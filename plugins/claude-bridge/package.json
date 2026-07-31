@@ -44,7 +44,7 @@
     }
   },
   "dependencies": {
-    "pi-claude-bridge": "0.6.2"
+    "pi-claude-bridge": "0.6.3"
   },
   "bundledDependencies": [
     "pi-claude-bridge"
