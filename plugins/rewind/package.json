@@ -44,7 +44,7 @@
     }
   },
   "dependencies": {
-    "pi-rewind-hook": "1.8.4"
+    "pi-rewind-hook": "1.8.5"
   },
   "bundledDependencies": [
     "pi-rewind-hook"
