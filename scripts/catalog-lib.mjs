@@ -236,6 +236,9 @@ export async function readToolCatalog(repoRoot) {
     description: tool.description,
     installTarget: tool.key,
     nextAction: tool.nextAction,
+    // The executable a PATH probe should look for; most tools are named
+    // after themselves (mermaid-cli ships mmdc, marp-cli ships marp).
+    bin: tool.bin ?? tool.label,
   }));
 }
 

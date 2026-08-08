@@ -36,6 +36,9 @@ pub struct Resource {
     /// them in transitively.
     #[serde(default)]
     pub dependencies: Vec<String>,
+    /// The executable to probe on PATH (tool resources only).
+    #[serde(default)]
+    pub bin: Option<String>,
 }
 
 /// A curated selection bundle from manifest/presets.json, offered on the

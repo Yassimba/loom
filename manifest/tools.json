@@ -53,13 +53,15 @@
       "key": "npm:@mermaid-js/mermaid-cli",
       "label": "mermaid-cli",
       "description": "Renders Mermaid diagrams to images (mmdc) — used by the diagram skills.",
-      "nextAction": "Ask your agent for a diagram."
+      "nextAction": "Ask your agent for a diagram.",
+      "bin": "mmdc"
     },
     {
       "key": "npm:@marp-team/marp-cli",
       "label": "marp-cli",
       "description": "Renders Markdown slide decks — used by the marp-slide skill.",
-      "nextAction": "Ask your agent for a slide deck."
+      "nextAction": "Ask your agent for a slide deck.",
+      "bin": "marp"
     }
   ]
 }
