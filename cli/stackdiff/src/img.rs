@@ -79,11 +79,37 @@ fn png_to_iterm(png: &[u8]) -> String {
     )
 }
 
-/// Render mermaid source to PNG bytes via the `mmdr` binary.
+/// Natural pixel width of the diagram, so PNGs can supersample.
+fn natural_width(source: &str) -> Option<f64> {
+    let mut child = Command::new("mmdr")
+        .args(["-i", "-", "--size"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    child.stdin.take()?.write_all(source.as_bytes()).ok()?;
+    let output = child.wait_with_output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let width_line = text.lines().find(|line| line.contains("\"width\""))?;
+    width_line
+        .split(':')
+        .nth(1)?
+        .trim()
+        .trim_end_matches(',')
+        .parse()
+        .ok()
+}
+
+/// Render mermaid source to PNG bytes via the `mmdr` binary, supersampled
+/// at 3x natural size so graphics-protocol terminals get retina-crisp text.
 pub fn mermaid_to_png(source: &str, theme: &str) -> Result<Vec<u8>> {
     let out = std::env::temp_dir().join(format!("stackdiff-{}.png", std::process::id()));
+    let width = natural_width(source)
+        .map(|w| ((w * 3.0) as u32).clamp(600, 6000).to_string())
+        .unwrap_or_else(|| "2400".to_string());
     let mut child = Command::new("mmdr")
-        .args(["-i", "-", "-e", "png", "-t", theme, "-o"])
+        .args(["-i", "-", "-e", "png", "-t", theme, "-w", &width, "-o"])
         .arg(&out)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
