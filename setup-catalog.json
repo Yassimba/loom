@@ -64,6 +64,15 @@
       "nextAction": "Start Pi and use the installed package."
     },
     {
+      "id": "pi-package:pi-subagents",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "subagents",
+      "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
+      "installTarget": "pi-subagents",
+      "nextAction": "Ask Pi to delegate a task to a subagent."
+    },
+    {
       "id": "pi-package:@yassimba/pi-web-access",
       "kind": "pi-package",
       "group": "Pi packages",

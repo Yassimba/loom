@@ -133,7 +133,7 @@ function rejectDependencyCycles(entries, index) {
 
 export async function readPiPackageCatalog(repoRoot) {
   const packagesRoot = join(repoRoot, "plugins");
-  const resources = [];
+  const resources = await readExternalPiPackages(repoRoot);
   for (const entry of await readdir(packagesRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const manifestPath = join(packagesRoot, entry.name, "package.json");
@@ -165,7 +165,39 @@ export async function readPiPackageCatalog(repoRoot) {
       nextAction: catalog.nextAction ?? "Start Pi and use the installed package.",
     });
   }
+  const names = resources.map((resource) => resource.installTarget);
+  const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+  if (duplicates.length > 0) {
+    throw new Error(`duplicate Pi package names: ${[...new Set(duplicates)].join(", ")}`);
+  }
   return resources.sort((left, right) => left.label.localeCompare(right.label));
+}
+
+/// Upstream Pi packages from manifest/pi-packages.json — offered next to the
+/// repo's own workspaces, installed verbatim from npm by name.
+async function readExternalPiPackages(repoRoot) {
+  let raw;
+  try {
+    raw = await readFile(join(repoRoot, "manifest", "pi-packages.json"), "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const meta = JSON.parse(raw);
+  return meta.packages.map(({ name, label, description, nextAction }) => {
+    if (!name || !label || !description) {
+      throw new Error(`pi-packages.json entries need name, label, and description`);
+    }
+    return {
+      id: `pi-package:${name}`,
+      kind: "pi-package",
+      group: "Pi packages",
+      label,
+      description,
+      installTarget: name,
+      nextAction: nextAction ?? "Start Pi and use the installed package.",
+    };
+  });
 }
 
 function parseTomlString(content, key, path) {
