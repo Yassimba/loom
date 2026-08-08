@@ -3,107 +3,14 @@
   "releases": [
     {
       "id": "loom",
-      "version": "0.9.0",
-      "tag": "loom-v0.9.0",
-      "bump": "minor",
+      "version": "0.9.1",
+      "tag": "loom-v0.9.1",
+      "bump": "patch",
       "distribution": "rust-binary",
       "commits": [
         {
-          "hash": "8354f1c11006f41ff76036db838beaea21b956cb",
-          "subject": "feat(installer): add scoped multi-agent skill setup"
-        },
-        {
-          "hash": "5f78ff57252b599135aa3bc19f9b652b6b14bff3",
-          "subject": "feat(stackdiff): mark call-site changes as a third diff status"
-        },
-        {
-          "hash": "9e63464f3a40e7701a9836f79a7eea3a878d9418",
-          "subject": "docs(skills): teach lineage skills the stackdiff v2 surface"
-        },
-        {
-          "hash": "96624d79f2e5944edfccd05c7974a61006ac097f",
-          "subject": "feat(release): publish stackdiff binaries"
-        }
-      ]
-    },
-    {
-      "id": "stackdiff",
-      "version": "0.1.0",
-      "tag": "stackdiff-v0.1.0",
-      "bump": "initial",
-      "distribution": "rust-binary",
-      "commits": [
-        {
-          "hash": "ef3f10a56ef874622c48f0fc3c7a14c65d6d3997",
-          "subject": "feat(stackdiff): --seq and --er diagram views from call data"
-        },
-        {
-          "hash": "700b0d7d9c235b92055855e9c0f6a71564119ea7",
-          "subject": "fix(stackdiff): fit -m graphs to the terminal width"
-        },
-        {
-          "hash": "404cae6c23017dd02781b0d121369bd5c2cd93f7",
-          "subject": "feat(stackdiff): overhaul -m — left-right layout, tints, docs, links"
-        },
-        {
-          "hash": "709d63f51322baf301953a45f07a34f411f19711",
-          "subject": "revert(stackdiff): drop the --img inline-image mode"
-        },
-        {
-          "hash": "7b0ed31361a0fba827bdf68244374639151c0638",
-          "subject": "fix(stackdiff): supersample --img at 3x natural size"
-        },
-        {
-          "hash": "52871e8847b36ff057f122983dad1ef2461283ae",
-          "subject": "feat(stackdiff): --img renders the diagram inline in the terminal"
-        },
-        {
-          "hash": "050dac37c449abf55dc120a129d4947c55c18409",
-          "subject": "style(stackdiff): adopt beautiful-mermaid's box aesthetics in -m"
-        },
-        {
-          "hash": "8e3f62f49df570577b43575edf9aa8eed84ec81f",
-          "subject": "feat(stackdiff): -m boxed-graph terminal view"
-        },
-        {
-          "hash": "5f78ff57252b599135aa3bc19f9b652b6b14bff3",
-          "subject": "feat(stackdiff): mark call-site changes as a third diff status"
-        },
-        {
-          "hash": "d48f4c745207c0843f8a24bc8c02d7d4711a900d",
-          "subject": "feat(stackdiff): exclude test files by default"
-        },
-        {
-          "hash": "cf1905aa1325dedd9cf22e555aad5df8db9e4650",
-          "subject": "feat(stackdiff): prune unchanged limbs by default"
-        },
-        {
-          "hash": "1e64fcab0b567122e80a67a8c63d0774fc8191d7",
-          "subject": "perf(stackdiff): hash-based entry inference, parallel entry diffs"
-        },
-        {
-          "hash": "946d63477292771cfd2faae746aa18415393079b",
-          "subject": "feat(stackdiff): default depth 3, respect .gitignore"
-        },
-        {
-          "hash": "c35513a77b627e7fab74b7657e47cbcbc03b8e6b",
-          "subject": "feat(stackdiff): git-diff colors, mermaid export, ~11x faster"
-        },
-        {
-          "hash": "e83d67f0218005535e56d37b50d166171620bce6",
-          "subject": "feat(stackdiff): rich output, pruning, formats, clickable locations"
-        },
-        {
-          "hash": "cc1117d61fe4b5e7b22b61972da1fdf9d97e5fb0",
-          "subject": "feat(stackdiff): add Rust call graph support"
-        },
-        {
-          "hash": "fb011ce4430a328e1a3b015a567b8c13fcf4aa9f",
-          "subject": "refactor!: rename agent setup to Loom"
-        },
-        {
-          "hash": "f0fd2657e6229b5f80ea51e1cf4ebb7e9f49ae2d",
-          "subject": "feat(stackdiff): Rust port of calldiff with a --tree mode"
+          "hash": "345382c61cc003033d7cfbf0e82ee37b143c2075",
+          "subject": "fix(installer): repair Windows and WSL setup"
         }
       ]
     }
