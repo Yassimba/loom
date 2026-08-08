@@ -9,10 +9,8 @@ Everything a coding-agent setup needs, in one repo you can install from: 50+ ski
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
 - [**openai-fast**](plugins/openai-fast/) — turn on OpenAI fast mode (the priority service tier) from inside Pi.
-- **subagents** — delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. Installed straight from [nicobailon/pi-subagents](https://github.com/nicobailon/pi-subagents).
 - [**herdr-worktree**](plugins/herdr-worktree/) — continue the current session in a fresh Herdr-managed git worktree.
-- [**rewind**](plugins/rewind/) — records file checkpoints as you work; branch to an earlier message and it restores your files to match.
-- [**web-access**](plugins/web-access/) — `web_search` and `fetch_content` tools for pages, PDFs, and GitHub repos.
+- **subagents**, **web-access**, **rewind**, **claude-bridge** — installed straight from their upstream npm packages, [exact-pinned](manifest/pi-packages.json) so they update only when this repo bumps the pin.
 
 ## The engineering flow
 
@@ -98,9 +96,10 @@ Each Pi package installs on its own:
 ```bash
 pi install npm:@yassimba/pi-herdr-worktree
 pi install npm:@yassimba/pi-openai-fast
-pi install npm:@yassimba/pi-rewind
 pi install npm:pi-subagents
-pi install npm:@yassimba/pi-web-access
+pi install npm:pi-web-access
+pi install npm:pi-rewind-hook
+pi install npm:pi-claude-bridge
 ```
 
 See the package README under [`plugins/`](plugins/) for its commands and configuration.
@@ -146,8 +145,7 @@ For local Pi extension development, use `scripts/sync-pi-extensions.sh status` a
 This repo builds on other people's work:
 
 - Several of the coding skills are adapted from [Matt Pocock's skills](https://github.com/mattpocock/skills), and the [research](skills/research/SKILL.md) skill is his, copied verbatim.
-- [web-access](plugins/web-access/) and [rewind](plugins/rewind/) are reviewed distributions of [nicobailon](https://github.com/nicobailon)'s [pi-web-access](https://github.com/nicobailon/pi-web-access) and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook).
-- [claude-bridge](plugins/claude-bridge/) is a reviewed distribution of [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge).
+- subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); claude-bridge is [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge). All install pinned from upstream npm.
 
 Each package's README and `THIRD_PARTY_NOTICES.md` record the exact upstream version. Thanks, all.
 

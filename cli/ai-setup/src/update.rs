@@ -1,4 +1,4 @@
-use crate::{skills, Catalog, CommandSpec, NodeStatus, System};
+use crate::{skills, Catalog, CommandSpec, NodeStatus, ResourceKind, System};
 
 /// One independent update lane; lanes run concurrently and report whole
 /// blocks of output so nothing interleaves.
@@ -20,10 +20,35 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
 
     let mut tasks = Vec::new();
     if system.command_exists("pi") {
-        tasks.push(UpdateTask {
-            label: "Pi and Pi packages",
-            commands: vec![CommandSpec::new("pi", ["update", "--all"])],
-        });
+        // Pinned reinstalls instead of `pi update --all`: cataloged packages
+        // move only when their pin (or a first-party publish) does, and Pi
+        // itself is the mise manifest's job. Packages outside the catalog
+        // are left alone.
+        let listed = system
+            .run(&CommandSpec::new("pi", ["list"]))
+            .ok()
+            .filter(|result| result.success)
+            .map(|result| format!("{}\n{}", result.stdout, result.stderr))
+            .unwrap_or_default();
+        let commands = catalog
+            .resources
+            .iter()
+            .filter(|resource| resource.kind == ResourceKind::PiPackage)
+            .filter(|resource| listed.contains(&resource.install_target))
+            .map(|resource| {
+                let spec = match &resource.version {
+                    Some(version) => format!("npm:{}@{version}", resource.install_target),
+                    None => format!("npm:{}", resource.install_target),
+                };
+                CommandSpec::new("pi", ["install", &spec])
+            })
+            .collect::<Vec<_>>();
+        if !commands.is_empty() {
+            tasks.push(UpdateTask {
+                label: "Pi packages (pinned)",
+                commands,
+            });
+        }
     }
     if system.command_exists("herdr") {
         tasks.push(UpdateTask {

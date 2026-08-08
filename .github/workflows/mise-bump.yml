@@ -32,6 +32,23 @@ jobs:
           MISE_YES: "1"
           MISE_GLOBAL_CONFIG_FILE: ${{ github.workspace }}/manifest/ai-setup.toml
           MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+      - name: Bump Pi package pins (manifest/pi-packages.json)
+        run: |
+          python3 - <<'EOF'
+          import json, subprocess
+          path = "manifest/pi-packages.json"
+          data = json.load(open(path))
+          for package in data["packages"]:
+              latest = subprocess.run(
+                  ["npm", "view", package["name"], "version"],
+                  capture_output=True, text=True,
+              ).stdout.strip()
+              if latest:
+                  package["version"] = latest
+          with open(path, "w") as handle:
+              json.dump(data, handle, indent=2, ensure_ascii=False)
+              handle.write("\n")
+          EOF
       - name: Restore release-owned pins
         run: |
           python3 - <<'EOF'

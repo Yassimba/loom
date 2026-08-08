@@ -281,7 +281,15 @@ pub fn build_install_plan(
                 "pi",
                 CommandSpec::new(
                     "pi",
-                    ["install", &format!("npm:{}", resource.install_target)],
+                    [
+                        "install",
+                        &match &resource.version {
+                            Some(version) => {
+                                format!("npm:{}@{version}", resource.install_target)
+                            }
+                            None => format!("npm:{}", resource.install_target),
+                        },
+                    ],
                 ),
                 VerificationSpec::Command {
                     command: CommandSpec::new("pi", ["list"]),

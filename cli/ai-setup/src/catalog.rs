@@ -39,6 +39,10 @@ pub struct Resource {
     /// The executable to probe on PATH (tool resources only).
     #[serde(default)]
     pub bin: Option<String>,
+    /// Exact version pin (external Pi packages only): installs go through
+    /// `pi install npm:<target>@<version>` and update only when the pin does.
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 /// A curated selection bundle from manifest/presets.json, offered on the
