@@ -7,3 +7,4 @@ pub mod infer;
 pub mod lang;
 pub mod render;
 pub mod types;
+pub mod views;

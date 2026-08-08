@@ -15,6 +15,7 @@ use stackdiff::git::{
 use stackdiff::infer::{diff_entry, infer_entries};
 use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
+use stackdiff::views::{class_mermaid, render_colored, sequence_mermaid};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum ColorChoice {
@@ -112,6 +113,16 @@ struct Cli {
     /// Box-graph direction: lr grows down the terminal, td grows across
     #[arg(long, value_enum, default_value_t = Dir::Lr)]
     dir: Dir,
+
+    /// Sequence-diagram view: who calls whom, in execution order,
+    /// diff-colored; overrides --format
+    #[arg(long)]
+    seq: bool,
+
+    /// Class/ER view: the types in play, their touched methods, and which
+    /// type talks to which, diff-colored; overrides --format
+    #[arg(long)]
+    er: bool,
 
     /// Append a +added/-removed summary per entry (diff mode)
     #[arg(long)]
@@ -218,7 +229,41 @@ fn tree_as_diff(node: &stackdiff::types::CallNode) -> DiffNode {
     }
 }
 
+fn term_width() -> Option<usize> {
+    terminal_size::terminal_size()
+        .map(|(w, _)| w.0 as usize)
+        .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok())
+}
+
 fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOptions) {
+    if cli.seq {
+        println!("{header}\n");
+        for (index, tree) in trees.iter().enumerate() {
+            if index > 0 {
+                println!();
+            }
+            let (source, marks) = sequence_mermaid(tree);
+            match render_colored(&source, &marks, options.color, term_width()) {
+                Ok(diagram) => println!("{diagram}"),
+                Err(error) => eprintln!("--seq failed for {}: {error}", tree.key),
+            }
+            stat_line(cli, tree);
+        }
+        return;
+    }
+    if cli.er {
+        println!("{header}\n");
+        match class_mermaid(trees) {
+            Some((source, marks)) => {
+                match render_colored(&source, &marks, options.color, term_width()) {
+                    Ok(diagram) => println!("{diagram}"),
+                    Err(error) => eprintln!("--er failed: {error}"),
+                }
+            }
+            None => println!("No Type.method calls in these graphs — nothing to draw."),
+        }
+        return;
+    }
     if cli.boxes {
         let box_options = BoxOptions {
             color: options.color,
@@ -228,9 +273,7 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
             },
             link: link_template(cli),
             repo_root: options.repo_root.clone(),
-            max_width: terminal_size::terminal_size()
-                .map(|(w, _)| w.0 as usize)
-                .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok()),
+            max_width: term_width(),
         };
         println!("{header}\n");
         for (index, tree) in trees.iter().enumerate() {

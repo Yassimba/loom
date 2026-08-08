@@ -271,6 +271,59 @@ fn boxes_render_draws_statused_boxes() {
 }
 
 #[test]
+fn sequence_view_orders_messages_and_marks_changes() {
+    let diff_src = diff_outdent(
+        r#"
+      export function boot() {
+        one();
+    +   two();
+      }
+    "#,
+    );
+    let (before_src, after_src) = sources_from_file_diff(&diff_src);
+    let before = build_index(extract_functions("file.before.ts", &before_src).unwrap());
+    let after = build_index(extract_functions("file.after.ts", &after_src).unwrap());
+    let diff = diff_trees(
+        &build_call_tree("boot", &before, 12),
+        &build_call_tree("boot", &after, 12),
+    );
+    let (source, marks) = stackdiff::views::sequence_mermaid(&diff);
+    assert!(source.starts_with("sequenceDiagram"), "{source}");
+    assert!(source.contains("two()"), "{source}");
+    assert!(
+        marks
+            .iter()
+            .any(|(label, status)| label == "two()"
+                && *status == stackdiff::types::DiffStatus::Added),
+        "{marks:?}"
+    );
+    let colored = stackdiff::views::render_colored(&source, &marks, true, Some(100)).unwrap();
+    assert!(
+        colored.contains("\u{1b}[38;2;63;185;80mtwo()\u{1b}[0m"),
+        "{colored:?}"
+    );
+}
+
+#[test]
+fn class_view_groups_methods_by_type() {
+    let source = diff_outdent(
+        r#"
+      class Runner {
+        start() { this.prepare(); }
+        prepare() {}
+      }
+    "#,
+    );
+    let index = build_index(extract_functions("app.ts", &source).unwrap());
+    let tree = build_call_tree("Runner.start", &index, 12);
+    let diff = diff_trees(&tree, &tree);
+    let (mermaid, _) = stackdiff::views::class_mermaid(&[diff]).unwrap();
+    assert!(mermaid.contains("class Runner {"), "{mermaid}");
+    assert!(mermaid.contains("+start()"), "{mermaid}");
+    assert!(mermaid.contains("+prepare()"), "{mermaid}");
+}
+
+#[test]
 fn json_output_carries_dataflow_fields() {
     let source = diff_outdent(
         r#"
