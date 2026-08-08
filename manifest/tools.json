@@ -32,10 +32,14 @@
       "nextAction": "Run `glab auth login` once."
     },
     {
-      "key": "tokei",
+      "key": "aqua:XAMPPRocky/tokei",
       "label": "tokei",
       "description": "Fast code-statistics tool several skills shell out to for codebase orientation.",
-      "nextAction": "Run `tokei` in a repo."
+      "nextAction": "Run `tokei` in a repo.",
+      "companions": [
+        "cargo:tokei",
+        "rust"
+      ]
     },
     {
       "key": "github:zdyxry/tokui",

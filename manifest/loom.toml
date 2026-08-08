@@ -44,16 +44,17 @@ zoxide = "0.10.0"
 # `envex`, binary `envx`). One wizard tool, companion keys.
 "github:mikeleppane/envx" = { version = "v0.6.2", os = ["linux", "windows"] }
 "cargo:envex" = { version = "0.6.2", os = ["macos"] }
-# the cargo build above needs a toolchain; only envx pulls this in, and
-# only on macos
+# Cargo fallbacks for envx and tokei need a toolchain; companion metadata
+# pulls this in only with those tools, and only on macOS.
 rust = { version = "1.97.1", os = ["macos"] }
 
 # observability
 "github:DataDog/pup" = "v1.10.5"
 
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
-# release with assets)
-tokei = "12.1.2"
+# release with assets). macOS arm64 has no asset, so it builds via cargo.
+"aqua:XAMPPRocky/tokei" = { version = "12.1.2", os = ["linux", "windows"] }
+"cargo:tokei" = { version = "12.1.2", os = ["macos"] }
 "github:zdyxry/tokui" = "0.12.0"
 
 # issue tracking for agents (beads: br is the tracker, bv the TUI viewer)

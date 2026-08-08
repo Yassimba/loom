@@ -159,6 +159,14 @@ test("every public Pi extension package is offered in the setup catalog", async 
   assert.deepEqual(missingPackages, []);
 });
 
+test("tokei uses native assets where upstream publishes them", async () => {
+  const catalog = await buildSetupCatalog(join(import.meta.dirname, ".."));
+  const tokei = catalog.find(({ id }) => id === "tool:tokei");
+
+  assert.equal(tokei.installTarget, "aqua:XAMPPRocky/tokei");
+  assert.deepEqual(tokei.companions, ["cargo:tokei", "rust"]);
+});
+
 test("personal skills cannot enter the setup catalog", async () => {
   // personal/ lives outside skills/, so listing one in skills.sh.json fails
   // the lookup — the exclusion is structural, not a category check.
