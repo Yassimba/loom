@@ -9,6 +9,7 @@ Everything a coding-agent setup needs, in one repo you can install from: 50+ ski
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
 - [**openai-fast**](plugins/openai-fast/) — turn on OpenAI fast mode (the priority service tier) from inside Pi.
+- **subagents** — delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. Installed straight from [nicobailon/pi-subagents](https://github.com/nicobailon/pi-subagents).
 - [**herdr-worktree**](plugins/herdr-worktree/) — continue the current session in a fresh Herdr-managed git worktree.
 - [**rewind**](plugins/rewind/) — records file checkpoints as you work; branch to an earlier message and it restores your files to match.
 - [**web-access**](plugins/web-access/) — `web_search` and `fetch_content` tools for pages, PDFs, and GitHub repos.
@@ -98,6 +99,7 @@ Each Pi package installs on its own:
 pi install npm:@yassimba/pi-herdr-worktree
 pi install npm:@yassimba/pi-openai-fast
 pi install npm:@yassimba/pi-rewind
+pi install npm:pi-subagents
 pi install npm:@yassimba/pi-web-access
 ```
 

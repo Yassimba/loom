@@ -1,0 +1,11 @@
+{
+  "comment": "External Pi packages the setup offers alongside this repo's own plugins/ workspaces — upstream npm packages installed verbatim via `pi install npm:<name>`.",
+  "packages": [
+    {
+      "name": "pi-subagents",
+      "label": "subagents",
+      "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
+      "nextAction": "Ask Pi to delegate a task to a subagent."
+    }
+  ]
+}
