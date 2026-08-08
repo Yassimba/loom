@@ -489,8 +489,14 @@ pub fn lineage_graph(
     fn label_of(node: &DiffNode) -> String {
         let mut text = node.key.clone();
         match &node.signature {
-            // Full typed inputs; fall back to the declared-name label.
+            // Full typed inputs; unresolved calls show their call-site
+            // args; last resort is the declared-name label.
             Some(signature) => text.push_str(signature),
+            None if !node.meta.args.is_empty() => {
+                text.push('(');
+                text.push_str(&node.meta.args.join(", "));
+                text.push(')');
+            }
             None => {
                 if let Some(params) = node.label.strip_prefix(&node.key) {
                     text.push_str(params);
