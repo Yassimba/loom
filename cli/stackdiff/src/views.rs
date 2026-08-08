@@ -150,7 +150,7 @@ pub fn class_mermaid(
 fn cluster_overview(
     nodes: &BTreeMap<String, (String, DiffStatus, bool, Option<String>)>,
     edges: &BTreeMap<(String, String), (Option<String>, DiffStatus)>,
-) -> String {
+) -> Vec<ClusterRow> {
     let keys: Vec<&String> = nodes.keys().collect();
     let index: BTreeMap<&String, usize> = keys.iter().enumerate().map(|(i, k)| (*k, i)).collect();
     let mut parent: Vec<usize> = (0..keys.len()).collect();
@@ -175,7 +175,7 @@ fn cluster_overview(
         let root = find(&mut parent, i);
         clusters.entry(root).or_default().push(i);
     }
-    let mut rows: Vec<(usize, usize, String)> = clusters
+    let mut rows: Vec<ClusterRow> = clusters
         .values()
         .map(|members| {
             let changed = members
@@ -189,26 +189,15 @@ fn cluster_overview(
                 .min_by_key(|&i| (incoming[i], std::cmp::Reverse(members.len()), keys[i]))
                 .map(|i| keys[i].clone())
                 .unwrap_or_default();
-            (members.len(), changed, entry)
+            ClusterRow {
+                changed,
+                size: members.len(),
+                entry,
+            }
         })
         .collect();
-    rows.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.cmp(&a.0)));
-
-    let mut out = vec![format!(
-        "Graph too big to draw ({} nodes) — {} clusters. Open one:",
-        nodes.len(),
-        rows.len()
-    )];
-    for (size, changed, entry) in rows.iter().take(20) {
-        out.push(format!(
-            "  {changed:>4} changed / {size:>4} nodes   stackdiff … -e {entry} -m"
-        ));
-    }
-    if rows.len() > 20 {
-        out.push(format!("  … {} more clusters", rows.len() - 20));
-    }
-    out.push("(--full draws it anyway)".to_string());
-    out.join("\n")
+    rows.sort_by(|a, b| b.changed.cmp(&a.changed).then(b.size.cmp(&a.size)));
+    rows
 }
 
 fn note_method(
@@ -431,11 +420,19 @@ pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
 /// (drawn once — convergence is visible as fan-in), data constructors as
 /// stadium nodes, edges labeled with the binding the result lands in.
 /// Branches flatten away; unresolved plumbing drops out entirely.
+/// One connected cluster of an oversized lineage graph.
+#[derive(Debug, Clone)]
+pub struct ClusterRow {
+    pub changed: usize,
+    pub size: usize,
+    pub entry: String,
+}
+
 /// What the lineage view decided to show: the graph, or — past the size
-/// limit — an overview of its connected clusters with entry hints.
+/// limit — its connected clusters with entry hints.
 pub enum Lineage {
     Graph(String, Marks),
-    Overview(String),
+    Overview(Vec<ClusterRow>),
 }
 
 pub fn lineage_mermaid(
