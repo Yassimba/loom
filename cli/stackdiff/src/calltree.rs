@@ -3,6 +3,8 @@
 use std::collections::HashSet;
 
 use crate::extract::FunctionIndex;
+use std::collections::HashMap;
+
 use crate::types::{CallMeta, CallNode, CallStep, FunctionInfo, NodeKind};
 
 /// Look up a callable by key, falling back to its `new X` constructor alias —
@@ -46,9 +48,12 @@ fn expand_steps(
                 meta: CallMeta::default(),
                 children: expand_steps(children, index, depth, max_depth, visiting),
             },
-            CallStep::Call { key, meta } => {
+            CallStep::Call { key, meta, count } => {
                 let mut node = expand_call(key, index, depth, max_depth, visiting);
                 node.meta = meta.clone();
+                if *count > 1 {
+                    node.label.push_str(&format!(" ×{count}"));
+                }
                 node
             }
         })
@@ -140,4 +145,89 @@ pub fn resolve_entry(entry: &str, index: &FunctionIndex) -> Option<String> {
     }
 
     None
+}
+
+/// callee key → (caller key, call-site meta) edges, for --callers.
+pub fn reverse_index(index: &FunctionIndex) -> HashMap<String, Vec<(String, CallMeta)>> {
+    let mut reverse: HashMap<String, Vec<(String, CallMeta)>> = HashMap::new();
+    fn walk(
+        steps: &[CallStep],
+        caller: &str,
+        index: &FunctionIndex,
+        reverse: &mut HashMap<String, Vec<(String, CallMeta)>>,
+    ) {
+        for step in steps {
+            match step {
+                CallStep::Call { key, meta, .. } => {
+                    if let Some(info) = lookup_callable(key, index) {
+                        reverse
+                            .entry(info.key.clone())
+                            .or_default()
+                            .push((caller.to_string(), meta.clone()));
+                    }
+                }
+                CallStep::Branch { children, .. } => walk(children, caller, index, reverse),
+            }
+        }
+    }
+    for info in index.values() {
+        if info.key.starts_with("new ") {
+            continue;
+        }
+        walk(&info.steps, &info.key, index, &mut reverse);
+    }
+    for edges in reverse.values_mut() {
+        edges.sort_by(|a, b| a.0.cmp(&b.0));
+        edges.dedup_by(|a, b| a.0 == b.0);
+    }
+    reverse
+}
+
+/// Who-calls-X tree: the root is `key`, children are its callers, and so on
+/// upward. Each caller node carries the call-site meta of its edge down.
+pub fn build_caller_tree(
+    key: &str,
+    index: &FunctionIndex,
+    reverse: &HashMap<String, Vec<(String, CallMeta)>>,
+    max_depth: usize,
+) -> CallNode {
+    let mut visiting = std::collections::HashSet::new();
+    expand_callers(key, index, reverse, 0, max_depth, &mut visiting)
+}
+
+fn expand_callers(
+    key: &str,
+    index: &FunctionIndex,
+    reverse: &HashMap<String, Vec<(String, CallMeta)>>,
+    depth: usize,
+    max_depth: usize,
+    visiting: &mut std::collections::HashSet<String>,
+) -> CallNode {
+    let info = lookup_callable(key, index);
+    let resolved_key = info
+        .map(|i| i.key.clone())
+        .unwrap_or_else(|| key.to_string());
+    let mut node = CallNode {
+        key: resolved_key.clone(),
+        label: display_call_label(key, index),
+        kind: NodeKind::Call,
+        location: info.map(|i| format!("{}:{}", i.file, i.line)),
+        doc: info.and_then(|i| i.doc.clone()),
+        returns: info.and_then(|i| i.returns.clone()),
+        meta: CallMeta::default(),
+        children: Vec::new(),
+    };
+    if depth >= max_depth || visiting.contains(&resolved_key) {
+        return node;
+    }
+    visiting.insert(resolved_key.clone());
+    if let Some(edges) = reverse.get(&resolved_key) {
+        for (caller, meta) in edges {
+            let mut child = expand_callers(caller, index, reverse, depth + 1, max_depth, visiting);
+            child.meta = meta.clone();
+            node.children.push(child);
+        }
+    }
+    visiting.remove(&resolved_key);
+    node
 }

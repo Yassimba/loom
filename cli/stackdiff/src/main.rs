@@ -6,16 +6,17 @@ use clap::{ArgAction, Parser, ValueEnum};
 
 use rayon::prelude::*;
 use stackdiff::boxes::{render_boxes, BoxOptions, Direction};
-use stackdiff::calltree::build_call_tree;
+use stackdiff::calltree::{build_call_tree, build_caller_tree, reverse_index};
 use stackdiff::diff::prune_unchanged;
 use stackdiff::extract::{build_index, extract_functions, FunctionIndex};
 use stackdiff::git::{
     assert_git_repo, list_source_files, read_snapshot_files, resolve_snapshots, verify_commit,
 };
 use stackdiff::infer::{diff_entry, infer_entries};
+use stackdiff::noise::{report as noise_report, scrub_index, NoiseFilter};
 use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
-use stackdiff::views::{class_mermaid, render_colored, sequence_mermaid};
+use stackdiff::views::{class_mermaid, module_mermaid, render_colored, sequence_mermaid};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum ColorChoice {
@@ -88,6 +89,27 @@ struct Cli {
     /// brings them in)
     #[arg(long)]
     tests: bool,
+
+    /// Show builtin/plumbing calls that hide by default (len, clone, …)
+    #[arg(long)]
+    noise: bool,
+
+    /// Extra hide globs on top of the defaults and .stackdiff.toml
+    #[arg(long, action = ArgAction::Append)]
+    hide: Vec<String>,
+
+    /// Print the unresolved-call frequency table (what hides, what shows)
+    /// and exit — tune .stackdiff.toml from it
+    #[arg(long)]
+    noise_report: bool,
+
+    /// Reverse graph: who calls the entry, and who calls the callers
+    #[arg(long)]
+    callers: bool,
+
+    /// Module zoom: one node per file, arrows where calls cross files
+    #[arg(long)]
+    modules: bool,
 
     /// Labels only: hide binding/args/returns, locations, and doc lines
     #[arg(long)]
@@ -188,11 +210,12 @@ fn render_options(cli: &Cli, cwd: &Path, color: bool) -> RenderOptions {
 fn load_index(
     cwd: &Path,
     snapshot: &Snapshot,
-    path_filters: &[String],
-    no_ignore: bool,
-    include_tests: bool,
+    cli: &Cli,
+    filter: &NoiseFilter,
 ) -> Result<FunctionIndex> {
+    let (path_filters, no_ignore, include_tests) = (&cli.paths, cli.no_ignore, cli.tests);
     let files = list_source_files(cwd, snapshot, path_filters, no_ignore, include_tests)?;
+
     let sources = read_snapshot_files(cwd, snapshot, &files);
     let all: Vec<_> = sources
         .par_iter()
@@ -212,7 +235,9 @@ fn load_index(
             }
         })
         .collect();
-    Ok(build_index(all))
+    let mut index = build_index(all);
+    scrub_index(&mut index, filter);
+    Ok(index)
 }
 
 fn tree_as_diff(node: &stackdiff::types::CallNode) -> DiffNode {
@@ -235,6 +260,28 @@ fn term_width() -> Option<usize> {
         .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok())
 }
 
+/// Field definitions for --er, from the worktree (or --from ref) sources.
+fn load_types(cli: &Cli) -> std::collections::BTreeMap<String, Vec<(String, Option<String>)>> {
+    let mut types = std::collections::BTreeMap::new();
+    let cwd = cli
+        .repo
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().expect("no current directory"));
+    let snapshot = Snapshot::Worktree;
+    let Ok(files) = list_source_files(&cwd, &snapshot, &cli.paths, cli.no_ignore, cli.tests) else {
+        return types;
+    };
+    for (file, source) in read_snapshot_files(&cwd, &snapshot, &files) {
+        let Some(source) = source else { continue };
+        if let Ok(found) = stackdiff::extract::extract_types(&file, &source) {
+            for info in found {
+                types.entry(info.name).or_insert(info.fields);
+            }
+        }
+    }
+    types
+}
+
 fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOptions) {
     if cli.seq {
         println!("{header}\n");
@@ -251,9 +298,22 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
         }
         return;
     }
+    if cli.modules {
+        println!("{header}\n");
+        match module_mermaid(trees) {
+            Some((source, marks)) => {
+                match render_colored(&source, &marks, options.color, term_width()) {
+                    Ok(diagram) => println!("{diagram}"),
+                    Err(error) => eprintln!("--modules failed: {error}"),
+                }
+            }
+            None => println!("No cross-file calls in these graphs — nothing to draw."),
+        }
+        return;
+    }
     if cli.er {
         println!("{header}\n");
-        match class_mermaid(trees) {
+        match class_mermaid(trees, &load_types(cli)) {
             Some((source, marks)) => {
                 match render_colored(&source, &marks, options.color, term_width()) {
                     Ok(diagram) => println!("{diagram}"),
@@ -350,7 +410,13 @@ fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         }
         None => Snapshot::Worktree,
     };
-    let index = load_index(cwd, &snapshot, &cli.paths, cli.no_ignore, cli.tests)?;
+    let filter = NoiseFilter::load(cwd, !cli.noise, &cli.hide);
+    let index = load_index(cwd, &snapshot, cli, &filter)?;
+
+    if cli.noise_report {
+        println!("{}", noise_report(&index, &filter));
+        return Ok(0);
+    }
 
     if cli.entries.is_empty() {
         let mut exported: Vec<&String> = index
@@ -366,17 +432,17 @@ fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         return Ok(0);
     }
 
+    let reverse = cli.callers.then(|| reverse_index(&index));
     let mut trees = Vec::new();
     for entry in &cli.entries {
         let Some(resolved) = stackdiff::calltree::resolve_entry(entry, &index) else {
             eprintln!("Entrypoint not found: {entry}");
             continue;
         };
-        trees.push(tree_as_diff(&build_call_tree(
-            &resolved,
-            &index,
-            cli.max_depth,
-        )));
+        trees.push(tree_as_diff(&match &reverse {
+            Some(reverse) => build_caller_tree(&resolved, &index, reverse, cli.max_depth),
+            None => build_call_tree(&resolved, &index, cli.max_depth),
+        }));
     }
     if trees.is_empty() {
         return Ok(1);
@@ -403,11 +469,53 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         verify_commit(cwd, reference)?;
     }
 
+    let filter = NoiseFilter::load(cwd, !cli.noise, &cli.hide);
     let (before, after) = rayon::join(
-        || load_index(cwd, &from, &cli.paths, cli.no_ignore, cli.tests),
-        || load_index(cwd, &to, &cli.paths, cli.no_ignore, cli.tests),
+        || load_index(cwd, &from, cli, &filter),
+        || load_index(cwd, &to, cli, &filter),
     );
     let (before, after) = (before?, after?);
+
+    if cli.noise_report {
+        println!("{}", noise_report(&after, &filter));
+        return Ok(0);
+    }
+
+    if cli.callers {
+        if cli.entries.is_empty() {
+            anyhow::bail!("--callers needs --entry: whose callers?");
+        }
+        let before_reverse = reverse_index(&before);
+        let after_reverse = reverse_index(&after);
+        let mut diffs = Vec::new();
+        for entry in &cli.entries {
+            let before_key = stackdiff::calltree::resolve_entry(entry, &before);
+            let after_key = stackdiff::calltree::resolve_entry(entry, &after);
+            let Some(key) = after_key.or(before_key) else {
+                eprintln!("Entrypoint not found: {entry}");
+                continue;
+            };
+            let before_tree = build_caller_tree(&key, &before, &before_reverse, cli.max_depth);
+            let after_tree = build_caller_tree(&key, &after, &after_reverse, cli.max_depth);
+            diffs.push(stackdiff::diff::diff_trees(&before_tree, &after_tree));
+        }
+        if diffs.is_empty() {
+            println!("No caller graphs to show.");
+            return Ok(0);
+        }
+        let options = render_options(cli, cwd, color);
+        print_trees(
+            cli,
+            &format!(
+                "stackdiff --callers {} → {}",
+                from.describe(),
+                to.describe()
+            ),
+            &diffs,
+            &options,
+        );
+        return Ok(0);
+    }
 
     let entries = infer_entries(&before, &after, &cli.entries, cli.max_depth)?;
 
