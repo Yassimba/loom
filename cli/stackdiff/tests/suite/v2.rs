@@ -436,27 +436,30 @@ fn lineage_view_draws_shared_callees_once() {
     let index = build_index(extract_functions("app.ts", &source).unwrap());
     let tree = build_call_tree("boot", &index, 12);
     let diff = diff_trees(&tree, &tree);
-    let (mermaid, _) = match stackdiff::views::lineage_mermaid(&[diff], None, "LR", None).unwrap() {
-        stackdiff::views::Lineage::Graph(source, marks) => (source, marks),
+    let (nodes, edges) = match stackdiff::views::lineage_graph(&[diff], None, None).unwrap() {
+        stackdiff::views::Lineage::Graph(nodes, edges) => (nodes, edges),
         _ => panic!("expected graph"),
     };
-    // resolve appears as ONE node, referenced by two edges.
-    assert_eq!(mermaid.matches("[resolve → Plan]").count(), 1, "{mermaid}");
-    let resolve_id = mermaid
-        .lines()
-        .find(|l| l.contains("[resolve → Plan]"))
-        .and_then(|l| l.split('[').next())
-        .unwrap()
-        .to_string();
-    let fan_in = mermaid
-        .lines()
-        .filter(|l| l.contains("-->") && l.trim_end().ends_with(resolve_id.trim()))
-        .count();
-    assert_eq!(fan_in, 2, "two edges converge on resolve:\n{mermaid}");
-    assert!(
-        mermaid.contains("|plan|"),
-        "binding rides the edge:\n{mermaid}"
+    assert_eq!(
+        nodes.iter().filter(|n| n.key == "resolve").count(),
+        1,
+        "shared callee appears once"
     );
+    let fan_in = edges.iter().filter(|e| e.to == "resolve").count();
+    assert_eq!(fan_in, 2, "two edges converge on resolve");
+    assert!(
+        edges
+            .iter()
+            .any(|e| e.label.as_deref() == Some("plan") || e.label.as_deref() == Some("p")),
+        "binding rides the edge"
+    );
+    let drawn = stackdiff::dag::render_dag(&nodes, &edges, false);
+    assert_eq!(
+        drawn.matches("resolve → Plan").count(),
+        1,
+        "one box for the shared callee:\n{drawn}"
+    );
+    assert!(drawn.contains("▶"), "arrows drawn:\n{drawn}");
 }
 
 #[test]

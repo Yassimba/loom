@@ -17,8 +17,7 @@ use stackdiff::noise::{report as noise_report, scrub_index, NoiseFilter};
 use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
 use stackdiff::views::{
-    class_mermaid, lineage_mermaid, module_mermaid, render_colored, render_colored_flip,
-    sequence_mermaid, Lineage,
+    class_mermaid, lineage_graph, module_mermaid, render_colored, sequence_mermaid, Lineage,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -513,23 +512,13 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
     let link = template
         .as_deref()
         .map(|template| (template, options.repo_root.as_deref()));
-    let dir = match cli.dir {
-        Some(Dir::Td) => "TD",
-        _ => "LR",
-    };
     let limit = (!cli.full).then_some(60);
-    match lineage_mermaid(trees, link, dir, limit) {
-        Some(Lineage::Graph(source, marks)) => {
-            match render_colored_flip(
-                &source,
-                &marks,
-                options.color,
-                term_width(),
-                cli.dir.is_none(),
-            ) {
-                Ok(diagram) => println!("{diagram}"),
-                Err(error) => eprintln!("lineage view failed: {error}"),
-            }
+    match lineage_graph(trees, link, limit) {
+        Some(Lineage::Graph(nodes, edges)) => {
+            println!(
+                "{}",
+                stackdiff::dag::render_dag(&nodes, &edges, options.color)
+            );
         }
         Some(Lineage::Overview(rows)) => {
             let interactive = std::io::stdout().is_terminal() && rebuild.is_some();
@@ -579,30 +568,22 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
                     if entry_trees.is_empty() {
                         break;
                     }
-                    let attempt = lineage_mermaid(&entry_trees, link, dir, Some(60));
-                    let Some(Lineage::Graph(source, marks)) = attempt else {
+                    let attempt = lineage_graph(&entry_trees, link, Some(60));
+                    let Some(Lineage::Graph(nodes, edges)) = attempt else {
                         continue;
                     };
-                    match render_colored_flip(
-                        &source,
-                        &marks,
-                        options.color,
-                        term_width(),
-                        cli.dir.is_none(),
-                    ) {
-                        Ok(diagram) => {
-                            println!("{diagram}");
-                            if depth < cli.depth() {
-                                println!(
-                                    "(depth {depth} to stay drawable — `-e {} -m --max-depth {}` digs deeper)",
-                                    rows[index].entry,
-                                    cli.depth()
-                                );
-                            }
-                            println!();
-                        }
-                        Err(error) => eprintln!("lineage view failed: {error}"),
+                    println!(
+                        "{}",
+                        stackdiff::dag::render_dag(&nodes, &edges, options.color)
+                    );
+                    if depth < cli.depth() {
+                        println!(
+                            "(depth {depth} to stay drawable — `-e {} -m --max-depth {}` digs deeper)",
+                            rows[index].entry,
+                            cli.depth()
+                        );
                     }
+                    println!();
                     drawn = true;
                     break;
                 }
