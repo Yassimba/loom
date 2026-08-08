@@ -116,7 +116,6 @@ struct Placed {
     data: bool,
     w: usize,
     h: usize,
-    layer: usize,
     /// y of the box top, x of the box left
     x: usize,
     y: usize,
@@ -143,7 +142,6 @@ fn layers(nodes: &[GraphNode], edges: &[GraphEdge]) -> Vec<usize> {
         forward[a].push(b);
         indegree[b] += 1;
     }
-    // Kahn; cycle leftovers get appended at their current depth.
     let mut layer = vec![0usize; nodes.len()];
     let mut queue: Vec<usize> = (0..nodes.len()).filter(|&i| indegree[i] == 0).collect();
     let mut remaining = indegree.clone();
@@ -166,49 +164,6 @@ fn layers(nodes: &[GraphNode], edges: &[GraphEdge]) -> Vec<usize> {
         }
     }
     layer
-}
-
-/// Order nodes within layers by barycenter of their neighbors.
-fn ordering(nodes: &[GraphNode], edges: &[GraphEdge], layer: &[usize]) -> Vec<Vec<usize>> {
-    let index: HashMap<&str, usize> = nodes
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (n.key.as_str(), i))
-        .collect();
-    let max_layer = layer.iter().copied().max().unwrap_or(0);
-    let mut columns: Vec<Vec<usize>> = vec![Vec::new(); max_layer + 1];
-    for (i, &l) in layer.iter().enumerate() {
-        columns[l].push(i);
-    }
-    let mut neighbors: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
-    for edge in edges {
-        let (Some(&a), Some(&b)) = (index.get(edge.from.as_str()), index.get(edge.to.as_str()))
-        else {
-            continue;
-        };
-        neighbors[a].push(b);
-        neighbors[b].push(a);
-    }
-    for _ in 0..3 {
-        let position: HashMap<usize, usize> = columns
-            .iter()
-            .flat_map(|column| column.iter().enumerate().map(|(pos, &n)| (n, pos)))
-            .collect();
-        for column in &mut columns {
-            column.sort_by_key(|&n| {
-                let hood = &neighbors[n];
-                if hood.is_empty() {
-                    return (position.get(&n).copied().unwrap_or(0) * 100) as i64;
-                }
-                let sum: usize = hood
-                    .iter()
-                    .map(|other| position.get(other).copied().unwrap_or(0) * 100)
-                    .sum();
-                (sum / hood.len()) as i64
-            });
-        }
-    }
-    columns
 }
 
 fn paint(status: DiffStatus, role: Role, color: bool) -> (String, String) {
@@ -318,13 +273,29 @@ fn draw_box(canvas: &mut Canvas, node: &Placed) {
     }
 }
 
+/// One placed thing: a real box, or a zero-width waypoint a long edge
+/// bends through (classic Sugiyama virtual node).
+struct Item {
+    real: Option<usize>,
+    layer: usize,
+    w: usize,
+    h: usize,
+    x: usize,
+    y: usize,
+}
+
 /// Render the lineage graph left→right with layered layout.
 pub fn render_dag(nodes: &[GraphNode], edges: &[GraphEdge], color: bool) -> String {
     let layer = layers(nodes, edges);
-    let columns = ordering(nodes, edges, &layer);
+    let index: HashMap<&str, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.key.as_str(), i))
+        .collect();
 
-    // Box shapes
-    let mut placed: Vec<Placed> = nodes
+    // Items: every real node, plus virtual waypoints for layer-skipping
+    // edges so each drawn segment spans exactly one gap.
+    let mut items: Vec<Item> = nodes
         .iter()
         .enumerate()
         .map(|(i, node)| {
@@ -335,141 +306,237 @@ pub fn render_dag(nodes: &[GraphNode], edges: &[GraphEdge], color: bool) -> Stri
                 .chain(node.loc.iter().map(|l| l.chars().count()))
                 .max()
                 .unwrap_or(0);
-            Placed {
+            Item {
+                real: Some(i),
+                layer: layer[i],
                 w: content + 4,
                 h: lines.len() + 2 + usize::from(node.loc.is_some()),
-                lines,
-                loc: node.loc.clone(),
-                url: node.url.clone(),
-                status: node.status,
-                data: node.data,
-                layer: layer[i],
                 x: 0,
                 y: 0,
             }
         })
         .collect();
 
-    // Corridor lanes: one per edge crossing each gap.
-    let max_layer = columns.len();
-    let mut gap_lanes = vec![0usize; max_layer + 1];
-    let index: HashMap<&str, usize> = nodes
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (n.key.as_str(), i))
-        .collect();
-    let mut edge_refs: Vec<(usize, usize, &GraphEdge)> = Vec::new();
+    // Chains: per edge, the item ids it threads through.
+    struct Segment {
+        a: usize,
+        b: usize,
+        status: DiffStatus,
+        /// label + arrow live on the final segment
+        label: Option<String>,
+        last: bool,
+    }
+    let mut segments: Vec<Segment> = Vec::new();
     for edge in edges {
-        let (Some(&a), Some(&b)) = (index.get(edge.from.as_str()), index.get(edge.to.as_str()))
+        let (Some(&na), Some(&nb)) = (index.get(edge.from.as_str()), index.get(edge.to.as_str()))
         else {
             continue;
         };
-        edge_refs.push((a, b, edge));
-        let (lo, hi) = if layer[a] <= layer[b] {
-            (layer[a], layer[b])
-        } else {
-            (layer[b], layer[a])
-        };
-        for gap in lo..hi.max(lo + 1) {
-            gap_lanes[gap + 1] += 1;
+        let (la, lb) = (layer[na], layer[nb]);
+        if la >= lb {
+            continue; // back edges: fan-in already tells the story
+        }
+        let mut chain = vec![na];
+        for l in la + 1..lb {
+            items.push(Item {
+                real: None,
+                layer: l,
+                w: 1,
+                h: 1,
+                x: 0,
+                y: 0,
+            });
+            chain.push(items.len() - 1);
+        }
+        chain.push(nb);
+        for pair in chain.windows(2) {
+            segments.push(Segment {
+                a: pair[0],
+                b: pair[1],
+                status: edge.status,
+                label: edge.label.clone(),
+                last: pair[1] == nb,
+            });
         }
     }
 
-    // Column x positions.
-    let mut col_x = vec![0usize; max_layer];
-    let mut col_w = vec![0usize; max_layer];
-    for (l, column) in columns.iter().enumerate() {
-        col_w[l] = column.iter().map(|&n| placed[n].w).max().unwrap_or(0);
+    // Column membership + barycenter ordering over items.
+    let max_layer = items.iter().map(|i| i.layer).max().unwrap_or(0);
+    let mut columns: Vec<Vec<usize>> = vec![Vec::new(); max_layer + 1];
+    for (i, item) in items.iter().enumerate() {
+        columns[item.layer].push(i);
     }
-    let mut x = 0;
-    for l in 0..max_layer {
-        col_x[l] = x;
-        let lanes = gap_lanes.get(l + 1).copied().unwrap_or(0);
-        x += col_w[l] + 3 + lanes * 2 + 3;
+    let mut neighbors: Vec<Vec<usize>> = vec![Vec::new(); items.len()];
+    for segment in &segments {
+        neighbors[segment.a].push(segment.b);
+        neighbors[segment.b].push(segment.a);
+    }
+    for _ in 0..4 {
+        let position: HashMap<usize, usize> = columns
+            .iter()
+            .flat_map(|column| column.iter().enumerate().map(|(pos, &n)| (n, pos)))
+            .collect();
+        for column in &mut columns {
+            column.sort_by_key(|&n| {
+                let hood = &neighbors[n];
+                if hood.is_empty() {
+                    return (position.get(&n).copied().unwrap_or(0) * 100) as i64;
+                }
+                let sum: usize = hood
+                    .iter()
+                    .map(|other| position.get(other).copied().unwrap_or(0) * 100)
+                    .sum();
+                (sum / hood.len()) as i64
+            });
+        }
     }
 
-    // Node y positions per column.
+    // Geometry: column x, lanes per gap, item y.
+    let mut lanes = vec![0usize; max_layer + 1];
+    for segment in &segments {
+        lanes[items[segment.b].layer] += 1;
+    }
+    let mut col_w = vec![0usize; max_layer + 1];
+    for (l, column) in columns.iter().enumerate() {
+        col_w[l] = column.iter().map(|&n| items[n].w).max().unwrap_or(1);
+    }
+    let mut col_x = vec![0usize; max_layer + 1];
+    let mut x = 1;
+    for l in 0..=max_layer {
+        // corridor before this column holds this gap's lanes
+        x += if l == 0 { 0 } else { 3 + lanes[l] * 2 + 2 };
+        col_x[l] = x;
+        x += col_w[l];
+    }
     for column in &columns {
         let mut y = 0;
         for &n in column {
-            placed[n].y = y;
-            y += placed[n].h + NODE_GAP + 1;
+            items[n].y = y;
+            y += items[n].h + NODE_GAP + 1;
         }
     }
     for (l, column) in columns.iter().enumerate() {
         for &n in column {
-            // center within column width
-            placed[n].x = col_x[l] + (col_w[l] - placed[n].w) / 2;
+            let w = items[n].w;
+            items[n].x = col_x[l] + (col_w[l] - w) / 2;
         }
     }
 
     let width = x + 2;
-    let height = placed.iter().map(|p| p.y + p.h).max().unwrap_or(1) + 2;
+    let height = items.iter().map(|i| i.y + i.h).max().unwrap_or(1) + 1;
     let mut canvas = Canvas::new(width, height);
 
-    // Edges under boxes: draw rails first is wrong (boxes protect themselves
-    // via rail()), draw boxes first then rails that refuse to overwrite.
+    // Boxes first (rails refuse to enter them).
+    let placed: Vec<Placed> = items
+        .iter()
+        .filter_map(|item| {
+            let i = item.real?;
+            let node = &nodes[i];
+            Some(Placed {
+                lines: wrap(&node.label, MAX_LABEL),
+                loc: node.loc.clone(),
+                url: node.url.clone(),
+                status: node.status,
+                data: node.data,
+                w: item.w,
+                h: item.h,
+                x: item.x,
+                y: item.y,
+            })
+        })
+        .collect();
     for node in &placed {
         draw_box(&mut canvas, node);
     }
 
-    // Assign lanes per gap in target-y order for tidy fanouts.
+    // Rails: every segment spans one gap; lanes assigned by target y.
+    let mut sorted: Vec<usize> = (0..segments.len()).collect();
+    sorted.sort_by_key(|&i| {
+        let b = &items[segments[i].b];
+        (b.layer, b.y, items[segments[i].a].y)
+    });
     let mut lane_cursor: BTreeMap<usize, usize> = BTreeMap::new();
-    let mut sorted_edges: Vec<&(usize, usize, &GraphEdge)> = edge_refs.iter().collect();
-    sorted_edges.sort_by_key(|(_, b, _)| (placed[*b].layer, placed[*b].y));
-
-    for (a, b, edge) in sorted_edges {
-        let (src, dst) = (&placed[*a], &placed[*b]);
-        if src.layer >= dst.layer {
-            continue; // back edges: convergence already shows fan-in; skip rails
-        }
-        let status = edge.status;
-        let sy = src.y + src.h / 2;
-        let dy = dst.y + dst.h / 2;
-        let start_x = src.x + src.w;
-        // lane in the gap just before dst's column
-        let gap = dst.layer;
-        let lanes_before: usize = gap_lanes.iter().take(gap).sum();
+    struct Finish {
+        x: usize,
+        y: usize,
+        status: DiffStatus,
+        label: Option<String>,
+        label_from: usize,
+        arrow: bool,
+    }
+    let mut finishes: Vec<Finish> = Vec::new();
+    for i in sorted {
+        let segment = &segments[i];
+        let (a, b) = (&items[segment.a], &items[segment.b]);
+        let status = segment.status;
+        let sy = a.y + a.h / 2;
+        let dy = b.y + b.h / 2;
+        let start_x = a.x + a.w;
+        let gap = b.layer;
         let cursor = lane_cursor.entry(gap).or_insert(0);
-        let lane_index = *cursor;
+        let lane_x = col_x[gap] - 3 - (*cursor) * 2 - 1;
         *cursor += 1;
-        let lane_x = col_x[gap].saturating_sub(3 + (gap_lanes[gap] - lane_index) * 2 - 2);
-        let _ = lanes_before;
-        // horizontal from source to lane (may pass through intermediate cols;
-        // rails refuse to enter boxes, so runs clip visually at obstacles)
-        let y_run = sy;
         for cx in start_x..lane_x {
-            canvas.rail(cx, y_run, '─', status);
+            canvas.rail(cx, sy, '─', status);
         }
-        // vertical along the lane
-        let (top, bottom) = if y_run <= dy {
-            (y_run, dy)
-        } else {
-            (dy, y_run)
-        };
-        for cy in top..=bottom {
-            canvas.rail(lane_x, cy, '│', status);
-        }
-        canvas.rail(lane_x, y_run, if y_run <= dy { '╮' } else { '╯' }, status);
-        canvas.rail(lane_x, dy, if y_run <= dy { '╰' } else { '╭' }, status);
-        if y_run == dy {
+        if sy == dy {
             canvas.rail(lane_x, dy, '─', status);
+        } else {
+            let (top, bottom) = if sy < dy { (sy, dy) } else { (dy, sy) };
+            for cy in top + 1..bottom {
+                canvas.rail(lane_x, cy, '│', status);
+            }
+            canvas.rail(lane_x, sy, if sy < dy { '╮' } else { '╯' }, status);
+            canvas.rail(lane_x, dy, if sy < dy { '╰' } else { '╭' }, status);
         }
-        // horizontal into the target
-        let end_x = dst.x;
+        let end_x = if segment.last { b.x } else { b.x + 1 };
         for cx in lane_x + 1..end_x.saturating_sub(1) {
             canvas.rail(cx, dy, '─', status);
         }
-        if let Some(label) = &edge.label {
+        finishes.push(Finish {
+            x: end_x,
+            y: dy,
+            status,
+            label: segment.last.then(|| segment.label.clone()).flatten(),
+            label_from: lane_x + 2,
+            arrow: segment.last,
+        });
+    }
+
+    // Labels and arrowheads last, so crossing rails never eat them.
+    for finish in &finishes {
+        if finish.arrow {
+            canvas.put(
+                finish.x.saturating_sub(1),
+                finish.y,
+                '▶',
+                finish.status,
+                Role::Arrow,
+            );
+        }
+        if let Some(label) = &finish.label {
             let text: String = label.chars().take(14).collect();
-            let space = end_x.saturating_sub(lane_x + 2);
+            let space = finish.x.saturating_sub(finish.label_from + 1);
             if text.chars().count() + 1 < space {
+                canvas.put(finish.label_from, finish.y, ' ', finish.status, Role::Edge);
                 for (offset, ch) in text.chars().enumerate() {
-                    canvas.put(lane_x + 2 + offset, dy, ch, status, Role::Edge);
+                    canvas.put(
+                        finish.label_from + 1 + offset,
+                        finish.y,
+                        ch,
+                        finish.status,
+                        Role::Edge,
+                    );
                 }
+                canvas.put(
+                    finish.label_from + 1 + text.chars().count(),
+                    finish.y,
+                    ' ',
+                    finish.status,
+                    Role::Edge,
+                );
             }
         }
-        canvas.put(end_x.saturating_sub(1), dy, '▶', status, Role::Arrow);
     }
 
     // Emit with runs + links.
