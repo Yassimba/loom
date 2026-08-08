@@ -24,7 +24,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Yassimba/ai-setup.git",
+    "url": "git+https://github.com/Yassimba/loom.git",
     "directory": "plugins/openai-fast"
   },
   "publishConfig": {
@@ -35,7 +35,7 @@
       "./index.ts"
     ]
   },
-  "aiSetup": {
+  "loom": {
     "catalog": {
       "label": "OpenAI Fast Mode",
       "description": "Request OpenAI priority service tier from supported models"

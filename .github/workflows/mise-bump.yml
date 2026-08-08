@@ -1,8 +1,8 @@
 name: mise-bump
 
 # Weekly pin bumps for the published tool manifest and the contributor dev
-# env. Merging the PR is publishing: `ai-setup update` reads main. The
-# repo's own binaries (ai-setup, stackdiff) are excluded — their pins move
+# env. Merging the PR is publishing: `loom update` reads main. The
+# repo's own binaries (loom, stackdiff) are excluded — their pins move
 # with their releases via plan-releases.mjs.
 
 on:
@@ -26,11 +26,11 @@ jobs:
         run: mise upgrade --bump
         env:
           MISE_YES: "1"
-      - name: Bump manifest pins (manifest/ai-setup.toml)
+      - name: Bump manifest pins (manifest/loom.toml)
         run: mise upgrade --bump
         env:
           MISE_YES: "1"
-          MISE_GLOBAL_CONFIG_FILE: ${{ github.workspace }}/manifest/ai-setup.toml
+          MISE_GLOBAL_CONFIG_FILE: ${{ github.workspace }}/manifest/loom.toml
           MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
       - name: Bump Pi package pins (manifest/pi-packages.json)
         run: |
@@ -53,13 +53,13 @@ jobs:
         run: |
           python3 - <<'EOF'
           import re, subprocess
-          path = "manifest/ai-setup.toml"
+          path = "manifest/loom.toml"
           current = open(path).read()
           published = subprocess.run(
               ["git", "show", f"HEAD:{path}"], capture_output=True, text=True
           ).stdout
-          for exe in ("ai-setup", "stackdiff"):
-              pattern = rf'^"github:Yassimba/ai-setup\[exe={exe}\]" = .*$'
+          for exe in ("loom", "stackdiff"):
+              pattern = rf'^"github:Yassimba/loom\[exe={exe}\]" = .*$'
               keep = re.search(pattern, published, re.M)
               if keep:
                   current = re.sub(pattern, lambda _: keep.group(0), current, flags=re.M)
@@ -73,8 +73,8 @@ jobs:
           commit-message: "chore(tools): bump mise pins"
           body: |
             Weekly `mise upgrade --bump` across `mise.toml` and
-            `manifest/ai-setup.toml`. Merging publishes the new pins —
-            `ai-setup update` syncs the manifest from main. Release-owned
-            pins (ai-setup, stackdiff) are restored to their released
+            `manifest/loom.toml`. Merging publishes the new pins —
+            `loom update` syncs the manifest from main. Release-owned
+            pins (loom, stackdiff) are restored to their released
             versions before the PR is opened.
           delete-branch: true

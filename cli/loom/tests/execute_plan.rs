@@ -1,4 +1,4 @@
-use ai_setup::{
+use loom::{
     execute_install_plan, CommandResult, CommandSpec, InstallPlan, InstallStep, StepAction, System,
 };
 use std::fs;
@@ -133,10 +133,8 @@ impl SkillInstallSystem {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
-        let home = std::env::temp_dir().join(format!(
-            "ai-setup-exec-{label}-{}-{nanos}",
-            std::process::id()
-        ));
+        let home =
+            std::env::temp_dir().join(format!("loom-exec-{label}-{}-{nanos}", std::process::id()));
         fs::create_dir_all(home.join(".claude")).expect("create temp home");
         Self {
             home,
@@ -145,7 +143,7 @@ impl SkillInstallSystem {
     }
 
     fn staging(&self) -> PathBuf {
-        self.home.join(".cache").join("ai-setup").join("staging")
+        self.home.join(".cache").join("loom").join("staging")
     }
 
     fn tree(&self) -> PathBuf {
@@ -183,11 +181,7 @@ impl System for SkillInstallSystem {
             }
             "tar" => {
                 for name in &self.repo_skills {
-                    let skill = self
-                        .staging()
-                        .join("ai-setup-main")
-                        .join("skills")
-                        .join(name);
+                    let skill = self.staging().join("loom-main").join("skills").join(name);
                     fs::create_dir_all(&skill)?;
                     fs::write(skill.join("SKILL.md"), format!("# {name}\n"))?;
                 }

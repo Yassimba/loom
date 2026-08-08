@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
-# ai-setup bootstrap: ensure mise, sync the published tool manifest into
-# mise's conf.d, install its exact pins (including the ai-setup CLI itself),
+# Loom bootstrap: ensure mise, sync the published tool manifest into
+# mise's conf.d, install its exact pins (including the Loom CLI itself),
 # then hand off to the guided setup. Tools update only when a new manifest
-# lands on main and `ai-setup update` re-syncs it.
+# lands on main and `loom update` re-syncs it.
 
 # TLS 1.2 for downloads on hosts whose .NET default predates it; additive
 # (-bor) so stronger protocols stay enabled.
@@ -10,9 +10,9 @@ $ErrorActionPreference = "Stop"
 # Invoke-WebRequest's progress bar slows downloads badly under PowerShell 5.1.
 $script:ProgressPreference = "SilentlyContinue"
 
-$Name = "ai-setup"
-$Repo = "Yassimba/ai-setup"
-$ManifestUrl = "https://raw.githubusercontent.com/$Repo/main/manifest/ai-setup.toml"
+$Name = "loom"
+$Repo = "Yassimba/loom"
+$ManifestUrl = "https://raw.githubusercontent.com/$Repo/main/manifest/loom.toml"
 $ConfD = Join-Path $HOME ".config\mise\conf.d"
 
 function Get-Url([string]$Url, [string]$OutFile) {
@@ -56,11 +56,11 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   throw "$Name`: mise is installed but not on PATH yet; open a new terminal and rerun this installer"
 }
 
-# 2. The manifest's core block only - node and the ai-setup CLI. Everything
+# 2. The manifest's core block only - node and the Loom CLI. Everything
 #    else is optional and chosen in the wizard, which appends to this file.
-#    An existing selection is left alone (ai-setup update refreshes it).
+#    An existing Loom selection is left alone (loom update refreshes it).
 New-Item -ItemType Directory -Path $ConfD -Force | Out-Null
-$Selection = Join-Path $ConfD "ai-setup.toml"
+$Selection = Join-Path $ConfD "loom.toml"
 if (-not (Test-Path $Selection)) {
   $TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
   try {
@@ -70,7 +70,7 @@ if (-not (Test-Path $Selection)) {
     $end = [array]::IndexOf($lines, "# core:end")
     if ($begin -lt 0 -or $end -lt $begin) { throw "$Name`: manifest is missing its core block" }
     $core = $lines[$begin..$end]
-    @("# Managed by ai-setup: the selected tools from the published manifest.", "", "[tools]") + $core |
+    @("# Managed by Loom: the selected tools from the published manifest.", "", "[tools]") + $core |
       Set-Content -Path $Selection
     Write-Host "$Name`: core tools synced to $Selection"
   } finally {
@@ -78,11 +78,11 @@ if (-not (Test-Path $Selection)) {
   }
 }
 
-# 3. Install the pins - node and the ai-setup CLI (plus any prior selection).
+# 3. Install the pins - node and the Loom CLI (plus any prior selection).
 mise install --yes
 if ($LASTEXITCODE -ne 0) { throw "$Name`: mise install failed" }
 
 # 4. Hand off to the guided setup with the freshly installed tools on PATH.
 Write-Host ""
-mise exec -- ai-setup setup
+mise exec -- loom setup
 exit $LASTEXITCODE

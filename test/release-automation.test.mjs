@@ -14,7 +14,7 @@ async function fixture() {
   await mkdir(join(root, "plugins", "pi-example"), { recursive: true });
   await mkdir(join(root, "plugins", "herdr-prebuilt"), { recursive: true });
   await mkdir(join(root, "plugins", "herdr-source"), { recursive: true });
-  await mkdir(join(root, "cli", "ai-setup"), { recursive: true });
+  await mkdir(join(root, "cli", "loom"), { recursive: true });
   await writeFile(
     join(root, "plugins", "pi-example", "package.json"),
     JSON.stringify({ name: "@example/pi-example", version: "1.2.3" }),
@@ -36,13 +36,13 @@ async function fixture() {
     'version = "0.4.0"\nplatforms = ["linux", "windows"]\ncommand = ["bash", "herdr/build.sh"]\n',
   );
   await writeFile(
-    join(root, "cli", "ai-setup", "Cargo.toml"),
-    '[package]\nname = "ai-setup"\nversion = "0.1.0"\n',
+    join(root, "cli", "loom", "Cargo.toml"),
+    '[package]\nname = "loom"\nversion = "0.1.0"\n',
   );
   await mkdir(join(root, "manifest"), { recursive: true });
   await writeFile(
-    join(root, "manifest", "ai-setup.toml"),
-    '[tools]\n"github:Yassimba/ai-setup[exe=ai-setup]" = { version = "ai-setup-v0.1.0", tag_regex = "^ai-setup-v" }\n',
+    join(root, "manifest", "loom.toml"),
+    '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.1.0", tag_regex = "^loom-v" }\n',
   );
   return root;
 }
@@ -83,9 +83,9 @@ test("discovers npm, prebuilt Rust, source Rust, and CLI releases from manifests
   assert.deepEqual(
     components.map(({ id, distribution, version }) => ({ id, distribution, version })),
     [
-      { id: "ai-setup", distribution: "rust-binary", version: "0.1.0" },
       { id: "herdr-prebuilt", distribution: "rust-binary", version: "2.0.0" },
       { id: "herdr-source", distribution: "rust-source", version: "0.4.0" },
+      { id: "loom", distribution: "rust-binary", version: "0.1.0" },
       { id: "pi-example", distribution: "npm", version: "1.2.3" },
     ],
   );
@@ -94,13 +94,13 @@ test("discovers npm, prebuilt Rust, source Rust, and CLI releases from manifests
 test("rejects drift between CLI and manifest pin versions", async () => {
   const root = await fixture();
   await writeFile(
-    join(root, "manifest", "ai-setup.toml"),
-    '[tools]\n"github:Yassimba/ai-setup[exe=ai-setup]" = { version = "ai-setup-v9.9.9", tag_regex = "^ai-setup-v" }\n',
+    join(root, "manifest", "loom.toml"),
+    '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v9.9.9", tag_regex = "^loom-v" }\n',
   );
 
   assert.throws(
     () => discoverReleaseComponents(root),
-    /Cargo 0\.1\.0 and manifest\/ai-setup\.toml pin ai-setup-v9\.9\.9/,
+    /Cargo 0\.1\.0 and manifest\/loom\.toml pin loom-v9\.9\.9/,
   );
 });
 

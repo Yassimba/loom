@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .claude/settings.local.json
 node_modules/
-cli/ai-setup/target/
+cli/loom/target/
 .pi-subagents/
 /ai-docs/
 e2e-output/

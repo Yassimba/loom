@@ -1,20 +1,20 @@
 #!/usr/bin/env sh
 set -eu
 
-# ai-setup bootstrap: ensure mise, sync the published tool manifest into
-# mise's conf.d, install its exact pins (including the ai-setup CLI itself),
+# Loom bootstrap: ensure mise, sync the published tool manifest into
+# mise's conf.d, install its exact pins (including the Loom CLI itself),
 # then hand off to the guided setup. Tools update only when a new manifest
-# lands on main and `ai-setup update` re-syncs it.
+# lands on main and `loom update` re-syncs it.
 
-NAME="ai-setup"
-REPO="Yassimba/ai-setup"
-MANIFEST_URL="https://raw.githubusercontent.com/${REPO}/main/manifest/ai-setup.toml"
+NAME="loom"
+REPO="Yassimba/loom"
+MANIFEST_URL="https://raw.githubusercontent.com/${REPO}/main/manifest/loom.toml"
 CONF_D="${HOME}/.config/mise/conf.d"
 
 case "$(uname -s)" in
   MINGW* | MSYS* | CYGWIN*)
     echo "$NAME: this looks like Git Bash/MSYS on Windows; use the PowerShell installer instead:" >&2
-    echo '  powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.ps1 | iex"' >&2
+    echo '  powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"' >&2
     exit 1 ;;
 esac
 
@@ -28,17 +28,17 @@ if ! command -v mise >/dev/null 2>&1; then
 fi
 command -v mise >/dev/null 2>&1 || { echo "$NAME: mise install failed" >&2; exit 1; }
 
-# 2. The manifest's core block only — node and the ai-setup CLI. Everything
+# 2. The manifest's core block only — node and the Loom CLI. Everything
 #    else is optional and chosen in the wizard, which appends to this file.
-#    An existing selection is left alone (`ai-setup update` refreshes it).
+#    An existing Loom selection is left alone (`loom update` refreshes it).
 mkdir -p "$CONF_D"
-selection="${CONF_D}/ai-setup.toml"
+selection="${CONF_D}/loom.toml"
 if [ ! -f "$selection" ]; then
   tmp_manifest="$(mktemp)"
   trap 'rm -f "$tmp_manifest"' EXIT INT TERM
   curl -fsSL --retry 5 --retry-delay 3 "$MANIFEST_URL" -o "$tmp_manifest"
   {
-    echo "# Managed by ai-setup: the selected tools from the published manifest."
+    echo "# Managed by Loom: the selected tools from the published manifest."
     echo ""
     echo "[tools]"
     sed -n '/^# core:begin/,/^# core:end/p' "$tmp_manifest"
@@ -46,7 +46,7 @@ if [ ! -f "$selection" ]; then
   echo "$NAME: core tools synced to $selection"
 fi
 
-# 3. Install the pins — node and the ai-setup CLI (plus any prior selection).
+# 3. Install the pins — node and the Loom CLI (plus any prior selection).
 mise install --yes
 
 # 4. Shell activation, so the tools are on PATH in new shells.
@@ -64,4 +64,4 @@ fi
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 echo ""
-exec mise exec -- ai-setup setup
+exec mise exec -- loom setup

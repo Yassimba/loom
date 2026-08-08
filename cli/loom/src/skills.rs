@@ -8,8 +8,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const TARBALL_URL: &str =
-    "https://codeload.github.com/Yassimba/ai-setup/tar.gz/refs/heads/main";
+pub const TARBALL_URL: &str = "https://codeload.github.com/Yassimba/loom/tar.gz/refs/heads/main";
 
 /// Agent directories whose `skills/` child receives installs. The agent dir
 /// existing is the signal that the agent itself is installed; the skills
@@ -77,7 +76,7 @@ pub fn expand_skill_dependencies(all: &[Resource], selection: Vec<Resource>) -> 
 }
 
 /// Catalog skills already present (as a real directory or a symlink holding a
-/// SKILL.md) in any detected tree — the set `ai-setup update` refreshes.
+/// SKILL.md) in any detected tree — the set `loom update` refreshes.
 pub fn installed_catalog_skills(resources: &[Resource], home: &Path) -> Vec<Resource> {
     let trees = detect_skill_trees(home);
     resources
@@ -124,7 +123,7 @@ pub fn install_skills(system: &dyn System, skills: &[String]) -> Result<Vec<Tree
         ));
     }
 
-    let staging = home.join(".cache").join("ai-setup").join("staging");
+    let staging = home.join(".cache").join("loom").join("staging");
     let result = fetch_repo(system, &staging).and_then(|repo_root| {
         let source_root = repo_root.join("skills");
         let mut missing = skills
@@ -146,14 +145,14 @@ pub fn install_skills(system: &dyn System, skills: &[String]) -> Result<Vec<Tree
 /// Download and unpack the repo tarball into `staging`; returns the extracted
 /// repo root. Shells out to curl and tar (present on macOS, Linux, and
 /// Windows 10+) through `System`, so tests can intercept both.
-/// `AI_SETUP_REPO_DIR` overrides the download with a local checkout — for
+/// `LOOM_REPO_DIR` overrides the download with a local checkout — for
 /// testing unpushed skills and manifest changes end to end.
 pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf, String> {
-    if let Some(local) = std::env::var_os("AI_SETUP_REPO_DIR") {
+    if let Some(local) = std::env::var_os("LOOM_REPO_DIR") {
         let root = PathBuf::from(local);
         if !root.join("skills").is_dir() {
             return Err(format!(
-                "AI_SETUP_REPO_DIR does not look like the repo: {}",
+                "LOOM_REPO_DIR does not look like the repo: {}",
                 root.display()
             ));
         }
@@ -191,7 +190,7 @@ pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf,
         }
     }
     // The tarball unpacks to a single top-level directory whose name embeds
-    // the ref; locate it rather than hardcoding "ai-setup-main".
+    // the ref; locate it rather than hardcoding "loom-main".
     let entries = fs::read_dir(staging)
         .map_err(|error| format!("could not read {}: {error}", staging.display()))?
         .flatten()
@@ -257,7 +256,7 @@ fn copy_skill(source_root: &Path, tree: &Path, name: &str) -> Result<CopyOutcome
     {
         return Ok(CopyOutcome::SkippedSymlink);
     }
-    let incoming = tree.join(format!(".{name}.ai-setup-new"));
+    let incoming = tree.join(format!(".{name}.loom-new"));
     let _ = fs::remove_dir_all(&incoming);
     copy_dir(&source_root.join(name), &incoming).map_err(|error| error.to_string())?;
     if target.exists() {
@@ -313,7 +312,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let home = std::env::temp_dir().join(format!(
-            "ai-setup-skills-{label}-{}-{nanos}",
+            "loom-skills-{label}-{}-{nanos}",
             std::process::id()
         ));
         fs::create_dir_all(&home).expect("create temp home");
@@ -378,7 +377,7 @@ mod tests {
         assert_eq!(outcome, CopyOutcome::Installed);
         assert!(tree.join("tdd").join("SKILL.md").is_file());
         assert!(!tree.join("tdd").join("stale.md").exists());
-        assert!(!tree.join(".tdd.ai-setup-new").exists());
+        assert!(!tree.join(".tdd.loom-new").exists());
         fs::remove_dir_all(&home).ok();
     }
 

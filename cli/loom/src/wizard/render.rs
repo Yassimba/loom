@@ -140,7 +140,7 @@ impl Wizard {
 
     fn render_header(&self, frame: &mut Frame, area: Rect) {
         let title = Line::from(vec![
-            Span::styled(" ⚙ ai-setup ", Style::new().fg(ACCENT).bold()),
+            Span::styled(" ⚙ loom ", Style::new().fg(ACCENT).bold()),
             Span::styled(concat!("v", env!("CARGO_PKG_VERSION")), Style::new().dim()),
         ]);
         frame.render_widget(Paragraph::new(title), area);

@@ -1,8 +1,8 @@
 //! Sync tool selections from the published manifest into mise.
 //!
-//! The repo's `manifest/ai-setup.toml` is the MENU: every tool this setup
+//! The repo's `manifest/loom.toml` is the MENU: every tool this setup
 //! can provide, exact-pinned. What lands on a machine is the SELECTION —
-//! `~/.config/mise/conf.d/ai-setup.toml` holds the core block plus the
+//! `~/.config/mise/conf.d/loom.toml` holds the core block plus the
 //! tools the user chose. Syncing rebuilds the selection from the fresh
 //! manifest (so pins update) filtered to the previously selected keys plus
 //! any newly requested ones; mise merges the file without touching the
@@ -13,7 +13,7 @@ use crate::{skills, CommandSpec, System};
 use std::fs;
 use std::path::PathBuf;
 
-const MANIFEST_IN_REPO: &str = "manifest/ai-setup.toml";
+const MANIFEST_IN_REPO: &str = "manifest/loom.toml";
 const CORE_BEGIN: &str = "# core:begin";
 const CORE_END: &str = "# core:end";
 
@@ -24,7 +24,7 @@ pub fn conf_d_target(home: &std::path::Path) -> PathBuf {
     home.join(".config")
         .join("mise")
         .join("conf.d")
-        .join("ai-setup.toml")
+        .join("loom.toml")
 }
 
 pub fn mise_available(system: &dyn System) -> bool {
@@ -74,9 +74,9 @@ fn render_selection(manifest: &str, keys: &[String]) -> Result<String, String> {
     let core = core_section(manifest)
         .ok_or_else(|| format!("{MANIFEST_IN_REPO} is missing its core:begin/core:end block"))?;
     let mut out = String::from(
-        "# Managed by ai-setup: the selected tools from the published manifest.\n\
-         # Change the selection with `ai-setup setup`; refresh pins with\n\
-         # `ai-setup update`. Personal tools belong in your own config.toml.\n\n\
+        "# Managed by Loom: the selected tools from the published manifest.\n\
+         # Change the selection with `loom setup`; refresh pins with\n\
+         # `loom update`. Personal tools belong in your own config.toml.\n\n\
          [tools]\n",
     );
     out.push_str(&core);
@@ -108,10 +108,7 @@ pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, S
     let home = system
         .home_dir()
         .ok_or_else(|| "home directory is unavailable".to_string())?;
-    let staging = home
-        .join(".cache")
-        .join("ai-setup")
-        .join("manifest-staging");
+    let staging = home.join(".cache").join("loom").join("manifest-staging");
     let result = skills::fetch_repo(system, &staging).and_then(|repo_root| {
         let source = repo_root.join(MANIFEST_IN_REPO);
         let manifest = fs::read_to_string(&source)
@@ -164,7 +161,7 @@ mod tests {
 [tools]
 # core:begin
 node = \"24.19.0\"
-\"github:Yassimba/ai-setup[exe=ai-setup]\" = { version = \"ai-setup-v0.6.2\" }
+\"github:Yassimba/loom[exe=loom]\" = { version = \"loom-v0.6.2\" }
 # core:end
 
 gh = \"2.97.0\"

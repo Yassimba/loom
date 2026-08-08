@@ -116,11 +116,11 @@ function updateVersion(component, version) {
   // The published mise manifest pins this repo's own binaries; keep each
   // component's pin in step with its release. A commented-out pin (a binary
   // not yet in the manifest) is left alone.
-  if (component.id === "ai-setup" || component.id === "stackdiff") {
-    const manifestTomlPath = join(repoRoot, "manifest", "ai-setup.toml");
+  if (component.id === "loom" || component.id === "stackdiff") {
+    const manifestTomlPath = join(repoRoot, "manifest", "loom.toml");
     const raw = readFileSync(manifestTomlPath, "utf8");
     const pinPattern = new RegExp(
-      `^("github:Yassimba/ai-setup\\[exe=${component.id}\\]" = \\{ version = ")[^"]+`,
+      `^("github:Yassimba/loom\\[exe=${component.id}\\]" = \\{ version = ")[^"]+`,
       "m",
     );
     if (pinPattern.test(raw)) {

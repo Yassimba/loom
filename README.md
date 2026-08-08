@@ -1,10 +1,10 @@
-# ai-setup
+# Loom
 
-Everything a coding-agent setup needs, in one repo you can install from: 50+ skills and Pi packages. A guided installer walks you through the collection, sets up anything you're missing (like Pi or Herdr), and checks that it all works.
+Loom weaves a coding-agent setup into one installable collection: 50+ skills, Pi packages, and pinned tools. Its guided installer walks you through the collection, sets up anything you're missing (like Pi or Herdr), and checks that it all works.
 
 ## What's inside
 
-**Agent skills** — 50+ skills for coding agents that read a `skills/` tree (Claude Code included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, planning and backlog flow. Install one or all of them.
+**Agent skills** — 50+ skills for coding agents that read a `skills/` tree (Claude Code included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, and planning. Install one or all of them.
 
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
@@ -37,31 +37,31 @@ You don't have to do all of it. A small, clear feature can start at step 7.
 ### macOS and Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh
 ```
 
 ### Windows
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
 ```
 
-One command does the minimum and asks about the rest: it installs [mise](https://mise.jdx.dev), syncs the core of the [tool manifest](manifest/ai-setup.toml) (node and the `ai-setup` CLI, exact-pinned), and drops you into the guided setup. Your own `~/.config/mise/config.toml` is never touched; use it to layer personal tools on top.
+One command does the minimum and asks about the rest: it installs [mise](https://mise.jdx.dev), syncs the core of the [tool manifest](manifest/loom.toml) (node and the `loom` CLI, exact-pinned), and drops you into the guided setup. Your own `~/.config/mise/config.toml` is never touched; use it to layer personal tools on top.
 
 A wizard then walks through **tools** (Pi, herdr, gh, glab, tokei/tokui, uv, and the skills' helper CLIs — pick what you want, every one pinned to the version Yassin runs), **Pi packages**, and **skills** by category, and shows you the exact install plan before it runs anything. What you pick becomes your selection; skills are copied straight into your agents' skill trees. It ends by telling you what to try first.
 
-Tool versions move only when a new manifest lands on this repo — `ai-setup update` re-syncs it and refreshes everything else you installed.
+Tool versions move only when a new manifest lands on this repo — `loom update` re-syncs it and refreshes everything else you installed.
 
 Come back to it later:
 
 ```bash
-ai-setup add       # choose more capabilities
-ai-setup update    # update installed tooling and resources
-ai-setup doctor    # check the setup
-ai-setup add --skill tdd --herdr-plugin reviewr --yes
+loom add       # choose more capabilities
+loom update    # update installed tooling and resources
+loom doctor    # check the setup
+loom add --skill tdd --herdr-plugin reviewr --yes
 ```
 
-There's also an [`ai-setup`](skills/ai-setup/SKILL.md) skill, so a coding agent can run this same setup for you and ask before each step.
+There's also a [`loom`](skills/loom/SKILL.md) skill, so a coding agent can run this same setup for you and ask before each step.
 
 ## Install directly
 
@@ -72,21 +72,21 @@ You don't need the CLI — it just drives the tools below, and each one works on
 The CLI installs skills natively: it detects which coding agents you have (`~/.claude`, `~/.agents`, `~/.codex`, `~/.pi/agent`) and copies the skills you pick — plus any skills they declare as dependencies — into each agent's skill tree.
 
 ```bash
-ai-setup add --skill tdd --yes     # one skill (and whatever it depends on)
-ai-setup update                    # refresh installed skills, backfill new agents
+loom add --skill tdd --yes     # one skill (and whatever it depends on)
+loom update                    # refresh installed skills, backfill new agents
 ```
 
 The repository is also on [skills.sh](https://skills.sh):
 
 ```bash
-npx skills add Yassimba/ai-setup
+npx skills add Yassimba/loom
 ```
 
 Claude Code users can get the same skills from its marketplace:
 
 ```text
-/plugin marketplace add Yassimba/ai-setup
-/plugin install ai-setup@ai-setup
+/plugin marketplace add Yassimba/loom
+/plugin install loom@loom
 ```
 
 ### Pi packages
@@ -108,7 +108,7 @@ See the package README under [`plugins/`](plugins/) for its commands and configu
 
 - `skills/<name>/SKILL.md` — the reviewed shared skills. Category grouping lives in `skills.sh.json`.
 - `plugins/<name>/` — Pi packages, each installable on its own.
-- `cli/ai-setup/` — the Rust setup CLI.
+- `cli/loom/` — the Rust setup CLI.
 - `setup-catalog.json` — the generated catalog the CLI embeds.
 - `.claude-plugin/` — exposes the shared skills through the Claude Code marketplace.
 - `drafts/` — unreviewed skills. Not published.
@@ -127,9 +127,9 @@ npm run audit
 Check the Rust CLI separately:
 
 ```bash
-cargo fmt --manifest-path cli/ai-setup/Cargo.toml -- --check
-cargo clippy --manifest-path cli/ai-setup/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path cli/ai-setup/Cargo.toml
+cargo fmt --manifest-path cli/loom/Cargo.toml -- --check
+cargo clippy --manifest-path cli/loom/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path cli/loom/Cargo.toml
 ```
 
 If you change a reviewed skill or package catalog metadata, regenerate the embedded catalog:
