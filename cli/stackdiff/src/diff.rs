@@ -14,6 +14,10 @@ fn diff_node(before: Option<&CallNode>, after: Option<&CallNode>) -> DiffNode {
             label: after.label.clone(),
             kind: after.kind,
             status: DiffStatus::Same,
+            location: after.location.clone(),
+            doc: after.doc.clone(),
+            returns: after.returns.clone(),
+            meta: after.meta.clone(),
             children: diff_children(&before.children, &after.children),
         },
         (None, Some(after)) => mark_tree(after, DiffStatus::Added),
@@ -28,6 +32,10 @@ fn mark_tree(node: &CallNode, status: DiffStatus) -> DiffNode {
         label: node.label.clone(),
         kind: node.kind,
         status,
+        location: node.location.clone(),
+        doc: node.doc.clone(),
+        returns: node.returns.clone(),
+        meta: node.meta.clone(),
         children: node.children.iter().map(|c| mark_tree(c, status)).collect(),
     }
 }
@@ -75,4 +83,52 @@ fn diff_children(before: &[CallNode], after: &[CallNode]) -> Vec<DiffNode> {
 
 pub fn tree_has_changes(node: &DiffNode) -> bool {
     node.status != DiffStatus::Same || node.children.iter().any(tree_has_changes)
+}
+
+/// Keep only changed limbs plus `context` unchanged siblings around each;
+/// elided runs collapse to one "…" node. Ancestors of changes always stay.
+pub fn prune_unchanged(node: &DiffNode, context: usize) -> DiffNode {
+    let keep: Vec<bool> = node.children.iter().map(tree_has_changes).collect();
+    let near: Vec<bool> = (0..node.children.len())
+        .map(|i| {
+            let lo = i.saturating_sub(context);
+            let hi = (i + context).min(keep.len().saturating_sub(1));
+            (lo..=hi).any(|j| keep[j])
+        })
+        .collect();
+    let mut children = Vec::new();
+    let mut elided = false;
+    for (index, child) in node.children.iter().enumerate() {
+        if near.get(index).copied().unwrap_or(false) {
+            children.push(prune_unchanged(child, context));
+            elided = false;
+        } else if !elided {
+            children.push(DiffNode {
+                key: "…".into(),
+                label: "…".into(),
+                kind: crate::types::NodeKind::Call,
+                status: DiffStatus::Same,
+                location: None,
+                doc: None,
+                returns: None,
+                meta: crate::types::CallMeta::default(),
+                children: Vec::new(),
+            });
+            elided = true;
+        }
+    }
+    DiffNode {
+        children,
+        ..DiffNode {
+            key: node.key.clone(),
+            label: node.label.clone(),
+            kind: node.kind,
+            status: node.status,
+            location: node.location.clone(),
+            doc: node.doc.clone(),
+            returns: node.returns.clone(),
+            meta: node.meta.clone(),
+            children: Vec::new(),
+        }
+    }
 }

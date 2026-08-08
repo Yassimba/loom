@@ -99,6 +99,10 @@ fn tree_as_diff(node: &stackdiff::types::CallNode) -> DiffNode {
         label: node.label.clone(),
         kind: node.kind,
         status: DiffStatus::Same,
+        location: node.location.clone(),
+        doc: node.doc.clone(),
+        returns: node.returns.clone(),
+        meta: node.meta.clone(),
         children: node.children.iter().map(tree_as_diff).collect(),
     }
 }
