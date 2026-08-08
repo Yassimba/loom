@@ -714,6 +714,26 @@
       "installTarget": "npm:@marp-team/marp-cli",
       "nextAction": "Ask your agent for a slide deck.",
       "bin": "marp"
+    },
+    {
+      "id": "tool:beads",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "beads",
+      "description": "Beads (br): local-first issue tracker for coding agents — tasks in SQLite with JSONL export for git. Rust port of Steve Yegge's beads.",
+      "installTarget": "github:Dicklesworthstone/beads_rust",
+      "nextAction": "Run `br quickstart` in a repo.",
+      "bin": "br"
+    },
+    {
+      "id": "tool:beads-viewer",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "beads-viewer",
+      "description": "Beads viewer (bv): graph-aware TUI over the Beads tracker — kanban, dependency DAG, critical path.",
+      "installTarget": "github:Dicklesworthstone/beads_viewer",
+      "nextAction": "Run `bv` in a repo with Beads issues.",
+      "bin": "bv"
     }
   ]
 }

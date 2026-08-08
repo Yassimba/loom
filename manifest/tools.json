@@ -62,6 +62,20 @@
       "description": "Renders Markdown slide decks — used by the marp-slide skill.",
       "nextAction": "Ask your agent for a slide deck.",
       "bin": "marp"
+    },
+    {
+      "key": "github:Dicklesworthstone/beads_rust",
+      "label": "beads",
+      "bin": "br",
+      "description": "Beads (br): local-first issue tracker for coding agents — tasks in SQLite with JSONL export for git. Rust port of Steve Yegge's beads.",
+      "nextAction": "Run `br quickstart` in a repo."
+    },
+    {
+      "key": "github:Dicklesworthstone/beads_viewer",
+      "label": "beads-viewer",
+      "bin": "bv",
+      "description": "Beads viewer (bv): graph-aware TUI over the Beads tracker — kanban, dependency DAG, critical path.",
+      "nextAction": "Run `bv` in a repo with Beads issues."
     }
   ]
 }
