@@ -80,13 +80,13 @@ struct Cli {
     #[arg(long)]
     plain: bool,
 
-    /// Prune unchanged limbs from diffs, keeping --context siblings
+    /// Show whole trees in diffs instead of pruning unchanged limbs
     #[arg(long)]
-    only_changes: bool,
+    full: bool,
 
-    /// Unchanged siblings kept around each change (implies --only-changes)
-    #[arg(long)]
-    context: Option<usize>,
+    /// Unchanged siblings kept around each change (default 1)
+    #[arg(long, default_value_t = 1)]
+    context: usize,
 
     /// Output format
     #[arg(long, value_enum, default_value_t = Format::Text)]
@@ -322,16 +322,14 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         return Ok(0);
     }
 
-    let prune = cli.only_changes || cli.context.is_some();
-    let context = cli.context.unwrap_or(1);
     let diffs: Vec<_> = entries
         .par_iter()
         .filter_map(|entry| diff_entry(entry, &before, &after, cli.max_depth))
         .map(|diff| {
-            if prune {
-                prune_unchanged(&diff, context)
-            } else {
+            if cli.full {
                 diff
+            } else {
+                prune_unchanged(&diff, cli.context)
             }
         })
         .collect();
