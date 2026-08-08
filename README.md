@@ -1,14 +1,10 @@
 # ai-setup
 
-Everything a coding-agent setup needs, in one repo you can install from: 50+ skills, Herdr plugins, and Pi packages. A guided installer walks you through the collection, sets up anything you're missing (like Pi or Herdr), and checks that it all works.
+Everything a coding-agent setup needs, in one repo you can install from: 50+ skills and Pi packages. A guided installer walks you through the collection, sets up anything you're missing (like Pi or Herdr), and checks that it all works.
 
 ## What's inside
 
 **Agent skills** — 50+ skills for coding agents that read a `skills/` tree (Claude Code included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, planning and backlog flow. Install one or all of them.
-
-**Herdr plugins** — plugins for [Herdr](https://herdr.dev), a terminal multiplexer for coding agents. They ship as prebuilt, checksum-verified binaries, so you don't need Rust installed:
-
-- [**jumplist**](plugins/herdr-jumplist/) — jump back and forward through the panes you've focused, like editor navigation history.
 
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
@@ -57,7 +53,7 @@ Then run:
 ai-setup setup
 ```
 
-A wizard walks through **Pi packages**, then **Herdr plugins**, then **skills** by category, and shows you the exact install plan before it runs anything. Pi packages and Herdr plugins go through their own package managers; skills are copied straight into your agents' skill trees. It ends by telling you what to try first.
+A wizard walks through **Pi packages**, then **skills** by category, and shows you the exact install plan before it runs anything. Pi packages go through their own package manager; skills are copied straight into your agents' skill trees. It ends by telling you what to try first.
 
 Come back to it later:
 
@@ -109,20 +105,10 @@ pi install npm:@yassimba/pi-web-access
 
 See the package README under [`plugins/`](plugins/) for its commands and configuration.
 
-### Herdr plugins
-
-Install any Herdr plugin straight from its folder in this repo:
-
-```bash
-herdr plugin install Yassimba/ai-setup/plugins/herdr-jumplist --yes
-```
-
-Compiled plugins download checksum-verified binaries for macOS, Linux, or Windows from this repo's GitHub releases. No Rust needed.
-
 ## Repository layout
 
 - `skills/<name>/SKILL.md` — the reviewed shared skills. Category grouping lives in `skills.sh.json`.
-- `plugins/<name>/` — Pi packages and Herdr plugins, each installable on its own.
+- `plugins/<name>/` — Pi packages, each installable on its own.
 - `cli/ai-setup/` — the Rust setup CLI.
 - `setup-catalog.json` — the generated catalog the CLI embeds.
 - `.claude-plugin/` — exposes the shared skills through the Claude Code marketplace.

@@ -11,9 +11,7 @@ folders. The Claude plugin is the repo root itself: `.claude-plugin/plugin.json`
 plus auto-discovered `skills/`, listed by `.claude-plugin/marketplace.json`
 (`source: "./"`).
 `plugins/<name>/` — one flat directory per plugin package: npm workspaces
-(Pi extensions, discovered by their `package.json`) and Rust Herdr plugins
-(installable via `herdr plugin install Yassimba/ai-setup/plugins/<name>`)
-side by side.
+(Pi extensions, discovered by their `package.json`).
 `cli/ai-setup/` — the Rust onboarding CLI installed by the root bootstrap
 scripts. `setup-catalog.json` is generated from reviewed skills and opted-in
 plugin metadata; the CLI embeds it, copies skills into the agent skill trees
