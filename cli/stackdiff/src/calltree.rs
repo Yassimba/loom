@@ -7,7 +7,7 @@ use crate::types::{CallMeta, CallNode, CallStep, FunctionInfo, NodeKind};
 
 /// Look up a callable by key, falling back to its `new X` constructor alias —
 /// languages without a `new` keyword (Python) emit plain `X` for instantiation.
-fn lookup_callable<'a>(key: &str, index: &'a FunctionIndex) -> Option<&'a FunctionInfo> {
+pub fn lookup_callable<'a>(key: &str, index: &'a FunctionIndex) -> Option<&'a FunctionInfo> {
     index.get(key).or_else(|| index.get(&format!("new {key}")))
 }
 
