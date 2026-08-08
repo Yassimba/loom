@@ -8,8 +8,16 @@ use std::collections::BTreeMap;
 
 use crate::types::{DiffNode, DiffStatus, NodeKind};
 
-/// A label expected in the rendered output, with the status to paint it.
-pub type Marks = Vec<(String, DiffStatus)>;
+/// A label expected in the rendered output: paint it by status, and wrap
+/// it in an OSC 8 hyperlink when a url is attached.
+#[derive(Debug)]
+pub struct Mark {
+    pub label: String,
+    pub status: DiffStatus,
+    pub url: Option<String>,
+}
+
+pub type Marks = Vec<Mark>;
 
 fn clip(text: &str, max: usize) -> String {
     let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -37,7 +45,11 @@ fn participant(node: &DiffNode, fallback: &str) -> String {
 
 fn mark(marks: &mut Marks, label: &str, status: DiffStatus) {
     if status != DiffStatus::Same && !label.is_empty() {
-        marks.push((label.to_string(), status));
+        marks.push(Mark {
+            label: label.to_string(),
+            status,
+            url: None,
+        });
     }
 }
 
@@ -188,32 +200,39 @@ fn paint(status: DiffStatus, text: &str) -> String {
     format!("{code}{text}\x1b[0m")
 }
 
-/// Render mermaid source through mermaid-text and paint the marked labels.
+/// Render mermaid source through mermaid-text, painting and hyperlinking
+/// the marked labels. Tries both flow directions and keeps whichever fits
+/// the terminal best (narrow enough first, then shortest).
 pub fn render_colored(
     source: &str,
     marks: &Marks,
     color: bool,
     max_width: Option<usize>,
 ) -> anyhow::Result<String> {
-    let rendered = mermaid_text::render_with_width(source, max_width)
-        .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))?;
-    if !color {
-        return Ok(rendered);
-    }
-    let mut sorted: Vec<&(String, DiffStatus)> = marks.iter().collect();
-    sorted.sort_by_key(|(label, _)| std::cmp::Reverse(label.chars().count()));
+    let rendered = best_layout(source, max_width)?;
+    let mut sorted: Vec<&Mark> = marks.iter().collect();
+    sorted.sort_by_key(|mark| std::cmp::Reverse(mark.label.chars().count()));
     let out = rendered
         .lines()
         .map(|line| {
             let mut line = line.to_string();
-            for (label, status) in &sorted {
-                if let Some(at) = line.find(label.as_str()) {
-                    line = format!(
-                        "{}{}{}",
-                        &line[..at],
-                        paint(*status, label),
-                        &line[at + label.len()..]
-                    );
+            for mark in &sorted {
+                if let Some(at) = line.find(mark.label.as_str()) {
+                    let painted = if color {
+                        paint(mark.status, &mark.label)
+                    } else {
+                        mark.label.clone()
+                    };
+                    let shown = match &mark.url {
+                        Some(url) => {
+                            format!("\x1b]8;;{url}\x1b\\{painted}\x1b]8;;\x1b\\")
+                        }
+                        None => painted,
+                    };
+                    if !color && mark.url.is_none() {
+                        break;
+                    }
+                    line = format!("{}{}{}", &line[..at], shown, &line[at + mark.label.len()..]);
                     break;
                 }
             }
@@ -222,6 +241,46 @@ pub fn render_colored(
         .collect::<Vec<_>>()
         .join("\n");
     Ok(out)
+}
+
+fn best_layout(source: &str, max_width: Option<usize>) -> anyhow::Result<String> {
+    let render = |src: &str| {
+        mermaid_text::render_with_width(src, max_width)
+            .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))
+    };
+    let Some(flipped) = flip_direction(source) else {
+        return render(source);
+    };
+    let first = render(source)?;
+    let second = match render(&flipped) {
+        Ok(second) => second,
+        Err(_) => return Ok(first),
+    };
+    let measure = |text: &str| {
+        let width = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
+        let height = text.lines().count();
+        (width, height)
+    };
+    let (w1, h1) = measure(&first);
+    let (w2, h2) = measure(&second);
+    let limit = max_width.unwrap_or(usize::MAX);
+    let pick_second = match (w1 <= limit, w2 <= limit) {
+        (true, false) => false,
+        (false, true) => true,
+        // Both fit (or neither): prefer the smaller footprint.
+        _ => w2 * h2 < w1 * h1,
+    };
+    Ok(if pick_second { second } else { first })
+}
+
+fn flip_direction(source: &str) -> Option<String> {
+    if let Some(rest) = source.strip_prefix("flowchart LR") {
+        Some(format!("flowchart TD{rest}"))
+    } else {
+        source
+            .strip_prefix("flowchart TD")
+            .map(|rest| format!("flowchart LR{rest}"))
+    }
 }
 
 /// Module zoom: one node per file, an edge when a call crosses files,
@@ -289,10 +348,13 @@ pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
 /// (drawn once — convergence is visible as fan-in), data constructors as
 /// stadium nodes, edges labeled with the binding the result lands in.
 /// Branches flatten away; unresolved plumbing drops out entirely.
-pub fn lineage_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
+pub fn lineage_mermaid(
+    roots: &[DiffNode],
+    link: Option<(&str, Option<&std::path::Path>)>,
+) -> Option<(String, Marks)> {
     #[derive(Default)]
     struct Graph {
-        nodes: BTreeMap<String, (String, DiffStatus, bool)>,
+        nodes: BTreeMap<String, (String, DiffStatus, bool, Option<String>)>,
         edges: BTreeMap<(String, String), (Option<String>, DiffStatus)>,
     }
 
@@ -317,11 +379,15 @@ pub fn lineage_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
     }
 
     fn label_of(node: &DiffNode) -> String {
-        let name = node.key.clone();
-        match &node.returns {
-            Some(ret) => clip(&format!("{name} → {ret}"), 44),
-            None => clip(&name, 44),
+        let mut text = node.key.clone();
+        if let Some(signature) = &node.signature {
+            text.push_str(signature);
         }
+        if let Some(ret) = &node.returns {
+            text.push_str(" → ");
+            text.push_str(ret);
+        }
+        clip(&text, 56)
     }
 
     fn walk(node: &DiffNode, ancestor: Option<&str>, graph: &mut Graph) {
@@ -330,7 +396,7 @@ pub fn lineage_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
             let entry = graph
                 .nodes
                 .entry(node.key.clone())
-                .or_insert_with(|| (label_of(node), node.status, data));
+                .or_insert_with(|| (label_of(node), node.status, data, node.location.clone()));
             merge_status(&mut entry.1, node.status);
             if let Some(from) = ancestor {
                 if from != node.key {
@@ -369,14 +435,34 @@ pub fn lineage_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
     }
     let mut lines = vec!["flowchart LR".to_string()];
     let mut marks = Marks::new();
-    for (key, (label, status, data)) in &graph.nodes {
+    for (key, (label, status, data, location)) in &graph.nodes {
         let id = ids[key];
         if *data {
             lines.push(format!("n{id}([{label}])"));
         } else {
             lines.push(format!("n{id}[{label}]"));
         }
-        mark(&mut marks, label, *status);
+        let url = match (link, location) {
+            (Some((template, root)), Some(location)) => {
+                location.rsplit_once(':').map(|(path, line)| {
+                    let absolute = match root {
+                        Some(root) => root.join(path).to_string_lossy().into_owned(),
+                        None => path.to_string(),
+                    };
+                    template
+                        .replace("{path}", &absolute)
+                        .replace("{line}", line)
+                })
+            }
+            _ => None,
+        };
+        if *status != DiffStatus::Same || url.is_some() {
+            marks.push(Mark {
+                label: label.clone(),
+                status: *status,
+                url,
+            });
+        }
     }
     for ((from, to), (binding, status)) in &graph.edges {
         let (Some(from_id), Some(to_id)) = (ids.get(from), ids.get(to)) else {

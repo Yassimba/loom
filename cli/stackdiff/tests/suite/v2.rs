@@ -293,8 +293,8 @@ fn sequence_view_orders_messages_and_marks_changes() {
     assert!(
         marks
             .iter()
-            .any(|(label, status)| label == "two()"
-                && *status == stackdiff::types::DiffStatus::Added),
+            .any(|mark| mark.label == "two()"
+                && mark.status == stackdiff::types::DiffStatus::Added),
         "{marks:?}"
     );
     let colored = stackdiff::views::render_colored(&source, &marks, true, Some(100)).unwrap();
@@ -436,7 +436,7 @@ fn lineage_view_draws_shared_callees_once() {
     let index = build_index(extract_functions("app.ts", &source).unwrap());
     let tree = build_call_tree("boot", &index, 12);
     let diff = diff_trees(&tree, &tree);
-    let (mermaid, _) = stackdiff::views::lineage_mermaid(&[diff]).unwrap();
+    let (mermaid, _) = stackdiff::views::lineage_mermaid(&[diff], None).unwrap();
     // resolve appears as ONE node, referenced by two edges.
     assert_eq!(mermaid.matches("[resolve → Plan]").count(), 1, "{mermaid}");
     let resolve_id = mermaid

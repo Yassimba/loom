@@ -64,7 +64,14 @@ pub(crate) fn node_text(node: &DiffNode, rich: bool) -> String {
         text.push_str(" = ");
     }
     if node.meta.args.is_empty() {
-        text.push_str(&node.label);
+        // No call-site args to show: prefer the declared typed signature.
+        match &node.signature {
+            Some(signature) => {
+                text.push_str(&node.key);
+                text.push_str(signature);
+            }
+            None => text.push_str(&node.label),
+        }
     } else {
         // Call-site args replace the declared-parameter label.
         text.push_str(&node.key);

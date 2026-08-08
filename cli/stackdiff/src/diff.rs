@@ -21,6 +21,7 @@ fn diff_node(before: Option<&CallNode>, after: Option<&CallNode>) -> DiffNode {
             location: after.location.clone(),
             doc: after.doc.clone(),
             returns: after.returns.clone(),
+            signature: after.signature.clone(),
             meta: after.meta.clone(),
             children: diff_children(&before.children, &after.children),
         },
@@ -39,6 +40,7 @@ fn mark_tree(node: &CallNode, status: DiffStatus) -> DiffNode {
         location: node.location.clone(),
         doc: node.doc.clone(),
         returns: node.returns.clone(),
+        signature: node.signature.clone(),
         meta: node.meta.clone(),
         children: node.children.iter().map(|c| mark_tree(c, status)).collect(),
     }
@@ -127,6 +129,7 @@ pub fn prune_unchanged(node: &DiffNode, context: usize) -> DiffNode {
                 location: None,
                 doc: None,
                 returns: None,
+                signature: None,
                 meta: crate::types::CallMeta::default(),
                 children: Vec::new(),
             });
@@ -143,6 +146,7 @@ pub fn prune_unchanged(node: &DiffNode, context: usize) -> DiffNode {
             location: node.location.clone(),
             doc: node.doc.clone(),
             returns: node.returns.clone(),
+            signature: node.signature.clone(),
             meta: node.meta.clone(),
             children: Vec::new(),
         }
@@ -172,6 +176,7 @@ fn dedupe_node(node: &mut DiffNode, seen: &mut std::collections::HashSet<String>
             location: None,
             doc: None,
             returns: None,
+            signature: None,
             meta: crate::types::CallMeta::default(),
             children: Vec::new(),
         }];
@@ -180,4 +185,56 @@ fn dedupe_node(node: &mut DiffNode, seen: &mut std::collections::HashSet<String>
     for child in &mut node.children {
         dedupe_node(child, seen);
     }
+}
+
+fn is_data_node(node: &DiffNode) -> bool {
+    node.location.is_none()
+        && node
+            .key
+            .chars()
+            .next()
+            .map(|c| c.is_uppercase())
+            .unwrap_or(false)
+}
+
+/// Lineage granularity: keep resolved functions, data constructors, and
+/// anything changed; flatten unchanged branch arms; drop unchanged
+/// unresolved plumbing. The default tree altitude.
+pub fn lineage_prune(node: &DiffNode) -> DiffNode {
+    DiffNode {
+        children: lineage_children(node),
+        ..DiffNode {
+            key: node.key.clone(),
+            label: node.label.clone(),
+            kind: node.kind,
+            status: node.status,
+            location: node.location.clone(),
+            doc: node.doc.clone(),
+            returns: node.returns.clone(),
+            signature: node.signature.clone(),
+            meta: node.meta.clone(),
+            children: Vec::new(),
+        }
+    }
+}
+
+fn lineage_children(node: &DiffNode) -> Vec<DiffNode> {
+    let mut out = Vec::new();
+    for child in &node.children {
+        let marker = child.key == "…" || child.key == "▸";
+        let keep = marker
+            || child.status != DiffStatus::Same
+            || child.location.is_some()
+            || is_data_node(child);
+        if child.kind == crate::types::NodeKind::Branch && child.status == DiffStatus::Same {
+            out.extend(lineage_children(child));
+        } else if keep {
+            out.push(lineage_prune(child));
+        } else {
+            out.extend(lineage_children(child));
+        }
+    }
+    // Flattening can leave duplicate elision markers side by side.
+    out.dedup_by(|a, b| a.key == "…" && b.key == "…");
+    out
 }
