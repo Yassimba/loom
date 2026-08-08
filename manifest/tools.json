@@ -14,6 +14,12 @@
       "nextAction": "Run `herdr` to start the multiplexer."
     },
     {
+      "key": "github:Yassimba/loom[exe=stackdiff]",
+      "label": "stackdiff",
+      "description": "Diff call graphs across Git revisions for TypeScript, Python, Go, and Rust.",
+      "nextAction": "Run `stackdiff --help` in a Git repository."
+    },
+    {
       "key": "gh",
       "label": "gh",
       "description": "GitHub CLI — the release, code-review, and jira skills use it for PRs and issues.",

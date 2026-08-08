@@ -29,8 +29,7 @@ herdr = { version = "0.8.0", os = ["macos", "linux"] }
 # this repo's own extras. Component-scoped release tags, so the pin is the
 # full tag; release automation rewrites these lines (plan-releases.mjs) and
 # the mise-bump workflow restores them if `mise upgrade` moves them.
-# stackdiff joins after its first release is published from release/auto:
-# "github:Yassimba/loom[exe=stackdiff]" = { version = "stackdiff-v0.1.0", tag_regex = "^stackdiff-v" }
+"github:Yassimba/loom[exe=stackdiff]" = { version = "stackdiff-v0.1.0", tag_regex = "^stackdiff-v" }
 
 # forges
 gh = "2.97.0"
