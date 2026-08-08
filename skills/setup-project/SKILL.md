@@ -1,7 +1,6 @@
 ---
 name: setup-project
-description: Configure this repo for the engineering skills — issue tracker, domain doc layout, editor deep links, ai-docs gitignore. Run once per repo before first use of the other engineering skills.
-disable-model-invocation: true
+description: Configure this repo for the engineering skills — issue tracker (Beads, GitHub, GitLab, or local markdown), domain-doc layout, editor deep links, ai-docs gitignore. Use when the user wants a repo set up for the engineering skills, after a fresh `loom init`, or when another skill finds `ai-docs/agents/` missing.
 ---
 
 # Setup Project
@@ -27,6 +26,8 @@ Look at the current repo to understand its starting state. Read what's actually 
 - `.gitignore` — is `ai-docs/` already ignored?
 - `ai-docs/plans/` — sign that a local-markdown issue tracker convention is already in use
 - An `### Editor` entry in the existing `## Agent skills` block — is the editor already configured?
+
+Done when: every item above has an observed answer — a guess is a missing observation.
 
 ### 2. Present findings and ask
 
@@ -67,6 +68,8 @@ Confirm the layout:
 
 For anything else, ask for the editor's URL template with `{path}` and `{line}` placeholders and record it verbatim. `{path}` is always absolute.
 
+Done when: the user has answered all three sections — a defaulted answer the user never saw is not an answer.
+
 ### 3. Confirm and edit
 
 Show the user a draft of:
@@ -75,6 +78,8 @@ Show the user a draft of:
 - The contents of `ai-docs/agents/issue-tracker.md` and `ai-docs/agents/domain.md`
 
 Let them edit before writing.
+
+Done when: the user has approved the draft, edited or as-is.
 
 ### 4. Write
 
@@ -116,6 +121,8 @@ Then write the two docs files using the seed templates in this skill folder as a
 For "other" issue trackers, write `ai-docs/agents/issue-tracker.md` from scratch using the user's description.
 
 Add `ai-docs/` to `.gitignore` (create the file if needed; skip if already covered) — `ai-docs/` is local agent working space: plans, briefs, brainstorm sessions, and these config docs stay out of the repo's history.
+
+Done when: the `## Agent skills` block names all three choices, `ai-docs/agents/issue-tracker.md` and `ai-docs/agents/domain.md` both exist, and `.gitignore` covers `ai-docs/`.
 
 ### 5. Done
 

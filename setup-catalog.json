@@ -270,7 +270,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "setup-project",
-      "description": "Configure this repo for the engineering skills — issue tracker, domain doc layout, editor deep links, ai-docs gitignore. Run once per repo before first use of the other engineering skills.",
+      "description": "Configure this repo for the engineering skills — issue tracker (Beads, GitHub, GitLab, or local markdown), domain-doc layout, editor deep links, ai-docs gitignore. Use when the user wants a repo set up for the engineering skills, after a fresh `loom init`, or when another skill finds `ai-docs/agents/` missing.",
       "installTarget": "setup-project",
       "nextAction": "Ask your coding agent to use the setup-project skill.",
       "dependencies": []
