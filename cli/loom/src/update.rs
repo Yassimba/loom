@@ -172,27 +172,14 @@ fn run_update_task(system: &dyn System, task: &UpdateTask) -> (bool, String) {
     (true, format!("  ✓ {}", task.label))
 }
 
-/// Refresh every catalog skill found in any agent tree, into every detected
-/// tree. Re-copying the union both updates stale content and backfills agents
-/// installed since the skills were: a fresh ~/.codex gets the same skills the
-/// other trees already hold.
+/// Refresh catalog skills in the exact global and current-project trees where
+/// they already exist. Agent and scope choices remain stable across updates.
 fn update_installed_skills(system: &dyn System, catalog: &Catalog) -> (bool, String) {
-    let Some(home) = system.home_dir() else {
-        return (
-            false,
-            "  ! Shared skills: home directory is unavailable".to_string(),
-        );
-    };
-    let installed = skills::installed_catalog_skills(&catalog.resources, &home);
-    if installed.is_empty() {
-        return (true, "  ✓ Shared skills (none installed)".to_string());
-    }
-    let names = skills::expand_skill_dependencies(&catalog.resources, installed)
-        .into_iter()
-        .map(|resource| resource.install_target)
-        .collect::<Vec<_>>();
-    match skills::install_skills(system, &names) {
+    match skills::refresh_installed_skills(system, &catalog.resources) {
         Ok(reports) => {
+            if reports.is_empty() {
+                return (true, "  ✓ Shared skills (none installed)".to_string());
+            }
             let mut block = String::from("  ✓ Shared skills");
             for report in reports {
                 let skipped = if report.skipped_symlinks.is_empty() {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Next Task"
+  short_description: "Claim the next Beads task"
+  default_prompt: "Use $next to grab the next task."

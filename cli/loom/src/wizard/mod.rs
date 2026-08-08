@@ -25,7 +25,7 @@ use std::time::Duration;
 pub fn run_wizard(model: Model, system: &(dyn System + Sync)) -> Result<WizardOutcome> {
     anyhow::ensure!(
         std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
-        "interactive setup needs a terminal; use --skill, --pi-package, or --herdr-plugin instead"
+        "interactive setup needs a terminal; use --skill, --pi-package, or --herdr-plugin instead (skills also accept --agent and --scope)"
     );
     let mut wizard = Wizard::new(model);
     wizard.probing = true;
@@ -50,8 +50,14 @@ fn run_loop(
         {
             let resources = wizard.model.resources.clone();
             let status = wizard.model.status;
+            let destination = wizard.skill_destination();
             scope.spawn(move || {
-                let _ = probe_sender.send(crate::app::detect_installed(&resources, status, system));
+                let _ = probe_sender.send(crate::app::detect_installed(
+                    &resources,
+                    status,
+                    system,
+                    &destination,
+                ));
             });
         }
         loop {

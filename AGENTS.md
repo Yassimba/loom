@@ -14,8 +14,9 @@ plus auto-discovered `skills/`, listed by `.claude-plugin/marketplace.json`
 (Pi extensions, discovered by their `package.json`).
 `cli/loom/` — the Rust onboarding CLI installed by the root bootstrap
 scripts. `setup-catalog.json` is generated from reviewed skills and opted-in
-plugin metadata; the CLI embeds it, copies skills into the agent skill trees
-itself, and delegates Pi package installs to Pi.
+plugin metadata; the CLI embeds it, copies skills into user-selected agent
+trees at global or current-project scope, and delegates Pi package installs
+to Pi.
 `manifest/loom.toml` — the published tool manifest, the MENU: every
 tool this setup can provide, exact-pinned (node, Pi, herdr, gh, the
 loom and stackdiff binaries, …), with wizard metadata in
@@ -36,8 +37,9 @@ them.
 
 The repo is the only real copy of each skill. `scripts/sync-skills.sh link`
 symlinks `skills/<name>` and `personal/<name>` into the global agent trees
-(`~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, and
-`~/.pi/agent/skills`), so an edit made from either side is the same file and
+(`~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`,
+`~/.pi/agent/skills`, and `~/.config/opencode/skills`), so an edit made from
+either side is the same file and
 syncing means committing. `pull` brings
 a diverged or unknown global skill back into the repo (unknown ones land in
 `drafts/`), `status` shows the picture, `unlink` materializes a real copy for

@@ -1,6 +1,6 @@
 //! Native skill installer. Skills are plain directories in this repo;
 //! installing one means downloading the repo tarball once and copying
-//! `skills/<name>` into every agent skill tree present on the machine.
+//! `skills/<name>` into the selected agent and scope destinations.
 //! No package manager sits in between.
 
 use crate::{CommandSpec, Resource, ResourceKind, System};
@@ -10,16 +10,162 @@ use std::path::{Path, PathBuf};
 
 pub const TARBALL_URL: &str = "https://codeload.github.com/Yassimba/loom/tar.gz/refs/heads/main";
 
-/// Agent directories whose `skills/` child receives installs. The agent dir
-/// existing is the signal that the agent itself is installed; the skills
-/// subdirectory is created on demand.
-const AGENT_DIRS: [&[&str]; 4] = [&[".claude"], &[".agents"], &[".codex"], &[".pi", "agent"]];
+const OPENCODE_PLUGIN_SOURCE: &str = "manifest/opencode/plugins/loom-session-env.js";
+const OPENCODE_PLUGIN_NAME: &str = "loom-session-env.js";
+
+/// A user-facing skill destination. `AgentsStandard` is the portable
+/// `.agents/skills` tree used directly by several hosts.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, clap::ValueEnum)]
+pub enum SkillAgent {
+    Claude,
+    #[value(name = "agents")]
+    AgentsStandard,
+    Codex,
+    Pi,
+    #[value(name = "opencode")]
+    OpenCode,
+}
+
+impl SkillAgent {
+    pub const ALL: [Self; 5] = [
+        Self::Claude,
+        Self::AgentsStandard,
+        Self::Codex,
+        Self::Pi,
+        Self::OpenCode,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Claude => "Claude",
+            Self::AgentsStandard => "Agent Skills standard",
+            Self::Codex => "Codex",
+            Self::Pi => "Pi",
+            Self::OpenCode => "OpenCode",
+        }
+    }
+
+    pub(crate) fn status_label(self) -> &'static str {
+        match self {
+            Self::AgentsStandard => "Agents",
+            _ => self.label(),
+        }
+    }
+
+    fn global_agent_dir(self, home: &Path) -> PathBuf {
+        match self {
+            Self::Claude => home.join(".claude"),
+            Self::AgentsStandard => home.join(".agents"),
+            Self::Codex => home.join(".codex"),
+            Self::Pi => home.join(".pi").join("agent"),
+            Self::OpenCode => home.join(".config").join("opencode"),
+        }
+    }
+
+    pub(crate) fn global_skill_tree(self, home: &Path) -> PathBuf {
+        self.global_agent_dir(home).join("skills")
+    }
+
+    pub(crate) fn project_skill_tree(self, root: &Path) -> PathBuf {
+        match self {
+            Self::Claude => root.join(".claude").join("skills"),
+            Self::AgentsStandard | Self::Codex => root.join(".agents").join("skills"),
+            Self::Pi => root.join(".pi").join("skills"),
+            Self::OpenCode => root.join(".opencode").join("skills"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+pub enum SkillScope {
+    #[default]
+    Global,
+    Project,
+}
+
+impl SkillScope {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Global => "Global",
+            Self::Project => "Project",
+        }
+    }
+}
+
+/// Exact agent and scope selection carried from the UI into execution.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SkillDestination {
+    pub agents: Vec<SkillAgent>,
+    pub scope: SkillScope,
+    pub home: PathBuf,
+    pub project_root: PathBuf,
+}
+
+impl SkillDestination {
+    pub fn new(
+        agents: Vec<SkillAgent>,
+        scope: SkillScope,
+        home: &Path,
+        current_dir: &Path,
+    ) -> Self {
+        let agents = SkillAgent::ALL
+            .into_iter()
+            .filter(|agent| agents.contains(agent))
+            .collect();
+        Self {
+            agents,
+            scope,
+            home: home.to_path_buf(),
+            project_root: project_root(current_dir),
+        }
+    }
+
+    pub fn trees(&self) -> Vec<PathBuf> {
+        let mut seen = HashSet::new();
+        self.agents
+            .iter()
+            .map(|agent| match self.scope {
+                SkillScope::Global => agent.global_skill_tree(&self.home),
+                SkillScope::Project => agent.project_skill_tree(&self.project_root),
+            })
+            .filter(|tree| seen.insert(tree.clone()))
+            .collect()
+    }
+
+    pub fn display(&self) -> String {
+        self.trees()
+            .iter()
+            .map(|tree| tree.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+/// Prefer the Git worktree root so invoking Loom in a nested package still
+/// installs project skills for the whole repository. Outside Git, cwd is the
+/// project boundary the caller explicitly chose.
+pub fn project_root(current_dir: &Path) -> PathBuf {
+    current_dir
+        .ancestors()
+        .find(|candidate| candidate.join(".git").exists())
+        .unwrap_or(current_dir)
+        .to_path_buf()
+}
+
+/// Agents already configured globally, preserving the historic behavior
+/// when a scripted invocation omits `--agent`.
+pub fn detect_skill_agents(home: &Path) -> Vec<SkillAgent> {
+    SkillAgent::ALL
+        .into_iter()
+        .filter(|agent| agent.global_agent_dir(home).is_dir())
+        .collect()
+}
 
 /// The supported agent directories, for user-facing messages:
-/// `~/.claude, ~/.agents, ~/.codex, ~/.pi/agent`.
+/// `~/.claude, ~/.agents, ~/.codex, ~/.pi/agent, ~/.config/opencode`.
 pub(crate) fn agent_dirs_display() -> String {
-    AGENT_DIRS
-        .map(|components| format!("~/{}", components.join("/")))
+    SkillAgent::ALL
+        .map(|agent| format!("~/{}", agent.global_agent_dir(Path::new("")).display()))
         .join(", ")
 }
 
@@ -30,19 +176,28 @@ pub(crate) fn skill_present_in(tree: &Path, name: &str) -> bool {
     tree.join(name).join("SKILL.md").is_file()
 }
 
-/// The skill trees to install into: `<agent dir>/skills` for every agent
-/// directory that exists under `home`.
+/// Existing global skill trees, used for backward-compatible detection and
+/// update inventory.
 pub fn detect_skill_trees(home: &Path) -> Vec<PathBuf> {
-    AGENT_DIRS
-        .iter()
-        .map(|components| {
-            components
-                .iter()
-                .fold(home.to_path_buf(), |path, part| path.join(part))
-        })
-        .filter(|agent_dir| agent_dir.is_dir())
-        .map(|agent_dir| agent_dir.join("skills"))
+    SkillAgent::ALL
+        .into_iter()
+        .filter(|agent| agent.global_agent_dir(home).is_dir())
+        .map(|agent| agent.global_skill_tree(home))
         .collect()
+}
+
+pub(crate) fn opencode_adapter_path(home: &Path) -> PathBuf {
+    home.join(".config")
+        .join("opencode")
+        .join("plugins")
+        .join(OPENCODE_PLUGIN_NAME)
+}
+
+pub(crate) fn project_opencode_adapter_path(project_root: &Path) -> PathBuf {
+    project_root
+        .join(".opencode")
+        .join("plugins")
+        .join(OPENCODE_PLUGIN_NAME)
 }
 
 /// The selection plus the transitive closure of catalog skill dependencies,
@@ -73,22 +228,6 @@ pub fn expand_skill_dependencies(all: &[Resource], selection: Vec<Resource>) -> 
     expanded
 }
 
-/// Catalog skills already present (as a real directory or a symlink holding a
-/// SKILL.md) in any detected tree — the set `loom update` refreshes.
-pub fn installed_catalog_skills(resources: &[Resource], home: &Path) -> Vec<Resource> {
-    let trees = detect_skill_trees(home);
-    resources
-        .iter()
-        .filter(|resource| resource.kind == ResourceKind::Skill)
-        .filter(|resource| {
-            trees
-                .iter()
-                .any(|tree| skill_present_in(tree, &resource.install_target))
-        })
-        .cloned()
-        .collect()
-}
-
 /// What happened to one skill in one tree.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CopyOutcome {
@@ -109,16 +248,17 @@ pub struct TreeReport {
 /// Download the repo once and copy every named skill into every detected
 /// skill tree, then verify each copy landed with its SKILL.md. Returns the
 /// per-tree summaries, or one aggregated failure message.
-pub fn install_skills(system: &dyn System, skills: &[String]) -> Result<Vec<TreeReport>, String> {
+pub fn install_skills(
+    system: &dyn System,
+    skills: &[String],
+    destination: &SkillDestination,
+) -> Result<Vec<TreeReport>, String> {
     let home = system
         .home_dir()
         .ok_or_else(|| "home directory is unavailable".to_string())?;
-    let trees = detect_skill_trees(&home);
+    let trees = destination.trees();
     if trees.is_empty() {
-        return Err(format!(
-            "no supported agent directory found ({})",
-            agent_dirs_display()
-        ));
+        return Err("no skill agents selected".to_string());
     }
 
     let staging = home.join(".cache").join("loom").join("staging");
@@ -134,7 +274,123 @@ pub fn install_skills(system: &dyn System, skills: &[String]) -> Result<Vec<Tree
                 missing.cloned().collect::<Vec<_>>().join(", ")
             ));
         }
+        install_opencode_adapter(&home, &repo_root, destination)?;
         copy_into_trees(&source_root, &trees, skills)
+    });
+    let _ = fs::remove_dir_all(&staging);
+    result
+}
+
+/// Install the Loom-owned session adapter when OpenCode is present. The
+/// plugin gives shell tools the current raw session ID; it owns one fixed
+/// filename, so updates replace only Loom's previous copy.
+fn install_opencode_adapter(
+    home: &Path,
+    repo_root: &Path,
+    destination: &SkillDestination,
+) -> Result<(), String> {
+    if !destination.agents.contains(&SkillAgent::OpenCode) {
+        return Ok(());
+    }
+
+    let target = match destination.scope {
+        SkillScope::Global => opencode_adapter_path(home),
+        SkillScope::Project => project_opencode_adapter_path(&destination.project_root),
+    };
+    install_opencode_adapter_at(repo_root, &target)
+}
+
+fn install_opencode_adapter_at(repo_root: &Path, target: &Path) -> Result<(), String> {
+    let source = repo_root.join(OPENCODE_PLUGIN_SOURCE);
+    if !source.is_file() {
+        return Err(format!(
+            "downloaded repo is missing the OpenCode adapter: {OPENCODE_PLUGIN_SOURCE}"
+        ));
+    }
+    let parent = target
+        .parent()
+        .ok_or_else(|| "OpenCode adapter target has no parent".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
+    let incoming = parent.join(format!(".{OPENCODE_PLUGIN_NAME}.loom-new"));
+    let _ = fs::remove_file(&incoming);
+    fs::copy(&source, &incoming)
+        .map_err(|error| format!("could not stage OpenCode adapter: {error}"))?;
+    if target.exists() || target.symlink_metadata().is_ok() {
+        fs::remove_file(target)
+            .map_err(|error| format!("could not replace {}: {error}", target.display()))?;
+    }
+    fs::rename(&incoming, target)
+        .map_err(|error| format!("could not install {}: {error}", target.display()))?;
+    Ok(())
+}
+
+/// Refresh only skill copies that already exist globally or in the current
+/// project. Each tree keeps its own set, so update never widens an earlier
+/// agent or scope choice.
+pub fn refresh_installed_skills(
+    system: &dyn System,
+    resources: &[Resource],
+) -> Result<Vec<TreeReport>, String> {
+    let home = system
+        .home_dir()
+        .ok_or_else(|| "home directory is unavailable".to_string())?;
+    let current_dir = system
+        .current_dir()
+        .ok_or_else(|| "current directory is unavailable".to_string())?;
+    let project = project_root(&current_dir);
+    let mut trees = detect_skill_trees(&home);
+    trees.extend(
+        SkillAgent::ALL
+            .into_iter()
+            .map(|agent| agent.project_skill_tree(&project))
+            .filter(|tree| tree.is_dir()),
+    );
+    let mut seen = HashSet::new();
+    trees.retain(|tree| seen.insert(tree.clone()));
+
+    let copies = trees
+        .into_iter()
+        .filter_map(|tree| {
+            let installed = resources
+                .iter()
+                .filter(|resource| resource.kind == ResourceKind::Skill)
+                .filter(|resource| skill_present_in(&tree, &resource.install_target))
+                .cloned()
+                .collect::<Vec<_>>();
+            if installed.is_empty() {
+                return None;
+            }
+            let names = expand_skill_dependencies(resources, installed)
+                .into_iter()
+                .map(|resource| resource.install_target)
+                .collect::<Vec<_>>();
+            Some((tree, names))
+        })
+        .collect::<Vec<_>>();
+    if copies.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let staging = home.join(".cache").join("loom").join("staging");
+    let result = fetch_repo(system, &staging).and_then(|repo_root| {
+        let source_root = repo_root.join("skills");
+        let mut reports = Vec::new();
+        for (tree, names) in &copies {
+            let mut copied = copy_into_trees(&source_root, std::slice::from_ref(tree), names)?;
+            reports.append(&mut copied);
+            let adapter = if *tree == home.join(".config").join("opencode").join("skills") {
+                Some(opencode_adapter_path(&home))
+            } else if *tree == project.join(".opencode").join("skills") {
+                Some(project_opencode_adapter_path(&project))
+            } else {
+                None
+            };
+            if let Some(adapter) = adapter {
+                install_opencode_adapter_at(&repo_root, &adapter)?;
+            }
+        }
+        Ok(reports)
     });
     let _ = fs::remove_dir_all(&staging);
     result
@@ -328,6 +584,7 @@ mod tests {
         let home = temp_home("detect");
         fs::create_dir_all(home.join(".claude")).unwrap();
         fs::create_dir_all(home.join(".pi").join("agent")).unwrap();
+        fs::create_dir_all(home.join(".config").join("opencode")).unwrap();
 
         let trees = detect_skill_trees(&home);
 
@@ -336,6 +593,33 @@ mod tests {
             vec![
                 home.join(".claude").join("skills"),
                 home.join(".pi").join("agent").join("skills"),
+                home.join(".config").join("opencode").join("skills"),
+            ]
+        );
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn project_destinations_follow_agent_conventions_and_deduplicate() {
+        // Capability/seam: user-selected agent and scope routing. This fails
+        // if a host path drifts or Codex duplicates the shared .agents tree.
+        let home = temp_home("project-destination");
+        let project = home.join("work");
+        fs::create_dir_all(project.join(".git")).unwrap();
+        let destination = SkillDestination::new(
+            SkillAgent::ALL.to_vec(),
+            SkillScope::Project,
+            &home,
+            &project.join("nested"),
+        );
+
+        assert_eq!(
+            destination.trees(),
+            vec![
+                project.join(".claude/skills"),
+                project.join(".agents/skills"),
+                project.join(".pi/skills"),
+                project.join(".opencode/skills"),
             ]
         );
         fs::remove_dir_all(&home).ok();
@@ -395,27 +679,6 @@ mod tests {
 
         assert_eq!(outcome, CopyOutcome::SkippedSymlink);
         assert!(tree.join("tdd").symlink_metadata().unwrap().is_symlink());
-        fs::remove_dir_all(&home).ok();
-    }
-
-    #[test]
-    fn installed_skills_are_the_union_across_trees() {
-        let home = temp_home("union");
-        let claude = home.join(".claude").join("skills");
-        let codex = home.join(".codex").join("skills");
-        write_skill(&claude, "tdd");
-        write_skill(&codex, "commit");
-
-        let all = vec![skill("tdd", &[]), skill("commit", &[]), skill("other", &[])];
-        let installed = installed_catalog_skills(&all, &home);
-
-        assert_eq!(
-            installed
-                .iter()
-                .map(|resource| resource.label.as_str())
-                .collect::<Vec<_>>(),
-            vec!["tdd", "commit"]
-        );
         fs::remove_dir_all(&home).ok();
     }
 }

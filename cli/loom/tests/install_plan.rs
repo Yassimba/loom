@@ -1,8 +1,27 @@
 use loom::{
-    build_install_plan, expand_skill_dependencies, CommandSpec, NodeStatus, Platform,
-    PrerequisiteStatus, Resource, ResourceKind, Runtime, StepAction, VerificationSpec,
+    build_install_plan as build_plan, expand_skill_dependencies, CommandSpec, InstallPlan,
+    NodeStatus, Platform, PrerequisiteStatus, Resource, ResourceKind, Runtime, SkillAgent,
+    SkillDestination, SkillScope, StepAction, VerificationSpec,
 };
 use pretty_assertions::assert_eq;
+
+fn skill_destination() -> SkillDestination {
+    SkillDestination::new(
+        SkillAgent::ALL.to_vec(),
+        SkillScope::Global,
+        std::path::Path::new("/tmp/loom-test-home"),
+        std::path::Path::new("/tmp/loom-test-project"),
+    )
+}
+
+fn build_install_plan(
+    resources: &[Resource],
+    runtimes: &[Runtime],
+    status: PrerequisiteStatus,
+    platform: Platform,
+) -> anyhow::Result<InstallPlan> {
+    build_plan(resources, runtimes, status, platform, &skill_destination())
+}
 
 fn resource(kind: ResourceKind, id: &str, target: &str) -> Resource {
     Resource {
@@ -61,6 +80,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
         vec![
             StepAction::CopySkills {
                 skills: vec!["tdd".into()],
+                destination: skill_destination(),
             },
             StepAction::Command(CommandSpec::new(
                 "pi",
@@ -134,6 +154,7 @@ fn skill_selection_expands_to_its_dependency_closure() {
                 "commit".into(),
                 "writing-clearly-and-concisely".into(),
             ],
+            destination: skill_destination(),
         }
     );
 }

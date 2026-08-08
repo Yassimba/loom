@@ -4,8 +4,8 @@
 //! clickable Back/Next buttons.
 
 use super::state::{
-    ExecStatus, Focus, HitMap, InstallStage, PickRow, PickStage, SettingRow, SettingsStage,
-    SkillsStage, Stage, WelcomeStage, Wizard,
+    AgentsStage, ExecStatus, Focus, HitMap, InstallStage, PickRow, PickStage, SettingRow,
+    SettingsStage, SkillsStage, Stage, WelcomeStage, Wizard,
 };
 use crate::settings::SettingSpec;
 use crate::{Resource, Runtime};
@@ -48,6 +48,7 @@ impl Wizard {
         let (primary, secondary) = match &self.stages[self.stage_index] {
             Stage::Welcome(stage) => self.render_welcome(frame, content, stage),
             Stage::Pick(stage) => self.render_pick(frame, content, stage),
+            Stage::Agents(stage) => self.render_agents(frame, content, stage),
             Stage::Skills(stage) => self.render_skills(frame, content, stage),
             Stage::Settings(stage) => self.render_settings(frame, content, stage),
             Stage::Review { scroll } => {
@@ -180,6 +181,7 @@ impl Wizard {
                 };
                 let count = match &self.stages[index] {
                     Stage::Pick(stage) => self.selected_count(&stage.items),
+                    Stage::Agents(_) => self.agent_on.iter().filter(|on| **on).count(),
                     Stage::Skills(stage) => stage
                         .categories
                         .iter()
@@ -212,6 +214,7 @@ impl Wizard {
             match &self.stages[self.stage_index] {
                 Stage::Welcome(_) => " space toggle/apply · j/k move · l/enter start · ? help",
                 Stage::Pick(_) => " space toggle · / search · a all · h/l steps · u undo · ? help",
+                Stage::Agents(_) => " space toggle · a all agents · h/l steps · u undo · ? help",
                 Stage::Skills(_) => {
                     " space toggle · / search · a category · A all · h/l panes+steps · ? help"
                 }
@@ -267,7 +270,9 @@ impl Wizard {
     fn button_states(&self) -> (bool, &'static str, bool) {
         match &self.stages[self.stage_index] {
             Stage::Welcome(_) => (false, "Start", true),
-            Stage::Pick(_) | Stage::Skills(_) | Stage::Settings(_) => (true, "Next", true),
+            Stage::Pick(_) | Stage::Agents(_) | Stage::Skills(_) | Stage::Settings(_) => {
+                (true, "Next", true)
+            }
             Stage::Review { .. } => (
                 true,
                 "Install",
@@ -575,11 +580,82 @@ impl Wizard {
                 Style::new().dim(),
             ),
         ];
-        if self.model.installed[index] {
+        if self.resource_installed(index) {
             lines.push(Line::from(""));
             lines.push(Line::styled("Already installed.", Style::new().fg(OK)));
         }
         lines
+    }
+
+    fn render_agents(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        stage: &AgentsStage,
+    ) -> (ListHit, ListHit) {
+        let [list_area, details_area] =
+            Layout::horizontal([Constraint::Percentage(48), Constraint::Percentage(52)])
+                .areas(area);
+        let mut items = vec![ListItem::new(Line::from(vec![
+            Span::styled(" ◉ ", Style::new().fg(OK)),
+            Span::styled(
+                format!("Scope: {}", self.skill_scope.label()),
+                Style::new().bold(),
+            ),
+        ]))];
+        items.extend(
+            crate::SkillAgent::ALL
+                .iter()
+                .zip(&self.agent_on)
+                .map(|(agent, on)| {
+                    let (mark, style) = mark_for(*on);
+                    ListItem::new(Line::from(vec![
+                        Span::styled(format!(" {mark} "), style),
+                        Span::raw(agent.label()),
+                    ]))
+                }),
+        );
+        let selected = self.agent_on.iter().filter(|on| **on).count();
+        let title = format!(
+            " Agents · {selected}/{} selected ",
+            crate::SkillAgent::ALL.len()
+        );
+        let list = List::new(items)
+            .block(bordered(&title, true))
+            .highlight_style(Style::new().bg(Color::DarkGray));
+        let mut state = ListState::default().with_selected(Some(stage.cursor));
+        frame.render_stateful_widget(list, list_area, &mut state);
+
+        let destination = self.skill_destination();
+        let mut details = vec![
+            Line::styled("Skill destination", Style::new().bold().fg(ACCENT)),
+            Line::from(""),
+            Line::from(format!("Scope  {}", destination.scope.label())),
+            Line::from(""),
+        ];
+        if destination.agents.is_empty() {
+            details.push(Line::styled(
+                "Select at least one agent before installing skills.",
+                Style::new().fg(WARN),
+            ));
+        } else {
+            details.push(Line::styled("Exact paths", Style::new().bold()));
+            for tree in destination.trees() {
+                details.push(Line::from(format!("  {}", tree.display())));
+            }
+        }
+        details.push(Line::from(""));
+        details.push(Line::styled(
+            "Space toggles scope or the highlighted agent.",
+            Style::new().dim(),
+        ));
+        frame.render_widget(
+            Paragraph::new(details)
+                .wrap(Wrap { trim: true })
+                .block(bordered(" Destination ", false).padding(Padding::horizontal(1))),
+            details_area,
+        );
+        (Some((list_area, 0)), None)
     }
 
     fn render_skills(
@@ -806,6 +882,24 @@ impl Wizard {
                 && expanded
                     .iter()
                     .any(|resource| resource.kind == crate::ResourceKind::PiPackage);
+            if expanded
+                .iter()
+                .any(|resource| resource.kind == crate::ResourceKind::Skill)
+            {
+                let destination = self.skill_destination();
+                lines.push(Line::styled(
+                    format!("Skill destination ({})", destination.scope.label()),
+                    Style::new().bold(),
+                ));
+                if destination.agents.is_empty() {
+                    lines.push(Line::styled("  ! no agents selected", Style::new().fg(ERR)));
+                } else {
+                    for tree in destination.trees() {
+                        lines.push(Line::from(format!("  → {}", tree.display())));
+                    }
+                }
+                lines.push(Line::from(""));
+            }
             for (kind, title) in [
                 (crate::ResourceKind::Tool, "Tools"),
                 (crate::ResourceKind::HerdrPlugin, "Herdr plugins"),
@@ -1042,7 +1136,7 @@ impl Wizard {
 
     fn resource_item(&self, index: usize) -> ListItem<'_> {
         let resource = &self.model.resources[index];
-        if self.model.installed[index] {
+        if self.resource_installed(index) {
             return ListItem::new(Line::from(vec![
                 Span::styled(" ✓ ", Style::new().fg(OK)),
                 Span::styled(resource.label.as_str(), Style::new().dim()),

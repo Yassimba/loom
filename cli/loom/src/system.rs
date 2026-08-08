@@ -23,6 +23,11 @@ pub trait System {
     fn home_dir(&self) -> Option<PathBuf> {
         dirs::home_dir()
     }
+    /// The directory `loom` was launched from. Skill project scope resolves
+    /// its worktree root from here; injectable for installer tests.
+    fn current_dir(&self) -> Option<PathBuf> {
+        env::current_dir().ok()
+    }
 }
 
 /// Holds the PATH this process resolves tools against. It starts as the

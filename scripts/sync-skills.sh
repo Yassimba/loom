@@ -11,10 +11,11 @@ set -euo pipefail
 #   link    [name]           repo -> trees, as symlinks. Replaces a real dir
 #                            only after proving it identical to the repo copy;
 #                            a diverged dir is left alone with a pull hint.
-#   pull    [name]           ~/.claude/skills -> repo. Copies a diverged global
-#                            dir over the repo copy (review with git diff);
-#                            copies an unknown skill into drafts/. Refuses to
-#                            overwrite uncommitted repo files.
+#   pull    [name]           selected primary tree -> repo. Defaults to
+#                            ~/.claude/skills; --tree selects another agent.
+#                            Copies a diverged global dir over the repo copy
+#                            (review with git diff); unknown skills go to
+#                            drafts/. Refuses to overwrite uncommitted files.
 #   unlink  [name]           turn a symlink back into a real copy — for testing
 #                            what `npx skills add` users get.
 #   promote <name> [personal]  drafts/<name> -> skills/<name> (or
@@ -33,11 +34,12 @@ SKILLS="$REPO/skills"
 PERSONAL="$REPO/personal"
 DRAFTS="$REPO/drafts"
 
-# pull reads from here — the tree agents actually edit.
+# pull reads from here by default; --tree changes it with the selected tree.
 PRIMARY="$HOME/.claude/skills"
 
-# link/unlink/status touch all of these. Narrow with --tree claude|agents|codex|pi.
-TREES=("$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills" "$HOME/.pi/agent/skills")
+# link/unlink/status touch all of these. Narrow with
+# --tree claude|agents|codex|pi|opencode.
+TREES=("$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills" "$HOME/.pi/agent/skills" "$HOME/.config/opencode/skills")
 
 say()  { printf '%s\n' "$*"; }
 item() { printf '  %s\n' "$*"; }
@@ -312,20 +314,21 @@ main() {
     case "$want_tree" in
       claude|agents|codex) TREES=("$HOME/.$want_tree/skills") ;;
       pi) TREES=("$HOME/.pi/agent/skills") ;;
-      *) die "--tree must be one of: claude agents codex pi" ;;
+      opencode) TREES=("$HOME/.config/opencode/skills") ;;
+      *) die "--tree must be one of: claude agents codex pi opencode" ;;
     esac
+    PRIMARY="${TREES[0]}"
   fi
-
-  [ -d "$PRIMARY" ] || die "no skill tree at $PRIMARY"
 
   case "$cmd" in
     status)  cmd_status ;;
     link)    cmd_link "${args[0]:-}" ;;
-    pull)    cmd_pull "${args[0]:-}" ;;
+    pull)    [ -d "$PRIMARY" ] || die "no skill tree at $PRIMARY"
+             cmd_pull "${args[0]:-}" ;;
     unlink)  cmd_unlink "${args[0]:-}" ;;
     promote) cmd_promote "${args[@]+"${args[@]}"}" ;;
     deps)    cmd_deps ;;
-    *) die "usage: $0 {status|link|pull|unlink|promote|deps} [name] [--tree claude|agents|codex|pi]" ;;
+    *) die "usage: $0 {status|link|pull|unlink|promote|deps} [name] [--tree claude|agents|codex|pi|opencode]" ;;
   esac
 }
 
