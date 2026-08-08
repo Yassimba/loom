@@ -1,6 +1,6 @@
 use ai_setup::app::{install_selected, load_catalog, Selectors};
 use ai_setup::doctor::run_doctor;
-use ai_setup::init::{run_init, InitOptions};
+use ai_setup::init::{run_init, sync_projects, InitOptions};
 use ai_setup::update::run_updates;
 use ai_setup::{RealSystem, ResourceKind};
 use anyhow::Result;
@@ -57,6 +57,8 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Refresh every registered project's AGENTS.md from the templates
+    Sync,
     /// Print shell completions (skill/tool/package names included)
     Completions { shell: clap_complete::Shell },
 }
@@ -132,6 +134,15 @@ fn main() -> Result<()> {
             install_selected(&catalog, &selectors, args.yes, args.dry_run, &system)?
         }
         Command::Doctor => run_doctor(&system),
+        Command::Sync => {
+            let (ok, report) = sync_projects(&system);
+            if ok {
+                println!("{report}");
+            } else {
+                eprintln!("{report}");
+            }
+            ok
+        }
         Command::Init {
             python,
             no_python,
