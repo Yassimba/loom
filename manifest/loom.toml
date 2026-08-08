@@ -17,7 +17,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.19.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.8.0", tag_regex = "^loom-v" }
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.9.1", tag_regex = "^loom-v" }
 # core:end
 
 # agents & multiplexer
