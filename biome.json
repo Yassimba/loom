@@ -6,14 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": [
-      "plugins/**",
-      "scripts/**",
-      "test/**",
-      "*.json",
-      "!plugins/herdr-jumplist",
-      "!**/*.generated.*"
-    ]
+    "includes": ["plugins/**", "scripts/**", "test/**", "*.json", "!**/*.generated.*"]
   },
   "formatter": {
     "enabled": true,

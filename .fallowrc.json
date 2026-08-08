@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.fallow.tools/schemas/fallowrc.json",
   "entry": ["plugins/*/src/index.ts", "plugins/*/src/*/index.ts"],
-  "ignorePatterns": ["skills/**", "drafts/**", "plugins/herdr-jumplist/**", "**/*.generated.*"],
+  "ignorePatterns": ["skills/**", "drafts/**", "**/*.generated.*"],
   "ignoreDependencies": ["pi-claude-bridge", "pi-rewind-hook", "pi-web-access"],
   "ignoreExportsUsedInFile": true,
   "health": {

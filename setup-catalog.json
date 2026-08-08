@@ -575,15 +575,6 @@
       "installTarget": "wtf",
       "nextAction": "Ask your coding agent to use the wtf skill.",
       "dependencies": []
-    },
-    {
-      "id": "herdr-plugin:yassin.jumplist",
-      "kind": "herdr-plugin",
-      "group": "Herdr plugins",
-      "label": "Pane Jumplist",
-      "description": "Back/forward through pane focus history, VS Code style",
-      "installTarget": "Yassimba/ai-setup/plugins/herdr-jumplist",
-      "nextAction": "Run `herdr plugin list` to see the installed plugin."
     }
   ]
 }
