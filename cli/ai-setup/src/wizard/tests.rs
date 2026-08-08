@@ -19,6 +19,7 @@ fn resource(kind: ResourceKind, group: &str, label: &str) -> Resource {
         install_target: label.into(),
         next_action: "next".into(),
         dependencies: Vec::new(),
+        bin: None,
     }
 }
 

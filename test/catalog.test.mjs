@@ -127,6 +127,7 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       description: "GitHub CLI",
       installTarget: "gh",
       nextAction: "Run `gh auth login` once.",
+      bin: "gh",
     },
   ]);
 });

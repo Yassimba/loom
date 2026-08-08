@@ -301,6 +301,7 @@ mod tests {
             install_target: name.into(),
             next_action: String::new(),
             dependencies: dependencies.iter().map(ToString::to_string).collect(),
+            bin: None,
         }
     }
 

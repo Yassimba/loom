@@ -172,7 +172,16 @@ pub(crate) fn detect_installed(
     resources
         .iter()
         .map(|resource| match resource.kind {
-            ResourceKind::Tool => selected_tools.contains(&resource.install_target),
+            // A tool is installed when mise manages it (it is in the
+            // selection) or its binary is on PATH from any other installer
+            // (brew, cargo, ...): both are honestly "installed".
+            ResourceKind::Tool => {
+                selected_tools.contains(&resource.install_target)
+                    || resource
+                        .bin
+                        .as_deref()
+                        .is_some_and(|bin| system.command_exists(bin))
+            }
             ResourceKind::HerdrPlugin => herdr_plugins.as_ref().is_some_and(|output| {
                 output.contains(resource.id.trim_start_matches("herdr-plugin:"))
             }),
