@@ -135,6 +135,9 @@ pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, S
     let _ = fs::remove_dir_all(&staging);
     let target = result?;
     mise_install(system).map_err(|error| format!("mise install failed: {error}"))?;
+    // Moved pins leave their old versions in the store; prune is best-effort
+    // cleanup and only removes versions no config references anymore.
+    let _ = system.run(&CommandSpec::new("mise", ["prune", "--yes"]));
     system.refresh_path();
     Ok(target)
 }
