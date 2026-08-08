@@ -221,6 +221,37 @@ fn test_files_are_recognized_by_convention() {
 }
 
 #[test]
+fn boxes_render_draws_statused_boxes() {
+    let diff_src = diff_outdent(
+        r#"
+      export function boot() {
+        one();
+    +   two();
+      }
+    "#,
+    );
+    let (before_src, after_src) = sources_from_file_diff(&diff_src);
+    let before = build_index(extract_functions("file.before.ts", &before_src).unwrap());
+    let after = build_index(extract_functions("file.after.ts", &after_src).unwrap());
+    let diff = diff_trees(
+        &build_call_tree("boot", &before, 12),
+        &build_call_tree("boot", &after, 12),
+    );
+    let plain = stackdiff::boxes::render_boxes(&diff, false);
+    assert!(plain.contains("╭"), "draws rounded boxes:\n{plain}");
+    assert!(
+        plain.contains("│ two() │"),
+        "boxes the added call:\n{plain}"
+    );
+    assert!(plain.contains("▼"), "draws connector arrows:\n{plain}");
+    let colored = stackdiff::boxes::render_boxes(&diff, true);
+    assert!(
+        colored.contains("\u{1b}[32m"),
+        "added box painted green:\n{colored:?}"
+    );
+}
+
+#[test]
 fn json_output_carries_dataflow_fields() {
     let source = diff_outdent(
         r#"

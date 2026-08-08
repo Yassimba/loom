@@ -54,7 +54,7 @@ fn status_prefix(status: DiffStatus, color: bool) -> String {
 
 /// The node's display text: label in plain mode; in rich mode the call-site
 /// view `binding = key(args) → ret` when call-site facts exist.
-fn node_text(node: &DiffNode, rich: bool) -> String {
+pub(crate) fn node_text(node: &DiffNode, rich: bool) -> String {
     if !rich || node.kind == NodeKind::Branch {
         return node.label.clone();
     }

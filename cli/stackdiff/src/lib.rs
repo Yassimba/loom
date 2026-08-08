@@ -1,3 +1,4 @@
+pub mod boxes;
 pub mod calltree;
 pub mod diff;
 pub mod extract;
