@@ -66,30 +66,50 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   throw "$Name`: mise is installed but not on PATH yet; open a new terminal and rerun this installer"
 }
 
-# 2. The manifest's core block only - node and the Loom CLI. Everything
-#    else is optional and chosen in the wizard, which appends to this file.
-#    An existing Loom selection is left alone (loom update refreshes it).
+# 2. Refresh the required core block - node and the Loom CLI - while keeping
+#    any optional tools already chosen through the wizard. This also repairs
+#    selections left incomplete by an interrupted or older bootstrap.
 New-Item -ItemType Directory -Path $ConfD -Force | Out-Null
 $Selection = Join-Path $ConfD "loom.toml"
-if (-not (Test-Path $Selection)) {
-  $TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
-  try {
-    Get-Url $ManifestUrl $TmpManifest
-    $lines = Get-Content $TmpManifest
-    $begin = -1
-    $end = -1
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-      if ($begin -lt 0 -and $lines[$i].StartsWith("# core:begin")) { $begin = $i }
-      if ($begin -ge 0 -and $lines[$i].StartsWith("# core:end")) { $end = $i; break }
+$TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
+try {
+  Get-Url $ManifestUrl $TmpManifest
+  $lines = Get-Content $TmpManifest
+  $begin = -1
+  $end = -1
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($begin -lt 0 -and $lines[$i].StartsWith("# core:begin")) { $begin = $i }
+    if ($begin -ge 0 -and $lines[$i].StartsWith("# core:end")) { $end = $i; break }
+  }
+  if ($begin -lt 0 -or $end -lt $begin) { throw "$Name`: manifest is missing its core block" }
+  $core = $lines[$begin..$end]
+
+  if (Test-Path $Selection) {
+    $updated = [System.Collections.Generic.List[string]]::new()
+    $inserted = $false
+    $skippingCore = $false
+    foreach ($line in Get-Content $Selection) {
+      if ($line.StartsWith("# core:begin")) { $skippingCore = $true; continue }
+      if ($skippingCore) {
+        if ($line.StartsWith("# core:end")) { $skippingCore = $false }
+        continue
+      }
+      $updated.Add($line)
+      if (-not $inserted -and $line -eq "[tools]") {
+        $updated.AddRange([string[]]$core)
+        $inserted = $true
+      }
     }
-    if ($begin -lt 0 -or $end -lt $begin) { throw "$Name`: manifest is missing its core block" }
-    $core = $lines[$begin..$end]
+    if ($skippingCore) { throw "$Name`: existing selection has an incomplete core block" }
+    if (-not $inserted) { throw "$Name`: existing selection is missing its [tools] table" }
+    $updated | Set-Content -Path $Selection
+  } else {
     @("# Managed by Loom: the selected tools from the published manifest.", "", "[tools]") + $core |
       Set-Content -Path $Selection
-    Write-Host "$Name`: core tools synced to $Selection"
-  } finally {
-    Remove-Item $TmpManifest -Force -ErrorAction SilentlyContinue
   }
+  Write-Host "$Name`: core tools synced to $Selection"
+} finally {
+  Remove-Item $TmpManifest -Force -ErrorAction SilentlyContinue
 }
 
 # 3. Install the pins - node and the Loom CLI (plus any prior selection).
