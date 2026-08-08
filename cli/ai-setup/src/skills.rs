@@ -146,7 +146,19 @@ pub fn install_skills(system: &dyn System, skills: &[String]) -> Result<Vec<Tree
 /// Download and unpack the repo tarball into `staging`; returns the extracted
 /// repo root. Shells out to curl and tar (present on macOS, Linux, and
 /// Windows 10+) through `System`, so tests can intercept both.
+/// `AI_SETUP_REPO_DIR` overrides the download with a local checkout — for
+/// testing unpushed skills and manifest changes end to end.
 pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf, String> {
+    if let Some(local) = std::env::var_os("AI_SETUP_REPO_DIR") {
+        let root = PathBuf::from(local);
+        if !root.join("skills").is_dir() {
+            return Err(format!(
+                "AI_SETUP_REPO_DIR does not look like the repo: {}",
+                root.display()
+            ));
+        }
+        return Ok(root);
+    }
     let _ = fs::remove_dir_all(staging);
     fs::create_dir_all(staging)
         .map_err(|error| format!("could not create {}: {error}", staging.display()))?;
