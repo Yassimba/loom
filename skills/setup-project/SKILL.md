@@ -19,6 +19,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 Look at the current repo to understand its starting state. Read what's actually there:
 
 - `git remote -v` and `.git/config` — is this a GitHub repo? Which one?
+- `.beads/` at the repo root, and whether the `br` CLI is on PATH — an installed Beads setup is the strongest tracker signal
 - `AGENTS.md` and `CLAUDE.md` at the repo root — does either exist? Is there already an `## Agent skills` section in either?
 - `CONTEXT.md` and `CONTEXT-MAP.md` at the repo root
 - `ai-docs/adr/` and any `src/*/ai-docs/adr/` directories
@@ -37,8 +38,9 @@ Assume the user does not know what these terms mean. Each section starts with a 
 
 > Explainer: The "issue tracker" is where issues live for this repo. Skills like `to-tickets` and `to-spec` read from and write to it — they need to know whether to call `gh issue create`, write a markdown file under `ai-docs/plans/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
 
-Propose the tracker the `git remote` points at — GitHub, or GitLab (`gitlab.com` or self-hosted). With no remote, or if the user prefers something else, offer:
+Propose **Beads** first when `.beads/` exists or the `br` CLI is installed — a machine set up for Beads almost always wants its repos tracked there. Otherwise propose the tracker the `git remote` points at — GitHub, or GitLab (`gitlab.com` or self-hosted). The full menu:
 
+- **Beads** — issues live in `.beads/issues.jsonl` in this repo, managed with the `br` CLI, triaged with `bv` (dependency-aware, built for agents)
 - **GitHub** — issues live in the repo's GitHub Issues (uses the `gh` CLI)
 - **GitLab** — issues live in the repo's GitLab Issues (uses the [`glab`](https://gitlab.com/gitlab-org/cli) CLI)
 - **Local markdown** — issues live as files under `ai-docs/plans/<feature>/` in this repo (good for solo projects or repos without a remote)
@@ -78,11 +80,12 @@ Let them edit before writing.
 
 **Pick the file to edit:**
 
-- If `CLAUDE.md` exists, edit it.
+- If `CLAUDE.md` exists and is only an `@AGENTS.md` pointer (the `loom init` pattern), edit `AGENTS.md`.
+- Else if `CLAUDE.md` exists, edit it.
 - Else if `AGENTS.md` exists, edit it.
 - If neither exists, ask the user which one to create — don't pick for them.
 
-If an `## Agent skills` block already exists in the chosen file, update its contents in-place, leaving the surrounding sections exactly as the user wrote them.
+If an `## Agent skills` block already exists in the chosen file, update its contents in-place, leaving the surrounding sections exactly as the user wrote them. In a `loom init`-managed file, place the block **outside** the `ai-setup:section` fences (typically at the end) — text inside the fences belongs to the templates and refreshes on sync.
 
 The block:
 
@@ -104,6 +107,7 @@ The block:
 
 Then write the two docs files using the seed templates in this skill folder as a starting point:
 
+- [issue-tracker-beads.md](./issue-tracker-beads.md) — Beads issue tracker
 - [issue-tracker-github.md](./issue-tracker-github.md) — GitHub issue tracker
 - [issue-tracker-gitlab.md](./issue-tracker-gitlab.md) — GitLab issue tracker
 - [issue-tracker-local.md](./issue-tracker-local.md) — local-markdown issue tracker
