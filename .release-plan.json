@@ -2,57 +2,51 @@
   "schema": 1,
   "releases": [
     {
-      "id": "herdr-worktree",
-      "version": "1.0.0",
-      "tag": "herdr-worktree-v1.0.0",
-      "bump": "major",
-      "distribution": "npm",
-      "commits": [
-        {
-          "hash": "fb011ce4430a328e1a3b015a567b8c13fcf4aa9f",
-          "subject": "refactor!: rename agent setup to Loom"
-        }
-      ]
-    },
-    {
       "id": "loom",
-      "version": "0.7.0",
-      "tag": "loom-v0.7.0",
+      "version": "0.8.0",
+      "tag": "loom-v0.8.0",
       "bump": "minor",
       "distribution": "rust-binary",
       "commits": [
         {
-          "hash": "e10c5302e060bf4750ef7e765d5815a35aa6fd99",
-          "subject": "feat(skills): setup-project becomes model-invoked with real bounds"
+          "hash": "e8e0359abad2530509aed723d34256f607a18d80",
+          "subject": "docs(skills): clarify design and tracker guidance"
         },
         {
-          "hash": "83af3b30cb2a0c8b4438570c781c9c7c9fc4cb90",
-          "subject": "feat(skills): setup-project learns Beads and the init contract"
+          "hash": "73f0086b79bb9d7d624abf24cdf2a79375570a7f",
+          "subject": "feat(skills): quick-lineage — colored call graphs in chat"
         },
         {
-          "hash": "0da1b2eee4cd644ca28f90fbabfe969565eecd07",
-          "subject": "chore(catalog): format skills listing"
+          "hash": "3694904f38d02d02bfc5a86ee369b7c58675e644",
+          "subject": "feat(skills): beads is the default tracker when br is installed"
         },
         {
-          "hash": "66aa5379447525e9adec931c3c3d17f092d02451",
-          "subject": "chore(skills): sync code-review to upstream skills-poc"
+          "hash": "5672f138759ec4c3990622679da24f6852fe1b91",
+          "subject": "ci(release): publish npm packages with OIDC"
         },
         {
-          "hash": "6e07e9f1ef5190d5e1f30d0ca16e79b268b8790a",
-          "subject": "feat(skills): adopt writing-for-agents from skills-poc"
-        }
-      ]
-    },
-    {
-      "id": "openai-fast",
-      "version": "1.0.0",
-      "tag": "openai-fast-v1.0.0",
-      "bump": "major",
-      "distribution": "npm",
-      "commits": [
+          "hash": "560343577a6c6991913eadceb776be831de558ab",
+          "subject": "Merge remote-tracking branch 'origin/main'"
+        },
         {
-          "hash": "fb011ce4430a328e1a3b015a567b8c13fcf4aa9f",
-          "subject": "refactor!: rename agent setup to Loom"
+          "hash": "60b38e9062e97a2c8087e6d4c0578ffa1eec244e",
+          "subject": "chore(skills): remove blueprint prototype artifact"
+        },
+        {
+          "hash": "35a62ab550549da41c6af70404caba2a23ee50b1",
+          "subject": "feat(skills): blueprint and lineage-diff ground on stackdiff"
+        },
+        {
+          "hash": "e0baa07822cfcdc76e8ddb79b6762b158ace9526",
+          "subject": "feat(skills): loom skill catches up with the loom CLI"
+        },
+        {
+          "hash": "652e428596558e2456dfc36c05273f9e4b575cb7",
+          "subject": "chore(skills): sync codebase-design to upstream skills-poc"
+        },
+        {
+          "hash": "0a04395c2c64433bcf11a94c79fd4adfe58c5b0f",
+          "subject": "feat(deps): skills can depend on tools, locked in the wizard"
         }
       ]
     }
