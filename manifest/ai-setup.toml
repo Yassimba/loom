@@ -41,6 +41,10 @@ glab = "1.112.0"
 tokei = "12.1.2"
 "github:zdyxry/tokui" = "0.12.0"
 
+# issue tracking for agents (beads: br is the tracker, bv the TUI viewer)
+"github:Dicklesworthstone/beads_rust" = "v0.2.22"
+"github:Dicklesworthstone/beads_viewer" = "v0.19.0"
+
 # python toolchain
 uv = "0.12.3"
 
