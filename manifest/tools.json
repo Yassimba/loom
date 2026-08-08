@@ -104,7 +104,8 @@
       "description": "Environment variable manager with a TUI and CLI. Native binaries on Linux/Windows; builds via cargo on macOS (crates.io `envex`).",
       "nextAction": "Run `envx` to browse your environment.",
       "companions": [
-        "cargo:envex"
+        "cargo:envex",
+        "rust"
       ]
     },
     {

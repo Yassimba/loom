@@ -45,6 +45,9 @@ zoxide = "0.10.0"
 # `envex`, binary `envx`). One wizard tool, companion keys.
 "github:mikeleppane/envx" = { version = "v0.6.2", os = ["linux", "windows"] }
 "cargo:envex" = { version = "0.6.2", os = ["macos"] }
+# the cargo build above needs a toolchain; only envx pulls this in, and
+# only on macos
+rust = { version = "1.97.1", os = ["macos"] }
 
 # observability
 "github:DataDog/pup" = "v1.10.5"
