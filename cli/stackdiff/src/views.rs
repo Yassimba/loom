@@ -488,14 +488,20 @@ pub fn lineage_graph(
 
     fn label_of(node: &DiffNode) -> String {
         let mut text = node.key.clone();
-        if let Some(signature) = &node.signature {
-            text.push_str(signature);
+        match &node.signature {
+            // Full typed inputs; fall back to the declared-name label.
+            Some(signature) => text.push_str(signature),
+            None => {
+                if let Some(params) = node.label.strip_prefix(&node.key) {
+                    text.push_str(params);
+                }
+            }
         }
         if let Some(ret) = &node.returns {
             text.push_str(" → ");
             text.push_str(ret);
         }
-        clip(&text, 56)
+        clip(&text, 140)
     }
 
     fn walk(node: &DiffNode, ancestor: Option<&str>, graph: &mut Graph) {

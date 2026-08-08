@@ -63,21 +63,20 @@ pub(crate) fn node_text(node: &DiffNode, rich: bool) -> String {
         text.push_str(binding);
         text.push_str(" = ");
     }
-    if node.meta.args.is_empty() {
-        // No call-site args to show: prefer the declared typed signature.
-        match &node.signature {
-            Some(signature) => {
-                text.push_str(&node.key);
-                text.push_str(signature);
-            }
-            None => text.push_str(&node.label),
+    // Typed inputs win when the callee declares them; call-site args cover
+    // the rest.
+    match (&node.signature, node.meta.args.is_empty()) {
+        (Some(signature), _) => {
+            text.push_str(&node.key);
+            text.push_str(signature);
         }
-    } else {
-        // Call-site args replace the declared-parameter label.
-        text.push_str(&node.key);
-        text.push('(');
-        text.push_str(&node.meta.args.join(", "));
-        text.push(')');
+        (None, false) => {
+            text.push_str(&node.key);
+            text.push('(');
+            text.push_str(&node.meta.args.join(", "));
+            text.push(')');
+        }
+        (None, true) => text.push_str(&node.label),
     }
     if let Some(returns) = &node.returns {
         text.push_str(" → ");

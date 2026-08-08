@@ -41,7 +41,7 @@ fn rich_render_shows_binding_args_returns_doc_and_location() {
         &with_status_column(
             r#"
       boot()  app.ts:5
-      ├─ config = loadConfig("app.json") → Config  app.ts:2
+      ├─ config = loadConfig(path: string) → Config  app.ts:2
       │  │  “Load the app config.”
       │  └─ read(path)
       └─ start(config)
@@ -102,7 +102,7 @@ fn rust_doc_comment_return_type_and_macro_calls() {
         &with_status_column(
             r#"
       main()  app.rs:5
-      ├─ total = add(1, 2) → i32  app.rs:2
+      ├─ total = add(a: i32, b: i32) → i32  app.rs:2
       │     “Add two numbers.”
       └─ println!()
     "#,
@@ -455,7 +455,7 @@ fn lineage_view_draws_shared_callees_once() {
     );
     let drawn = stackdiff::dag::render_dag(&nodes, &edges, false, Some(200));
     assert_eq!(
-        drawn.matches("resolve → Plan").count(),
+        drawn.matches("resolve() → Plan").count(),
         1,
         "one box for the shared callee:\n{drawn}"
     );
