@@ -42,7 +42,7 @@ function Install-MiseRelease {
   if ($Architecture -notin @("arm64", "x64")) {
     throw "$Name`: mise has no supported Windows asset for $Architecture"
   }
-  $AssetName = "mise-$($Release.tag_name)-windows-$Architecture.exe"
+  $AssetName = "mise-$($Release.tag_name)-windows-$Architecture.zip"
   $Asset = $Release.assets | Where-Object { $_.name -eq $AssetName } | Select-Object -First 1
   $Checksums = $Release.assets | Where-Object { $_.name -eq "SHASUMS256.txt" } | Select-Object -First 1
   if (-not $Asset -or -not $Checksums) { throw "$Name`: mise release assets are incomplete" }
@@ -50,19 +50,22 @@ function Install-MiseRelease {
   $TmpDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
   New-Item -ItemType Directory -Path $TmpDirectory | Out-Null
   try {
-    $TmpExe = Join-Path $TmpDirectory $AssetName
+    $TmpArchive = Join-Path $TmpDirectory $AssetName
     $TmpChecksums = Join-Path $TmpDirectory "SHASUMS256.txt"
-    Get-Url $Asset.browser_download_url $TmpExe
+    Get-Url $Asset.browser_download_url $TmpArchive
     Get-Url $Checksums.browser_download_url $TmpChecksums
     $ChecksumLine = Get-Content $TmpChecksums | Where-Object { $_.EndsWith($AssetName) } | Select-Object -First 1
     if (-not $ChecksumLine) { throw "$Name`: mise checksum is missing for $AssetName" }
     $Expected = ($ChecksumLine -split '\s+')[0]
-    $Actual = (Get-FileHash -Path $TmpExe -Algorithm SHA256).Hash
+    $Actual = (Get-FileHash -Path $TmpArchive -Algorithm SHA256).Hash
     if ($Actual -ne $Expected) { throw "$Name`: mise checksum verification failed" }
 
     $InstallDirectory = Join-Path $HOME ".local\bin"
     New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
-    Copy-Item $TmpExe (Join-Path $InstallDirectory "mise.exe") -Force
+    $Extracted = Join-Path $TmpDirectory "extracted"
+    Expand-Archive -Path $TmpArchive -DestinationPath $Extracted
+    Copy-Item (Join-Path $Extracted "mise\bin\mise.exe") $InstallDirectory -Force
+    Copy-Item (Join-Path $Extracted "mise\bin\mise-shim.exe") $InstallDirectory -Force
     $UserPath = [Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
     $UserEntries = @($UserPath -split ';' | Where-Object { $_ })
     if ($InstallDirectory -notin $UserEntries) {
@@ -181,5 +184,5 @@ if (-not $ProfileContent.Contains($Activation)) {
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 Write-Host ""
-mise exec -- loom setup @SetupArgs
+mise -C $HOME exec -- loom setup @SetupArgs
 exit $LASTEXITCODE

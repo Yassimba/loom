@@ -17,6 +17,7 @@ test("the Unix bootstrap persists mise activation exactly once", async () => {
   await writeFile(
     join(bin, "mise"),
     `#!/bin/sh
+if [ "$1" = "-C" ]; then shift 2; fi
 case "$1" in
   doctor) echo "activated: no" ;;
   install) exit 0 ;;

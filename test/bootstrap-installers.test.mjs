@@ -29,7 +29,8 @@ test("PowerShell falls back to a checksummed native mise release", async () => {
 
   assert.match(installer, /RuntimeInformation\]::OSArchitecture/);
   assert.match(installer, /SHASUMS256\.txt/);
-  assert.match(installer, /Get-FileHash -Path \$TmpExe -Algorithm SHA256/);
+  assert.match(installer, /Get-FileHash -Path \$TmpArchive -Algorithm SHA256/);
+  assert.match(installer, /mise\\bin\\mise-shim\.exe/);
 });
 
 test("PowerShell accepts annotated core manifest markers", async () => {
@@ -48,7 +49,7 @@ test("PowerShell accepts annotated core manifest markers", async () => {
 test("piped Unix bootstrap reconnects interactive setup to the terminal", async () => {
   const installer = await readFile(join(repoRoot, "install.sh"), "utf8");
 
-  assert.match(installer, /exec mise exec -- loom setup "\$@" <\/dev\/tty/);
+  assert.match(installer, /exec mise -C "\$HOME" exec -- loom setup "\$@" <\/dev\/tty/);
 });
 
 test("bootstraps forward explicit setup selectors", async () => {
@@ -57,8 +58,8 @@ test("bootstraps forward explicit setup selectors", async () => {
     readFile(join(repoRoot, "install.ps1"), "utf8"),
   ]);
 
-  assert.match(unix, /loom setup "\$@"/);
-  assert.match(windows, /loom setup @SetupArgs/);
+  assert.match(unix, /mise -C "\$HOME" exec -- loom setup "\$@"/);
+  assert.match(windows, /mise -C \$HOME exec -- loom setup @SetupArgs/);
 });
 
 test("bootstraps install only the Loom selection, not the current project", async () => {

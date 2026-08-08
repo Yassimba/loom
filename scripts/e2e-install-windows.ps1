@@ -48,7 +48,7 @@ foreach ($Candidate in @(
   if (Test-Path $Candidate) { $env:Path = $env:Path.TrimEnd(';') + ";" + $Candidate }
 }
 $Mise = (Get-Command mise -ErrorAction Stop).Source
-& $Mise exec -- loom --version *> (Join-Path $EvidenceDir "loom-version.txt")
+& $Mise -C $HOME exec -- loom --version *> (Join-Path $EvidenceDir "loom-version.txt")
 if ($LASTEXITCODE -ne 0) { throw "installed Loom did not run" }
 $LoomVersion = ((Get-Content (Join-Path $EvidenceDir "loom-version.txt") -Raw) -split '\s+')[1]
 if ($LoomVersion -eq "0.10.0") {
@@ -56,17 +56,17 @@ if ($LoomVersion -eq "0.10.0") {
 } elseif ($env:LOOM_E2E_TOKEI -eq "skip") {
   "unsupported: upstream Tokei publishes no Windows ARM64 asset" | Set-Content (Join-Path $EvidenceDir "tokei-version.txt")
 } else {
-  & $Mise exec -- loom add --tool tokei --yes *> (Join-Path $EvidenceDir "tokei-install.txt")
+  & $Mise -C $HOME exec -- loom add --tool tokei --yes *> (Join-Path $EvidenceDir "tokei-install.txt")
   if ($LASTEXITCODE -ne 0) { throw "tokei install failed" }
-  & $Mise exec -- tokei --version *> (Join-Path $EvidenceDir "tokei-version.txt")
+  & $Mise -C $HOME exec -- tokei --version *> (Join-Path $EvidenceDir "tokei-version.txt")
   if ($LASTEXITCODE -ne 0) { throw "tokei did not run" }
 }
-& $Mise exec -- loom status *> (Join-Path $EvidenceDir "loom-status.txt")
+& $Mise -C $HOME exec -- loom status *> (Join-Path $EvidenceDir "loom-status.txt")
 if ($LASTEXITCODE -ne 0) { throw "loom status failed" }
 if ($ExpectBeads) {
-  & $Mise exec -- br --version *> (Join-Path $EvidenceDir "br-version.txt")
+  & $Mise -C $HOME exec -- br --version *> (Join-Path $EvidenceDir "br-version.txt")
   if ($LASTEXITCODE -ne 0) { throw "br did not run" }
-  & $Mise exec -- bv --version *> (Join-Path $EvidenceDir "bv-version.txt")
+  & $Mise -C $HOME exec -- bv --version *> (Join-Path $EvidenceDir "bv-version.txt")
   if ($LASTEXITCODE -ne 0) { throw "bv did not run" }
 }
 & $Mise doctor *> (Join-Path $EvidenceDir "mise-doctor.txt")
@@ -112,10 +112,11 @@ if ($LASTEXITCODE -ne 0) { throw "Loom is unavailable in a fresh PowerShell" }
 Invoke-Bootstrap *> (Join-Path $EvidenceDir "rerun.txt")
 
 $ProfileText = Get-Content $TargetProfile -Raw
+$ProfileText | Set-Content (Join-Path $EvidenceDir "profile.txt")
 $MiseQuoted = $Mise.Replace("'", "''")
 $MiseDirQuoted = (Split-Path -Parent $Mise).Replace("'", "''")
 $Activation = "`$env:Path = '$MiseDirQuoted;' + `$env:Path; (& '$MiseQuoted' activate pwsh) | Out-String | Invoke-Expression"
-if (($ProfileText | Select-String -SimpleMatch $Activation -AllMatches).Matches.Count -ne 1) {
+if ([regex]::Matches($ProfileText, [regex]::Escape($Activation)).Count -ne 1) {
   throw "mise activation must appear exactly once in the PowerShell profile"
 }
 $SelectionText = Get-Content $Selection -Raw

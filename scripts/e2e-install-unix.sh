@@ -43,17 +43,17 @@ mise_bin=${HOME}/.local/bin/mise
 if [[ ! -x "$mise_bin" ]]; then
   mise_bin=$(PATH="$base_path" command -v mise)
 fi
-"$mise_bin" exec -- loom --version >"$evidence_dir/loom-version.txt" 2>&1
+"$mise_bin" -C "$HOME" exec -- loom --version >"$evidence_dir/loom-version.txt" 2>&1
 loom_version=$(awk '{print $2}' "$evidence_dir/loom-version.txt")
 if [[ $loom_version == 0.10.0 ]]; then
   echo "deferred until Loom 0.10.1 is published" >"$evidence_dir/tokei-version.txt"
 else
-  "$mise_bin" exec -- loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1
-  "$mise_bin" exec -- tokei --version >"$evidence_dir/tokei-version.txt" 2>&1
+  "$mise_bin" -C "$HOME" exec -- loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1
+  "$mise_bin" -C "$HOME" exec -- tokei --version >"$evidence_dir/tokei-version.txt" 2>&1
 fi
-"$mise_bin" exec -- loom status >"$evidence_dir/loom-status.txt" 2>&1
-"$mise_bin" exec -- br --version >"$evidence_dir/br-version.txt" 2>&1
-"$mise_bin" exec -- bv --version >"$evidence_dir/bv-version.txt" 2>&1
+"$mise_bin" -C "$HOME" exec -- loom status >"$evidence_dir/loom-status.txt" 2>&1
+"$mise_bin" -C "$HOME" exec -- br --version >"$evidence_dir/br-version.txt" 2>&1
+"$mise_bin" -C "$HOME" exec -- bv --version >"$evidence_dir/bv-version.txt" 2>&1
 "$mise_bin" doctor >"$evidence_dir/mise-doctor.txt" 2>&1 || true
 
 selection=${HOME}/.config/mise/conf.d/loom.toml
