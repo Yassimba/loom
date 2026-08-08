@@ -45,6 +45,7 @@ fn expand_steps(
                 location: None,
                 doc: None,
                 returns: None,
+                signature: None,
                 meta: CallMeta::default(),
                 children: expand_steps(children, index, depth, max_depth, visiting),
             },
@@ -68,6 +69,7 @@ fn leaf(key: &str, label: String, info: Option<&FunctionInfo>) -> CallNode {
         location: info.map(|info| format!("{}:{}", info.file, info.line)),
         doc: info.and_then(|info| info.doc.clone()),
         returns: info.and_then(|info| info.returns.clone()),
+        signature: info.and_then(|info| info.signature.clone()),
         meta: CallMeta::default(),
         children: Vec::new(),
     }
@@ -214,6 +216,7 @@ fn expand_callers(
         location: info.map(|i| format!("{}:{}", i.file, i.line)),
         doc: info.and_then(|i| i.doc.clone()),
         returns: info.and_then(|i| i.returns.clone()),
+        signature: info.and_then(|i| i.signature.clone()),
         meta: CallMeta::default(),
         children: Vec::new(),
     };

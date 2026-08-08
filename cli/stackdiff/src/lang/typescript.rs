@@ -20,6 +20,29 @@ fn is_fn_like(kind: &str) -> bool {
     )
 }
 
+/// "(name: Type, …)" as written, None when no params carry types.
+fn typed_signature(params: Option<Node>, src: &str) -> Option<String> {
+    let params = params.filter(|p| p.kind() == "formal_parameters")?;
+    let mut parts: Vec<String> = Vec::new();
+    let mut typed = false;
+    for p in named_children(params) {
+        let name = child_by_type(p, "identifier")
+            .map(|id| text(id, src).to_string())
+            .unwrap_or_else(|| "_".to_string());
+        let ty = p
+            .child_by_field_name("type")
+            .map(|t| collapse_ws(text(t, src).trim_start_matches(':').trim()));
+        match ty {
+            Some(ty) => {
+                typed = true;
+                parts.push(format!("{name}: {ty}"));
+            }
+            None => parts.push(name),
+        }
+    }
+    typed.then(|| format!("({})", parts.join(", ")))
+}
+
 fn params_label(params: Option<Node>, src: &str) -> String {
     let Some(params) = params else {
         return "()".to_string();
@@ -329,6 +352,7 @@ fn function_from_parts(
         line: line_of(src, fn_node.start_byte()),
         doc: doc_before(doc_node, src),
         returns: return_type(fn_node, src),
+        signature: typed_signature(params, src),
         steps: steps_from_body(body, class_name, src),
         exported,
     }

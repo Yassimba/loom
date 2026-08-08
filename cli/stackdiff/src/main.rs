@@ -145,6 +145,11 @@ struct Cli {
     #[arg(long, help_heading = "View")]
     full: bool,
 
+    /// Full control-flow granularity: keep if/else arms and unresolved
+    /// plumbing calls the lineage default flattens away
+    #[arg(long, help_heading = "View")]
+    flow: bool,
+
     /// Unchanged siblings kept around each change [default: 1]
     #[arg(long, help_heading = "View")]
     context: Option<usize>,
@@ -340,6 +345,7 @@ fn tree_as_diff(node: &stackdiff::types::CallNode) -> DiffNode {
         location: node.location.clone(),
         doc: node.doc.clone(),
         returns: node.returns.clone(),
+        signature: node.signature.clone(),
         meta: node.meta.clone(),
         children: node.children.iter().map(tree_as_diff).collect(),
     }
@@ -374,6 +380,18 @@ fn load_types(cli: &Cli) -> std::collections::BTreeMap<String, Vec<(String, Opti
 }
 
 fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOptions) {
+    // The default tree reads at lineage granularity; --flow restores
+    // branches and plumbing.
+    let lineage_cut: Vec<DiffNode>;
+    let trees: &[DiffNode] = if !cli.flow
+        && matches!(cli.the_view(), View::Text | View::Boxes)
+        && cli.format != Format::Json
+    {
+        lineage_cut = trees.iter().map(stackdiff::diff::lineage_prune).collect();
+        &lineage_cut
+    } else {
+        trees
+    };
     if cli.the_view() == View::Seq {
         println!("{header}\n");
         for (index, tree) in trees.iter().enumerate() {
@@ -391,7 +409,11 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
     }
     if cli.the_view() == View::Lineage {
         println!("{header}\n");
-        match lineage_mermaid(trees) {
+        let template = link_template(cli);
+        let link = template
+            .as_deref()
+            .map(|template| (template, options.repo_root.as_deref()));
+        match lineage_mermaid(trees, link) {
             Some((source, marks)) => {
                 match render_colored(&source, &marks, options.color, term_width()) {
                     Ok(diagram) => println!("{diagram}"),

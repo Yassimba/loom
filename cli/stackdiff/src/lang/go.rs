@@ -40,6 +40,35 @@ fn params_label(params: Option<Node>, src: &str) -> String {
     }
 }
 
+/// "(name Type, …)" as written; None when untyped/unnamed.
+fn typed_signature(params: Option<Node>, src: &str) -> Option<String> {
+    let params = params.filter(|p| p.kind() == "parameter_list")?;
+    let mut parts: Vec<String> = Vec::new();
+    let mut typed = false;
+    for p in named_children(params) {
+        if p.kind() != "parameter_declaration" {
+            continue;
+        }
+        let ty = p
+            .child_by_field_name("type")
+            .map(|t| collapse_ws(text(t, src)));
+        let name = child_by_type(p, "identifier").map(|id| text(id, src).to_string());
+        match (name, ty) {
+            (Some(name), Some(ty)) => {
+                typed = true;
+                parts.push(format!("{name} {ty}"));
+            }
+            (Some(name), None) => parts.push(name),
+            (None, Some(ty)) => {
+                typed = true;
+                parts.push(ty);
+            }
+            (None, None) => parts.push("_".to_string()),
+        }
+    }
+    typed.then(|| format!("({})", parts.join(", ")))
+}
+
 fn callee_key(node: Node, receiver_type: Option<&str>, src: &str) -> Option<String> {
     match node.kind() {
         "identifier" => Some(text(node, src).to_string()),
@@ -245,6 +274,7 @@ fn handle_function(file: &str, node: Node, functions: &mut Vec<FunctionInfo>, sr
         line: line_of(src, node.start_byte()),
         doc: doc_before(node, src),
         returns: go_result(node, src),
+        signature: typed_signature(params, src),
         steps: body
             .map(|b| collect_statements(statements_of(b), None, src))
             .unwrap_or_default(),
@@ -282,6 +312,7 @@ fn handle_method(file: &str, node: Node, functions: &mut Vec<FunctionInfo>, src:
         line: line_of(src, node.start_byte()),
         doc: doc_before(node, src),
         returns: go_result(node, src),
+        signature: typed_signature(params, src),
         steps: body
             .map(|b| collect_statements(statements_of(b), Some(&type_name), src))
             .unwrap_or_default(),

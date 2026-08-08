@@ -42,6 +42,37 @@ fn params_label(params: Option<Node>, src: &str) -> String {
     }
 }
 
+/// "(name: Type, …)" from annotations, None when nothing is typed.
+fn typed_signature(params: Option<Node>, src: &str) -> Option<String> {
+    let params = params.filter(|p| p.kind() == "parameters")?;
+    let mut parts: Vec<String> = Vec::new();
+    let mut typed = false;
+    for p in named_children(params) {
+        match p.kind() {
+            "typed_parameter" | "typed_default_parameter" => {
+                let name = child_by_type(p, "identifier")
+                    .map(|id| text(id, src).to_string())
+                    .unwrap_or_else(|| "_".to_string());
+                match p.child_by_field_name("type") {
+                    Some(t) => {
+                        typed = true;
+                        parts.push(format!("{name}: {}", collapse_ws(text(t, src))));
+                    }
+                    None => parts.push(name),
+                }
+            }
+            "identifier" => parts.push(text(p, src).to_string()),
+            "default_parameter" => parts.push(
+                child_by_type(p, "identifier")
+                    .map(|id| text(id, src).to_string())
+                    .unwrap_or_else(|| "_".to_string()),
+            ),
+            _ => parts.push("_".to_string()),
+        }
+    }
+    typed.then(|| format!("({})", parts.join(", ")))
+}
+
 fn callee_key(node: Node, class_name: Option<&str>, src: &str) -> Option<String> {
     match node.kind() {
         "identifier" => Some(text(node, src).to_string()),
@@ -254,6 +285,7 @@ fn handle_function(
         .map(|annotation| collapse_ws(text(annotation, src)));
     let line = line_of(src, node.start_byte());
 
+    let signature = typed_signature(params, src);
     functions.push(FunctionInfo {
         key,
         label: format!("{label}{params_label}"),
@@ -261,6 +293,7 @@ fn handle_function(
         line,
         doc: doc.clone(),
         returns: returns.clone(),
+        signature: signature.clone(),
         steps: collect_block(body, class_name, src),
         exported: exported && !is_private,
     });
@@ -273,6 +306,7 @@ fn handle_function(
             line,
             doc,
             returns,
+            signature,
             steps: collect_block(body, Some(class_name), src),
             exported,
         });
@@ -366,6 +400,7 @@ fn handle_lambda_assignment(
         line: line_of(src, statement.start_byte()),
         doc: None,
         returns: None,
+        signature: None,
         steps: body
             .map(|b| collect_statements(vec![b], None, src))
             .unwrap_or_default(),

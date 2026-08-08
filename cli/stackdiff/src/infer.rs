@@ -200,6 +200,7 @@ pub fn diff_entry(
             location: None,
             doc: None,
             returns: None,
+            signature: None,
             meta: CallMeta::default(),
             children: Vec::new(),
         };
@@ -217,6 +218,7 @@ pub fn diff_entry(
             location: None,
             doc: None,
             returns: None,
+            signature: None,
             meta: CallMeta::default(),
             children: Vec::new(),
         };

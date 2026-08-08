@@ -33,6 +33,33 @@ fn params_label(params: Option<Node>, src: &str) -> String {
     }
 }
 
+/// "(name: Type, …)" as written; None for self-only/untyped lists.
+fn typed_signature(params: Option<Node>, src: &str) -> Option<String> {
+    let params = params?;
+    let mut parts: Vec<String> = Vec::new();
+    let mut typed = false;
+    for p in named_children(params) {
+        match p.kind() {
+            "parameter" => {
+                let name = p
+                    .named_child(0)
+                    .map(|pattern| collapse_ws(text(pattern, src)))
+                    .unwrap_or_else(|| "_".into());
+                match p.child_by_field_name("type") {
+                    Some(t) => {
+                        typed = true;
+                        parts.push(format!("{name}: {}", collapse_ws(text(t, src))));
+                    }
+                    None => parts.push(name),
+                }
+            }
+            "self_parameter" => parts.push("self".into()),
+            _ => {}
+        }
+    }
+    typed.then(|| format!("({})", parts.join(", ")))
+}
+
 fn callee_key(node: Node, self_type: Option<&str>, src: &str) -> Option<String> {
     match node.kind() {
         "identifier" => Some(text(node, src).to_string()),
@@ -245,6 +272,7 @@ fn handle_function(
         key,
         file: file.to_string(),
         line: line_of(src, node.start_byte()),
+        signature: typed_signature(params, src),
         doc: doc_before(node, src),
         returns: node
             .child_by_field_name("return_type")
