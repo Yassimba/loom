@@ -5,6 +5,7 @@ use anyhow::Result;
 use clap::{ArgAction, Parser, ValueEnum};
 
 use rayon::prelude::*;
+use stackdiff::boxes::render_boxes;
 use stackdiff::calltree::build_call_tree;
 use stackdiff::diff::prune_unchanged;
 use stackdiff::extract::{build_index, extract_functions, FunctionIndex};
@@ -96,6 +97,11 @@ struct Cli {
     /// Output format
     #[arg(long, value_enum, default_value_t = Format::Text)]
     format: Format,
+
+    /// Boxed-graph view in the terminal (mermaid-style boxes, colored by
+    /// status); shorthand that overrides --format
+    #[arg(short = 'm', long)]
+    boxes: bool,
 
     /// Append a +added/-removed summary per entry (diff mode)
     #[arg(long)]
@@ -193,6 +199,17 @@ fn tree_as_diff(node: &stackdiff::types::CallNode) -> DiffNode {
 }
 
 fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOptions) {
+    if cli.boxes {
+        println!("{header}\n");
+        for (index, tree) in trees.iter().enumerate() {
+            if index > 0 {
+                println!();
+            }
+            println!("{}", render_boxes(tree, options.color));
+            stat_line(cli, tree);
+        }
+        return;
+    }
     match cli.format {
         Format::Json => {
             let value = serde_json::json!({ "header": header, "entries": trees });
