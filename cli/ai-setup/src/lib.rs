@@ -1,6 +1,7 @@
 pub mod app;
 mod catalog;
 pub mod doctor;
+pub mod init;
 mod install;
 mod jsonc;
 pub mod manifest;
