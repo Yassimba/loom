@@ -42,8 +42,18 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   if (-not $installed) {
     throw "$Name`: could not install mise automatically; install it from https://mise.jdx.dev/installing-mise.html and rerun"
   }
-  # The nested powershell of the README one-liner inherits the pre-install
-  # environment; extend PATH for this session from the usual install homes.
+  # The nested PowerShell of the README one-liner keeps its pre-install PATH.
+  # Pull in the paths that WinGet or Scoop just persisted for future shells.
+  $persistentPaths = @(
+    [Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine)
+    [Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
+  ) | Where-Object { $_ }
+  foreach ($path in $persistentPaths) {
+    $env:Path = "$env:Path".TrimEnd(';') + ";" + $path
+  }
+
+  # Keep the common install homes as fallbacks for package managers that did
+  # not persist their shim directory.
   $candidates = @(
     (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links"),
     (Join-Path $HOME "scoop\shims")
@@ -66,8 +76,12 @@ if (-not (Test-Path $Selection)) {
   try {
     Get-Url $ManifestUrl $TmpManifest
     $lines = Get-Content $TmpManifest
-    $begin = [array]::IndexOf($lines, "# core:begin")
-    $end = [array]::IndexOf($lines, "# core:end")
+    $begin = -1
+    $end = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      if ($begin -lt 0 -and $lines[$i].StartsWith("# core:begin")) { $begin = $i }
+      if ($begin -ge 0 -and $lines[$i].StartsWith("# core:end")) { $end = $i; break }
+    }
     if ($begin -lt 0 -or $end -lt $begin) { throw "$Name`: manifest is missing its core block" }
     $core = $lines[$begin..$end]
     @("# Managed by Loom: the selected tools from the published manifest.", "", "[tools]") + $core |
