@@ -1,5 +1,6 @@
 use ai_setup::app::{install_selected, load_catalog, Selectors};
 use ai_setup::doctor::run_doctor;
+use ai_setup::init::{run_init, InitOptions};
 use ai_setup::update::run_updates;
 use ai_setup::{RealSystem, ResourceKind};
 use anyhow::Result;
@@ -32,6 +33,30 @@ enum Command {
     },
     /// Check the setup and print actionable repairs
     Doctor,
+    /// Scaffold this project's AGENTS.md and CLAUDE.md from the templates
+    Init {
+        /// Include the Python section (--no-python to exclude)
+        #[arg(long, overrides_with = "no_python")]
+        python: bool,
+        #[arg(long, hide = true)]
+        no_python: bool,
+        /// Include the Rust section (--no-rust to exclude)
+        #[arg(long, overrides_with = "no_rust")]
+        rust: bool,
+        #[arg(long, hide = true)]
+        no_rust: bool,
+        /// Include the Beads issue-triage section (--no-beads to exclude)
+        #[arg(long, overrides_with = "no_beads")]
+        beads: bool,
+        #[arg(long, hide = true)]
+        no_beads: bool,
+        /// Accept detection defaults without prompting
+        #[arg(long)]
+        yes: bool,
+        /// Rewrite AGENTS.md and CLAUDE.md from scratch
+        #[arg(long)]
+        force: bool,
+    },
     /// Print shell completions (skill/tool/package names included)
     Completions { shell: clap_complete::Shell },
 }
@@ -107,6 +132,33 @@ fn main() -> Result<()> {
             install_selected(&catalog, &selectors, args.yes, args.dry_run, &system)?
         }
         Command::Doctor => run_doctor(&system),
+        Command::Init {
+            python,
+            no_python,
+            rust,
+            no_rust,
+            beads,
+            no_beads,
+            yes,
+            force,
+        } => {
+            let flag = |on: bool, off: bool| match (on, off) {
+                (true, _) => Some(true),
+                (_, true) => Some(false),
+                _ => None,
+            };
+            run_init(
+                &system,
+                &load_catalog()?,
+                &InitOptions {
+                    python: flag(python, no_python),
+                    rust: flag(rust, no_rust),
+                    beads: flag(beads, no_beads),
+                    yes,
+                    force,
+                },
+            )?
+        }
         Command::Completions { shell } => {
             print_completions(shell)?;
             true
