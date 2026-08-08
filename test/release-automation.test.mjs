@@ -50,7 +50,8 @@ async function fixture() {
 test("npm publishing treats component paths as local directories", async () => {
   const workflow = await readFile(".github/workflows/publish-pi-package.yml", "utf8");
 
-  assert.match(workflow, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/);
+  assert.match(workflow, /id-token: write/);
+  assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
   assert.match(workflow, /npm publish "\.\/\$PACKAGE_PATH"/);
 });
 

@@ -71,9 +71,7 @@ async function readSkillDependencies(skillRoot) {
   const names = (list) =>
     Array.isArray(list) && list.every((name) => typeof name === "string" && name.length > 0);
   if (!names(skills) || !names(tools) || skills.length + tools.length === 0) {
-    throw new Error(
-      `deps.yml must hold non-empty skills and/or tools lists of names: ${depsPath}`,
-    );
+    throw new Error(`deps.yml must hold non-empty skills and/or tools lists of names: ${depsPath}`);
   }
   return { skills, tools };
 }

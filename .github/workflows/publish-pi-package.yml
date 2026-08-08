@@ -64,8 +64,6 @@ jobs:
     if: needs.resolve.outputs.publish == 'true' && needs.resolve.outputs.npm_count != '0'
     name: npm · ${{ matrix.id }}
     runs-on: ubuntu-latest
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
