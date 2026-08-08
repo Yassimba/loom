@@ -4,14 +4,15 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use clap::{ArgAction, Parser, ValueEnum};
 
+use rayon::prelude::*;
 use stackdiff::calltree::build_call_tree;
 use stackdiff::diff::prune_unchanged;
 use stackdiff::extract::{build_index, extract_functions, FunctionIndex};
 use stackdiff::git::{
-    assert_git_repo, list_source_files, read_snapshot_file, resolve_snapshots, verify_commit,
+    assert_git_repo, list_source_files, read_snapshot_files, resolve_snapshots, verify_commit,
 };
 use stackdiff::infer::{diff_entry, infer_entries};
-use stackdiff::render::{diff_stat, render_diff, RenderOptions};
+use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -29,6 +30,8 @@ enum Format {
     Json,
     /// The tree inside a ```diff fence — paste into chat/PRs for coloring
     Markdown,
+    /// A Mermaid flowchart (added green, removed red) in a ```mermaid fence
+    Mermaid,
 }
 
 /// Diff call stacks across git commits — like `git diff`, but for who-calls-whom.
@@ -138,19 +141,25 @@ fn render_options(cli: &Cli, cwd: &Path, color: bool) -> RenderOptions {
 
 fn load_index(cwd: &Path, snapshot: &Snapshot, path_filters: &[String]) -> Result<FunctionIndex> {
     let files = list_source_files(cwd, snapshot, path_filters)?;
-    let mut all = Vec::new();
-    for file in files {
-        let Some(source) = read_snapshot_file(cwd, snapshot, &file) else {
-            continue;
-        };
-        match extract_functions(&file, &source) {
-            Ok(functions) => all.extend(functions),
-            Err(error) => eprintln!(
-                "warn: failed to parse {file} @ {}: {error}",
-                snapshot.describe()
-            ),
-        }
-    }
+    let sources = read_snapshot_files(cwd, snapshot, &files);
+    let all: Vec<_> = sources
+        .par_iter()
+        .flat_map(|(file, source)| {
+            let Some(source) = source else {
+                return Vec::new();
+            };
+            match extract_functions(file, source) {
+                Ok(functions) => functions,
+                Err(error) => {
+                    eprintln!(
+                        "warn: failed to parse {file} @ {}: {error}",
+                        snapshot.describe()
+                    );
+                    Vec::new()
+                }
+            }
+        })
+        .collect();
     Ok(build_index(all))
 }
 
@@ -173,6 +182,14 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
         Format::Json => {
             let value = serde_json::json!({ "header": header, "entries": trees });
             println!("{}", serde_json::to_string_pretty(&value).expect("json"));
+        }
+        Format::Mermaid => {
+            println!("{header}\n");
+            for tree in trees {
+                println!("```mermaid");
+                println!("{}", render_mermaid(tree));
+                println!("```");
+            }
         }
         Format::Markdown => {
             println!("{header}\n");
@@ -279,8 +296,11 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         verify_commit(cwd, reference)?;
     }
 
-    let before = load_index(cwd, &from, &cli.paths)?;
-    let after = load_index(cwd, &to, &cli.paths)?;
+    let (before, after) = rayon::join(
+        || load_index(cwd, &from, &cli.paths),
+        || load_index(cwd, &to, &cli.paths),
+    );
+    let (before, after) = (before?, after?);
 
     let entries = infer_entries(&before, &after, &cli.entries, cli.max_depth)?;
 

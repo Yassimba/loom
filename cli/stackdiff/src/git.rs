@@ -1,7 +1,8 @@
 //! Read source files from git trees or the working tree.
 
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use anyhow::{bail, Context, Result};
 
@@ -147,4 +148,79 @@ pub fn read_snapshot_file(cwd: &Path, snapshot: &Snapshot, file: &str) -> Option
         }
         Snapshot::Commit(reference) => git(cwd, &["show", &format!("{reference}:{file}")]).ok(),
     }
+}
+
+/// Read many files from a snapshot at once. For commits this streams all
+/// blobs through a single `git cat-file --batch` process instead of one
+/// `git show` per file.
+pub fn read_snapshot_files(
+    cwd: &Path,
+    snapshot: &Snapshot,
+    files: &[String],
+) -> Vec<(String, Option<String>)> {
+    match snapshot {
+        Snapshot::Worktree => files
+            .iter()
+            .map(|file| {
+                let source = std::fs::read_to_string(cwd.join(file)).ok();
+                (file.clone(), source)
+            })
+            .collect(),
+        Snapshot::Commit(reference) => batch_read(cwd, reference, files).unwrap_or_else(|_| {
+            files
+                .iter()
+                .map(|file| (file.clone(), read_snapshot_file(cwd, snapshot, file)))
+                .collect()
+        }),
+    }
+}
+
+fn batch_read(
+    cwd: &Path,
+    reference: &str,
+    files: &[String],
+) -> Result<Vec<(String, Option<String>)>> {
+    let mut child = Command::new("git")
+        .args(["cat-file", "--batch"])
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("failed to run git cat-file")?;
+
+    // Feed requests from a thread so a full response pipe can't deadlock us.
+    let mut stdin = child.stdin.take().context("no stdin")?;
+    let requests: String = files
+        .iter()
+        .map(|file| format!("{reference}:{file}\n"))
+        .collect();
+    let writer = std::thread::spawn(move || {
+        let _ = stdin.write_all(requests.as_bytes());
+    });
+
+    let mut reader = BufReader::new(child.stdout.take().context("no stdout")?);
+    let mut out = Vec::with_capacity(files.len());
+    for file in files {
+        let mut header = String::new();
+        if reader.read_line(&mut header)? == 0 {
+            out.push((file.clone(), None));
+            continue;
+        }
+        let fields: Vec<&str> = header.trim_end().split(' ').collect();
+        let source = match fields.as_slice() {
+            [_, _, size] => {
+                let size: usize = size.parse().unwrap_or(0);
+                let mut buf = vec![0u8; size + 1]; // blob + trailing newline
+                reader.read_exact(&mut buf)?;
+                buf.pop();
+                Some(String::from_utf8_lossy(&buf).into_owned())
+            }
+            _ => None, // "<name> missing"
+        };
+        out.push((file.clone(), source));
+    }
+    let _ = writer.join();
+    let _ = child.wait();
+    Ok(out)
 }
