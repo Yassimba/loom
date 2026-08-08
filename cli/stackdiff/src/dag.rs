@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use crate::theme::Palette;
 use crate::types::DiffStatus;
 use crate::views::{GraphEdge, GraphNode};
 
@@ -254,29 +255,17 @@ fn layers(nodes: &[GraphNode], edges: &[GraphEdge]) -> Vec<usize> {
     layer
 }
 
-fn paint(status: DiffStatus, role: Role, color: bool) -> (String, String) {
+fn paint(status: DiffStatus, role: Role, color: bool, palette: &Palette) -> (String, String) {
     if !color {
         return (String::new(), String::new());
     }
-    const ADDED: ((u8, u8, u8), (u8, u8, u8)) = ((63, 185, 80), (14, 40, 22));
-    const REMOVED: ((u8, u8, u8), (u8, u8, u8)) = ((248, 81, 73), (45, 17, 17));
-    const CHANGED: ((u8, u8, u8), (u8, u8, u8)) = ((210, 153, 34), (43, 35, 10));
     let inside = matches!(
         role,
         Role::Frame | Role::Fill | Role::Text | Role::Loc | Role::Badge
     );
-    let tint = |((fr, fg, fb), (br, bg, bb)): ((u8, u8, u8), (u8, u8, u8))| {
-        if inside {
-            format!("\x1b[38;2;{fr};{fg};{fb}m\x1b[48;2;{br};{bg};{bb}m")
-        } else {
-            format!("\x1b[38;2;{fr};{fg};{fb}m")
-        }
-    };
-    let prefix = match status {
-        DiffStatus::Added => tint(ADDED),
-        DiffStatus::Removed => tint(REMOVED),
-        DiffStatus::Changed => tint(CHANGED),
-        DiffStatus::Same => match role {
+    let prefix = match palette.open(status, inside) {
+        Some(open) => open,
+        None => match role {
             Role::Frame | Role::Rail | Role::Loc => "\x1b[2m".to_string(),
             Role::Edge => "\x1b[2;3m".to_string(),
             _ => String::new(),
@@ -380,6 +369,7 @@ pub fn render_dag(
     edges: &[GraphEdge],
     color: bool,
     max_width: Option<usize>,
+    palette: &Palette,
 ) -> String {
     const PROFILES: [(usize, bool); 4] = [
         (MAX_LABEL, true),
@@ -387,14 +377,14 @@ pub fn render_dag(
         (26, false),
         (20, false),
     ];
-    let mut rendered = render_dag_profile(nodes, edges, color, PROFILES[0]);
+    let mut rendered = render_dag_profile(nodes, edges, color, PROFILES[0], palette);
     if let Some(limit) = max_width {
         for profile in &PROFILES[1..] {
             let width = rendered.lines().map(visible_width).max().unwrap_or(0);
             if width <= limit {
                 break;
             }
-            rendered = render_dag_profile(nodes, edges, color, *profile);
+            rendered = render_dag_profile(nodes, edges, color, *profile, palette);
         }
     }
     rendered
@@ -438,6 +428,7 @@ fn render_dag_profile(
     edges: &[GraphEdge],
     color: bool,
     (max_label, show_loc): (usize, bool),
+    palette: &Palette,
 ) -> String {
     let layer = layers(nodes, edges);
     let index: HashMap<&str, usize> = nodes
@@ -710,7 +701,7 @@ fn render_dag_profile(
             if run.is_empty() {
                 return;
             }
-            let (open, close) = paint(key.0, key.1, color);
+            let (open, close) = paint(key.0, key.1, color, palette);
             line.push_str(&open);
             line.push_str(run);
             line.push_str(&close);

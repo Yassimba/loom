@@ -158,7 +158,7 @@ pub fn resolve_entry(entry: &str, index: &FunctionIndex) -> Option<String> {
     if matches.len() > 1 {
         let exported: Vec<&&String> = matches
             .iter()
-            .filter(|key| index.get(**key).map(|f| f.exported).unwrap_or(false))
+            .filter(|key| index.get(key).map(|f| f.exported).unwrap_or(false))
             .collect();
         if exported.len() == 1 {
             return Some((*exported[0]).clone());

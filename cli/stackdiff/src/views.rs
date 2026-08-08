@@ -246,14 +246,11 @@ fn collect_classes(
     }
 }
 
-fn paint(status: DiffStatus, text: &str) -> String {
-    let code = match status {
-        DiffStatus::Added => "\x1b[38;2;63;185;80m",
-        DiffStatus::Removed => "\x1b[38;2;248;81;73m",
-        DiffStatus::Changed => "\x1b[38;2;210;153;34m",
-        DiffStatus::Same => return text.to_string(),
-    };
-    format!("{code}{text}\x1b[0m")
+fn paint(status: DiffStatus, text: &str, palette: &crate::theme::Palette) -> String {
+    match palette.open(status, false) {
+        Some(open) => format!("{open}{text}\x1b[0m"),
+        None => text.to_string(),
+    }
 }
 
 /// Render mermaid source through mermaid-text, painting and hyperlinking
@@ -264,8 +261,9 @@ pub fn render_colored(
     marks: &Marks,
     color: bool,
     max_width: Option<usize>,
+    palette: &crate::theme::Palette,
 ) -> anyhow::Result<String> {
-    render_colored_flip(source, marks, color, max_width, true)
+    render_colored_flip(source, marks, color, max_width, true, palette)
 }
 
 pub fn render_colored_flip(
@@ -274,6 +272,7 @@ pub fn render_colored_flip(
     color: bool,
     max_width: Option<usize>,
     auto_flip: bool,
+    palette: &crate::theme::Palette,
 ) -> anyhow::Result<String> {
     // Double-rendering to pick a direction is only worth it on small graphs.
     let rendered = if auto_flip && source.lines().count() <= 120 {
@@ -291,7 +290,7 @@ pub fn render_colored_flip(
             for mark in &sorted {
                 if let Some(at) = line.find(mark.label.as_str()) {
                     let painted = if color {
-                        paint(mark.status, &mark.label)
+                        paint(mark.status, &mark.label, palette)
                     } else {
                         mark.label.clone()
                     };

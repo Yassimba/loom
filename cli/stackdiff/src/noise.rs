@@ -179,6 +179,7 @@ pub struct Defaults {
     pub view: Option<String>,
     pub dir: Option<String>,
     pub link: Option<String>,
+    pub theme: Option<String>,
     #[serde(default)]
     pub tests: bool,
 }
@@ -290,7 +291,6 @@ impl NoiseFilter {
 fn resolved(index: &FunctionIndex, key: &str) -> bool {
     index.contains_key(key) || index.contains_key(&format!("new {key}"))
 }
-
 
 fn scrub_steps(steps: Vec<CallStep>, index: &FunctionIndex, filter: &NoiseFilter) -> Vec<CallStep> {
     let mut kept: Vec<CallStep> = Vec::new();
