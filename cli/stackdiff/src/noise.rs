@@ -291,6 +291,7 @@ fn resolved(index: &FunctionIndex, key: &str) -> bool {
     index.contains_key(key) || index.contains_key(&format!("new {key}"))
 }
 
+
 fn scrub_steps(steps: Vec<CallStep>, index: &FunctionIndex, filter: &NoiseFilter) -> Vec<CallStep> {
     let mut kept: Vec<CallStep> = Vec::new();
     for step in steps {
@@ -331,12 +332,9 @@ fn scrub_steps(steps: Vec<CallStep>, index: &FunctionIndex, filter: &NoiseFilter
 
 /// Strip hidden calls and collapse repeats across every function body.
 pub fn scrub_index(index: &mut FunctionIndex, filter: &NoiseFilter) {
-    let keys: Vec<String> = index.keys().cloned().collect();
     let lookup = index.clone();
-    for key in keys {
-        if let Some(info) = index.get_mut(&key) {
-            info.steps = scrub_steps(std::mem::take(&mut info.steps), &lookup, filter);
-        }
+    for info in index.all_mut() {
+        info.steps = scrub_steps(std::mem::take(&mut info.steps), &lookup, filter);
     }
 }
 

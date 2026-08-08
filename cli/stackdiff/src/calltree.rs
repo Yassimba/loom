@@ -10,7 +10,19 @@ use crate::types::{CallMeta, CallNode, CallStep, FunctionInfo, NodeKind};
 /// Look up a callable by key, falling back to its `new X` constructor alias —
 /// languages without a `new` keyword (Python) emit plain `X` for instantiation.
 pub fn lookup_callable<'a>(key: &str, index: &'a FunctionIndex) -> Option<&'a FunctionInfo> {
-    index.get(key).or_else(|| index.get(&format!("new {key}")))
+    lookup_from(key, index, None)
+}
+
+/// Resolve a callee for a specific caller: same-file/same-tree/same-language
+/// definitions outrank distant namesakes.
+pub fn lookup_from<'a>(
+    key: &str,
+    index: &'a FunctionIndex,
+    caller_file: Option<&str>,
+) -> Option<&'a FunctionInfo> {
+    index
+        .best(key, caller_file)
+        .or_else(|| index.best(&format!("new {key}"), caller_file))
 }
 
 fn display_call_label(key: &str, index: &FunctionIndex) -> String {
@@ -27,6 +39,7 @@ fn display_call_label(key: &str, index: &FunctionIndex) -> String {
 fn expand_steps(
     steps: &[CallStep],
     index: &FunctionIndex,
+    caller_file: Option<&str>,
     depth: usize,
     max_depth: usize,
     visiting: &mut HashSet<String>,
@@ -47,10 +60,10 @@ fn expand_steps(
                 returns: None,
                 signature: None,
                 meta: CallMeta::default(),
-                children: expand_steps(children, index, depth, max_depth, visiting),
+                children: expand_steps(children, index, caller_file, depth, max_depth, visiting),
             },
             CallStep::Call { key, meta, count } => {
-                let mut node = expand_call(key, index, depth, max_depth, visiting);
+                let mut node = expand_call(key, index, caller_file, depth, max_depth, visiting);
                 node.meta = meta.clone();
                 if *count > 1 {
                     node.label.push_str(&format!(" ×{count}"));
@@ -78,12 +91,13 @@ fn leaf(key: &str, label: String, info: Option<&FunctionInfo>) -> CallNode {
 fn expand_call(
     key: &str,
     index: &FunctionIndex,
+    caller_file: Option<&str>,
     depth: usize,
     max_depth: usize,
     visiting: &mut HashSet<String>,
 ) -> CallNode {
     let label = display_call_label(key, index);
-    let info = lookup_callable(key, index);
+    let info = lookup_from(key, index, caller_file);
 
     if depth >= max_depth {
         return leaf(key, label, info);
@@ -98,7 +112,14 @@ fn expand_call(
     }
 
     visiting.insert(info.key.clone());
-    let children = expand_steps(&info.steps, index, depth + 1, max_depth, visiting);
+    let children = expand_steps(
+        &info.steps,
+        index,
+        Some(&info.file),
+        depth + 1,
+        max_depth,
+        visiting,
+    );
     visiting.remove(&info.key);
 
     CallNode {
@@ -109,7 +130,7 @@ fn expand_call(
 
 pub fn build_call_tree(entry_key: &str, index: &FunctionIndex, max_depth: usize) -> CallNode {
     let resolved = resolve_entry(entry_key, index).unwrap_or_else(|| entry_key.to_string());
-    expand_call(&resolved, index, 0, max_depth, &mut HashSet::new())
+    expand_call(&resolved, index, None, 0, max_depth, &mut HashSet::new())
 }
 
 pub fn resolve_entry(entry: &str, index: &FunctionIndex) -> Option<String> {
@@ -155,20 +176,23 @@ pub fn reverse_index(index: &FunctionIndex) -> HashMap<String, Vec<(String, Call
     fn walk(
         steps: &[CallStep],
         caller: &str,
+        caller_file: &str,
         index: &FunctionIndex,
         reverse: &mut HashMap<String, Vec<(String, CallMeta)>>,
     ) {
         for step in steps {
             match step {
                 CallStep::Call { key, meta, .. } => {
-                    if let Some(info) = lookup_callable(key, index) {
+                    if let Some(info) = lookup_from(key, index, Some(caller_file)) {
                         reverse
                             .entry(info.key.clone())
                             .or_default()
                             .push((caller.to_string(), meta.clone()));
                     }
                 }
-                CallStep::Branch { children, .. } => walk(children, caller, index, reverse),
+                CallStep::Branch { children, .. } => {
+                    walk(children, caller, caller_file, index, reverse)
+                }
             }
         }
     }
@@ -176,7 +200,7 @@ pub fn reverse_index(index: &FunctionIndex) -> HashMap<String, Vec<(String, Call
         if info.key.starts_with("new ") {
             continue;
         }
-        walk(&info.steps, &info.key, index, &mut reverse);
+        walk(&info.steps, &info.key, &info.file, index, &mut reverse);
     }
     for edges in reverse.values_mut() {
         edges.sort_by(|a, b| a.0.cmp(&b.0));
