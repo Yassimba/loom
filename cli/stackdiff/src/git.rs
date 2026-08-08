@@ -107,6 +107,27 @@ fn list_commit_source_files(cwd: &Path, reference: &str) -> Result<Vec<String>> 
         .collect())
 }
 
+/// Test code by convention: test/spec directories or test-named files.
+pub fn is_test_file(file: &str) -> bool {
+    let in_test_dir = file
+        .split('/')
+        .any(|dir| matches!(dir, "tests" | "test" | "__tests__" | "testing"));
+    let name = file.rsplit('/').next().unwrap_or(file);
+    in_test_dir
+        || name.starts_with("test_")
+        || name == "conftest.py"
+        || [
+            "_test.py",
+            ".test.ts",
+            ".test.tsx",
+            ".spec.ts",
+            ".spec.tsx",
+            "_test.go",
+        ]
+        .iter()
+        .any(|suffix| name.ends_with(suffix))
+}
+
 fn path_allowed(file: &str, path_filters: &[String]) -> bool {
     if path_filters.is_empty() {
         return true;
@@ -142,6 +163,7 @@ pub fn list_source_files(
     snapshot: &Snapshot,
     path_filters: &[String],
     no_ignore: bool,
+    include_tests: bool,
 ) -> Result<Vec<String>> {
     let mut files = match snapshot {
         Snapshot::Worktree if no_ignore => {
@@ -153,6 +175,11 @@ pub fn list_source_files(
         Snapshot::Commit(reference) => list_commit_source_files(cwd, reference)?,
     };
     files.retain(|file| path_allowed(file, path_filters));
+    // A path filter that names test code is its own opt-in.
+    let filters_want_tests = path_filters.iter().any(|filter| is_test_file(filter));
+    if !include_tests && !filters_want_tests {
+        files.retain(|file| !is_test_file(file));
+    }
     files.sort();
     files.dedup();
     Ok(files)

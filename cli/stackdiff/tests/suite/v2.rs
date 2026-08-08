@@ -159,6 +159,33 @@ fn mermaid_output_marks_added_nodes() {
 }
 
 #[test]
+fn test_files_are_recognized_by_convention() {
+    use stackdiff::git::is_test_file;
+    for test in [
+        "packages/core/tests/application/test_runner.py",
+        "src/__tests__/app.test.ts",
+        "src/app.spec.tsx",
+        "pkg/runner_test.go",
+        "tests/conftest.py",
+        "test_edge.py",
+    ] {
+        assert!(is_test_file(test), "{test} should count as a test file");
+    }
+    for source in [
+        "src/app.ts",
+        "packages/core/src/runner.py",
+        "pkg/runner.go",
+        "src/latest_results.py",
+        "src/contest.py",
+    ] {
+        assert!(
+            !is_test_file(source),
+            "{source} should not count as a test file"
+        );
+    }
+}
+
+#[test]
 fn json_output_carries_dataflow_fields() {
     let source = diff_outdent(
         r#"
