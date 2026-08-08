@@ -172,6 +172,7 @@ test("the release planner updates manifests, locks, and repeat releases", async 
   git("init", "-q");
   git("config", "user.email", "ci@example.test");
   git("config", "user.name", "CI");
+  git("config", "commit.gpgsign", "false");
   git("add", ".");
   git("commit", "-qm", "feat(example): initial plugin");
 
