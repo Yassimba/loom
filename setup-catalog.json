@@ -586,6 +586,16 @@
       "dependencies": []
     },
     {
+      "id": "skill:writing-for-agents",
+      "kind": "skill",
+      "group": "General",
+      "label": "writing-for-agents",
+      "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.",
+      "installTarget": "writing-for-agents",
+      "nextAction": "Ask your coding agent to use the writing-for-agents skill.",
+      "dependencies": []
+    },
+    {
       "id": "skill:wtf",
       "kind": "skill",
       "group": "General",
