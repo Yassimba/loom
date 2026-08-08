@@ -1,5 +1,31 @@
 {
   "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "engineering",
+      "label": "Engineering flow",
+      "description": "the idea-to-commit skill loop, plus gh and tokei",
+      "targets": [
+        "brainstorming",
+        "wayfinder",
+        "grill-with-docs",
+        "grill-with-examples",
+        "grilling",
+        "to-spec",
+        "to-tickets",
+        "implement",
+        "tdd",
+        "code-review",
+        "refactor",
+        "e2e-test",
+        "commit",
+        "diagnosing-bugs",
+        "writing-clearly-and-concisely",
+        "gh",
+        "tokei"
+      ]
+    }
+  ],
   "resources": [
     {
       "id": "pi-package:@yassimba/pi-claude-bridge",

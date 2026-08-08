@@ -90,6 +90,7 @@ fn model(status: PrerequisiteStatus) -> Model {
     let settings = test_settings();
     Model {
         resources: catalog(),
+        presets: vec![],
         installed: vec![false; catalog().len()],
         setting_states: vec![SettingState::NotApplied; settings.len()],
         settings,
@@ -158,7 +159,11 @@ fn welcome_offers_missing_runtimes_for_quick_install() {
     let Stage::Welcome(stage) = &wizard.stages[0] else {
         panic!("expected the welcome stage");
     };
-    assert_eq!(stage.rows.len(), 3, "mise, herdr, and pi are all listed");
+    assert_eq!(
+        stage.rows.len(),
+        5,
+        "three runtimes plus the two built-in presets"
+    );
     assert_eq!(
         stage.cursor, 2,
         "cursor starts on the first missing runtime"
@@ -758,4 +763,96 @@ fn g_and_shift_g_jump_to_list_edges() {
         panic!("expected a pick stage");
     };
     assert_eq!(stage.cursor, 0);
+}
+
+#[test]
+fn space_auto_advances_after_toggling() {
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Enter]); // Herdr pick stage
+    press(&mut wizard, &[KeyCode::Enter]); // Pi pick stage (2 items)
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    let Stage::Pick(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected a pick stage");
+    };
+    assert_eq!(stage.cursor, 1, "space toggles and steps down");
+    assert!(wizard.selected[stage.items[0]]);
+}
+
+#[test]
+fn undo_restores_the_previous_selection() {
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Enter, KeyCode::Enter]); // Pi pick stage
+    press(&mut wizard, &[KeyCode::Char(' '), KeyCode::Char(' ')]);
+    assert_eq!(wizard.selection().len(), 2);
+    press(&mut wizard, &[KeyCode::Char('u')]);
+    assert_eq!(wizard.selection().len(), 1, "u pops one selection change");
+    press(&mut wizard, &[KeyCode::Char('u')]);
+    assert_eq!(wizard.selection().len(), 0);
+}
+
+#[test]
+fn search_filters_toggles_and_lands_the_cursor() {
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Enter; 3]); // Skills stage
+    press(&mut wizard, &[KeyCode::Char('/')]);
+    // "mermaid" lives in the second category; search sees all categories.
+    for c in "mermaid".chars() {
+        press(&mut wizard, &[KeyCode::Char(c)]);
+    }
+    assert_eq!(wizard.search_matches().len(), 1);
+    press(&mut wizard, &[KeyCode::Char(' ')]); // toggle the match
+    press(&mut wizard, &[KeyCode::Enter]); // accept: land on the hit
+    assert!(wizard.search.is_none());
+    let Stage::Skills(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected the skills stage");
+    };
+    assert_eq!(
+        (stage.category_cursor, stage.skill_cursor),
+        (1, 0),
+        "cursor parked on the Diagrams skill"
+    );
+    assert_eq!(wizard.selection().len(), 1);
+    // While searching, letters typed were not treated as hotkeys.
+    assert!(!wizard.show_help);
+}
+
+#[test]
+fn presets_apply_and_undo() {
+    let mut model = model(ready());
+    model.presets = vec![crate::PresetSpec {
+        id: "mini".into(),
+        label: "Mini".into(),
+        description: "just tdd".into(),
+        targets: vec!["tdd".into()],
+    }];
+    let mut wizard = Wizard::new(model);
+    let Stage::Welcome(stage) = &wizard.stages[0] else {
+        panic!("expected welcome");
+    };
+    // rows: 3 installed runtimes, Everything, Mini, Start empty.
+    assert_eq!(stage.rows.len(), 6);
+    // Everything selects the whole catalog (nothing installed in fixture).
+    press(
+        &mut wizard,
+        &[KeyCode::Char('G'), KeyCode::Char('k'), KeyCode::Char('k')],
+    );
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert_eq!(wizard.selection().len(), 6);
+    // The catalog preset narrows to its targets.
+    press(&mut wizard, &[KeyCode::Char('j'), KeyCode::Char(' ')]);
+    assert_eq!(
+        wizard
+            .selection()
+            .iter()
+            .map(|resource| resource.install_target.as_str())
+            .collect::<Vec<_>>(),
+        ["tdd"]
+    );
+    // Start empty clears; undo walks back through all three.
+    press(&mut wizard, &[KeyCode::Char('j'), KeyCode::Char(' ')]);
+    assert!(wizard.selection().is_empty());
+    press(&mut wizard, &[KeyCode::Char('u')]);
+    assert_eq!(wizard.selection().len(), 1);
+    press(&mut wizard, &[KeyCode::Char('u')]);
+    assert_eq!(wizard.selection().len(), 6);
 }

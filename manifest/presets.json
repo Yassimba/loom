@@ -1,0 +1,29 @@
+{
+  "comment": "Selection bundles the wizard offers on its Welcome screen, by resource install target (skills, tools, Pi packages). The catalog generator validates every target exists; 'Everything' and 'Start empty' are built into the wizard and don't belong here.",
+  "presets": [
+    {
+      "id": "engineering",
+      "label": "Engineering flow",
+      "description": "the idea-to-commit skill loop, plus gh and tokei",
+      "targets": [
+        "brainstorming",
+        "wayfinder",
+        "grill-with-docs",
+        "grill-with-examples",
+        "grilling",
+        "to-spec",
+        "to-tickets",
+        "implement",
+        "tdd",
+        "code-review",
+        "refactor",
+        "e2e-test",
+        "commit",
+        "diagnosing-bugs",
+        "writing-clearly-and-concisely",
+        "gh",
+        "tokei"
+      ]
+    }
+  ]
+}

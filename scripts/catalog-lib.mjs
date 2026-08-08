@@ -248,3 +248,24 @@ export async function buildSetupCatalog(repoRoot) {
   ]);
   return [...piPackages, ...skills, ...herdrPlugins, ...tools];
 }
+
+/// Wizard selection bundles from manifest/presets.json; every target must
+/// resolve to a catalog resource so a preset can never silently rot.
+export async function readSetupPresets(repoRoot, resources) {
+  const meta = JSON.parse(await readFile(join(repoRoot, "manifest", "presets.json"), "utf8"));
+  const targets = new Set(resources.map((resource) => resource.installTarget));
+  for (const preset of meta.presets) {
+    const unknown = preset.targets.filter((target) => !targets.has(target));
+    if (unknown.length > 0) {
+      throw new Error(
+        `preset ${preset.id} names unknown install targets: ${unknown.join(", ")}`,
+      );
+    }
+  }
+  return meta.presets.map(({ id, label, description, targets }) => ({
+    id,
+    label,
+    description,
+    targets,
+  }));
+}
