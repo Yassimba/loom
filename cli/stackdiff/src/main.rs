@@ -503,7 +503,7 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
     }
 }
 
-type Rebuild<'a> = &'a dyn Fn(&str) -> Vec<DiffNode>;
+type Rebuild<'a> = &'a dyn Fn(&str, usize) -> Vec<DiffNode>;
 
 /// Render the lineage view; oversized graphs become a cluster list, and —
 /// on a terminal, when `rebuild` can produce a single entry's trees — an
@@ -570,17 +570,47 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
                     .ok()
                     .flatten();
                 let Some(index) = picked else { break };
-                let entry_trees = rebuild(&rows[index].entry);
-                if entry_trees.is_empty() {
-                    eprintln!("Could not rebuild {}", rows[index].entry);
-                    continue;
-                }
-                // The drill-in reads as the lineage chain: the top-down text
-                // tree, docs and types inline — not another graph.
+                // Mermaid, kept drawable: step the depth down until the
+                // graph fits under the cap.
                 println!();
-                for tree in &entry_trees {
-                    let chain = stackdiff::diff::lineage_prune(tree);
-                    println!("{}\n", render_diff(&chain, options));
+                let mut drawn = false;
+                for depth in (1..=cli.depth()).rev() {
+                    let entry_trees = rebuild(&rows[index].entry, depth);
+                    if entry_trees.is_empty() {
+                        break;
+                    }
+                    let attempt = lineage_mermaid(&entry_trees, link, dir, Some(60));
+                    let Some(Lineage::Graph(source, marks)) = attempt else {
+                        continue;
+                    };
+                    match render_colored_flip(
+                        &source,
+                        &marks,
+                        options.color,
+                        term_width(),
+                        cli.dir.is_none(),
+                    ) {
+                        Ok(diagram) => {
+                            println!("{diagram}");
+                            if depth < cli.depth() {
+                                println!(
+                                    "(depth {depth} to stay drawable — `-e {} -m --max-depth {}` digs deeper)",
+                                    rows[index].entry,
+                                    cli.depth()
+                                );
+                            }
+                            println!();
+                        }
+                        Err(error) => eprintln!("lineage view failed: {error}"),
+                    }
+                    drawn = true;
+                    break;
+                }
+                if !drawn {
+                    eprintln!(
+                        "{} is too wide to draw even at depth 1 — try the text view: -e {}",
+                        rows[index].entry, rows[index].entry
+                    );
                 }
             }
         }
@@ -675,9 +705,9 @@ fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
                 .map(|root| tree_as_diff(&build_call_tree(root, &index, cli.depth())))
                 .collect();
             let options = render_options(cli, cwd, color);
-            let rebuild = |entry: &str| -> Vec<DiffNode> {
+            let rebuild = |entry: &str, depth: usize| -> Vec<DiffNode> {
                 stackdiff::calltree::resolve_entry(entry, &index)
-                    .map(|key| vec![tree_as_diff(&build_call_tree(&key, &index, cli.depth()))])
+                    .map(|key| vec![tree_as_diff(&build_call_tree(&key, &index, depth))])
                     .unwrap_or_default()
             };
             show_lineage(cli, &trees, &options, Some(&rebuild));
@@ -834,8 +864,8 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
     let options = render_options(cli, cwd, color);
     if cli.the_view() == View::Lineage {
         println!("{header}\n");
-        let rebuild = |entry: &str| -> Vec<DiffNode> {
-            diff_entry(entry, &before, &after, cli.depth())
+        let rebuild = |entry: &str, depth: usize| -> Vec<DiffNode> {
+            diff_entry(entry, &before, &after, depth)
                 .map(|diff| vec![diff])
                 .unwrap_or_default()
         };
