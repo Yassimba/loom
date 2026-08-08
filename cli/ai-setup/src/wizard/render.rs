@@ -348,11 +348,18 @@ impl Wizard {
             Style::new().dim(),
         ));
         footer.push(Line::from(""));
-        footer.push(Line::from(vec![
-            Span::raw("Space or click to toggle · "),
-            Span::styled("Enter", Style::new().fg(ACCENT).bold()),
-            Span::raw(" to start."),
-        ]));
+        footer.push(if matches!(stage.rows[stage.cursor], PickRow::Preset(_)) {
+            Line::from(vec![
+                Span::styled("Enter", Style::new().fg(ACCENT).bold()),
+                Span::raw(" to start with this preset · Space to apply and stay."),
+            ])
+        } else {
+            Line::from(vec![
+                Span::raw("Space or click to toggle · "),
+                Span::styled("Enter", Style::new().fg(ACCENT).bold()),
+                Span::raw(" to start."),
+            ])
+        });
         frame.render_widget(
             Paragraph::new(footer).alignment(Alignment::Center),
             footer_area,
