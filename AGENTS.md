@@ -44,39 +44,6 @@ The script skips full Pi packages (ones that also declare `pi.skills` or
 installs, and a bare extension symlink would drop their skills/prompts and
 double-load the extension.
 
-`plugins/pi-subagents` is a vendored fork of
-[nicobailon/pi-subagents](https://github.com/nicobailon/pi-subagents) (MIT,
-upstream author credited in its package.json). The git bridge to upstream is
-the standalone clone at `~/Documents/projects/pi-subagents` (`origin` =
-Yassimba/pi-subagents fork, `upstream` = nicobailon): pull upstream there,
-then rsync into `plugins/pi-subagents` (minus `.git`, `node_modules`,
-`package-lock.json`) and commit here. Its 39k third-party lines are excluded
-from repo gates (biome, tsc, fallow) — run its own `npm test` inside the
-package instead.
-
-`plugins/herdr-reviewr` is developed here as `yassimba.reviewr`. It started
-from [persiyanov/herdr-reviewr](https://github.com/persiyanov/herdr-reviewr)
-(MIT, vendored at v0.11.0 via `git subtree add --squash`) but has diverged far
-past routine subtree pulls — GitLab MR support, Windows builds, remote diff
-review, the built-in project switcher. Treat it as first-party: don't
-`git subtree pull` from upstream; if an upstream change is worth having,
-port it by hand and note the origin in the commit.
-It releases from this repo through the generated `release/auto` PR. Merging that
-PR creates a `herdr-reviewr-v<version>` tag and the shared release workflow
-cross-compiles 6 targets, then attaches the binaries its installers download.
-Its Rust tree is excluded from the JS repo gates (fallow ignore, biome
-allowlist); the inferred Rust CI matrix runs its format, Clippy, test, and build
-commands when its path changes.
-See `ai-docs/adr/0001-vendor-herdr-plugins-via-subtree.md`.
-
-`plugins/mindwalk` is a squashed subtree of
-[cosmtrek/mindwalk](https://github.com/cosmtrek/mindwalk) plus ZacharyQin's Pi adapter
-from upstream PR #4. It is released here as `@yassimba/pi-mindwalk`; its npm prepack
-cross-compiles the Go application for all supported platforms and bundles those binaries,
-so installation needs neither Go nor a postinstall download. Pull upstream deliberately
-with `git subtree pull --prefix plugins/mindwalk ... --squash`, then port the Pi package
-changes across any conflicts and preserve `THIRD_PARTY_NOTICES.md`.
-
 Note: the global `merge` skill is not a rename of `resolving-merge-conflicts`
 — it performs a branch merge rather than resolving a conflict in progress.
 

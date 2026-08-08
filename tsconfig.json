@@ -9,6 +9,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["plugins/*/src/**/*.ts", "test/**/*.ts"],
-  "exclude": ["plugins/pi-subagents/**"]
+  "include": ["plugins/*/src/**/*.ts", "test/**/*.ts"]
 }

@@ -80,11 +80,6 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        if: matrix.id == 'mindwalk'
-        with:
-          go-version-file: plugins/mindwalk/go.mod
-          cache: false
       - run: npm ci
       - name: Publish idempotently
         env:
