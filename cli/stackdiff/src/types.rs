@@ -69,6 +69,8 @@ impl CallStep {
 #[serde(rename_all = "kebab-case")]
 pub enum DiffStatus {
     Same,
+    /// Same call target, different call-site (binding or arguments).
+    Changed,
     Added,
     Removed,
 }

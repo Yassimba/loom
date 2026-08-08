@@ -33,7 +33,7 @@ Entry not found → `stackdiff --tree` lists the exported entrypoints; pick the 
 
 ## 3. Show it colored
 
-Paste the markdown output as-is — the ```` ```diff ```` fence renders `+` green and `-` red, and the two-space status column keeps rails aligned. For **Planned**, projected lines are the design's promise, not source facts — say so above the block.
+Paste the markdown output as-is — the ```` ```diff ```` fence renders `+` green and `-` red (`!` marks a same-call-different-arguments change), and the two-space status column keeps rails aligned. For **Planned**, projected lines are the design's promise, not source facts — say so above the block.
 
 Under the block, one takeaway sentence: what the graph shows about the question that prompted it.
 

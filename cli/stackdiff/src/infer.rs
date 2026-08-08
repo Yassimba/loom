@@ -76,9 +76,11 @@ impl<'i> SigCache<'i> {
                     key.hash(hasher);
                     cyclic |= self.steps_sig(children, depth, visiting, hasher);
                 }
-                CallStep::Call { key, .. } => {
+                CallStep::Call { key, meta } => {
                     let (sig, hit) = self.call_sig(key, depth + 1, visiting);
                     sig.hash(hasher);
+                    meta.binding.hash(hasher);
+                    meta.args.hash(hasher);
                     cyclic |= hit;
                 }
             }

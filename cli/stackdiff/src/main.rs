@@ -245,8 +245,8 @@ fn stat_line(cli: &Cli, tree: &DiffNode) {
     if !cli.stat {
         return;
     }
-    let (added, removed) = diff_stat(tree);
-    println!("  {}: +{added} -{removed}", tree.key);
+    let (added, removed, changed) = diff_stat(tree);
+    println!("  {}: +{added} -{removed} !{changed}", tree.key);
 }
 
 fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {

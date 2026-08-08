@@ -13,7 +13,11 @@ fn diff_node(before: Option<&CallNode>, after: Option<&CallNode>) -> DiffNode {
             key: after.key.clone(),
             label: after.label.clone(),
             kind: after.kind,
-            status: DiffStatus::Same,
+            status: if before.meta == after.meta {
+                DiffStatus::Same
+            } else {
+                DiffStatus::Changed
+            },
             location: after.location.clone(),
             doc: after.doc.clone(),
             returns: after.returns.clone(),
