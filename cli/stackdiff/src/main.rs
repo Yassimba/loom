@@ -17,7 +17,8 @@ use stackdiff::noise::{report as noise_report, scrub_index, NoiseFilter};
 use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
 use stackdiff::views::{
-    class_mermaid, lineage_mermaid, module_mermaid, render_colored, sequence_mermaid,
+    class_mermaid, lineage_mermaid, module_mermaid, render_colored, render_colored_flip,
+    sequence_mermaid, Lineage,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -408,13 +409,25 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
         let link = template
             .as_deref()
             .map(|template| (template, options.repo_root.as_deref()));
-        match lineage_mermaid(trees, link) {
-            Some((source, marks)) => {
-                match render_colored(&source, &marks, options.color, term_width()) {
+        let dir = match cli.dir {
+            Some(Dir::Td) => "TD",
+            _ => "LR",
+        };
+        let limit = (!cli.full).then_some(60);
+        match lineage_mermaid(trees, link, dir, limit) {
+            Some(Lineage::Graph(source, marks)) => {
+                match render_colored_flip(
+                    &source,
+                    &marks,
+                    options.color,
+                    term_width(),
+                    cli.dir.is_none(),
+                ) {
                     Ok(diagram) => println!("{diagram}"),
                     Err(error) => eprintln!("--view lineage failed: {error}"),
                 }
             }
+            Some(Lineage::Overview(overview)) => println!("{overview}"),
             None => println!("No resolved calls in these graphs — nothing to draw."),
         }
         return;
