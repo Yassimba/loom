@@ -575,19 +575,12 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
                     eprintln!("Could not rebuild {}", rows[index].entry);
                     continue;
                 }
+                // The drill-in reads as the lineage chain: the top-down text
+                // tree, docs and types inline — not another graph.
                 println!();
-                match lineage_mermaid(&entry_trees, link, dir, None) {
-                    Some(Lineage::Graph(source, marks)) => match render_colored_flip(
-                        &source,
-                        &marks,
-                        options.color,
-                        term_width(),
-                        cli.dir.is_none(),
-                    ) {
-                        Ok(diagram) => println!("{diagram}\n"),
-                        Err(error) => eprintln!("lineage view failed: {error}"),
-                    },
-                    _ => println!("Nothing to draw for {}.", rows[index].entry),
+                for tree in &entry_trees {
+                    let chain = stackdiff::diff::lineage_prune(tree);
+                    println!("{}\n", render_diff(&chain, options));
                 }
             }
         }
