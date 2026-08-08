@@ -136,6 +136,41 @@ fn prune_keeps_changes_with_context_and_elides_the_rest() {
 }
 
 #[test]
+fn call_site_changes_mark_amber_in_rich_and_hide_in_plain() {
+    let diff_src = diff_outdent(
+        r#"
+      export function boot() {
+    -   start(config);
+    +   start(config, retries);
+      }
+    "#,
+    );
+    let (before_src, after_src) = sources_from_file_diff(&diff_src);
+    let before = build_index(extract_functions("file.before.ts", &before_src).unwrap());
+    let after = build_index(extract_functions("file.after.ts", &after_src).unwrap());
+    let diff = diff_trees(
+        &build_call_tree("boot", &before, 12),
+        &build_call_tree("boot", &after, 12),
+    );
+    let rich = stackdiff::render::render_diff(
+        &diff,
+        &stackdiff::render::RenderOptions {
+            rich: true,
+            ..Default::default()
+        },
+    );
+    assert!(
+        rich.contains("! └─ start(config, retries)"),
+        "rich render should mark the call-site change:\n{rich}"
+    );
+    let plain = stackdiff::render::render_diff(&diff, &stackdiff::render::RenderOptions::default());
+    assert!(
+        plain.contains("  └─ start()"),
+        "plain render hides call-site-only changes:\n{plain}"
+    );
+}
+
+#[test]
 fn mermaid_output_marks_added_nodes() {
     let diff_src = diff_outdent(
         r#"

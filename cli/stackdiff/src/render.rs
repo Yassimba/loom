@@ -29,6 +29,7 @@ fn paint(status: DiffStatus, text: &str, color: bool) -> String {
     match status {
         DiffStatus::Added => text.green().to_string(),
         DiffStatus::Removed => text.red().to_string(),
+        DiffStatus::Changed => text.yellow().to_string(),
         DiffStatus::Same => text.to_string(),
     }
 }
@@ -45,6 +46,7 @@ fn status_prefix(status: DiffStatus, color: bool) -> String {
     let raw = match status {
         DiffStatus::Added => "+",
         DiffStatus::Removed => "-",
+        DiffStatus::Changed => "!",
         DiffStatus::Same => " ",
     };
     paint(status, raw, color)
@@ -116,6 +118,13 @@ fn walk(
     lines: &mut Vec<String>,
 ) {
     let color = options.color;
+    // Plain mode hides call-site facts, so a call-site-only change has
+    // nothing visible to mark.
+    let status = if !options.rich && node.status == DiffStatus::Changed {
+        DiffStatus::Same
+    } else {
+        node.status
+    };
     let branch = if is_root {
         ""
     } else if is_last {
@@ -125,8 +134,8 @@ fn walk(
     };
     lines.push(format!(
         "{} {indent}{branch}{}{}",
-        status_prefix(node.status, color),
-        paint(node.status, &node_text(node, options.rich), color),
+        status_prefix(status, color),
+        paint(status, &node_text(node, options.rich), color),
         location_suffix(node, options),
     ));
 
@@ -155,7 +164,7 @@ fn walk(
             let doc_indent = format!("{child_indent}{rail_here}");
             lines.push(format!(
                 "{} {doc_indent}{}",
-                status_prefix(node.status, color),
+                status_prefix(status, color),
                 dim(&format!("“{doc}”"), color),
             ));
         }
@@ -183,6 +192,7 @@ pub fn render_mermaid(root: &DiffNode) -> String {
     mermaid_walk(root, None, &mut counter, &mut lines, &mut classes);
     lines.push("classDef added fill:#e6ffec,stroke:#1a7f37,color:#1a7f37".to_string());
     lines.push("classDef removed fill:#ffebe9,stroke:#cf222e,color:#cf222e".to_string());
+    lines.push("classDef changed fill:#fff8c5,stroke:#9a6700,color:#9a6700".to_string());
     lines.extend(classes);
     lines.join("\n")
 }
@@ -208,6 +218,7 @@ fn mermaid_walk(
     match node.status {
         DiffStatus::Added => classes.push(format!("class n{id} added")),
         DiffStatus::Removed => classes.push(format!("class n{id} removed")),
+        DiffStatus::Changed => classes.push(format!("class n{id} changed")),
         DiffStatus::Same => {}
     }
     for child in &node.children {
@@ -215,21 +226,21 @@ fn mermaid_walk(
     }
 }
 
-/// Added/removed node counts for `--stat`.
-pub fn diff_stat(node: &DiffNode) -> (usize, usize) {
-    let mut added = 0;
-    let mut removed = 0;
-    count(node, &mut added, &mut removed);
-    (added, removed)
+/// Added/removed/changed node counts for `--stat`.
+pub fn diff_stat(node: &DiffNode) -> (usize, usize, usize) {
+    let mut counts = (0, 0, 0);
+    count(node, &mut counts);
+    counts
 }
 
-fn count(node: &DiffNode, added: &mut usize, removed: &mut usize) {
+fn count(node: &DiffNode, counts: &mut (usize, usize, usize)) {
     match node.status {
-        DiffStatus::Added => *added += 1,
-        DiffStatus::Removed => *removed += 1,
+        DiffStatus::Added => counts.0 += 1,
+        DiffStatus::Removed => counts.1 += 1,
+        DiffStatus::Changed => counts.2 += 1,
         DiffStatus::Same => {}
     }
     for child in &node.children {
-        count(child, added, removed);
+        count(child, counts);
     }
 }
