@@ -3,83 +3,18 @@
   "releases": [
     {
       "id": "loom",
-      "version": "0.10.0",
-      "tag": "loom-v0.10.0",
-      "bump": "minor",
+      "version": "0.10.1",
+      "tag": "loom-v0.10.1",
+      "bump": "patch",
       "distribution": "rust-binary",
       "commits": [
         {
-          "hash": "d151deb3e09a793ed97fd83c35d8eca87b7843ea",
-          "subject": "chore(release): merge origin main"
+          "hash": "503aacfef9758213a7ac70311d37c267e77de396",
+          "subject": "fix(bootstrap): verify clean installs across platforms (#45)"
         },
         {
-          "hash": "01e19c5c25877d3a6a4fddf27575bcf197aa69ea",
-          "subject": "fix(installer): persist mise activation"
-        },
-        {
-          "hash": "e473055e70e45ee3bda55443a6680e6557c94b2f",
-          "subject": "feat(installer): parallelize independent setup lanes"
-        },
-        {
-          "hash": "7d4a451bb9c32cf3d0c65edfce15477d0a99b920",
-          "subject": "feat(stackdiff): --view lineage — the call DAG with convergence"
-        },
-        {
-          "hash": "dfdfb3543055c018ab3a4840c580d42a14a3864e",
-          "subject": "feat(stackdiff): noise filter, --callers, loop collapse, ER fields, --modules"
-        }
-      ]
-    },
-    {
-      "id": "stackdiff",
-      "version": "0.2.0",
-      "tag": "stackdiff-v0.2.0",
-      "bump": "minor",
-      "distribution": "rust-binary",
-      "commits": [
-        {
-          "hash": "d151deb3e09a793ed97fd83c35d8eca87b7843ea",
-          "subject": "chore(release): merge origin main"
-        },
-        {
-          "hash": "c9bd6d192d7a3780914024fe4508b9bdfbfa3669",
-          "subject": "feat(stackdiff): interactive cluster picker and auto entry-point roots"
-        },
-        {
-          "hash": "014b6fa00ec3499f569f7b8a430095dad256b0cb",
-          "subject": "perf(stackdiff): gate huge lineage graphs; --dir picks the direction"
-        },
-        {
-          "hash": "a8d4affe305bc450dc0c9596395b30f83b5d4cc7",
-          "subject": "feat(stackdiff): -m now opens the lineage DAG"
-        },
-        {
-          "hash": "255770432b65fa4098db909a53a88d8b998f4eda",
-          "subject": "fix(stackdiff): infer topmost roots, not every changed function"
-        },
-        {
-          "hash": "2a5b26d0cfb9204bbed1db5149574a14529b76fe",
-          "subject": "fix(stackdiff): drop the pager; lineage cut applies regardless of status"
-        },
-        {
-          "hash": "d7c0a3f82ff2eab7da4d1ab8bcf7865916ddf230",
-          "subject": "feat(stackdiff): lineage granularity by default, typed signatures, linked DAG"
-        },
-        {
-          "hash": "7d4a451bb9c32cf3d0c65edfce15477d0a99b920",
-          "subject": "feat(stackdiff): --view lineage — the call DAG with convergence"
-        },
-        {
-          "hash": "e4f4aa87bdbe858a77da6d2896e1b02fd824bcfb",
-          "subject": "feat(stackdiff): UX sweep — guidance, dedup, pager, --view, config, README"
-        },
-        {
-          "hash": "9672a0eb00fd47e33f00b5704d028721ecc3b4b3",
-          "subject": "feat(stackdiff): branch conditions ride the connector in -m"
-        },
-        {
-          "hash": "dfdfb3543055c018ab3a4840c580d42a14a3864e",
-          "subject": "feat(stackdiff): noise filter, --callers, loop collapse, ER fields, --modules"
+          "hash": "fb7628eaf39f9c5d0cb6e7273d8c53c359b7acdf",
+          "subject": "fix(bootstrap): recover Linux installs without Rust (#43)"
         }
       ]
     }
