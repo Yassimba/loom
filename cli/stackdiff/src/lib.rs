@@ -5,6 +5,7 @@ pub mod extract;
 pub mod git;
 pub mod infer;
 pub mod lang;
+pub mod noise;
 pub mod render;
 pub mod types;
 pub mod views;

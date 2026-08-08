@@ -37,6 +37,9 @@ pub struct CallNode {
     /// The callee's declared return type, as written in source.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub returns: Option<String>,
+    /// The callee's typed parameter list, e.g. "(target: RunTarget)".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
     #[serde(flatten)]
     pub meta: CallMeta,
     pub children: Vec<CallNode>,
@@ -48,6 +51,8 @@ pub enum CallStep {
     Call {
         key: String,
         meta: CallMeta,
+        /// Consecutive identical call sites collapsed (`×N` in labels).
+        count: usize,
     },
     Branch {
         key: String,
@@ -61,6 +66,7 @@ impl CallStep {
         CallStep::Call {
             key: key.into(),
             meta: CallMeta::default(),
+            count: 1,
         }
     }
 }
@@ -87,6 +93,8 @@ pub struct DiffNode {
     pub doc: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub returns: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
     #[serde(flatten)]
     pub meta: CallMeta,
     pub children: Vec<DiffNode>,
@@ -104,9 +112,18 @@ pub struct FunctionInfo {
     pub doc: Option<String>,
     /// Declared return type, as written.
     pub returns: Option<String>,
+    /// Typed parameter list as written, e.g. "(target: RunTarget, n: int)".
+    pub signature: Option<String>,
     /// Ordered body steps (calls + if/else branches)
     pub steps: Vec<CallStep>,
     pub exported: bool,
+}
+
+/// A type definition, for the --er view: name plus declared fields.
+#[derive(Debug, Clone)]
+pub struct TypeInfo {
+    pub name: String,
+    pub fields: Vec<(String, Option<String>)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

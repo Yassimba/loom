@@ -3,6 +3,8 @@
 
 use tree_sitter::{Node, Tree};
 
+use crate::types::TypeInfo;
+
 use super::{arg_text, child_by_type, collapse_ws, consumed, doc_before, named_children, text};
 use crate::types::{line_of, CallMeta, CallStep, FunctionInfo};
 
@@ -36,6 +38,35 @@ fn params_label(params: Option<Node>, src: &str) -> String {
     } else {
         format!("({})", names.join(", "))
     }
+}
+
+/// "(name Type, …)" as written; None when untyped/unnamed.
+fn typed_signature(params: Option<Node>, src: &str) -> Option<String> {
+    let params = params.filter(|p| p.kind() == "parameter_list")?;
+    let mut parts: Vec<String> = Vec::new();
+    let mut typed = false;
+    for p in named_children(params) {
+        if p.kind() != "parameter_declaration" {
+            continue;
+        }
+        let ty = p
+            .child_by_field_name("type")
+            .map(|t| collapse_ws(text(t, src)));
+        let name = child_by_type(p, "identifier").map(|id| text(id, src).to_string());
+        match (name, ty) {
+            (Some(name), Some(ty)) => {
+                typed = true;
+                parts.push(format!("{name} {ty}"));
+            }
+            (Some(name), None) => parts.push(name),
+            (None, Some(ty)) => {
+                typed = true;
+                parts.push(ty);
+            }
+            (None, None) => parts.push("_".to_string()),
+        }
+    }
+    typed.then(|| format!("({})", parts.join(", ")))
 }
 
 fn callee_key(node: Node, receiver_type: Option<&str>, src: &str) -> Option<String> {
@@ -95,7 +126,11 @@ impl<'s> Collector<'s> {
             return;
         }
         self.seen.insert(mark);
-        self.steps.push(CallStep::Call { key, meta });
+        self.steps.push(CallStep::Call {
+            key,
+            meta,
+            count: 1,
+        });
     }
 
     fn call_meta(&mut self, call: Node) -> CallMeta {
@@ -239,6 +274,7 @@ fn handle_function(file: &str, node: Node, functions: &mut Vec<FunctionInfo>, sr
         line: line_of(src, node.start_byte()),
         doc: doc_before(node, src),
         returns: go_result(node, src),
+        signature: typed_signature(params, src),
         steps: body
             .map(|b| collect_statements(statements_of(b), None, src))
             .unwrap_or_default(),
@@ -276,6 +312,7 @@ fn handle_method(file: &str, node: Node, functions: &mut Vec<FunctionInfo>, src:
         line: line_of(src, node.start_byte()),
         doc: doc_before(node, src),
         returns: go_result(node, src),
+        signature: typed_signature(params, src),
         steps: body
             .map(|b| collect_statements(statements_of(b), Some(&type_name), src))
             .unwrap_or_default(),
@@ -293,4 +330,48 @@ pub fn extract(file: &str, source: &str, tree: &Tree) -> Vec<FunctionInfo> {
         }
     }
     functions
+}
+
+/// Struct fields for the --er view.
+pub fn extract_types(source: &str, tree: &Tree) -> Vec<TypeInfo> {
+    let mut types = Vec::new();
+    for node in named_children(tree.root_node()) {
+        if node.kind() != "type_declaration" {
+            continue;
+        }
+        for spec in named_children(node) {
+            if spec.kind() != "type_spec" {
+                continue;
+            }
+            let (Some(name), Some(body)) = (
+                spec.child_by_field_name("name"),
+                spec.child_by_field_name("type"),
+            ) else {
+                continue;
+            };
+            if body.kind() != "struct_type" {
+                continue;
+            }
+            let mut fields = Vec::new();
+            for list in named_children(body) {
+                for field in named_children(list) {
+                    if field.kind() == "field_declaration" {
+                        let ty = field
+                            .child_by_field_name("type")
+                            .map(|t| collapse_ws(text(t, source)));
+                        for id in named_children(field) {
+                            if id.kind() == "field_identifier" {
+                                fields.push((text(id, source).to_string(), ty.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+            types.push(TypeInfo {
+                name: text(name, source).to_string(),
+                fields,
+            });
+        }
+    }
+    types
 }

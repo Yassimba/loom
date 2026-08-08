@@ -293,8 +293,8 @@ fn sequence_view_orders_messages_and_marks_changes() {
     assert!(
         marks
             .iter()
-            .any(|(label, status)| label == "two()"
-                && *status == stackdiff::types::DiffStatus::Added),
+            .any(|mark| mark.label == "two()"
+                && mark.status == stackdiff::types::DiffStatus::Added),
         "{marks:?}"
     );
     let colored = stackdiff::views::render_colored(&source, &marks, true, Some(100)).unwrap();
@@ -317,10 +317,146 @@ fn class_view_groups_methods_by_type() {
     let index = build_index(extract_functions("app.ts", &source).unwrap());
     let tree = build_call_tree("Runner.start", &index, 12);
     let diff = diff_trees(&tree, &tree);
-    let (mermaid, _) = stackdiff::views::class_mermaid(&[diff]).unwrap();
+    let (mermaid, _) =
+        stackdiff::views::class_mermaid(&[diff], &std::collections::BTreeMap::new()).unwrap();
     assert!(mermaid.contains("class Runner {"), "{mermaid}");
     assert!(mermaid.contains("+start()"), "{mermaid}");
     assert!(mermaid.contains("+prepare()"), "{mermaid}");
+}
+
+#[test]
+fn noise_filter_hides_builtins_and_collapses_repeats() {
+    use stackdiff::noise::{scrub_index, NoiseFilter};
+    let source = diff_outdent(
+        r#"
+      export function boot() {
+        real_work();
+        real_work();
+        len(items);
+        custom_helper(items);
+      }
+    "#,
+    );
+    let mut index = build_index(extract_functions("app.ts", &source).unwrap());
+    let filter = NoiseFilter::default_enabled();
+    scrub_index(&mut index, &filter);
+    let tree = build_call_tree("boot", &index, 12);
+    let labels: Vec<&str> = tree.children.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        vec!["real_work() ×2", "custom_helper()"],
+        "{labels:?}"
+    );
+}
+
+#[test]
+fn caller_tree_inverts_the_graph() {
+    use stackdiff::calltree::{build_caller_tree, reverse_index};
+    let source = diff_outdent(
+        r#"
+      export function helper() {}
+      export function alpha() { helper(); }
+      export function beta() { helper(); }
+    "#,
+    );
+    let index = build_index(extract_functions("app.ts", &source).unwrap());
+    let reverse = reverse_index(&index);
+    let tree = build_caller_tree("helper", &index, &reverse, 3);
+    let mut callers: Vec<&str> = tree.children.iter().map(|c| c.key.as_str()).collect();
+    callers.sort();
+    assert_eq!(callers, vec!["alpha", "beta"]);
+}
+
+#[test]
+fn er_view_includes_extracted_fields() {
+    let source = diff_outdent(
+        r#"
+      class Runner {
+        retries: number;
+        start() { this.prepare(); }
+        prepare() {}
+      }
+    "#,
+    );
+    let types_list = stackdiff::extract::extract_types("app.ts", &source).unwrap();
+    let mut types = std::collections::BTreeMap::new();
+    for info in types_list {
+        types.insert(info.name, info.fields);
+    }
+    let index = build_index(extract_functions("app.ts", &source).unwrap());
+    let tree = build_call_tree("Runner.start", &index, 12);
+    let diff = diff_trees(&tree, &tree);
+    let (mermaid, _) = stackdiff::views::class_mermaid(&[diff], &types).unwrap();
+    assert!(mermaid.contains("+retries number"), "{mermaid}");
+}
+
+#[test]
+fn twin_calls_align_by_argument_similarity() {
+    let diff_src = diff_outdent(
+        r#"
+      export function boot() {
+    +   wrap(alpha);
+        wrap(beta);
+      }
+    "#,
+    );
+    let (before_src, after_src) = sources_from_file_diff(&diff_src);
+    let before = build_index(extract_functions("file.before.ts", &before_src).unwrap());
+    let after = build_index(extract_functions("file.after.ts", &after_src).unwrap());
+    let diff = diff_trees(
+        &build_call_tree("boot", &before, 12),
+        &build_call_tree("boot", &after, 12),
+    );
+    // The pre-existing wrap(beta) must read unchanged; wrap(alpha) is the add.
+    let statuses: Vec<(String, stackdiff::types::DiffStatus)> = diff
+        .children
+        .iter()
+        .map(|c| (c.meta.args.join(","), c.status))
+        .collect();
+    assert_eq!(
+        statuses,
+        vec![
+            ("alpha".to_string(), stackdiff::types::DiffStatus::Added),
+            ("beta".to_string(), stackdiff::types::DiffStatus::Same),
+        ],
+        "{statuses:?}"
+    );
+}
+
+#[test]
+fn lineage_view_draws_shared_callees_once() {
+    let source = diff_outdent(
+        r#"
+      export function resolve(): Plan { return read(); }
+      export function alpha() { const plan = resolve(); }
+      export function beta() { const p = resolve(); }
+      export function boot() { alpha(); beta(); }
+    "#,
+    );
+    let index = build_index(extract_functions("app.ts", &source).unwrap());
+    let tree = build_call_tree("boot", &index, 12);
+    let diff = diff_trees(&tree, &tree);
+    let (mermaid, _) = match stackdiff::views::lineage_mermaid(&[diff], None, "LR", None).unwrap() {
+        stackdiff::views::Lineage::Graph(source, marks) => (source, marks),
+        _ => panic!("expected graph"),
+    };
+    // resolve appears as ONE node, referenced by two edges.
+    assert_eq!(mermaid.matches("[resolve → Plan]").count(), 1, "{mermaid}");
+    let resolve_id = mermaid
+        .lines()
+        .find(|l| l.contains("[resolve → Plan]"))
+        .and_then(|l| l.split('[').next())
+        .unwrap()
+        .to_string();
+    let fan_in = mermaid
+        .lines()
+        .filter(|l| l.contains("-->") && l.trim_end().ends_with(resolve_id.trim()))
+        .count();
+    assert_eq!(fan_in, 2, "two edges converge on resolve:\n{mermaid}");
+    assert!(
+        mermaid.contains("|plan|"),
+        "binding rides the edge:\n{mermaid}"
+    );
 }
 
 #[test]

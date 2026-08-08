@@ -21,6 +21,7 @@ fn diff_node(before: Option<&CallNode>, after: Option<&CallNode>) -> DiffNode {
             location: after.location.clone(),
             doc: after.doc.clone(),
             returns: after.returns.clone(),
+            signature: after.signature.clone(),
             meta: after.meta.clone(),
             children: diff_children(&before.children, &after.children),
         },
@@ -39,6 +40,7 @@ fn mark_tree(node: &CallNode, status: DiffStatus) -> DiffNode {
         location: node.location.clone(),
         doc: node.doc.clone(),
         returns: node.returns.clone(),
+        signature: node.signature.clone(),
         meta: node.meta.clone(),
         children: node.children.iter().map(|c| mark_tree(c, status)).collect(),
     }
@@ -47,22 +49,34 @@ fn mark_tree(node: &CallNode, status: DiffStatus) -> DiffNode {
 fn diff_children(before: &[CallNode], after: &[CallNode]) -> Vec<DiffNode> {
     let n = before.len();
     let m = after.len();
+    // Weighted LCS: matching keys pair (weight 2), and identical call-site
+    // meta upgrades the pair (weight 3) — so among same-key twins the
+    // occurrence with matching arguments wins over the merely positional one.
+    let score = |i: usize, j: usize| -> usize {
+        if before[i].key != after[j].key {
+            0
+        } else if before[i].meta == after[j].meta {
+            3
+        } else {
+            2
+        }
+    };
     let mut dp = vec![vec![0usize; m + 1]; n + 1];
-
     for i in (0..n).rev() {
         for j in (0..m).rev() {
-            dp[i][j] = if before[i].key == after[j].key {
-                dp[i + 1][j + 1] + 1
-            } else {
-                dp[i + 1][j].max(dp[i][j + 1])
+            let pair = match score(i, j) {
+                0 => 0,
+                s => dp[i + 1][j + 1] + s,
             };
+            dp[i][j] = pair.max(dp[i + 1][j]).max(dp[i][j + 1]);
         }
     }
 
     let mut result = Vec::new();
     let (mut i, mut j) = (0, 0);
     while i < n && j < m {
-        if before[i].key == after[j].key {
+        let s = score(i, j);
+        if s > 0 && dp[i][j] == dp[i + 1][j + 1] + s {
             result.push(diff_node(Some(&before[i]), Some(&after[j])));
             i += 1;
             j += 1;
@@ -115,6 +129,7 @@ pub fn prune_unchanged(node: &DiffNode, context: usize) -> DiffNode {
                 location: None,
                 doc: None,
                 returns: None,
+                signature: None,
                 meta: crate::types::CallMeta::default(),
                 children: Vec::new(),
             });
@@ -131,8 +146,92 @@ pub fn prune_unchanged(node: &DiffNode, context: usize) -> DiffNode {
             location: node.location.clone(),
             doc: node.doc.clone(),
             returns: node.returns.clone(),
+            signature: node.signature.clone(),
             meta: node.meta.clone(),
             children: Vec::new(),
         }
     }
+}
+
+/// Expand-once: after a subtree has been shown in full, later occurrences
+/// of the same key collapse to a single "▸ shown above" stub. Runs across
+/// a whole entry list in display order.
+pub fn dedupe_subtrees(trees: &mut [DiffNode]) {
+    let mut seen = std::collections::HashSet::new();
+    for tree in trees {
+        dedupe_node(tree, &mut seen);
+    }
+}
+
+fn dedupe_node(node: &mut DiffNode, seen: &mut std::collections::HashSet<String>) {
+    if node.children.is_empty() {
+        return;
+    }
+    if !seen.insert(node.key.clone()) {
+        node.children = vec![DiffNode {
+            key: "▸".into(),
+            label: "▸ shown above".into(),
+            kind: crate::types::NodeKind::Call,
+            status: DiffStatus::Same,
+            location: None,
+            doc: None,
+            returns: None,
+            signature: None,
+            meta: crate::types::CallMeta::default(),
+            children: Vec::new(),
+        }];
+        return;
+    }
+    for child in &mut node.children {
+        dedupe_node(child, seen);
+    }
+}
+
+fn is_data_node(node: &DiffNode) -> bool {
+    node.location.is_none()
+        && node
+            .key
+            .chars()
+            .next()
+            .map(|c| c.is_uppercase())
+            .unwrap_or(false)
+}
+
+/// Lineage granularity: keep resolved functions and data constructors;
+/// branch arms flatten away and unresolved plumbing drops out, whatever
+/// their diff status. The default tree altitude (--flow restores all).
+pub fn lineage_prune(node: &DiffNode) -> DiffNode {
+    DiffNode {
+        children: lineage_children(node),
+        ..DiffNode {
+            key: node.key.clone(),
+            label: node.label.clone(),
+            kind: node.kind,
+            status: node.status,
+            location: node.location.clone(),
+            doc: node.doc.clone(),
+            returns: node.returns.clone(),
+            signature: node.signature.clone(),
+            meta: node.meta.clone(),
+            children: Vec::new(),
+        }
+    }
+}
+
+fn lineage_children(node: &DiffNode) -> Vec<DiffNode> {
+    let mut out = Vec::new();
+    for child in &node.children {
+        let marker = child.key == "…" || child.key == "▸";
+        let keep = marker || child.location.is_some() || is_data_node(child);
+        if child.kind == crate::types::NodeKind::Branch {
+            out.extend(lineage_children(child));
+        } else if keep {
+            out.push(lineage_prune(child));
+        } else {
+            out.extend(lineage_children(child));
+        }
+    }
+    // Flattening can leave duplicate elision markers side by side.
+    out.dedup_by(|a, b| a.key == "…" && b.key == "…");
+    out
 }

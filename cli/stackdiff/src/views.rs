@@ -8,8 +8,16 @@ use std::collections::BTreeMap;
 
 use crate::types::{DiffNode, DiffStatus, NodeKind};
 
-/// A label expected in the rendered output, with the status to paint it.
-pub type Marks = Vec<(String, DiffStatus)>;
+/// A label expected in the rendered output: paint it by status, and wrap
+/// it in an OSC 8 hyperlink when a url is attached.
+#[derive(Debug)]
+pub struct Mark {
+    pub label: String,
+    pub status: DiffStatus,
+    pub url: Option<String>,
+}
+
+pub type Marks = Vec<Mark>;
 
 fn clip(text: &str, max: usize) -> String {
     let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -37,7 +45,11 @@ fn participant(node: &DiffNode, fallback: &str) -> String {
 
 fn mark(marks: &mut Marks, label: &str, status: DiffStatus) {
     if status != DiffStatus::Same && !label.is_empty() {
-        marks.push((label.to_string(), status));
+        marks.push(Mark {
+            label: label.to_string(),
+            status,
+            url: None,
+        });
     }
 }
 
@@ -94,7 +106,10 @@ fn type_of(key: &str) -> Option<String> {
 /// Build mermaid `classDiagram` source from the types reached by the trees:
 /// each type with its touched methods, edges where one type's method calls
 /// into another type.
-pub fn class_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
+pub fn class_mermaid(
+    roots: &[DiffNode],
+    types: &BTreeMap<String, Vec<(String, Option<String>)>>,
+) -> Option<(String, Marks)> {
     let mut methods: BTreeMap<String, BTreeMap<String, DiffStatus>> = BTreeMap::new();
     let mut edges: BTreeMap<(String, String), DiffStatus> = BTreeMap::new();
     for root in roots {
@@ -108,6 +123,12 @@ pub fn class_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
     let mut marks = Marks::new();
     for (type_name, type_methods) in &methods {
         lines.push(format!("class {type_name} {{"));
+        for (field, field_type) in types.get(type_name).into_iter().flatten() {
+            match field_type {
+                Some(ty) => lines.push(format!("  +{field} {ty}")),
+                None => lines.push(format!("  +{field}")),
+            }
+        }
         for (method, status) in type_methods {
             lines.push(format!("  +{method}()"));
             mark(&mut marks, &format!("{method}()"), *status);
@@ -121,6 +142,62 @@ pub fn class_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
         }
     }
     Some((lines.join("\n"), marks))
+}
+
+/// Connected clusters of the lineage graph, largest change first, each
+/// with a suggested entry to open it with.
+#[allow(clippy::type_complexity)]
+fn cluster_overview(
+    nodes: &BTreeMap<String, (String, DiffStatus, bool, Option<String>)>,
+    edges: &BTreeMap<(String, String), (Option<String>, DiffStatus)>,
+) -> Vec<ClusterRow> {
+    let keys: Vec<&String> = nodes.keys().collect();
+    let index: BTreeMap<&String, usize> = keys.iter().enumerate().map(|(i, k)| (*k, i)).collect();
+    let mut parent: Vec<usize> = (0..keys.len()).collect();
+    fn find(parent: &mut Vec<usize>, i: usize) -> usize {
+        if parent[i] != i {
+            let root = find(parent, parent[i]);
+            parent[i] = root;
+        }
+        parent[i]
+    }
+    let mut incoming = vec![0usize; keys.len()];
+    for (from, to) in edges.keys() {
+        let (a, b) = (index[from], index[to]);
+        let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
+        if ra != rb {
+            parent[ra] = rb;
+        }
+        incoming[b] += 1;
+    }
+    let mut clusters: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for i in 0..keys.len() {
+        let root = find(&mut parent, i);
+        clusters.entry(root).or_default().push(i);
+    }
+    let mut rows: Vec<ClusterRow> = clusters
+        .values()
+        .map(|members| {
+            let changed = members
+                .iter()
+                .filter(|&&i| nodes[keys[i]].1 != DiffStatus::Same)
+                .count();
+            // Suggest the member with no incoming edge (a root), largest first.
+            let entry = members
+                .iter()
+                .copied()
+                .min_by_key(|&i| (incoming[i], std::cmp::Reverse(members.len()), keys[i]))
+                .map(|i| keys[i].clone())
+                .unwrap_or_default();
+            ClusterRow {
+                changed,
+                size: members.len(),
+                entry,
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| b.changed.cmp(&a.changed).then(b.size.cmp(&a.size)));
+    rows
 }
 
 fn note_method(
@@ -179,32 +256,55 @@ fn paint(status: DiffStatus, text: &str) -> String {
     format!("{code}{text}\x1b[0m")
 }
 
-/// Render mermaid source through mermaid-text and paint the marked labels.
+/// Render mermaid source through mermaid-text, painting and hyperlinking
+/// the marked labels. Tries both flow directions and keeps whichever fits
+/// the terminal best (narrow enough first, then shortest).
 pub fn render_colored(
     source: &str,
     marks: &Marks,
     color: bool,
     max_width: Option<usize>,
 ) -> anyhow::Result<String> {
-    let rendered = mermaid_text::render_with_width(source, max_width)
-        .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))?;
-    if !color {
-        return Ok(rendered);
-    }
-    let mut sorted: Vec<&(String, DiffStatus)> = marks.iter().collect();
-    sorted.sort_by_key(|(label, _)| std::cmp::Reverse(label.chars().count()));
+    render_colored_flip(source, marks, color, max_width, true)
+}
+
+pub fn render_colored_flip(
+    source: &str,
+    marks: &Marks,
+    color: bool,
+    max_width: Option<usize>,
+    auto_flip: bool,
+) -> anyhow::Result<String> {
+    // Double-rendering to pick a direction is only worth it on small graphs.
+    let rendered = if auto_flip && source.lines().count() <= 120 {
+        best_layout(source, max_width)?
+    } else {
+        mermaid_text::render_with_width(source, max_width)
+            .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))?
+    };
+    let mut sorted: Vec<&Mark> = marks.iter().collect();
+    sorted.sort_by_key(|mark| std::cmp::Reverse(mark.label.chars().count()));
     let out = rendered
         .lines()
         .map(|line| {
             let mut line = line.to_string();
-            for (label, status) in &sorted {
-                if let Some(at) = line.find(label.as_str()) {
-                    line = format!(
-                        "{}{}{}",
-                        &line[..at],
-                        paint(*status, label),
-                        &line[at + label.len()..]
-                    );
+            for mark in &sorted {
+                if let Some(at) = line.find(mark.label.as_str()) {
+                    let painted = if color {
+                        paint(mark.status, &mark.label)
+                    } else {
+                        mark.label.clone()
+                    };
+                    let shown = match &mark.url {
+                        Some(url) => {
+                            format!("\x1b]8;;{url}\x1b\\{painted}\x1b]8;;\x1b\\")
+                        }
+                        None => painted,
+                    };
+                    if !color && mark.url.is_none() {
+                        break;
+                    }
+                    line = format!("{}{}{}", &line[..at], shown, &line[at + mark.label.len()..]);
                     break;
                 }
             }
@@ -213,4 +313,266 @@ pub fn render_colored(
         .collect::<Vec<_>>()
         .join("\n");
     Ok(out)
+}
+
+fn best_layout(source: &str, max_width: Option<usize>) -> anyhow::Result<String> {
+    let render = |src: &str| {
+        mermaid_text::render_with_width(src, max_width)
+            .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))
+    };
+    let Some(flipped) = flip_direction(source) else {
+        return render(source);
+    };
+    let first = render(source)?;
+    let second = match render(&flipped) {
+        Ok(second) => second,
+        Err(_) => return Ok(first),
+    };
+    let measure = |text: &str| {
+        let width = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
+        let height = text.lines().count();
+        (width, height)
+    };
+    let (w1, h1) = measure(&first);
+    let (w2, h2) = measure(&second);
+    let limit = max_width.unwrap_or(usize::MAX);
+    let pick_second = match (w1 <= limit, w2 <= limit) {
+        (true, false) => false,
+        (false, true) => true,
+        // Both fit (or neither): prefer the smaller footprint.
+        _ => w2 * h2 < w1 * h1,
+    };
+    Ok(if pick_second { second } else { first })
+}
+
+fn flip_direction(source: &str) -> Option<String> {
+    if let Some(rest) = source.strip_prefix("flowchart LR") {
+        Some(format!("flowchart TD{rest}"))
+    } else {
+        source
+            .strip_prefix("flowchart TD")
+            .map(|rest| format!("flowchart LR{rest}"))
+    }
+}
+
+/// Module zoom: one node per file, an edge when a call crosses files,
+/// statuses aggregated (any added/removed/changed edge wins over same).
+pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
+    fn file_of(node: &DiffNode) -> Option<String> {
+        node.location.as_deref().map(|location| {
+            let path = location
+                .rsplit_once(':')
+                .map(|(p, _)| p)
+                .unwrap_or(location);
+            path.rsplit('/').next().unwrap_or(path).to_string()
+        })
+    }
+    fn collect(
+        node: &DiffNode,
+        from: Option<&String>,
+        edges: &mut BTreeMap<(String, String), DiffStatus>,
+    ) {
+        let own = file_of(node).or_else(|| from.cloned());
+        if let (Some(from_file), Some(to_file)) = (from, file_of(node).as_ref()) {
+            if from_file != to_file {
+                let slot = edges
+                    .entry((from_file.clone(), to_file.clone()))
+                    .or_insert(node.status);
+                if *slot == DiffStatus::Same {
+                    *slot = node.status;
+                }
+            }
+        }
+        for child in &node.children {
+            collect(child, own.as_ref(), edges);
+        }
+    }
+    let mut edges = BTreeMap::new();
+    for root in roots {
+        collect(root, None, &mut edges);
+    }
+    if edges.is_empty() {
+        return None;
+    }
+    let mut lines = vec!["flowchart LR".to_string()];
+    let mut marks = Marks::new();
+    let mut ids: BTreeMap<&String, usize> = BTreeMap::new();
+    for (from, to) in edges.keys() {
+        let next = ids.len();
+        ids.entry(from).or_insert(next);
+        let next = ids.len();
+        ids.entry(to).or_insert(next);
+    }
+    for (file, id) in &ids {
+        lines.push(format!("n{id}[{file}]"));
+    }
+    for ((from, to), status) in &edges {
+        lines.push(format!("n{} --> n{}", ids[from], ids[to]));
+        if *status != DiffStatus::Same {
+            mark(&mut marks, from, *status);
+            mark(&mut marks, to, *status);
+        }
+    }
+    Some((lines.join("\n"), marks))
+}
+
+/// Lineage view: the call DAG at data granularity. One node per function
+/// (drawn once — convergence is visible as fan-in), data constructors as
+/// stadium nodes, edges labeled with the binding the result lands in.
+/// Branches flatten away; unresolved plumbing drops out entirely.
+/// One connected cluster of an oversized lineage graph.
+#[derive(Debug, Clone)]
+pub struct ClusterRow {
+    pub changed: usize,
+    pub size: usize,
+    pub entry: String,
+}
+
+/// What the lineage view decided to show: the graph, or — past the size
+/// limit — its connected clusters with entry hints.
+pub enum Lineage {
+    Graph(String, Marks),
+    Overview(Vec<ClusterRow>),
+}
+
+pub fn lineage_mermaid(
+    roots: &[DiffNode],
+    link: Option<(&str, Option<&std::path::Path>)>,
+    dir: &str,
+    limit: Option<usize>,
+) -> Option<Lineage> {
+    #[derive(Default)]
+    struct Graph {
+        nodes: BTreeMap<String, (String, DiffStatus, bool, Option<String>)>,
+        edges: BTreeMap<(String, String), (Option<String>, DiffStatus)>,
+    }
+
+    fn is_data(node: &DiffNode) -> bool {
+        node.location.is_none()
+            && node
+                .key
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
+    }
+
+    fn keep(node: &DiffNode) -> bool {
+        node.location.is_some() || is_data(node)
+    }
+
+    fn merge_status(slot: &mut DiffStatus, status: DiffStatus) {
+        if *slot == DiffStatus::Same {
+            *slot = status;
+        }
+    }
+
+    fn label_of(node: &DiffNode) -> String {
+        let mut text = node.key.clone();
+        if let Some(signature) = &node.signature {
+            text.push_str(signature);
+        }
+        if let Some(ret) = &node.returns {
+            text.push_str(" → ");
+            text.push_str(ret);
+        }
+        clip(&text, 56)
+    }
+
+    fn walk(node: &DiffNode, ancestor: Option<&str>, graph: &mut Graph) {
+        let own: Option<String> = if keep(node) {
+            let data = is_data(node);
+            let entry = graph
+                .nodes
+                .entry(node.key.clone())
+                .or_insert_with(|| (label_of(node), node.status, data, node.location.clone()));
+            merge_status(&mut entry.1, node.status);
+            if let Some(from) = ancestor {
+                if from != node.key {
+                    let edge = graph
+                        .edges
+                        .entry((from.to_string(), node.key.clone()))
+                        .or_insert_with(|| (node.meta.binding.clone(), node.status));
+                    merge_status(&mut edge.1, node.status);
+                }
+            }
+            Some(node.key.clone())
+        } else {
+            None
+        };
+        let next = own.as_deref().or(ancestor);
+        for child in &node.children {
+            if child.key == "…" || child.key == "▸" {
+                continue;
+            }
+            walk(child, next, graph);
+        }
+    }
+
+    let mut graph = Graph::default();
+    for root in roots {
+        walk(root, None, &mut graph);
+    }
+    if graph.edges.is_empty() {
+        return None;
+    }
+
+    if let Some(limit) = limit {
+        if graph.nodes.len() > limit {
+            return Some(Lineage::Overview(cluster_overview(
+                &graph.nodes,
+                &graph.edges,
+            )));
+        }
+    }
+
+    let mut ids: BTreeMap<&String, usize> = BTreeMap::new();
+    for key in graph.nodes.keys() {
+        let next = ids.len();
+        ids.insert(key, next);
+    }
+    let mut lines = vec![format!("flowchart {dir}")];
+    let mut marks = Marks::new();
+    for (key, (label, status, data, location)) in &graph.nodes {
+        let id = ids[key];
+        if *data {
+            lines.push(format!("n{id}([{label}])"));
+        } else {
+            lines.push(format!("n{id}[{label}]"));
+        }
+        let url = match (link, location) {
+            (Some((template, root)), Some(location)) => {
+                location.rsplit_once(':').map(|(path, line)| {
+                    let absolute = match root {
+                        Some(root) => root.join(path).to_string_lossy().into_owned(),
+                        None => path.to_string(),
+                    };
+                    template
+                        .replace("{path}", &absolute)
+                        .replace("{line}", line)
+                })
+            }
+            _ => None,
+        };
+        if *status != DiffStatus::Same || url.is_some() {
+            marks.push(Mark {
+                label: label.clone(),
+                status: *status,
+                url,
+            });
+        }
+    }
+    for ((from, to), (binding, status)) in &graph.edges {
+        let (Some(from_id), Some(to_id)) = (ids.get(from), ids.get(to)) else {
+            continue;
+        };
+        match binding {
+            Some(binding) => {
+                lines.push(format!("n{from_id} -->|{binding}| n{to_id}"));
+                mark(&mut marks, binding, *status);
+            }
+            None => lines.push(format!("n{from_id} --> n{to_id}")),
+        }
+    }
+    Some(Lineage::Graph(lines.join("\n"), marks))
 }

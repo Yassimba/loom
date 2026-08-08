@@ -5,7 +5,7 @@
 use tree_sitter::{Node, Tree};
 
 use super::{arg_text, child_by_type, collapse_ws, consumed, named_children, text};
-use crate::types::{first_sentence, line_of, CallMeta, CallStep, FunctionInfo};
+use crate::types::{first_sentence, line_of, CallMeta, CallStep, FunctionInfo, TypeInfo};
 
 fn params_label(params: Option<Node>, src: &str) -> String {
     let Some(params) = params else {
@@ -40,6 +40,37 @@ fn params_label(params: Option<Node>, src: &str) -> String {
     } else {
         format!("({})", names.join(", "))
     }
+}
+
+/// "(name: Type, …)" from annotations, None when nothing is typed.
+fn typed_signature(params: Option<Node>, src: &str) -> Option<String> {
+    let params = params.filter(|p| p.kind() == "parameters")?;
+    let mut parts: Vec<String> = Vec::new();
+    let mut typed = false;
+    for p in named_children(params) {
+        match p.kind() {
+            "typed_parameter" | "typed_default_parameter" => {
+                let name = child_by_type(p, "identifier")
+                    .map(|id| text(id, src).to_string())
+                    .unwrap_or_else(|| "_".to_string());
+                match p.child_by_field_name("type") {
+                    Some(t) => {
+                        typed = true;
+                        parts.push(format!("{name}: {}", collapse_ws(text(t, src))));
+                    }
+                    None => parts.push(name),
+                }
+            }
+            "identifier" => parts.push(text(p, src).to_string()),
+            "default_parameter" => parts.push(
+                child_by_type(p, "identifier")
+                    .map(|id| text(id, src).to_string())
+                    .unwrap_or_else(|| "_".to_string()),
+            ),
+            _ => parts.push("_".to_string()),
+        }
+    }
+    typed.then(|| format!("({})", parts.join(", ")))
 }
 
 fn callee_key(node: Node, class_name: Option<&str>, src: &str) -> Option<String> {
@@ -87,7 +118,11 @@ impl<'s> Collector<'s> {
             return;
         }
         self.seen.insert(mark);
-        self.steps.push(CallStep::Call { key, meta });
+        self.steps.push(CallStep::Call {
+            key,
+            meta,
+            count: 1,
+        });
     }
 
     fn call_meta(&mut self, call: Node) -> CallMeta {
@@ -250,6 +285,7 @@ fn handle_function(
         .map(|annotation| collapse_ws(text(annotation, src)));
     let line = line_of(src, node.start_byte());
 
+    let signature = typed_signature(params, src);
     functions.push(FunctionInfo {
         key,
         label: format!("{label}{params_label}"),
@@ -257,6 +293,7 @@ fn handle_function(
         line,
         doc: doc.clone(),
         returns: returns.clone(),
+        signature: signature.clone(),
         steps: collect_block(body, class_name, src),
         exported: exported && !is_private,
     });
@@ -269,6 +306,7 @@ fn handle_function(
             line,
             doc,
             returns,
+            signature,
             steps: collect_block(body, Some(class_name), src),
             exported,
         });
@@ -362,6 +400,7 @@ fn handle_lambda_assignment(
         line: line_of(src, statement.start_byte()),
         doc: None,
         returns: None,
+        signature: None,
         steps: body
             .map(|b| collect_statements(vec![b], None, src))
             .unwrap_or_default(),
@@ -386,4 +425,74 @@ pub fn extract(file: &str, source: &str, tree: &Tree) -> Vec<FunctionInfo> {
         visit(file, stmt, &mut functions, source);
     }
     functions
+}
+
+/// Class fields for the --er view: annotated class attributes plus
+/// `self.x = …` assignments in __init__.
+pub fn extract_types(source: &str, tree: &Tree) -> Vec<TypeInfo> {
+    let mut types = Vec::new();
+    for node in named_children(tree.root_node()) {
+        if node.kind() != "class_definition" {
+            continue;
+        }
+        let Some(name) = child_by_type(node, "identifier") else {
+            continue;
+        };
+        let Some(body) = child_by_type(node, "block") else {
+            continue;
+        };
+        let mut fields: Vec<(String, Option<String>)> = Vec::new();
+        for stmt in named_children(body) {
+            if stmt.kind() == "expression_statement" {
+                if let Some(assign) = named_children(stmt)
+                    .into_iter()
+                    .find(|c| c.kind() == "assignment")
+                {
+                    if let Some(left) = assign.named_child(0).filter(|l| l.kind() == "identifier") {
+                        let ty = assign
+                            .child_by_field_name("type")
+                            .map(|t| collapse_ws(text(t, source)));
+                        fields.push((text(left, source).to_string(), ty));
+                    }
+                }
+            }
+            if let Some(func) = unwrap_function(stmt) {
+                let is_init = child_by_type(func, "identifier")
+                    .map(|n| text(n, source) == "__init__")
+                    .unwrap_or(false);
+                if is_init {
+                    if let Some(init_body) = child_by_type(func, "block") {
+                        collect_self_fields(init_body, source, &mut fields);
+                    }
+                }
+            }
+        }
+        types.push(TypeInfo {
+            name: text(name, source).to_string(),
+            fields,
+        });
+    }
+    types
+}
+
+fn collect_self_fields(node: Node, src: &str, fields: &mut Vec<(String, Option<String>)>) {
+    if node.kind() == "assignment" {
+        if let Some(left) = node.named_child(0).filter(|l| l.kind() == "attribute") {
+            let parts: Vec<Node> = named_children(left);
+            if let [object, attr] = parts.as_slice() {
+                if object.kind() == "identifier" && text(*object, src) == "self" {
+                    let name = text(*attr, src).to_string();
+                    if !fields.iter().any(|(existing, _)| *existing == name) {
+                        let ty = node
+                            .child_by_field_name("type")
+                            .map(|t| collapse_ws(text(t, src)));
+                        fields.push((name, ty));
+                    }
+                }
+            }
+        }
+    }
+    for child in named_children(node) {
+        collect_self_fields(child, src, fields);
+    }
 }
