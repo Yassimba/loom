@@ -76,6 +76,11 @@ struct Cli {
     #[arg(long)]
     no_ignore: bool,
 
+    /// Include test files (excluded by default; a test path after -- also
+    /// brings them in)
+    #[arg(long)]
+    tests: bool,
+
     /// Labels only: hide binding/args/returns, locations, and doc lines
     #[arg(long)]
     plain: bool,
@@ -148,8 +153,9 @@ fn load_index(
     snapshot: &Snapshot,
     path_filters: &[String],
     no_ignore: bool,
+    include_tests: bool,
 ) -> Result<FunctionIndex> {
-    let files = list_source_files(cwd, snapshot, path_filters, no_ignore)?;
+    let files = list_source_files(cwd, snapshot, path_filters, no_ignore, include_tests)?;
     let sources = read_snapshot_files(cwd, snapshot, &files);
     let all: Vec<_> = sources
         .par_iter()
@@ -252,7 +258,7 @@ fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         }
         None => Snapshot::Worktree,
     };
-    let index = load_index(cwd, &snapshot, &cli.paths, cli.no_ignore)?;
+    let index = load_index(cwd, &snapshot, &cli.paths, cli.no_ignore, cli.tests)?;
 
     if cli.entries.is_empty() {
         let mut exported: Vec<&String> = index
@@ -306,8 +312,8 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
     }
 
     let (before, after) = rayon::join(
-        || load_index(cwd, &from, &cli.paths, cli.no_ignore),
-        || load_index(cwd, &to, &cli.paths, cli.no_ignore),
+        || load_index(cwd, &from, &cli.paths, cli.no_ignore, cli.tests),
+        || load_index(cwd, &to, &cli.paths, cli.no_ignore, cli.tests),
     );
     let (before, after) = (before?, after?);
 
