@@ -113,7 +113,7 @@
       "description": "Core agent-browser usage guide — read before running any agent-browser command. Use when the user asks to interact with, test, or automate a website — clicking, filling forms, extracting data, taking screenshots, logging in.",
       "installTarget": "browser-usage",
       "nextAction": "Ask your coding agent to use the browser-usage skill.",
-      "dependencies": []
+      "dependencies": ["npm:agent-browser"]
     },
     {
       "id": "skill:code-review",
@@ -433,7 +433,7 @@
       "description": "Generate Mermaid diagrams as code (.mmd) and export to PNG/SVG/PDF with mmdc. Use when the user wants a diagram — flowchart, sequence, class, ER, state, gantt, git graph, architecture, timeline, mindmap — proactively when explaining a system with 3+ components, a runtime flow, a schema, or a lifecycle, and when another skill (e.g. blueprint) needs a diagram authored or exported to an image.",
       "installTarget": "mermaid-skill",
       "nextAction": "Ask your coding agent to use the mermaid-skill skill.",
-      "dependencies": []
+      "dependencies": ["npm:@mermaid-js/mermaid-cli"]
     },
     {
       "id": "skill:marp-slide",
@@ -443,7 +443,7 @@
       "description": "Create Marp presentation slides — themed decks authored in Markdown. Use when the user asks for a Marp document or wants slides written in Markdown rather than .pptx.",
       "installTarget": "marp-slide",
       "nextAction": "Ask your coding agent to use the marp-slide skill.",
-      "dependencies": []
+      "dependencies": ["npm:@marp-team/marp-cli"]
     },
     {
       "id": "skill:pptx",

@@ -731,6 +731,7 @@ impl Wizard {
         ) {
             self.push_undo();
         }
+        let blocked = self.blocked_flags();
         // -1 steps back, +1 steps forward; resolved after the borrow of the
         // current stage ends.
         let mut navigate = 0i8;
@@ -762,7 +763,7 @@ impl Wizard {
                 KeyCode::Char('G') => stage.cursor = stage.items.len() - 1,
                 KeyCode::Char(' ') => {
                     let index = stage.items[stage.cursor];
-                    if !self.model.installed[index] {
+                    if !blocked[index] {
                         self.selected[index] = !self.selected[index];
                     }
                     // Auto-advance the way the cursor was travelling.
@@ -773,7 +774,7 @@ impl Wizard {
                     };
                 }
                 KeyCode::Char('a') => {
-                    toggle_group(&mut self.selected, &stage.items, &self.model.installed);
+                    toggle_group(&mut self.selected, &stage.items, &blocked);
                 }
                 KeyCode::Right | KeyCode::Char('l') => navigate = 1,
                 KeyCode::Left | KeyCode::Char('h') | KeyCode::Backspace | KeyCode::Char('b') => {
@@ -833,11 +834,11 @@ impl Wizard {
                     },
                     KeyCode::Char(' ') => match stage.focus {
                         Focus::Categories => {
-                            toggle_group(&mut self.selected, &category_items, &self.model.installed)
+                            toggle_group(&mut self.selected, &category_items, &blocked)
                         }
                         Focus::Skills => {
                             let index = category_items[stage.skill_cursor];
-                            if !self.model.installed[index] {
+                            if !blocked[index] {
                                 self.selected[index] = !self.selected[index];
                             }
                             // Auto-advance with the cross-category flow, in
@@ -859,7 +860,7 @@ impl Wizard {
                         }
                     },
                     KeyCode::Char('a') => {
-                        toggle_group(&mut self.selected, &category_items, &self.model.installed)
+                        toggle_group(&mut self.selected, &category_items, &blocked)
                     }
                     KeyCode::Char('A') => {
                         let all = stage
@@ -867,7 +868,7 @@ impl Wizard {
                             .iter()
                             .flat_map(|category| category.items.iter().copied())
                             .collect::<Vec<_>>();
-                        toggle_group(&mut self.selected, &all, &self.model.installed);
+                        toggle_group(&mut self.selected, &all, &blocked);
                     }
                     KeyCode::Tab => {
                         stage.focus = match stage.focus {
@@ -1088,6 +1089,36 @@ impl Wizard {
         self.probing = false;
     }
 
+    /// The selected resource (label) that pulls `index` in as a dependency,
+    /// when `index` is neither installed nor directly selected. Locked rows:
+    /// shown as selected, not deselectable while the parent stays picked.
+    pub(crate) fn required_note(&self, index: usize) -> Option<String> {
+        if self.model.installed[index] || self.selected[index] {
+            return None;
+        }
+        let target = &self.model.resources[index].id;
+        for (parent_index, on) in self.selected.iter().enumerate() {
+            if !*on {
+                continue;
+            }
+            let expanded = crate::expand_skill_dependencies(
+                &self.model.resources,
+                vec![self.model.resources[parent_index].clone()],
+            );
+            if expanded.iter().any(|resource| &resource.id == target) {
+                return Some(self.model.resources[parent_index].label.clone());
+            }
+        }
+        None
+    }
+
+    /// Per-resource toggle blocks: installed, or required by a selection.
+    fn blocked_flags(&self) -> Vec<bool> {
+        (0..self.model.resources.len())
+            .map(|index| self.model.installed[index] || self.required_note(index).is_some())
+            .collect()
+    }
+
     // ---- search ------------------------------------------------------------
 
     /// The current stage's resource indices that match the live query, in
@@ -1148,7 +1179,7 @@ impl Wizard {
             KeyCode::Char(' ') => {
                 let matches = self.search_matches();
                 if let Some(&index) = matches.get(self.search_cursor) {
-                    if !self.model.installed[index] {
+                    if !self.model.installed[index] && self.required_note(index).is_none() {
                         self.push_undo();
                         self.selected[index] = !self.selected[index];
                     }
@@ -1238,7 +1269,7 @@ impl Wizard {
             let matches = self.search_matches();
             if let Some(&hit) = matches.get(index) {
                 self.search_cursor = index;
-                if !self.model.installed[hit] {
+                if !self.model.installed[hit] && self.required_note(hit).is_none() {
                     self.push_undo();
                     self.selected[hit] = !self.selected[hit];
                 }
@@ -1257,7 +1288,7 @@ impl Wizard {
                 if index < stage.items.len() {
                     stage.cursor = index;
                     let item = stage.items[index];
-                    if !self.model.installed[item] {
+                    if !self.model.installed[item] && self.required_note(item).is_none() {
                         self.selected[item] = !self.selected[item];
                     }
                 }
@@ -1289,7 +1320,7 @@ impl Wizard {
                 stage.focus = Focus::Skills;
                 stage.skill_cursor = index;
                 let item = category.items[index];
-                if !self.model.installed[item] {
+                if !self.model.installed[item] && self.required_note(item).is_none() {
                     self.selected[item] = !self.selected[item];
                 }
             }

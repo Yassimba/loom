@@ -60,9 +60,7 @@ pub fn expand_skill_dependencies(all: &[Resource], selection: Vec<Resource>) -> 
         for name in dependencies {
             let Some(dependency) = all
                 .iter()
-                .find(|candidate| {
-                    candidate.kind == ResourceKind::Skill && candidate.install_target == name
-                })
+                .find(|candidate| candidate.install_target == name)
                 .cloned()
             else {
                 continue; // catalog generation guarantees deps resolve; stay lenient here
