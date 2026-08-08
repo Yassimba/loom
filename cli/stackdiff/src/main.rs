@@ -405,31 +405,7 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
     }
     if cli.the_view() == View::Lineage {
         println!("{header}\n");
-        let template = link_template(cli);
-        let link = template
-            .as_deref()
-            .map(|template| (template, options.repo_root.as_deref()));
-        let dir = match cli.dir {
-            Some(Dir::Td) => "TD",
-            _ => "LR",
-        };
-        let limit = (!cli.full).then_some(60);
-        match lineage_mermaid(trees, link, dir, limit) {
-            Some(Lineage::Graph(source, marks)) => {
-                match render_colored_flip(
-                    &source,
-                    &marks,
-                    options.color,
-                    term_width(),
-                    cli.dir.is_none(),
-                ) {
-                    Ok(diagram) => println!("{diagram}"),
-                    Err(error) => eprintln!("--view lineage failed: {error}"),
-                }
-            }
-            Some(Lineage::Overview(overview)) => println!("{overview}"),
-            None => println!("No resolved calls in these graphs — nothing to draw."),
-        }
+        show_lineage(cli, trees, options, None);
         return;
     }
     if cli.the_view() == View::Modules {
@@ -527,6 +503,98 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
     }
 }
 
+type Rebuild<'a> = &'a dyn Fn(&str) -> Vec<DiffNode>;
+
+/// Render the lineage view; oversized graphs become a cluster list, and —
+/// on a terminal, when `rebuild` can produce a single entry's trees — an
+/// interactive picker that drills into the chosen cluster.
+fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild: Option<Rebuild>) {
+    let template = link_template(cli);
+    let link = template
+        .as_deref()
+        .map(|template| (template, options.repo_root.as_deref()));
+    let dir = match cli.dir {
+        Some(Dir::Td) => "TD",
+        _ => "LR",
+    };
+    let limit = (!cli.full).then_some(60);
+    match lineage_mermaid(trees, link, dir, limit) {
+        Some(Lineage::Graph(source, marks)) => {
+            match render_colored_flip(
+                &source,
+                &marks,
+                options.color,
+                term_width(),
+                cli.dir.is_none(),
+            ) {
+                Ok(diagram) => println!("{diagram}"),
+                Err(error) => eprintln!("lineage view failed: {error}"),
+            }
+        }
+        Some(Lineage::Overview(rows)) => {
+            let interactive = std::io::stdout().is_terminal() && rebuild.is_some();
+            if !interactive {
+                println!("Graph too big to draw — {} clusters. Open one:", rows.len());
+                for row in rows.iter().take(20) {
+                    println!(
+                        "  {:>4} changed / {:>4} nodes   stackdiff … -e {} -m",
+                        row.changed, row.size, row.entry
+                    );
+                }
+                if rows.len() > 20 {
+                    println!("  … {} more clusters", rows.len() - 20);
+                }
+                println!("(--full draws it anyway)");
+                return;
+            }
+            let rebuild = rebuild.expect("interactive requires rebuild");
+            let items: Vec<String> = rows
+                .iter()
+                .take(30)
+                .map(|row| {
+                    format!(
+                        "{:>4} changed / {:>4} nodes   {}",
+                        row.changed, row.size, row.entry
+                    )
+                })
+                .collect();
+            loop {
+                let picked = dialoguer::Select::new()
+                    .with_prompt(format!(
+                        "Graph too big to draw — {} clusters. Open one (Esc quits)",
+                        rows.len()
+                    ))
+                    .items(&items)
+                    .default(0)
+                    .interact_opt()
+                    .ok()
+                    .flatten();
+                let Some(index) = picked else { break };
+                let entry_trees = rebuild(&rows[index].entry);
+                if entry_trees.is_empty() {
+                    eprintln!("Could not rebuild {}", rows[index].entry);
+                    continue;
+                }
+                println!();
+                match lineage_mermaid(&entry_trees, link, dir, None) {
+                    Some(Lineage::Graph(source, marks)) => match render_colored_flip(
+                        &source,
+                        &marks,
+                        options.color,
+                        term_width(),
+                        cli.dir.is_none(),
+                    ) {
+                        Ok(diagram) => println!("{diagram}\n"),
+                        Err(error) => eprintln!("lineage view failed: {error}"),
+                    },
+                    _ => println!("Nothing to draw for {}.", rows[index].entry),
+                }
+            }
+        }
+        None => println!("No resolved calls in these graphs — nothing to draw."),
+    }
+}
+
 fn stat_line(cli: &Cli, tree: &DiffNode) {
     if !cli.stat {
         return;
@@ -597,6 +665,31 @@ fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
     }
 
     if cli.entries.is_empty() {
+        if cli.the_view() == View::Lineage {
+            // No entry: start from the program's own doors.
+            let roots = stackdiff::calltree::detect_entrypoints(&index, 12);
+            if roots.is_empty() {
+                println!("No entry points detected — name one with -e.");
+                return Ok(0);
+            }
+            println!(
+                "stackdiff -m @ {} · auto roots: {}\n",
+                snapshot.describe(),
+                roots.join(", ")
+            );
+            let trees: Vec<DiffNode> = roots
+                .iter()
+                .map(|root| tree_as_diff(&build_call_tree(root, &index, cli.depth())))
+                .collect();
+            let options = render_options(cli, cwd, color);
+            let rebuild = |entry: &str| -> Vec<DiffNode> {
+                stackdiff::calltree::resolve_entry(entry, &index)
+                    .map(|key| vec![tree_as_diff(&build_call_tree(&key, &index, cli.depth()))])
+                    .unwrap_or_default()
+            };
+            show_lineage(cli, &trees, &options, Some(&rebuild));
+            return Ok(0);
+        }
         list_entries(&index, &snapshot, None);
         return Ok(0);
     }
@@ -746,6 +839,16 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
     );
 
     let options = render_options(cli, cwd, color);
+    if cli.the_view() == View::Lineage {
+        println!("{header}\n");
+        let rebuild = |entry: &str| -> Vec<DiffNode> {
+            diff_entry(entry, &before, &after, cli.depth())
+                .map(|diff| vec![diff])
+                .unwrap_or_default()
+        };
+        show_lineage(cli, &diffs, &options, Some(&rebuild));
+        return Ok(0);
+    }
     print_trees(cli, &header, &diffs, &options);
     Ok(0)
 }

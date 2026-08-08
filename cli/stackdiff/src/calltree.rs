@@ -283,3 +283,70 @@ fn edit_distance(a: &str, b: &str) -> usize {
     }
     prev[b.len()]
 }
+
+/// Score how much a function smells like a program entry point: nothing
+/// calls it, and its name/path look like main/CLI/API surface.
+pub fn entrypoint_score(
+    key: &str,
+    info: &FunctionInfo,
+    reverse: &HashMap<String, Vec<(String, CallMeta)>>,
+) -> i64 {
+    if !info.exported || key.starts_with("new ") {
+        return 0;
+    }
+    let mut score = 0;
+    if !reverse.contains_key(key) {
+        score += 4;
+    }
+    let name = key.rsplit(['.', ':']).next().unwrap_or(key).to_lowercase();
+    if name == "main" {
+        score += 4;
+    }
+    if name.starts_with("cmd") || name.starts_with("cli") || name.starts_with("handle") {
+        score += 2;
+    }
+    if ["run", "serve", "execute", "start", "app"].contains(&name.as_str()) {
+        score += 2;
+    }
+    let file = info.file.to_lowercase();
+    for marker in [
+        "/cli/",
+        "/commands/",
+        "/api/",
+        "/routes/",
+        "/endpoints/",
+        "/presentation/",
+        "/bin/",
+    ] {
+        if file.contains(marker) {
+            score += 2;
+            break;
+        }
+    }
+    if file.ends_with("main.py") || file.ends_with("main.rs") || file.ends_with("main.go") {
+        score += 2;
+    }
+    // A callable nobody calls with zero flavor is likely a library export.
+    if score <= 4 && info.steps.is_empty() {
+        return 0;
+    }
+    score
+}
+
+/// The functions a program starts from, best first.
+pub fn detect_entrypoints(index: &FunctionIndex, limit: usize) -> Vec<String> {
+    let reverse = reverse_index(index);
+    let mut scored: Vec<(i64, &String)> = index
+        .iter()
+        .filter_map(|(key, info)| {
+            let score = entrypoint_score(key, info, &reverse);
+            (score >= 4).then_some((score, key))
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(b.1)));
+    scored
+        .into_iter()
+        .take(limit)
+        .map(|(_, key)| key.clone())
+        .collect()
+}
