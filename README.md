@@ -47,13 +47,11 @@ curl -fsSL https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.sh |
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.ps1 | iex"
 ```
 
-Then run:
+One command does everything: it installs [mise](https://mise.jdx.dev), syncs the [tool manifest](manifest/ai-setup.toml) — an exact-pinned list of the tools this setup runs on (node, Pi, herdr, gh, and friends, including the `ai-setup` CLI itself) — installs those pins, and drops you into the guided setup. Your own `~/.config/mise/config.toml` is never touched; use it to layer personal tools on top.
 
-```bash
-ai-setup setup
-```
+A wizard then walks through **Pi packages** and **skills** by category, and shows you the exact install plan before it runs anything. Pi packages go through their own package manager; skills are copied straight into your agents' skill trees. It ends by telling you what to try first.
 
-A wizard walks through **Pi packages**, then **skills** by category, and shows you the exact install plan before it runs anything. Pi packages go through their own package manager; skills are copied straight into your agents' skill trees. It ends by telling you what to try first.
+Tool versions move only when a new manifest lands on this repo — `ai-setup update` re-syncs it and refreshes everything else you installed.
 
 Come back to it later:
 

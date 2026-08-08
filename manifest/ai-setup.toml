@@ -1,0 +1,44 @@
+# The published ai-setup tool manifest.
+#
+# The ai-setup CLI syncs this file to ~/.config/mise/conf.d/ai-setup.toml on
+# user machines and runs `mise install`. Users get new versions only when a
+# change to this file lands on main — keep every pin exact (no "latest", no
+# ranges), so every user converges on identical versions. The weekly
+# mise-bump workflow proposes updates as a PR; merging it is publishing.
+#
+# Machine-personal tools belong in the user's own ~/.config/mise/config.toml
+# (the personal overlay), never here.
+
+[tools]
+# runtimes
+node = "24.19.0"
+
+# agents & multiplexer
+"npm:@mariozechner/pi-coding-agent" = "0.73.1"
+# herdr ships no stable Windows assets yet; on Windows the CLI keeps its
+# manual install instruction and mise skips this entry.
+herdr = { version = "0.8.0", os = ["macos", "linux"] }
+
+# this repo's own binaries. Component-scoped release tags, so the pin is the
+# full tag; release automation rewrites these lines (plan-releases.mjs) and
+# the mise-bump workflow restores them if `mise upgrade` moves them.
+"github:Yassimba/ai-setup[exe=ai-setup]" = { version = "ai-setup-v0.6.2", tag_regex = "^ai-setup-v" }
+# stackdiff joins after its first release is published from release/auto:
+# "github:Yassimba/ai-setup[exe=stackdiff]" = { version = "stackdiff-v0.1.0", tag_regex = "^stackdiff-v" }
+
+# forges
+gh = "2.97.0"
+glab = "1.112.0"
+
+# code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
+# release with assets)
+tokei = "12.1.2"
+"github:zdyxry/tokui" = "0.12.0"
+
+# python toolchain
+uv = "0.12.3"
+
+# skill tooling (browser automation, diagram/slide export)
+"npm:agent-browser" = "0.33.2"
+"npm:@mermaid-js/mermaid-cli" = "11.16.0"
+"npm:@marp-team/marp-cli" = "4.5.0"

@@ -15,7 +15,15 @@ plus auto-discovered `skills/`, listed by `.claude-plugin/marketplace.json`
 `cli/ai-setup/` — the Rust onboarding CLI installed by the root bootstrap
 scripts. `setup-catalog.json` is generated from reviewed skills and opted-in
 plugin metadata; the CLI embeds it, copies skills into the agent skill trees
-itself, and delegates Pi and Herdr installs to their own managers.
+itself, and delegates Pi package installs to Pi.
+`manifest/ai-setup.toml` — the published tool manifest: every tool this
+setup provides, exact-pinned (node, Pi, herdr, gh, the ai-setup and
+stackdiff binaries, …). The installers and `ai-setup update` sync it to
+`~/.config/mise/conf.d/ai-setup.toml`; tools move only when a manifest
+change lands on main (the weekly `mise-bump` PR proposes bumps; release
+automation owns the ai-setup/stackdiff pins). The root `mise.toml` is the
+contributor dev-env + tasks, a separate file so the consumer manifest never
+activates on `cd`. See `ai-docs/adr/0002-distribute-tools-via-mise.md`.
 `drafts/` — pulled from a global agent tree, not yet reviewed.
 `personal/` — machine-specific skills, not for anyone else. Kept outside
 `skills/` so no installer surface (npx, Claude plugin, the CLI) can ever see

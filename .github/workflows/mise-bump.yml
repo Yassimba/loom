@@ -1,0 +1,63 @@
+name: mise-bump
+
+# Weekly pin bumps for the published tool manifest and the contributor dev
+# env. Merging the PR is publishing: `ai-setup update` reads main. The
+# repo's own binaries (ai-setup, stackdiff) are excluded — their pins move
+# with their releases via plan-releases.mjs.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: jdx/mise-action@5083fe46898c414b2475087cc79da59e7da859e8 # v2.1.11
+        with:
+          install: false
+      - name: Bump contributor dev-env pins (./mise.toml)
+        run: mise upgrade --bump
+        env:
+          MISE_YES: "1"
+      - name: Bump manifest pins (manifest/ai-setup.toml)
+        run: mise upgrade --bump
+        env:
+          MISE_YES: "1"
+          MISE_GLOBAL_CONFIG_FILE: ${{ github.workspace }}/manifest/ai-setup.toml
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+      - name: Restore release-owned pins
+        run: |
+          python3 - <<'EOF'
+          import re, subprocess
+          path = "manifest/ai-setup.toml"
+          current = open(path).read()
+          published = subprocess.run(
+              ["git", "show", f"HEAD:{path}"], capture_output=True, text=True
+          ).stdout
+          for exe in ("ai-setup", "stackdiff"):
+              pattern = rf'^"github:Yassimba/ai-setup\[exe={exe}\]" = .*$'
+              keep = re.search(pattern, published, re.M)
+              if keep:
+                  current = re.sub(pattern, lambda _: keep.group(0), current, flags=re.M)
+          open(path, "w").write(current)
+          EOF
+      - name: Open bump PR
+        uses: peter-evans/create-pull-request@67df31e08a133c6a77008b89689677067fef169e # v6.1.0
+        with:
+          branch: mise/bump
+          title: "chore(tools): bump mise pins"
+          commit-message: "chore(tools): bump mise pins"
+          body: |
+            Weekly `mise upgrade --bump` across `mise.toml` and
+            `manifest/ai-setup.toml`. Merging publishes the new pins —
+            `ai-setup update` syncs the manifest from main. Release-owned
+            pins (ai-setup, stackdiff) are restored to their released
+            versions before the PR is opened.
+          delete-branch: true

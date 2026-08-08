@@ -1,0 +1,29 @@
+# Contributor dev environment for this repo (activates on cd; consumers get
+# manifest/ai-setup.toml instead, synced by the CLI). Pins are exact so every
+# contributor builds with the same toolchain; the mise-bump workflow proposes
+# updates.
+
+[tools]
+node = "24.19.0"
+rust = "1.97.1"
+
+[tasks.test]
+description = "JS test suite"
+run = "npm test"
+
+[tasks.check]
+description = "Full gate: JS tests, tsc, biome, catalog, packaging, Rust"
+run = "npm run check"
+
+[tasks.audit]
+description = "Fallow audit on the changeset"
+run = "npm run audit"
+
+[tasks.catalog]
+description = "Regenerate setup-catalog.json"
+run = "npm run catalog:generate"
+
+[tasks.stackdiff]
+description = "Build and test the stackdiff crate"
+dir = "cli/stackdiff"
+run = ["cargo fmt --check", "cargo clippy --all-targets -- -D warnings", "cargo test"]

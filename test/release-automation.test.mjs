@@ -39,8 +39,11 @@ async function fixture() {
     join(root, "cli", "ai-setup", "Cargo.toml"),
     '[package]\nname = "ai-setup"\nversion = "0.1.0"\n',
   );
-  await writeFile(join(root, "install.sh"), 'VERSION="0.1.0"\n');
-  await writeFile(join(root, "install.ps1"), '$Version = "0.1.0"\n');
+  await mkdir(join(root, "manifest"), { recursive: true });
+  await writeFile(
+    join(root, "manifest", "ai-setup.toml"),
+    '[tools]\n"github:Yassimba/ai-setup[exe=ai-setup]" = { version = "ai-setup-v0.1.0", tag_regex = "^ai-setup-v" }\n',
+  );
   return root;
 }
 
@@ -88,11 +91,17 @@ test("discovers npm, prebuilt Rust, source Rust, and CLI releases from manifests
   );
 });
 
-test("rejects drift between CLI and installer versions", async () => {
+test("rejects drift between CLI and manifest pin versions", async () => {
   const root = await fixture();
-  await writeFile(join(root, "install.sh"), 'VERSION="9.9.9"\n');
+  await writeFile(
+    join(root, "manifest", "ai-setup.toml"),
+    '[tools]\n"github:Yassimba/ai-setup[exe=ai-setup]" = { version = "ai-setup-v9.9.9", tag_regex = "^ai-setup-v" }\n',
+  );
 
-  assert.throws(() => discoverReleaseComponents(root), /Cargo 0\.1\.0, install\.sh 9\.9\.9/);
+  assert.throws(
+    () => discoverReleaseComponents(root),
+    /Cargo 0\.1\.0 and manifest\/ai-setup\.toml pin ai-setup-v9\.9\.9/,
+  );
 });
 
 test("infers the highest semantic bump from conventional commits", () => {
