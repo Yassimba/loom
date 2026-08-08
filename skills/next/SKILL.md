@@ -18,7 +18,7 @@ Replace `<this-skill-directory>` with the directory containing this `SKILL.md`. 
 4. Claim it atomically with `<launcher> update <id> --claim`. If the claim loses a race, rerun the selection from step 2; never force-reclaim another actor's task.
 5. Run `<launcher> show <id> --json` again and read the full task. State the claimed ID and title, then treat its body as the current request and begin the work using the repository's normal workflow and relevant skills.
 
-If `bv` returns no claimable task, report that the ready frontier is empty. Include blocked work only as context; do not claim it.
+If `bv` returns no task, run `<launcher> ready --json`. Report an empty list as an empty frontier; list epics as a ready epic frontier; report any non-epic as a `bv` discrepancy. Use the fallback only for diagnosis. Claim only a `bv` top pick.
 
 ## Actor adapters
 
