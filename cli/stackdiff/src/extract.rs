@@ -25,6 +25,7 @@ pub fn extract_functions(file: &str, source: &str) -> Result<Vec<FunctionInfo>> 
         Language::TypeScript | Language::Tsx => lang::typescript::extract(file, source, &tree),
         Language::Python => lang::python::extract(file, source, &tree),
         Language::Go => lang::go::extract(file, source, &tree),
+        Language::Rust => lang::rust::extract(file, source, &tree),
     })
 }
 

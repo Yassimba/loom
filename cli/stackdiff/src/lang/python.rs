@@ -4,8 +4,8 @@
 
 use tree_sitter::{Node, Tree};
 
-use super::{child_by_type, collapse_ws, named_children, text};
-use crate::types::{CallStep, FunctionInfo};
+use super::{arg_text, child_by_type, collapse_ws, consumed, named_children, text};
+use crate::types::{first_sentence, line_of, CallMeta, CallStep, FunctionInfo};
 
 fn params_label(params: Option<Node>, src: &str) -> String {
     let Some(params) = params else {
@@ -76,16 +76,34 @@ struct Collector<'s> {
     src: &'s str,
     steps: Vec<CallStep>,
     seen: std::collections::HashSet<String>,
+    bindings: Vec<String>,
+    binding_ctx: Option<String>,
 }
 
 impl<'s> Collector<'s> {
-    fn add_call(&mut self, key: String, start: usize) {
+    fn add_call(&mut self, key: String, start: usize, meta: CallMeta) {
         let mark = format!("{key}:{start}");
         if self.seen.contains(&mark) {
             return;
         }
         self.seen.insert(mark);
-        self.steps.push(CallStep::Call { key });
+        self.steps.push(CallStep::Call { key, meta });
+    }
+
+    fn call_meta(&mut self, call: Node) -> CallMeta {
+        let args = child_by_type(call, "argument_list")
+            .map(|arguments| {
+                named_children(arguments)
+                    .into_iter()
+                    .map(|arg| arg_text(arg, self.src))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        CallMeta {
+            binding: self.binding_ctx.take(),
+            consumes: consumed(&self.bindings, &args),
+            args,
+        }
     }
 
     fn walk(&mut self, node: Node, class_name: Option<&str>) {
@@ -150,10 +168,26 @@ impl<'s> Collector<'s> {
                 }
                 return;
             }
+            "assignment" => {
+                let name = node
+                    .named_child(0)
+                    .filter(|left| left.kind() == "identifier")
+                    .map(|left| text(left, self.src).to_string());
+                if let Some(name) = name {
+                    self.binding_ctx = Some(name.clone());
+                    for child in named_children(node).into_iter().skip(1) {
+                        self.walk(child, class_name);
+                    }
+                    self.binding_ctx = None;
+                    self.bindings.push(name);
+                    return;
+                }
+            }
             "call" => {
                 if let Some(callee) = node.named_child(0) {
                     if let Some(key) = callee_key(callee, class_name, self.src) {
-                        self.add_call(key, node.start_byte());
+                        let meta = self.call_meta(node);
+                        self.add_call(key, node.start_byte(), meta);
                     }
                 }
             }
@@ -171,6 +205,8 @@ fn collect_statements(statements: Vec<Node>, class_name: Option<&str>, src: &str
         src,
         steps: Vec::new(),
         seen: std::collections::HashSet::new(),
+        bindings: Vec::new(),
+        binding_ctx: None,
     };
     for stmt in statements {
         collector.walk(stmt, class_name);
@@ -208,11 +244,19 @@ fn handle_function(
     };
     let params_label = params_label(params, src);
     let is_private = !is_init && name.starts_with('_');
+    let doc = docstring(body, src);
+    let returns = node
+        .child_by_field_name("return_type")
+        .map(|annotation| collapse_ws(text(annotation, src)));
+    let line = line_of(src, node.start_byte());
 
     functions.push(FunctionInfo {
         key,
         label: format!("{label}{params_label}"),
         file: file.to_string(),
+        line,
+        doc: doc.clone(),
+        returns: returns.clone(),
         steps: collect_block(body, class_name, src),
         exported: exported && !is_private,
     });
@@ -222,10 +266,29 @@ fn handle_function(
             key: format!("new {class_name}"),
             label: format!("{class_name}()"),
             file: file.to_string(),
+            line,
+            doc,
+            returns,
             steps: collect_block(body, Some(class_name), src),
             exported,
         });
     }
+}
+
+/// The first line of a body's leading docstring.
+fn docstring(body: Option<Node>, src: &str) -> Option<String> {
+    let first = named_children(body?).into_iter().next()?;
+    if first.kind() != "expression_statement" {
+        return None;
+    }
+    let string = named_children(first)
+        .into_iter()
+        .find(|child| child.kind() == "string")?;
+    let raw = text(string, src)
+        .trim_matches(|c| c == '"' || c == '\'')
+        .trim()
+        .to_string();
+    (!raw.is_empty()).then(|| first_sentence(&raw))
 }
 
 fn unwrap_function(node: Node) -> Option<Node> {
@@ -296,6 +359,9 @@ fn handle_lambda_assignment(
         exported: !name.starts_with('_'),
         key: name,
         file: file.to_string(),
+        line: line_of(src, statement.start_byte()),
+        doc: None,
+        returns: None,
         steps: body
             .map(|b| collect_statements(vec![b], None, src))
             .unwrap_or_default(),

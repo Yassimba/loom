@@ -3,8 +3,8 @@
 
 use tree_sitter::{Node, Tree};
 
-use super::{child_by_type, collapse_ws, named_children, text};
-use crate::types::{CallStep, FunctionInfo};
+use super::{arg_text, child_by_type, collapse_ws, consumed, doc_before, named_children, text};
+use crate::types::{line_of, CallMeta, CallStep, FunctionInfo};
 
 fn is_fn_like(kind: &str) -> bool {
     matches!(
@@ -125,16 +125,36 @@ struct Collector<'s> {
     src: &'s str,
     steps: Vec<CallStep>,
     seen: std::collections::HashSet<String>,
+    /// Bindings declared so far in this body, for consumes tracking.
+    bindings: Vec<String>,
+    /// The binding whose initializer we are currently walking.
+    binding_ctx: Option<String>,
 }
 
 impl<'s> Collector<'s> {
-    fn add_call(&mut self, key: String, start: usize) {
+    fn add_call(&mut self, key: String, start: usize, meta: CallMeta) {
         let mark = format!("{key}:{start}");
         if self.seen.contains(&mark) {
             return;
         }
         self.seen.insert(mark);
-        self.steps.push(CallStep::Call { key });
+        self.steps.push(CallStep::Call { key, meta });
+    }
+
+    fn call_meta(&mut self, call: Node) -> CallMeta {
+        let args = child_by_type(call, "arguments")
+            .map(|arguments| {
+                named_children(arguments)
+                    .into_iter()
+                    .map(|arg| arg_text(arg, self.src))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        CallMeta {
+            binding: self.binding_ctx.take(),
+            consumes: consumed(&self.bindings, &args),
+            args,
+        }
     }
 
     fn walk(&mut self, node: Node, class_name: Option<&str>) {
@@ -207,10 +227,28 @@ impl<'s> Collector<'s> {
             return;
         }
 
+        if kind == "variable_declarator" || kind == "assignment_expression" {
+            // The first call inside this initializer captures the binding.
+            let name = node
+                .named_child(0)
+                .filter(|left| left.kind() == "identifier")
+                .map(|left| text(left, self.src).to_string());
+            if let Some(name) = name {
+                self.binding_ctx = Some(name.clone());
+                for child in named_children(node).into_iter().skip(1) {
+                    self.walk(child, class_name);
+                }
+                self.binding_ctx = None;
+                self.bindings.push(name);
+                return;
+            }
+        }
+
         if kind == "call_expression" {
             if let Some(callee) = node.named_child(0) {
                 if let Some(key) = callee_key(callee, class_name, self.src) {
-                    self.add_call(key, node.start_byte());
+                    let meta = self.call_meta(node);
+                    self.add_call(key, node.start_byte(), meta);
                 }
             }
         } else if kind == "new_expression" {
@@ -221,7 +259,8 @@ impl<'s> Collector<'s> {
                     } else {
                         format!("new {key}")
                     };
-                    self.add_call(key, node.start_byte());
+                    let meta = self.call_meta(node);
+                    self.add_call(key, node.start_byte(), meta);
                 }
             }
         }
@@ -237,6 +276,8 @@ fn collect_statements(statements: Vec<Node>, class_name: Option<&str>, src: &str
         src,
         steps: Vec::new(),
         seen: std::collections::HashSet::new(),
+        bindings: Vec::new(),
+        binding_ctx: None,
     };
     for stmt in statements {
         collector.walk(stmt, class_name);
@@ -255,11 +296,19 @@ fn steps_from_body(body: Option<Node>, class_name: Option<&str>, src: &str) -> V
     }
 }
 
+fn return_type(node: Node, src: &str) -> Option<String> {
+    node.child_by_field_name("return_type")
+        .map(|annotation| collapse_ws(text(annotation, src).trim_start_matches(':').trim()))
+        .filter(|written| !written.is_empty())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn function_from_parts(
     file: &str,
     key: String,
     label: &str,
+    fn_node: Node,
+    doc_node: Node,
     params: Option<Node>,
     body: Option<Node>,
     exported: bool,
@@ -271,14 +320,19 @@ fn function_from_parts(
         label: format!("{label}{params_label}"),
         key,
         file: file.to_string(),
+        line: line_of(src, fn_node.start_byte()),
+        doc: doc_before(doc_node, src),
+        returns: return_type(fn_node, src),
         steps: steps_from_body(body, class_name, src),
         exported,
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_function_node(
     file: &str,
     node: Node,
+    doc_node: Node,
     name: Option<String>,
     exported: bool,
     class_name: Option<&str>,
@@ -310,6 +364,8 @@ fn handle_function_node(
         file,
         key.clone(),
         &key,
+        node,
+        doc_node,
         params,
         body,
         exported,
@@ -366,6 +422,8 @@ fn handle_class(
                 file,
                 key,
                 &label,
+                element,
+                element,
                 params,
                 fn_body,
                 method_exported,
@@ -382,6 +440,7 @@ fn handle_class(
                 handle_function_node(
                     file,
                     value,
+                    element,
                     Some(text(key_node, src).to_string()),
                     exported,
                     Some(&class_name),
@@ -418,12 +477,13 @@ fn visit_statement(
                     let name = id
                         .map(|id| text(id, src).to_string())
                         .or_else(|| is_default.then(|| "default".to_string()));
-                    handle_function_node(file, decl, name, true, None, functions, src);
+                    handle_function_node(file, decl, node, name, true, None, functions, src);
                 }
                 "arrow_function" => {
                     handle_function_node(
                         file,
                         decl,
+                        node,
                         is_default.then(|| "default".to_string()),
                         true,
                         None,
@@ -444,6 +504,7 @@ fn visit_statement(
             let id = child_by_type(node, "identifier");
             handle_function_node(
                 file,
+                node,
                 node,
                 id.map(|id| text(id, src).to_string()),
                 exported,
@@ -467,6 +528,7 @@ fn visit_statement(
                     handle_function_node(
                         file,
                         init,
+                        node,
                         Some(text(id, src).to_string()),
                         exported,
                         None,

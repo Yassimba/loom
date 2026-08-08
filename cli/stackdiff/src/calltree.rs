@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use crate::extract::FunctionIndex;
-use crate::types::{CallNode, CallStep, FunctionInfo, NodeKind};
+use crate::types::{CallMeta, CallNode, CallStep, FunctionInfo, NodeKind};
 
 /// Look up a callable by key, falling back to its `new X` constructor alias —
 /// languages without a `new` keyword (Python) emit plain `X` for instantiation.
@@ -40,11 +40,32 @@ fn expand_steps(
                 key: key.clone(),
                 label: label.clone(),
                 kind: NodeKind::Branch,
+                location: None,
+                doc: None,
+                returns: None,
+                meta: CallMeta::default(),
                 children: expand_steps(children, index, depth, max_depth, visiting),
             },
-            CallStep::Call { key } => expand_call(key, index, depth, max_depth, visiting),
+            CallStep::Call { key, meta } => {
+                let mut node = expand_call(key, index, depth, max_depth, visiting);
+                node.meta = meta.clone();
+                node
+            }
         })
         .collect()
+}
+
+fn leaf(key: &str, label: String, info: Option<&FunctionInfo>) -> CallNode {
+    CallNode {
+        key: key.to_string(),
+        label,
+        kind: NodeKind::Call,
+        location: info.map(|info| format!("{}:{}", info.file, info.line)),
+        doc: info.and_then(|info| info.doc.clone()),
+        returns: info.and_then(|info| info.returns.clone()),
+        meta: CallMeta::default(),
+        children: Vec::new(),
+    }
 }
 
 fn expand_call(
@@ -55,32 +76,18 @@ fn expand_call(
     visiting: &mut HashSet<String>,
 ) -> CallNode {
     let label = display_call_label(key, index);
+    let info = lookup_callable(key, index);
 
     if depth >= max_depth {
-        return CallNode {
-            key: key.to_string(),
-            label,
-            kind: NodeKind::Call,
-            children: Vec::new(),
-        };
+        return leaf(key, label, info);
     }
 
-    let Some(info) = lookup_callable(key, index) else {
-        return CallNode {
-            key: key.to_string(),
-            label,
-            kind: NodeKind::Call,
-            children: Vec::new(),
-        };
+    let Some(info) = info else {
+        return leaf(key, label, None);
     };
 
     if visiting.contains(&info.key) {
-        return CallNode {
-            key: key.to_string(),
-            label: format!("{label} ⇄"),
-            kind: NodeKind::Call,
-            children: Vec::new(),
-        };
+        return leaf(key, format!("{label} ⇄"), Some(info));
     }
 
     visiting.insert(info.key.clone());
@@ -88,10 +95,8 @@ fn expand_call(
     visiting.remove(&info.key);
 
     CallNode {
-        key: key.to_string(),
-        label,
-        kind: NodeKind::Call,
         children,
+        ..leaf(key, label, Some(info))
     }
 }
 

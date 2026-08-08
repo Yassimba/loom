@@ -3,8 +3,8 @@
 
 use tree_sitter::{Node, Tree};
 
-use super::{child_by_type, collapse_ws, named_children, text};
-use crate::types::{CallStep, FunctionInfo};
+use super::{arg_text, child_by_type, collapse_ws, consumed, doc_before, named_children, text};
+use crate::types::{line_of, CallMeta, CallStep, FunctionInfo};
 
 fn is_exported(name: &str) -> bool {
     name.chars()
@@ -84,16 +84,34 @@ struct Collector<'s> {
     src: &'s str,
     steps: Vec<CallStep>,
     seen: std::collections::HashSet<String>,
+    bindings: Vec<String>,
+    binding_ctx: Option<String>,
 }
 
 impl<'s> Collector<'s> {
-    fn add_call(&mut self, key: String, start: usize) {
+    fn add_call(&mut self, key: String, start: usize, meta: CallMeta) {
         let mark = format!("{key}:{start}");
         if self.seen.contains(&mark) {
             return;
         }
         self.seen.insert(mark);
-        self.steps.push(CallStep::Call { key });
+        self.steps.push(CallStep::Call { key, meta });
+    }
+
+    fn call_meta(&mut self, call: Node) -> CallMeta {
+        let args = child_by_type(call, "argument_list")
+            .map(|arguments| {
+                named_children(arguments)
+                    .into_iter()
+                    .map(|arg| arg_text(arg, self.src))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        CallMeta {
+            binding: self.binding_ctx.take(),
+            consumes: consumed(&self.bindings, &args),
+            args,
+        }
     }
 
     fn walk(&mut self, node: Node, receiver_type: Option<&str>) {
@@ -138,10 +156,27 @@ impl<'s> Collector<'s> {
                 }
                 return;
             }
+            "short_var_declaration" | "assignment_statement" => {
+                let name = node
+                    .named_child(0)
+                    .and_then(|left| named_children(left).into_iter().next())
+                    .filter(|first| first.kind() == "identifier")
+                    .map(|first| text(first, self.src).to_string());
+                if let Some(name) = name {
+                    self.binding_ctx = Some(name.clone());
+                    for child in named_children(node).into_iter().skip(1) {
+                        self.walk(child, receiver_type);
+                    }
+                    self.binding_ctx = None;
+                    self.bindings.push(name);
+                    return;
+                }
+            }
             "call_expression" => {
                 if let Some(callee) = node.named_child(0) {
                     if let Some(key) = callee_key(callee, receiver_type, self.src) {
-                        self.add_call(key, node.start_byte());
+                        let meta = self.call_meta(node);
+                        self.add_call(key, node.start_byte(), meta);
                     }
                 }
             }
@@ -163,6 +198,8 @@ fn collect_statements(
         src,
         steps: Vec::new(),
         seen: std::collections::HashSet::new(),
+        bindings: Vec::new(),
+        binding_ctx: None,
     };
     for stmt in statements {
         collector.walk(stmt, receiver_type);
@@ -199,10 +236,19 @@ fn handle_function(file: &str, node: Node, functions: &mut Vec<FunctionInfo>, sr
         exported: is_exported(&name),
         key: name,
         file: file.to_string(),
+        line: line_of(src, node.start_byte()),
+        doc: doc_before(node, src),
+        returns: go_result(node, src),
         steps: body
             .map(|b| collect_statements(statements_of(b), None, src))
             .unwrap_or_default(),
     });
+}
+
+/// The declared result type: the named child between params and body.
+fn go_result(node: Node, src: &str) -> Option<String> {
+    node.child_by_field_name("result")
+        .map(|result| collapse_ws(text(result, src)))
 }
 
 fn handle_method(file: &str, node: Node, functions: &mut Vec<FunctionInfo>, src: &str) {
@@ -227,6 +273,9 @@ fn handle_method(file: &str, node: Node, functions: &mut Vec<FunctionInfo>, src:
         label: format!("{key}{}", params_label(params, src)),
         key,
         file: file.to_string(),
+        line: line_of(src, node.start_byte()),
+        doc: doc_before(node, src),
+        returns: go_result(node, src),
         steps: body
             .map(|b| collect_statements(statements_of(b), Some(&type_name), src))
             .unwrap_or_default(),

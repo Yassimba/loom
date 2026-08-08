@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use crate::calltree::{build_call_tree, resolve_entry};
 use crate::diff::{diff_trees, tree_has_changes};
 use crate::extract::FunctionIndex;
-use crate::types::{CallNode, DiffNode, DiffStatus, NodeKind};
+use crate::types::{CallMeta, CallNode, DiffNode, DiffStatus, NodeKind};
 
 fn callee_set(index: &FunctionIndex, key: &str, max_depth: usize) -> String {
     let tree = build_call_tree(key, index, max_depth);
@@ -128,6 +128,10 @@ pub fn diff_entry(
             key: after_key.clone(),
             label: after_tree.label.clone(),
             kind: NodeKind::Call,
+            location: None,
+            doc: None,
+            returns: None,
+            meta: CallMeta::default(),
             children: Vec::new(),
         };
         let mut diff = diff_trees(&empty, &after_tree);
@@ -141,6 +145,10 @@ pub fn diff_entry(
             key: before_key.clone(),
             label: before_tree.label.clone(),
             kind: NodeKind::Call,
+            location: None,
+            doc: None,
+            returns: None,
+            meta: CallMeta::default(),
             children: Vec::new(),
         };
         let mut diff = diff_trees(&before_tree, &empty);
