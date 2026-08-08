@@ -240,7 +240,7 @@ fn boxes_render_draws_statused_boxes() {
     let plain = stackdiff::boxes::render_boxes(&diff, false);
     assert!(plain.contains("╭"), "draws rounded boxes:\n{plain}");
     assert!(
-        plain.contains("│ two() │"),
+        plain.contains("│  two()  │"),
         "boxes the added call:\n{plain}"
     );
     assert!(plain.contains("▼"), "draws connector arrows:\n{plain}");
