@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-The issue tracker configuration should have been provided to you — run `/setup-project` if not.
+The issue tracker configuration should have been provided to you. If it is missing: with `br` installed, treat Beads as the tracker by default (workflows: [`issue-tracker-beads.md`](../setup-project/issue-tracker-beads.md)) and suggest `/setup-project` to record the choice; otherwise run `/setup-project`.
 
 ## Process
 

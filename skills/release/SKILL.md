@@ -13,7 +13,7 @@ Three rules bind every phase:
 - Fix problems in the source, never by silencing the tool. Suppression requires the user's explicit approval.
 - Root-cause substantive test failures before touching them — route through `/diagnosing-bugs`.
 
-The issue tracker configuration should have been provided to you — run `/setup-project` if not.
+The issue tracker configuration should have been provided to you. If it is missing: with `br` installed, treat Beads as the tracker by default (workflows: [`issue-tracker-beads.md`](../setup-project/issue-tracker-beads.md)) and suggest `/setup-project` to record the choice; otherwise run `/setup-project`.
 
 ## Phase 0 — Discover Forge and Toolchain
 
