@@ -97,6 +97,7 @@ fn run_interactive(
     let installed = detect_installed(&catalog.resources, status, system);
     let model = Model {
         resources: catalog.resources.clone(),
+        presets: catalog.presets.clone(),
         installed,
         settings,
         setting_states,

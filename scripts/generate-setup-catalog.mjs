@@ -2,14 +2,14 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildSetupCatalog } from "./catalog-lib.mjs";
+import { buildSetupCatalog, readSetupPresets } from "./catalog-lib.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "..");
 const outputPath = join(repoRoot, "setup-catalog.json");
 
-export function renderSetupCatalog(resources) {
-  const expanded = `${JSON.stringify({ schemaVersion: 1, resources }, null, 2)}\n`;
+export function renderSetupCatalog(resources, presets) {
+  const expanded = `${JSON.stringify({ schemaVersion: 1, presets, resources }, null, 2)}\n`;
   return collapseShortStringArrays(expanded);
 }
 
@@ -31,7 +31,8 @@ function collapseShortStringArrays(json) {
 }
 
 async function generate({ check }) {
-  const content = renderSetupCatalog(await buildSetupCatalog(repoRoot));
+  const resources = await buildSetupCatalog(repoRoot);
+  const content = renderSetupCatalog(resources, await readSetupPresets(repoRoot, resources));
   if (check) {
     let current = "";
     try {

@@ -38,10 +38,23 @@ pub struct Resource {
     pub dependencies: Vec<String>,
 }
 
+/// A curated selection bundle from manifest/presets.json, offered on the
+/// wizard's Welcome screen. Targets are resource install targets.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetSpec {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub targets: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Catalog {
     pub schema_version: u32,
+    #[serde(default)]
+    pub presets: Vec<PresetSpec>,
     pub resources: Vec<Resource>,
 }
 

@@ -15,6 +15,8 @@ use ratatui::layout::Rect;
 /// construct it without touching the file system.
 pub struct Model {
     pub resources: Vec<Resource>,
+    /// Curated selection bundles from the catalog (manifest/presets.json).
+    pub presets: Vec<crate::PresetSpec>,
     /// Per-resource flag: already present on this machine (plugin listed by
     /// `herdr plugin list`, package listed by `pi list`, skill in an agent
     /// tree).
@@ -62,6 +64,22 @@ pub(crate) enum PickRow {
     Runtime(Runtime),
     /// The manager is already on PATH; shown, but not actionable.
     InstalledRuntime(Runtime),
+    /// A one-keypress selection bundle.
+    Preset(Preset),
+}
+
+/// Selection bundles offered on the Welcome screen. Applying one replaces
+/// the resource selection; fine-tuning continues in the stages. The curated
+/// bundles come from the catalog (manifest/presets.json) — configuration,
+/// not code; Everything and Empty are algorithmic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Preset {
+    /// Everything in the catalog that is not already installed.
+    Everything,
+    /// A curated bundle: index into the catalog's presets.
+    Catalog(usize),
+    /// Clear the selection and pick by hand.
+    Empty,
 }
 
 pub(crate) struct PickStage {
@@ -184,6 +202,12 @@ pub struct Wizard {
     pub(crate) stage_index: usize,
     pub(crate) max_visited: usize,
     pub(crate) hits: HitMap,
+    /// `Some(query)` while `/` search filters the current stage's list.
+    pub(crate) search: Option<String>,
+    pub(crate) search_cursor: usize,
+    pub(crate) show_help: bool,
+    /// Selection snapshots (resources, settings) for `u`; capped.
+    undo_stack: Vec<(Vec<bool>, Vec<bool>)>,
 }
 
 impl Wizard {
@@ -197,6 +221,9 @@ impl Wizard {
                     PickRow::Runtime(runtime)
                 }
             })
+            .chain(std::iter::once(PickRow::Preset(Preset::Everything)))
+            .chain((0..model.presets.len()).map(|index| PickRow::Preset(Preset::Catalog(index))))
+            .chain(std::iter::once(PickRow::Preset(Preset::Empty)))
             .collect::<Vec<_>>();
         let welcome_cursor = welcome_rows
             .iter()
@@ -277,6 +304,10 @@ impl Wizard {
             max_visited: 0,
             model,
             hits: HitMap::default(),
+            search: None,
+            search_cursor: 0,
+            show_help: false,
+            undo_stack: Vec::new(),
         }
     }
 
@@ -457,6 +488,7 @@ impl Wizard {
     }
 
     fn go_back(&mut self) {
+        self.search = None;
         if matches!(self.stages[self.stage_index], Stage::Install(_)) {
             return;
         }
@@ -482,6 +514,7 @@ impl Wizard {
     }
 
     fn entered_stage(&mut self) {
+        self.search = None;
         self.max_visited = self.max_visited.max(self.stage_index);
         if let Stage::Settings(_) = &self.stages[self.stage_index] {
             self.precheck_settings();
@@ -605,6 +638,14 @@ impl Wizard {
             // configured; the worker finishes, then keys work again.
             return None;
         }
+        if self.show_help && !is_ctrl_c {
+            // Any key dismisses the help overlay.
+            self.show_help = false;
+            return None;
+        }
+        if self.search.is_some() && !is_ctrl_c {
+            return self.handle_search_key(key.code);
+        }
         if is_ctrl_c || matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
             if let Stage::Install(stage) = &self.stages[self.stage_index] {
                 if let Some(report) = &stage.report {
@@ -616,7 +657,36 @@ impl Wizard {
         if key.code == KeyCode::Enter {
             return self.handle_enter();
         }
+        match key.code {
+            KeyCode::Char('?') => {
+                self.show_help = true;
+                return None;
+            }
+            KeyCode::Char('u') => {
+                self.undo();
+                return None;
+            }
+            KeyCode::Char('/')
+                if matches!(
+                    self.stages[self.stage_index],
+                    Stage::Pick(_) | Stage::Skills(_)
+                ) =>
+            {
+                self.search = Some(String::new());
+                self.search_cursor = 0;
+                return None;
+            }
+            _ => {}
+        }
 
+        // Snapshot before selection-mutating keys so `u` can restore; the
+        // stack dedupes, so a no-op toggle costs nothing.
+        if matches!(
+            key.code,
+            KeyCode::Char(' ') | KeyCode::Char('a') | KeyCode::Char('A')
+        ) {
+            self.push_undo();
+        }
         // -1 steps back, +1 steps forward; resolved after the borrow of the
         // current stage ends.
         let mut navigate = 0i8;
@@ -651,6 +721,8 @@ impl Wizard {
                     if !self.model.installed[index] {
                         self.selected[index] = !self.selected[index];
                     }
+                    // Auto-advance: rapid picking is space-space-space.
+                    stage.cursor = (stage.cursor + 1).min(stage.items.len() - 1);
                 }
                 KeyCode::Char('a') => {
                     toggle_group(&mut self.selected, &stage.items, &self.model.installed);
@@ -720,6 +792,13 @@ impl Wizard {
                             if !self.model.installed[index] {
                                 self.selected[index] = !self.selected[index];
                             }
+                            // Auto-advance with the same cross-category flow as j.
+                            if stage.skill_cursor + 1 < category_items.len() {
+                                stage.skill_cursor += 1;
+                            } else if stage.category_cursor + 1 < stage.categories.len() {
+                                stage.category_cursor += 1;
+                                stage.skill_cursor = 0;
+                            }
                         }
                     },
                     KeyCode::Char('a') => {
@@ -781,6 +860,7 @@ impl Wizard {
                             self.setting_touched[index] = true;
                         }
                     }
+                    stage.cursor = next_setting_row(&stage.rows, stage.cursor);
                 }
                 KeyCode::Char('a') => {
                     let actionable = (0..self.model.settings.len())
@@ -838,13 +918,78 @@ impl Wizard {
         match row {
             PickRow::Runtime(runtime) => self.toggle_runtime(runtime),
             PickRow::InstalledRuntime(_) => {}
+            PickRow::Preset(preset) => self.apply_preset(preset),
+        }
+    }
+
+    /// Replace the resource selection with a bundle. Undoable with `u`.
+    fn apply_preset(&mut self, preset: Preset) {
+        self.push_undo();
+        for on in &mut self.selected {
+            *on = false;
+        }
+        match preset {
+            Preset::Empty => {}
+            Preset::Everything => {
+                for (index, on) in self.selected.iter_mut().enumerate() {
+                    *on = !self.model.installed[index];
+                }
+            }
+            Preset::Catalog(preset_index) => {
+                for target in &self.model.presets[preset_index].targets {
+                    if let Some(index) = self
+                        .model
+                        .resources
+                        .iter()
+                        .position(|resource| resource.install_target == *target)
+                    {
+                        if !self.model.installed[index] {
+                            self.selected[index] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn preset_label(&self, preset: Preset) -> &str {
+        match preset {
+            Preset::Everything => "Everything",
+            Preset::Empty => "Start empty",
+            Preset::Catalog(index) => &self.model.presets[index].label,
+        }
+    }
+
+    pub(crate) fn preset_blurb(&self, preset: Preset) -> &str {
+        match preset {
+            Preset::Everything => "select the whole catalog, deselect what you don't want",
+            Preset::Empty => "clear the selection and pick by hand",
+            Preset::Catalog(index) => &self.model.presets[index].description,
+        }
+    }
+
+    fn push_undo(&mut self) {
+        let snapshot = (self.selected.clone(), self.setting_on.clone());
+        if self.undo_stack.last() == Some(&snapshot) {
+            return;
+        }
+        self.undo_stack.push(snapshot);
+        if self.undo_stack.len() > 100 {
+            self.undo_stack.remove(0);
+        }
+    }
+
+    pub(crate) fn undo(&mut self) {
+        if let Some((selected, setting_on)) = self.undo_stack.pop() {
+            self.selected = selected;
+            self.setting_on = setting_on;
         }
     }
 
     fn toggle_pick_all(&mut self, rows: &[PickRow]) {
         let all_on = rows.iter().all(|row| match row {
             PickRow::Runtime(runtime) => self.runtime_selected(*runtime),
-            PickRow::InstalledRuntime(_) => true,
+            PickRow::InstalledRuntime(_) | PickRow::Preset(_) => true,
         });
         for row in rows {
             if let PickRow::Runtime(runtime) = row {
@@ -856,6 +1001,107 @@ impl Wizard {
                     entry.1 = !all_on;
                 }
             }
+        }
+    }
+
+    // ---- search ------------------------------------------------------------
+
+    /// The current stage's resource indices that match the live query, in
+    /// list order. Empty query matches everything.
+    pub(crate) fn search_matches(&self) -> Vec<usize> {
+        let Some(query) = &self.search else {
+            return Vec::new();
+        };
+        let candidates: Vec<usize> = match &self.stages[self.stage_index] {
+            Stage::Pick(stage) => stage.items.clone(),
+            Stage::Skills(stage) => stage
+                .categories
+                .iter()
+                .flat_map(|category| category.items.iter().copied())
+                .collect(),
+            _ => Vec::new(),
+        };
+        candidates
+            .into_iter()
+            .filter(|&index| {
+                let resource = &self.model.resources[index];
+                fuzzy_match(&resource.label, query) || fuzzy_match(&resource.description, query)
+            })
+            .collect()
+    }
+
+    fn handle_search_key(&mut self, code: KeyCode) -> Option<Action> {
+        match code {
+            KeyCode::Esc => {
+                self.search = None;
+            }
+            KeyCode::Enter => self.accept_search(),
+            KeyCode::Backspace => {
+                let empty = match &mut self.search {
+                    Some(query) => {
+                        query.pop();
+                        query.is_empty()
+                    }
+                    None => true,
+                };
+                // Backspace on an empty query leaves search, like fzf.
+                if empty {
+                    self.search = None;
+                }
+                self.search_cursor = 0;
+            }
+            KeyCode::Up => self.search_cursor = self.search_cursor.saturating_sub(1),
+            KeyCode::Down => {
+                let len = self.search_matches().len();
+                if len > 0 {
+                    self.search_cursor = (self.search_cursor + 1).min(len - 1);
+                }
+            }
+            KeyCode::Char(' ') => {
+                let matches = self.search_matches();
+                if let Some(&index) = matches.get(self.search_cursor) {
+                    if !self.model.installed[index] {
+                        self.push_undo();
+                        self.selected[index] = !self.selected[index];
+                    }
+                    // Auto-advance to keep rapid picking flowing.
+                    self.search_cursor = (self.search_cursor + 1).min(matches.len() - 1);
+                }
+            }
+            KeyCode::Char(c) => {
+                if let Some(query) = &mut self.search {
+                    query.push(c);
+                }
+                self.search_cursor = 0;
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Leave search mode with the real cursor parked on the highlighted hit.
+    fn accept_search(&mut self) {
+        let matches = self.search_matches();
+        let hit = matches.get(self.search_cursor).copied();
+        self.search = None;
+        let Some(hit) = hit else { return };
+        match &mut self.stages[self.stage_index] {
+            Stage::Pick(stage) => {
+                if let Some(position) = stage.items.iter().position(|&item| item == hit) {
+                    stage.cursor = position;
+                }
+            }
+            Stage::Skills(stage) => {
+                for (category_index, category) in stage.categories.iter().enumerate() {
+                    if let Some(position) = category.items.iter().position(|&item| item == hit) {
+                        stage.category_cursor = category_index;
+                        stage.skill_cursor = position;
+                        stage.focus = Focus::Skills;
+                        break;
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -896,6 +1142,17 @@ impl Wizard {
     }
 
     fn click_primary(&mut self, index: usize) {
+        if self.search.is_some() {
+            let matches = self.search_matches();
+            if let Some(&hit) = matches.get(index) {
+                self.search_cursor = index;
+                if !self.model.installed[hit] {
+                    self.push_undo();
+                    self.selected[hit] = !self.selected[hit];
+                }
+            }
+            return;
+        }
         match &mut self.stages[self.stage_index] {
             Stage::Welcome(stage) => {
                 if index < stage.rows.len() {
@@ -951,6 +1208,16 @@ impl Wizard {
         let code = if down { KeyCode::Down } else { KeyCode::Up };
         let _ = self.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
+}
+
+/// Case-insensitive subsequence match: every query char appears in order.
+fn fuzzy_match(haystack: &str, query: &str) -> bool {
+    let haystack = haystack.to_lowercase();
+    let mut chars = haystack.chars();
+    query
+        .to_lowercase()
+        .chars()
+        .all(|needle| chars.by_ref().any(|hay| hay == needle))
 }
 
 fn contains(area: Rect, column: u16, row: u16) -> bool {
