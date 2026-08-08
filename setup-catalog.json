@@ -28,13 +28,14 @@
   ],
   "resources": [
     {
-      "id": "pi-package:@yassimba/pi-claude-bridge",
+      "id": "pi-package:pi-claude-bridge",
       "kind": "pi-package",
       "group": "Pi packages",
-      "label": "Claude Bridge",
-      "description": "Use Claude Code as a Pi model provider or delegate work through AskClaude",
-      "installTarget": "@yassimba/pi-claude-bridge",
-      "nextAction": "Start Pi and use the installed package."
+      "label": "claude-bridge",
+      "description": "Use Claude models inside Pi through your Claude subscription. By elidickinson.",
+      "installTarget": "pi-claude-bridge",
+      "version": "0.6.3",
+      "nextAction": "Run /model in Pi and pick a Claude model."
     },
     {
       "id": "pi-package:@yassimba/pi-herdr-worktree",
@@ -55,13 +56,14 @@
       "nextAction": "Start Pi and use the installed package."
     },
     {
-      "id": "pi-package:@yassimba/pi-rewind",
+      "id": "pi-package:pi-rewind-hook",
       "kind": "pi-package",
       "group": "Pi packages",
-      "label": "Rewind",
-      "description": "File checkpoints for Pi's conversation tree: branch to an earlier message and restore files to match",
-      "installTarget": "@yassimba/pi-rewind",
-      "nextAction": "Start Pi and use the installed package."
+      "label": "rewind",
+      "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
+      "installTarget": "pi-rewind-hook",
+      "version": "1.8.5",
+      "nextAction": "Branch to an earlier Pi message to see files rewind."
     },
     {
       "id": "pi-package:pi-subagents",
@@ -70,16 +72,18 @@
       "label": "subagents",
       "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
       "installTarget": "pi-subagents",
+      "version": "0.43.0",
       "nextAction": "Ask Pi to delegate a task to a subagent."
     },
     {
-      "id": "pi-package:@yassimba/pi-web-access",
+      "id": "pi-package:pi-web-access",
       "kind": "pi-package",
       "group": "Pi packages",
-      "label": "Web Access",
-      "description": "Search and fetch web, PDF, GitHub, and video content from Pi",
-      "installTarget": "@yassimba/pi-web-access",
-      "nextAction": "Start Pi and use the installed package."
+      "label": "web-access",
+      "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
+      "installTarget": "pi-web-access",
+      "version": "0.19.0",
+      "nextAction": "Ask Pi to search the web."
     },
     {
       "id": "skill:backlog",

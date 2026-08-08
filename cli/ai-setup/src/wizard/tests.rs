@@ -20,6 +20,7 @@ fn resource(kind: ResourceKind, group: &str, label: &str) -> Resource {
         next_action: "next".into(),
         dependencies: Vec::new(),
         bin: None,
+        version: None,
     }
 }
 

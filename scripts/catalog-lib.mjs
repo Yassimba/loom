@@ -184,9 +184,12 @@ async function readExternalPiPackages(repoRoot) {
     throw error;
   }
   const meta = JSON.parse(raw);
-  return meta.packages.map(({ name, label, description, nextAction }) => {
+  return meta.packages.map(({ name, version, label, description, nextAction }) => {
     if (!name || !label || !description) {
       throw new Error(`pi-packages.json entries need name, label, and description`);
+    }
+    if (!/^\d+\.\d+\.\d+$/.test(version ?? "")) {
+      throw new Error(`pi-packages.json: ${name} needs an exact version pin, got ${version}`);
     }
     return {
       id: `pi-package:${name}`,
@@ -195,6 +198,7 @@ async function readExternalPiPackages(repoRoot) {
       label,
       description,
       installTarget: name,
+      version,
       nextAction: nextAction ?? "Start Pi and use the installed package.",
     };
   });
@@ -292,9 +296,7 @@ export async function readSetupPresets(repoRoot, resources) {
   for (const preset of meta.presets) {
     const unknown = preset.targets.filter((target) => !targets.has(target));
     if (unknown.length > 0) {
-      throw new Error(
-        `preset ${preset.id} names unknown install targets: ${unknown.join(", ")}`,
-      );
+      throw new Error(`preset ${preset.id} names unknown install targets: ${unknown.join(", ")}`);
     }
   }
   return meta.presets.map(({ id, label, description, targets }) => ({

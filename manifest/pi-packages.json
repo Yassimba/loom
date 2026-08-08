@@ -1,11 +1,33 @@
 {
-  "comment": "External Pi packages the setup offers alongside this repo's own plugins/ workspaces — upstream npm packages installed verbatim via `pi install npm:<name>`.",
+  "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: `pi install npm:<name>@<version>`. Users get new versions only when a pin change lands on main; the mise-bump workflow proposes bumps. First-party packages still live in plugins/ workspaces.",
   "packages": [
     {
       "name": "pi-subagents",
+      "version": "0.43.0",
       "label": "subagents",
       "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
       "nextAction": "Ask Pi to delegate a task to a subagent."
+    },
+    {
+      "name": "pi-web-access",
+      "version": "0.19.0",
+      "label": "web-access",
+      "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
+      "nextAction": "Ask Pi to search the web."
+    },
+    {
+      "name": "pi-rewind-hook",
+      "version": "1.8.5",
+      "label": "rewind",
+      "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
+      "nextAction": "Branch to an earlier Pi message to see files rewind."
+    },
+    {
+      "name": "pi-claude-bridge",
+      "version": "0.6.3",
+      "label": "claude-bridge",
+      "description": "Use Claude models inside Pi through your Claude subscription. By elidickinson.",
+      "nextAction": "Run /model in Pi and pick a Claude model."
     }
   ]
 }
