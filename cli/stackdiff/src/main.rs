@@ -1,5 +1,4 @@
 use std::io::IsTerminal;
-use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -177,10 +176,6 @@ struct Cli {
     /// Append a +added/-removed summary per entry (diff mode)
     #[arg(long, help_heading = "Output")]
     stat: bool,
-
-    /// Print straight to stdout even when output exceeds the screen
-    #[arg(long, help_heading = "Output")]
-    no_pager: bool,
 
     /// Re-expand repeated subtrees instead of "▸ shown above" stubs
     #[arg(long, help_heading = "Output")]
@@ -742,28 +737,6 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
     Ok(0)
 }
 
-/// Route stdout through $PAGER/less like git does: -F quits when the
-/// output fits one screen, -R passes colors and links through.
-fn spawn_pager(cli: &Cli) -> Option<std::process::Child> {
-    if cli.no_pager || cli.format == Format::Json || !std::io::stdout().is_terminal() {
-        return None;
-    }
-    let pager = std::env::var("PAGER").unwrap_or_else(|_| "less".to_string());
-    let mut parts = pager.split_whitespace();
-    let bin = parts.next()?;
-    let mut command = std::process::Command::new(bin);
-    command.args(parts);
-    if bin == "less" {
-        command.arg("-RFX");
-    }
-    let child = command.stdin(std::process::Stdio::piped()).spawn().ok()?;
-    let fd = child.stdin.as_ref()?.as_raw_fd();
-    unsafe {
-        libc::dup2(fd, libc::STDOUT_FILENO);
-    }
-    Some(child)
-}
-
 fn main() {
     let mut cli = Cli::parse();
     {
@@ -791,7 +764,6 @@ fn main() {
         ColorChoice::Never => false,
         ColorChoice::Auto => std::io::stdout().is_terminal(),
     };
-    let pager = spawn_pager(&cli);
 
     let cwd = cli
         .repo
@@ -811,14 +783,5 @@ fn main() {
         1
     });
 
-    if let Some(mut child) = pager {
-        use std::io::Write;
-        let _ = std::io::stdout().flush();
-        unsafe {
-            libc::close(libc::STDOUT_FILENO);
-        }
-        drop(child.stdin.take());
-        let _ = child.wait();
-    }
     std::process::exit(code);
 }

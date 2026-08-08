@@ -197,9 +197,9 @@ fn is_data_node(node: &DiffNode) -> bool {
             .unwrap_or(false)
 }
 
-/// Lineage granularity: keep resolved functions, data constructors, and
-/// anything changed; flatten unchanged branch arms; drop unchanged
-/// unresolved plumbing. The default tree altitude.
+/// Lineage granularity: keep resolved functions and data constructors;
+/// branch arms flatten away and unresolved plumbing drops out, whatever
+/// their diff status. The default tree altitude (--flow restores all).
 pub fn lineage_prune(node: &DiffNode) -> DiffNode {
     DiffNode {
         children: lineage_children(node),
@@ -222,11 +222,8 @@ fn lineage_children(node: &DiffNode) -> Vec<DiffNode> {
     let mut out = Vec::new();
     for child in &node.children {
         let marker = child.key == "…" || child.key == "▸";
-        let keep = marker
-            || child.status != DiffStatus::Same
-            || child.location.is_some()
-            || is_data_node(child);
-        if child.kind == crate::types::NodeKind::Branch && child.status == DiffStatus::Same {
+        let keep = marker || child.location.is_some() || is_data_node(child);
+        if child.kind == crate::types::NodeKind::Branch {
             out.extend(lineage_children(child));
         } else if keep {
             out.push(lineage_prune(child));

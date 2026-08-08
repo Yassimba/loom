@@ -560,7 +560,6 @@ dependencies = [
  "anyhow",
  "clap",
  "clap_complete",
- "libc",
  "mermaid-text",
  "owo-colors",
  "rayon",
