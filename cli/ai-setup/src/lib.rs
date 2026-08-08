@@ -3,6 +3,7 @@ mod catalog;
 pub mod doctor;
 mod install;
 mod jsonc;
+pub mod manifest;
 pub mod settings;
 mod skills;
 mod system;

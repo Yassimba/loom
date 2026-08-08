@@ -11,8 +11,10 @@ pub fn run_doctor(system: &(dyn System + Sync)) -> bool {
     println!("ai-setup doctor\n");
     println!("✓ {:10} ai-setup {}", "CLI", env!("CARGO_PKG_VERSION"));
     print_skill_trees(system);
+    print_manifest(system);
     // Every probe is an independent `<tool> --version`; run them all at once.
-    let probes: [(&'static str, &[&str]); 4] = [
+    let probes: [(&'static str, &[&str]); 5] = [
+        ("mise", &["--version"]),
         ("node", &["--version"]),
         ("npm", &["--version"]),
         ("pi", &["--version"]),
@@ -50,6 +52,22 @@ pub fn run_doctor(system: &(dyn System + Sync)) -> bool {
         println!("\nOne or more installed managers could not run. Repair them, then retry.");
     }
     healthy
+}
+
+/// Whether the published tool manifest has been synced into mise's conf.d.
+fn print_manifest(system: &dyn System) {
+    let Some(home) = system.home_dir() else {
+        return;
+    };
+    let target = crate::manifest::conf_d_target(&home);
+    if target.is_file() {
+        println!("✓ {:10} {}", "manifest", target.display());
+    } else {
+        println!(
+            "○ {:10} not synced yet (run `ai-setup setup` or `ai-setup update`)",
+            "manifest"
+        );
+    }
 }
 
 /// The agent skill trees the native installer would write into, with how

@@ -34,34 +34,42 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             ],
         });
     }
-    let self_update = if cfg!(windows) {
-        CommandSpec::new(
-            "powershell",
-            [
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                "irm https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.ps1 | iex",
-            ],
-        )
-    } else {
-        CommandSpec::new(
-            "sh",
-            [
-                "-c",
-                "curl -fsSL https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.sh | sh",
-            ],
-        )
-    };
-    tasks.push(UpdateTask {
-        label: "AI Setup CLI",
-        commands: vec![self_update],
-    });
+    // With mise present, the manifest lane owns tool updates — including this
+    // CLI's own pin — so the curl self-update would only install a shadowing
+    // copy. It remains the fallback for pre-mise machines.
+    let mise = crate::manifest::mise_available(system);
+    if !mise {
+        let self_update = if cfg!(windows) {
+            CommandSpec::new(
+                "powershell",
+                [
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    "irm https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.ps1 | iex",
+                ],
+            )
+        } else {
+            CommandSpec::new(
+                "sh",
+                [
+                    "-c",
+                    "curl -fsSL https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.sh | sh",
+                ],
+            )
+        };
+        tasks.push(UpdateTask {
+            label: "AI Setup CLI",
+            commands: vec![self_update],
+        });
+    }
 
-    // Skills, Pi, Herdr, and the self-update touch disjoint state, so all
-    // lanes run concurrently; each lane prints once, when it finishes.
+    // Skills, Pi, Herdr, the tool manifest, and the self-update touch
+    // disjoint state, so all lanes run concurrently; each lane prints once,
+    // when it finishes.
     let lanes = std::iter::once("Shared skills")
+        .chain(mise.then_some("Tool manifest (mise)"))
         .chain(tasks.iter().map(|task| task.label))
         .collect::<Vec<_>>()
         .join(", ");
@@ -73,6 +81,12 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             let line_sender = line_sender.clone();
             scope.spawn(move || {
                 let _ = line_sender.send(update_installed_skills(system, catalog));
+            });
+        }
+        if mise {
+            let line_sender = line_sender.clone();
+            scope.spawn(move || {
+                let _ = line_sender.send(sync_tool_manifest(system));
             });
         }
         for task in &tasks {
@@ -92,6 +106,18 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
         }
     });
     ready
+}
+
+/// Refresh mise's conf.d copy of the published manifest and install its pins.
+/// Tools move only when a new manifest landed on main since the last sync.
+fn sync_tool_manifest(system: &dyn System) -> (bool, String) {
+    match crate::manifest::sync_and_install(system) {
+        Ok(target) => (
+            true,
+            format!("  ✓ Tool manifest (mise)\n      {}", target.display()),
+        ),
+        Err(message) => (false, format!("  ! Tool manifest (mise): {message}")),
+    }
 }
 
 fn run_update_task(system: &dyn System, task: &UpdateTask) -> (bool, String) {

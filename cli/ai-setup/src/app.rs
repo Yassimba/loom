@@ -27,6 +27,18 @@ pub fn install_selected(
     dry_run: bool,
     system: &(dyn System + Sync),
 ) -> Result<bool> {
+    // Tools come from the published mise manifest; sync it first so the plan
+    // below sees pi/node/herdr already present. Without mise the legacy
+    // detect-and-instruct path still covers everything.
+    if !dry_run && crate::manifest::mise_available(system) {
+        match crate::manifest::sync_and_install(system) {
+            Ok(target) => {
+                println!("✓ Tool manifest synced to {}", target.display());
+                system.refresh_path();
+            }
+            Err(message) => eprintln!("! Tool manifest: {message}"),
+        }
+    }
     let status = PrerequisiteStatus {
         pi: system.command_exists("pi"),
         herdr: system.command_exists("herdr"),

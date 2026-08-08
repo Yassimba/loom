@@ -28,3 +28,14 @@ an approved callplan. What verify compares built code against.
 Any difference between the promise and the built code's real behavior, found
 at verify. Accepted drift updates the promise; the record matches reality.
 _Avoid_: deviation, mismatch
+
+**Manifest**:
+The published, exact-pinned list of tools this setup provides, synced to
+every consumer machine by the CLI. Tools change only when a new manifest
+lands on main.
+_Avoid_: tool list, mise config (ambiguous with the contributor dev-env)
+
+**Overlay**:
+A user's own machine-local mise configuration, merged on top of the
+manifest and never published. The tools counterpart of `personal/` skills.
+_Avoid_: local config, custom tools

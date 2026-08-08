@@ -146,7 +146,7 @@ pub fn install_skills(system: &dyn System, skills: &[String]) -> Result<Vec<Tree
 /// Download and unpack the repo tarball into `staging`; returns the extracted
 /// repo root. Shells out to curl and tar (present on macOS, Linux, and
 /// Windows 10+) through `System`, so tests can intercept both.
-fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf, String> {
+pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf, String> {
     let _ = fs::remove_dir_all(staging);
     fs::create_dir_all(staging)
         .map_err(|error| format!("could not create {}: {error}", staging.display()))?;

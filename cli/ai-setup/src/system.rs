@@ -122,8 +122,17 @@ impl System for RealSystem {
         if let Some(home) = dirs::home_dir() {
             paths.push(home.join(".local").join("bin"));
             paths.push(home.join(".cargo").join("bin"));
+            // mise-managed tools resolve through its shims until the user's
+            // shell activation takes over.
+            paths.push(home.join(".local").join("share").join("mise").join("shims"));
             if cfg!(windows) {
                 paths.push(home.join("AppData").join("Roaming").join("npm"));
+                paths.push(
+                    home.join("AppData")
+                        .join("Local")
+                        .join("mise")
+                        .join("shims"),
+                );
             }
         }
         if cfg!(windows) {

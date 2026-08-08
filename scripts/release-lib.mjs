@@ -110,15 +110,16 @@ function cliComponent(repoRoot, pluginsRoot) {
   if (!existsSync(manifestPath)) return undefined;
   const cargo = cargoPackage(readFileSync(manifestPath, "utf8"));
   assertVersion(cargo.version, manifestPath);
-  const shellVersion = readFileSync(join(repoRoot, "install.sh"), "utf8").match(
-    /^VERSION="([^"]+)"/m,
+  // The installers no longer embed a version; the published mise manifest
+  // carries the CLI's release pin instead, as the full component tag
+  // (ubi resolves "ai-setup-v0.6.2" where a bare version would derive the
+  // wrong tag).
+  const manifestPin = readFileSync(join(repoRoot, "manifest", "ai-setup.toml"), "utf8").match(
+    /^"github:Yassimba\/ai-setup\[exe=ai-setup\]" = \{ version = "([^"]+)"/m,
   )?.[1];
-  const powershellVersion = readFileSync(join(repoRoot, "install.ps1"), "utf8").match(
-    /^\$Version = "([^"]+)"/m,
-  )?.[1];
-  if (shellVersion !== cargo.version || powershellVersion !== cargo.version) {
+  if (manifestPin !== `ai-setup-v${cargo.version}`) {
     throw new Error(
-      `ai-setup: Cargo ${cargo.version}, install.sh ${shellVersion}, and install.ps1 ${powershellVersion} must match`,
+      `ai-setup: Cargo ${cargo.version} and manifest/ai-setup.toml pin ${manifestPin} must match`,
     );
   }
   return {
@@ -127,6 +128,9 @@ function cliComponent(repoRoot, pluginsRoot) {
     bin: cargo.name,
     version: cargo.version,
     path: relative(repoRoot, cliDir),
+    // manifest/ai-setup.toml is deliberately absent: tool-pin bumps are
+    // main-effective and must not trigger CLI releases. The release prep
+    // still rewrites the CLI's own pin there (versionMirrors).
     paths: [
       "cli/ai-setup",
       "install.sh",
@@ -142,7 +146,7 @@ function cliComponent(repoRoot, pluginsRoot) {
     distribution: "rust-binary",
     toolchain: rustToolchain(cliDir, cargo),
     tag: `${cargo.name}-v${cargo.version}`,
-    versionMirrors: ["install.sh", "install.ps1"],
+    versionMirrors: ["manifest/ai-setup.toml"],
   };
 }
 
