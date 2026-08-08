@@ -12,7 +12,6 @@ use stackdiff::extract::{build_index, extract_functions, FunctionIndex};
 use stackdiff::git::{
     assert_git_repo, list_source_files, read_snapshot_files, resolve_snapshots, verify_commit,
 };
-use stackdiff::img::{detect_protocol, mermaid_to_png, png_to_terminal};
 use stackdiff::infer::{diff_entry, infer_entries};
 use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
@@ -103,15 +102,6 @@ struct Cli {
     /// status); shorthand that overrides --format
     #[arg(short = 'm', long)]
     boxes: bool,
-
-    /// Rendered diagram inline in the terminal: mermaid → mmdr → truecolor
-    /// half-blocks. Needs mmdr (cargo install mermaid-rs-renderer)
-    #[arg(long)]
-    img: bool,
-
-    /// mmdr theme for --img
-    #[arg(long, default_value = "dark")]
-    img_theme: String,
 
     /// Append a +added/-removed summary per entry (diff mode)
     #[arg(long)]
@@ -209,20 +199,6 @@ fn tree_as_diff(node: &stackdiff::types::CallNode) -> DiffNode {
 }
 
 fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOptions) {
-    if cli.img {
-        println!("{header}\n");
-        let protocol = detect_protocol();
-        for tree in trees {
-            let rendered = mermaid_to_png(&render_mermaid(tree), &cli.img_theme)
-                .and_then(|png| png_to_terminal(&png, protocol));
-            match rendered {
-                Ok(blocks) => println!("{blocks}"),
-                Err(error) => eprintln!("--img failed for {}: {error}", tree.key),
-            }
-            stat_line(cli, tree);
-        }
-        return;
-    }
     if cli.boxes {
         println!("{header}\n");
         for (index, tree) in trees.iter().enumerate() {
