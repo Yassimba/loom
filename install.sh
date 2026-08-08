@@ -73,7 +73,7 @@ mv "$tmp_selection" "$selection"
 echo "$NAME: core tools synced to $selection"
 
 # 3. Install the pins — node and the Loom CLI (plus any prior selection).
-mise install --yes
+mise -C "$HOME" install --yes
 
 # 4. Persist shell activation, so the tools are on PATH in new shells.
 case "$(basename "${SHELL:-sh}")" in

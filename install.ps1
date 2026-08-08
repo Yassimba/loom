@@ -31,6 +31,50 @@ function Get-Url([string]$Url, [string]$OutFile) {
   }
 }
 
+function Install-MiseRelease {
+  $Headers = @{
+    Accept = "application/vnd.github+json"
+    "User-Agent" = "loom-installer"
+  }
+  if ($env:GITHUB_TOKEN) { $Headers.Authorization = "Bearer $($env:GITHUB_TOKEN)" }
+  $Release = Invoke-RestMethod -Uri "https://api.github.com/repos/jdx/mise/releases/latest" -Headers $Headers
+  $Architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+  if ($Architecture -notin @("arm64", "x64")) {
+    throw "$Name`: mise has no supported Windows asset for $Architecture"
+  }
+  $AssetName = "mise-$($Release.tag_name)-windows-$Architecture.exe"
+  $Asset = $Release.assets | Where-Object { $_.name -eq $AssetName } | Select-Object -First 1
+  $Checksums = $Release.assets | Where-Object { $_.name -eq "SHASUMS256.txt" } | Select-Object -First 1
+  if (-not $Asset -or -not $Checksums) { throw "$Name`: mise release assets are incomplete" }
+
+  $TmpDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+  New-Item -ItemType Directory -Path $TmpDirectory | Out-Null
+  try {
+    $TmpExe = Join-Path $TmpDirectory $AssetName
+    $TmpChecksums = Join-Path $TmpDirectory "SHASUMS256.txt"
+    Get-Url $Asset.browser_download_url $TmpExe
+    Get-Url $Checksums.browser_download_url $TmpChecksums
+    $ChecksumLine = Get-Content $TmpChecksums | Where-Object { $_.EndsWith($AssetName) } | Select-Object -First 1
+    if (-not $ChecksumLine) { throw "$Name`: mise checksum is missing for $AssetName" }
+    $Expected = ($ChecksumLine -split '\s+')[0]
+    $Actual = (Get-FileHash -Path $TmpExe -Algorithm SHA256).Hash
+    if ($Actual -ne $Expected) { throw "$Name`: mise checksum verification failed" }
+
+    $InstallDirectory = Join-Path $HOME ".local\bin"
+    New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
+    Copy-Item $TmpExe (Join-Path $InstallDirectory "mise.exe") -Force
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
+    $UserEntries = @($UserPath -split ';' | Where-Object { $_ })
+    if ($InstallDirectory -notin $UserEntries) {
+      $NewUserPath = (@($InstallDirectory) + $UserEntries) -join ';'
+      [Environment]::SetEnvironmentVariable("Path", $NewUserPath, [System.EnvironmentVariableTarget]::User)
+    }
+    $env:Path = "$InstallDirectory;" + $env:Path
+  } finally {
+    Remove-Item $TmpDirectory -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
 # 1. mise - the only thing this script installs itself.
 if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   Write-Host "$Name`: installing mise (https://mise.jdx.dev)..."
@@ -44,7 +88,8 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
     if ($LASTEXITCODE -eq 0) { $installed = $true }
   }
   if (-not $installed) {
-    throw "$Name`: could not install mise automatically; install it from https://mise.jdx.dev/installing-mise.html and rerun"
+    Install-MiseRelease
+    $installed = $true
   }
   # The nested PowerShell of the README one-liner keeps its pre-install PATH.
   # Pull in the paths that WinGet or Scoop just persisted for future shells.
@@ -117,7 +162,7 @@ try {
 }
 
 # 3. Install the pins - node and the Loom CLI (plus any prior selection).
-mise install --yes
+mise -C $HOME install --yes
 if ($LASTEXITCODE -ne 0) { throw "$Name`: mise install failed" }
 
 # 4. Persist shell activation, so managed tools are on PATH in new shells.

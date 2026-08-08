@@ -68,9 +68,13 @@ jobs:
           - name: Windows x64
             runner: windows-2025
             engine: powershell
+            skill: next
+            tokei: required
           - name: Windows ARM64
             runner: windows-11-arm
             engine: pwsh
+            skill: tdd
+            tokei: skip
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Run the real bootstrap twice
@@ -78,6 +82,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           LOOM_E2E_POWERSHELL: ${{ matrix.engine }}
+          LOOM_E2E_SKILL: ${{ matrix.skill }}
+          LOOM_E2E_TOKEI: ${{ matrix.tokei }}
         run: .\scripts\e2e-install-windows.ps1
       - name: Upload evidence
         if: always()
