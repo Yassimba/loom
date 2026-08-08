@@ -64,6 +64,6 @@ Build the viewer — the lineage skill's script owns the HTML:
 
 `-r` stamps the diff range into the header so a saved page stays anchored to what it describes; omit it for an uncommitted change and the script stamps the current commit plus a working-tree marker itself.
 
-It validates every diagram in a headless browser. The page provides platform-native keyboard navigation, graph-aware branch switching, and BEFORE/AFTER crossing. Show it inline when possible, otherwise `--open`; `#<node id>` deep-links a hop. Two disjoint flows become separate tabs. If browser validation is unavailable, use lineage §4's PNG fallback.
+The page provides platform-native keyboard navigation, graph-aware branch switching, and BEFORE/AFTER crossing; `#<node id>` deep-links a hop. Two disjoint flows become separate tabs. Do not open it unless the user asks. Browser validation follows lineage §4: it is optional, explicit, and may use only a dedicated `LINEAGE_HEADLESS_BROWSER`. Never discover, launch, or pass the path of the user's desktop Chrome/Chromium/Edge installation, and never fall back to Puppeteer or `mmdc` automatically.
 
-Done when: render.sh reports OK and the page is open — or the PNG fallback compiled and passed lineage §4's vision check.
+Done when: the HTML exists and the response states whether dedicated browser validation ran. An unvalidated artifact is acceptable by default.

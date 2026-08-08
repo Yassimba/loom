@@ -586,16 +586,6 @@
       "dependencies": []
     },
     {
-      "id": "skill:writing-great-skills",
-      "kind": "skill",
-      "group": "General",
-      "label": "writing-great-skills",
-      "description": "Reference for writing and editing skills well — the vocabulary and principles that make a skill predictable.",
-      "installTarget": "writing-great-skills",
-      "nextAction": "Ask your coding agent to use the writing-great-skills skill.",
-      "dependencies": []
-    },
-    {
       "id": "skill:wtf",
       "kind": "skill",
       "group": "General",

@@ -4,9 +4,8 @@
   "groupings": [
     {
       "title": "Coding",
-      "description": "The development loop — planning, TDD, debugging, review, release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
+      "description": "The development loop \u2014 planning, TDD, debugging, review, release \u2014 plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
-        "backlog",
         "blueprint",
         "brainstorming",
         "browser-usage",
@@ -49,17 +48,24 @@
     },
     {
       "title": "Diagrams",
-      "description": "Turn systems and data into pictures — draw.io, Mermaid, and infographics.",
-      "skills": ["drawio-skill", "infographic-designer", "mermaid-skill"]
+      "description": "Turn systems and data into pictures \u2014 draw.io, Mermaid, and infographics.",
+      "skills": [
+        "drawio-skill",
+        "infographic-designer",
+        "mermaid-skill"
+      ]
     },
     {
       "title": "Presentations",
       "description": "Build slide decks in Marp markdown or PowerPoint.",
-      "skills": ["marp-slide", "pptx"]
+      "skills": [
+        "marp-slide",
+        "pptx"
+      ]
     },
     {
       "title": "General",
-      "description": "Interviewing, teaching, writing, and note-taking — skills for the work around the code.",
+      "description": "Interviewing, teaching, writing, and note-taking \u2014 skills for the work around the code.",
       "skills": [
         "grill-me",
         "grilling",
@@ -68,13 +74,12 @@
         "jira",
         "no-ai-slop",
         "research",
-        "ai-setup",
+        "loom",
         "teach",
         "wizard",
         "write-documentation",
         "write-readme",
         "writing-clearly-and-concisely",
-        "writing-great-skills",
         "wtf"
       ]
     }
