@@ -873,3 +873,51 @@ fn enter_on_a_preset_row_applies_it_and_starts() {
         "and advanced past the welcome screen"
     );
 }
+
+#[test]
+fn quitting_with_picks_asks_first_and_esc_steps_back() {
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Enter, KeyCode::Enter]); // Pi pick stage
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    // q with a pending pick asks instead of discarding.
+    let action = press(&mut wizard, &[KeyCode::Char('q')]);
+    assert!(action.is_none(), "quit is deferred to a confirmation");
+    assert!(wizard.confirm_quit);
+    // Any other key keeps going.
+    press(&mut wizard, &[KeyCode::Char('k')]);
+    assert!(!wizard.confirm_quit);
+    // Esc walks back a stage instead of quitting.
+    press(&mut wizard, &[KeyCode::Esc]);
+    assert!(matches!(wizard.stages[wizard.stage_index], Stage::Pick(_)));
+    press(&mut wizard, &[KeyCode::Esc]);
+    assert!(matches!(
+        wizard.stages[wizard.stage_index],
+        Stage::Welcome(_)
+    ));
+    // Confirming the dialog with enter quits for real.
+    press(&mut wizard, &[KeyCode::Char('q')]);
+    let action = press(&mut wizard, &[KeyCode::Enter]);
+    assert!(matches!(
+        action,
+        Some(Action::Exit(WizardOutcome::Cancelled))
+    ));
+}
+
+#[test]
+fn space_advances_in_the_direction_of_travel() {
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Enter, KeyCode::Enter]); // Pi pick (2 items)
+                                                           // G jumps to the bottom and marks the direction as upward: space flows up.
+    press(&mut wizard, &[KeyCode::Char('G'), KeyCode::Char(' ')]);
+    let Stage::Pick(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected a pick stage");
+    };
+    assert_eq!(stage.cursor, 0, "bottom-to-top travel: space steps up");
+    // Moving down flips the direction: space steps down again.
+    press(&mut wizard, &[KeyCode::Char('j'), KeyCode::Char('k')]);
+    press(&mut wizard, &[KeyCode::Char('j'), KeyCode::Char(' ')]);
+    let Stage::Pick(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected a pick stage");
+    };
+    assert_eq!(stage.cursor, 1, "top-to-bottom travel: space steps down");
+}
