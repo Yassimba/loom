@@ -27,6 +27,8 @@ if ! command -v mise >/dev/null 2>&1; then
   export PATH="${HOME}/.local/bin:${PATH}"
 fi
 command -v mise >/dev/null 2>&1 || { echo "$NAME: mise install failed" >&2; exit 1; }
+mise_bin="$(command -v mise)"
+mise_dir="$(dirname "$mise_bin")"
 
 # 2. Refresh the required core block — node and the Loom CLI — while keeping
 #    any optional tools already chosen through the wizard. This also repairs
@@ -71,13 +73,13 @@ mv "$tmp_selection" "$selection"
 echo "$NAME: core tools synced to $selection"
 
 # 3. Install the pins — node and the Loom CLI (plus any prior selection).
-mise install --yes
+mise -C "$HOME" install --yes
 
 # 4. Persist shell activation, so the tools are on PATH in new shells.
 case "$(basename "${SHELL:-sh}")" in
-  zsh)  profile="${HOME}/.zshrc"; activate='eval "$(mise activate zsh)"' ;;
-  bash) profile="${HOME}/.bashrc"; activate='eval "$(mise activate bash)"' ;;
-  fish) profile="${HOME}/.config/fish/config.fish"; activate='mise activate fish | source' ;;
+  zsh)  profile="${HOME}/.zshrc"; activate="$(printf 'export PATH="%s:$PATH"; eval "$("%s" activate zsh)"' "$mise_dir" "$mise_bin")" ;;
+  bash) profile="${HOME}/.bashrc"; activate="$(printf 'export PATH="%s:$PATH"; eval "$("%s" activate bash)"' "$mise_dir" "$mise_bin")" ;;
+  fish) profile="${HOME}/.config/fish/config.fish"; activate="$(printf 'fish_add_path "%s"; "%s" activate fish | source' "$mise_dir" "$mise_bin")" ;;
   *)    profile=""; activate="" ;;
 esac
 if [ -n "$profile" ]; then
@@ -97,6 +99,6 @@ echo ""
 # The README pipes this script into sh, so stdin is the download pipe rather
 # than the user's terminal. Reconnect it before starting the interactive UI.
 if [ ! -t 0 ] && [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
-  exec mise exec -- loom setup </dev/tty
+  exec mise -C "$HOME" exec -- loom setup "$@" </dev/tty
 fi
-exec mise exec -- loom setup
+exec mise -C "$HOME" exec -- loom setup "$@"
