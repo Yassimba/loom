@@ -228,6 +228,9 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
             },
             link: link_template(cli),
             repo_root: options.repo_root.clone(),
+            max_width: terminal_size::terminal_size()
+                .map(|(w, _)| w.0 as usize)
+                .or_else(|| std::env::var("COLUMNS").ok()?.parse().ok()),
         };
         println!("{header}\n");
         for (index, tree) in trees.iter().enumerate() {
