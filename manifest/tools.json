@@ -1,5 +1,5 @@
 {
-  "comment": "Wizard metadata for the optional (non-core) tools in ai-setup.toml. Keys must match the manifest's tool keys exactly; the catalog generator validates both directions.",
+  "comment": "Wizard metadata for the optional (non-core) tools in loom.toml. Keys must match the manifest's tool keys exactly; the catalog generator validates both directions.",
   "tools": [
     {
       "key": "npm:@mariozechner/pi-coding-agent",
@@ -76,6 +76,40 @@
       "bin": "bv",
       "description": "Beads viewer (bv): graph-aware TUI over the Beads tracker — kanban, dependency DAG, critical path.",
       "nextAction": "Run `bv` in a repo with Beads issues."
+    },
+    {
+      "key": "github:rcieri/glab-tui",
+      "label": "glab-tui",
+      "bin": "glab-tui",
+      "description": "Terminal UI for GitLab and GitHub on top of glab/gh: issues, MRs, pipelines, runners, releases.",
+      "nextAction": "Run `glab-tui` in a repo with a GitLab or GitHub remote."
+    },
+    {
+      "key": "gitleaks",
+      "label": "gitleaks",
+      "description": "Secret scanner for git repos - catches committed credentials before they ship.",
+      "nextAction": "Run `gitleaks git` in a repo."
+    },
+    {
+      "key": "zoxide",
+      "label": "zoxide",
+      "bin": "zoxide",
+      "description": "Smarter cd that learns your habits: `z` jumps to frecent directories, `zi` picks interactively.",
+      "nextAction": "Add `eval \"$(zoxide init zsh)\"` to your shell profile, then `z <dir>`."
+    },
+    {
+      "key": "cargo:envex",
+      "label": "envx",
+      "bin": "envx",
+      "description": "Environment variable manager with a TUI and CLI (crates.io `envex`; builds with cargo).",
+      "nextAction": "Run `envx` to browse your environment."
+    },
+    {
+      "key": "github:DataDog/pup",
+      "label": "pup",
+      "bin": "pup",
+      "description": "Datadog API CLI for agents and humans: 200+ commands over metrics, logs, monitors, traces.",
+      "nextAction": "Run `pup auth login` once."
     }
   ]
 }

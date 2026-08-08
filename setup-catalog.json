@@ -86,16 +86,6 @@
       "nextAction": "Ask Pi to search the web."
     },
     {
-      "id": "skill:backlog",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "backlog",
-      "description": "Backlog management: use when the user mentions a backlog, asks what's next, wants work recorded before implementation, or wants queued ideas or specs prioritized, transitioned, completed, or removed; also use when another skill needs to record lifecycle changes.",
-      "installTarget": "backlog",
-      "nextAction": "Ask your coding agent to use the backlog skill.",
-      "dependencies": ["grill-me"]
-    },
-    {
       "id": "skill:blueprint",
       "kind": "skill",
       "group": "Coding",
@@ -113,7 +103,7 @@
       "description": "Use when the user wants to brainstorm or explore an idea — a feature, product direction, or \"what if\" — before deciding whether it deserves a plan. Ideation only — ends in an idea brief, not a design.",
       "installTarget": "brainstorming",
       "nextAction": "Ask your coding agent to use the brainstorming skill.",
-      "dependencies": ["backlog", "to-spec", "to-tickets"]
+      "dependencies": ["to-spec", "to-tickets"]
     },
     {
       "id": "skill:browser-usage",
@@ -536,13 +526,13 @@
       "dependencies": []
     },
     {
-      "id": "skill:ai-setup",
+      "id": "skill:loom",
       "kind": "skill",
       "group": "General",
-      "label": "ai-setup",
-      "description": "Set up or troubleshoot Yassimba's curated agent skills, Pi packages, Herdr, and Herdr plugins through the ai-setup CLI. Use when the user asks to install this collection, configure Herdr, add one of its capabilities, update the setup, or diagnose installation problems.",
-      "installTarget": "ai-setup",
-      "nextAction": "Ask your coding agent to use the ai-setup skill.",
+      "label": "loom",
+      "description": "Set up or troubleshoot Yassimba's curated agent skills, Pi packages, Herdr, and Herdr plugins through the loom CLI. Use when the user asks to install this collection, configure Herdr, add one of its capabilities, update the setup, or diagnose installation problems.",
+      "installTarget": "loom",
+      "nextAction": "Ask your coding agent to use the loom skill.",
       "dependencies": []
     },
     {
@@ -734,6 +724,56 @@
       "installTarget": "github:Dicklesworthstone/beads_viewer",
       "nextAction": "Run `bv` in a repo with Beads issues.",
       "bin": "bv"
+    },
+    {
+      "id": "tool:glab-tui",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "glab-tui",
+      "description": "Terminal UI for GitLab and GitHub on top of glab/gh: issues, MRs, pipelines, runners, releases.",
+      "installTarget": "github:rcieri/glab-tui",
+      "nextAction": "Run `glab-tui` in a repo with a GitLab or GitHub remote.",
+      "bin": "glab-tui"
+    },
+    {
+      "id": "tool:gitleaks",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "gitleaks",
+      "description": "Secret scanner for git repos - catches committed credentials before they ship.",
+      "installTarget": "gitleaks",
+      "nextAction": "Run `gitleaks git` in a repo.",
+      "bin": "gitleaks"
+    },
+    {
+      "id": "tool:zoxide",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "zoxide",
+      "description": "Smarter cd that learns your habits: `z` jumps to frecent directories, `zi` picks interactively.",
+      "installTarget": "zoxide",
+      "nextAction": "Add `eval \"$(zoxide init zsh)\"` to your shell profile, then `z <dir>`.",
+      "bin": "zoxide"
+    },
+    {
+      "id": "tool:envx",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "envx",
+      "description": "Environment variable manager with a TUI and CLI (crates.io `envex`; builds with cargo).",
+      "installTarget": "cargo:envex",
+      "nextAction": "Run `envx` to browse your environment.",
+      "bin": "envx"
+    },
+    {
+      "id": "tool:pup",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "pup",
+      "description": "Datadog API CLI for agents and humans: 200+ commands over metrics, logs, monitors, traces.",
+      "installTarget": "github:DataDog/pup",
+      "nextAction": "Run `pup auth login` once.",
+      "bin": "pup"
     }
   ]
 }
