@@ -436,7 +436,10 @@ fn lineage_view_draws_shared_callees_once() {
     let index = build_index(extract_functions("app.ts", &source).unwrap());
     let tree = build_call_tree("boot", &index, 12);
     let diff = diff_trees(&tree, &tree);
-    let (mermaid, _) = stackdiff::views::lineage_mermaid(&[diff], None).unwrap();
+    let (mermaid, _) = match stackdiff::views::lineage_mermaid(&[diff], None, "LR", None).unwrap() {
+        stackdiff::views::Lineage::Graph(source, marks) => (source, marks),
+        _ => panic!("expected graph"),
+    };
     // resolve appears as ONE node, referenced by two edges.
     assert_eq!(mermaid.matches("[resolve → Plan]").count(), 1, "{mermaid}");
     let resolve_id = mermaid

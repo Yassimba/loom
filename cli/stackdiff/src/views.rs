@@ -144,6 +144,73 @@ pub fn class_mermaid(
     Some((lines.join("\n"), marks))
 }
 
+/// Connected clusters of the lineage graph, largest change first, each
+/// with a suggested entry to open it with.
+#[allow(clippy::type_complexity)]
+fn cluster_overview(
+    nodes: &BTreeMap<String, (String, DiffStatus, bool, Option<String>)>,
+    edges: &BTreeMap<(String, String), (Option<String>, DiffStatus)>,
+) -> String {
+    let keys: Vec<&String> = nodes.keys().collect();
+    let index: BTreeMap<&String, usize> = keys.iter().enumerate().map(|(i, k)| (*k, i)).collect();
+    let mut parent: Vec<usize> = (0..keys.len()).collect();
+    fn find(parent: &mut Vec<usize>, i: usize) -> usize {
+        if parent[i] != i {
+            let root = find(parent, parent[i]);
+            parent[i] = root;
+        }
+        parent[i]
+    }
+    let mut incoming = vec![0usize; keys.len()];
+    for (from, to) in edges.keys() {
+        let (a, b) = (index[from], index[to]);
+        let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
+        if ra != rb {
+            parent[ra] = rb;
+        }
+        incoming[b] += 1;
+    }
+    let mut clusters: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for i in 0..keys.len() {
+        let root = find(&mut parent, i);
+        clusters.entry(root).or_default().push(i);
+    }
+    let mut rows: Vec<(usize, usize, String)> = clusters
+        .values()
+        .map(|members| {
+            let changed = members
+                .iter()
+                .filter(|&&i| nodes[keys[i]].1 != DiffStatus::Same)
+                .count();
+            // Suggest the member with no incoming edge (a root), largest first.
+            let entry = members
+                .iter()
+                .copied()
+                .min_by_key(|&i| (incoming[i], std::cmp::Reverse(members.len()), keys[i]))
+                .map(|i| keys[i].clone())
+                .unwrap_or_default();
+            (members.len(), changed, entry)
+        })
+        .collect();
+    rows.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.cmp(&a.0)));
+
+    let mut out = vec![format!(
+        "Graph too big to draw ({} nodes) — {} clusters. Open one:",
+        nodes.len(),
+        rows.len()
+    )];
+    for (size, changed, entry) in rows.iter().take(20) {
+        out.push(format!(
+            "  {changed:>4} changed / {size:>4} nodes   stackdiff … -e {entry} -m"
+        ));
+    }
+    if rows.len() > 20 {
+        out.push(format!("  … {} more clusters", rows.len() - 20));
+    }
+    out.push("(--full draws it anyway)".to_string());
+    out.join("\n")
+}
+
 fn note_method(
     methods: &mut BTreeMap<String, BTreeMap<String, DiffStatus>>,
     type_name: &str,
@@ -209,7 +276,23 @@ pub fn render_colored(
     color: bool,
     max_width: Option<usize>,
 ) -> anyhow::Result<String> {
-    let rendered = best_layout(source, max_width)?;
+    render_colored_flip(source, marks, color, max_width, true)
+}
+
+pub fn render_colored_flip(
+    source: &str,
+    marks: &Marks,
+    color: bool,
+    max_width: Option<usize>,
+    auto_flip: bool,
+) -> anyhow::Result<String> {
+    // Double-rendering to pick a direction is only worth it on small graphs.
+    let rendered = if auto_flip && source.lines().count() <= 120 {
+        best_layout(source, max_width)?
+    } else {
+        mermaid_text::render_with_width(source, max_width)
+            .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))?
+    };
     let mut sorted: Vec<&Mark> = marks.iter().collect();
     sorted.sort_by_key(|mark| std::cmp::Reverse(mark.label.chars().count()));
     let out = rendered
@@ -348,10 +431,19 @@ pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
 /// (drawn once — convergence is visible as fan-in), data constructors as
 /// stadium nodes, edges labeled with the binding the result lands in.
 /// Branches flatten away; unresolved plumbing drops out entirely.
+/// What the lineage view decided to show: the graph, or — past the size
+/// limit — an overview of its connected clusters with entry hints.
+pub enum Lineage {
+    Graph(String, Marks),
+    Overview(String),
+}
+
 pub fn lineage_mermaid(
     roots: &[DiffNode],
     link: Option<(&str, Option<&std::path::Path>)>,
-) -> Option<(String, Marks)> {
+    dir: &str,
+    limit: Option<usize>,
+) -> Option<Lineage> {
     #[derive(Default)]
     struct Graph {
         nodes: BTreeMap<String, (String, DiffStatus, bool, Option<String>)>,
@@ -428,12 +520,21 @@ pub fn lineage_mermaid(
         return None;
     }
 
+    if let Some(limit) = limit {
+        if graph.nodes.len() > limit {
+            return Some(Lineage::Overview(cluster_overview(
+                &graph.nodes,
+                &graph.edges,
+            )));
+        }
+    }
+
     let mut ids: BTreeMap<&String, usize> = BTreeMap::new();
     for key in graph.nodes.keys() {
         let next = ids.len();
         ids.insert(key, next);
     }
-    let mut lines = vec!["flowchart LR".to_string()];
+    let mut lines = vec![format!("flowchart {dir}")];
     let mut marks = Marks::new();
     for (key, (label, status, data, location)) in &graph.nodes {
         let id = ids[key];
@@ -476,5 +577,5 @@ pub fn lineage_mermaid(
             None => lines.push(format!("n{from_id} --> n{to_id}")),
         }
     }
-    Some((lines.join("\n"), marks))
+    Some(Lineage::Graph(lines.join("\n"), marks))
 }
