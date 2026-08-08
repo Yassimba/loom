@@ -122,21 +122,39 @@ fn path_allowed(file: &str, path_filters: &[String]) -> bool {
     })
 }
 
+/// List worktree source files the way git sees them: tracked plus
+/// untracked, minus everything .gitignore excludes.
+fn list_worktree_source_files(cwd: &Path) -> Result<Vec<String>> {
+    let output = git(
+        cwd,
+        &["ls-files", "--cached", "--others", "--exclude-standard"],
+    )?;
+    Ok(output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && is_source_file(line))
+        .map(str::to_string)
+        .collect())
+}
+
 pub fn list_source_files(
     cwd: &Path,
     snapshot: &Snapshot,
     path_filters: &[String],
+    no_ignore: bool,
 ) -> Result<Vec<String>> {
     let mut files = match snapshot {
-        Snapshot::Worktree => {
+        Snapshot::Worktree if no_ignore => {
             let mut out = Vec::new();
             walk_worktree(cwd, cwd, &mut out);
             out
         }
+        Snapshot::Worktree => list_worktree_source_files(cwd)?,
         Snapshot::Commit(reference) => list_commit_source_files(cwd, reference)?,
     };
     files.retain(|file| path_allowed(file, path_filters));
     files.sort();
+    files.dedup();
     Ok(files)
 }
 

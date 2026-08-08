@@ -69,8 +69,12 @@ struct Cli {
     tree: bool,
 
     /// Max call-tree depth
-    #[arg(long, default_value_t = 12)]
+    #[arg(long, default_value_t = 3)]
     max_depth: usize,
+
+    /// Include files that .gitignore excludes
+    #[arg(long)]
+    no_ignore: bool,
 
     /// Labels only: hide binding/args/returns, locations, and doc lines
     #[arg(long)]
@@ -139,8 +143,13 @@ fn render_options(cli: &Cli, cwd: &Path, color: bool) -> RenderOptions {
     }
 }
 
-fn load_index(cwd: &Path, snapshot: &Snapshot, path_filters: &[String]) -> Result<FunctionIndex> {
-    let files = list_source_files(cwd, snapshot, path_filters)?;
+fn load_index(
+    cwd: &Path,
+    snapshot: &Snapshot,
+    path_filters: &[String],
+    no_ignore: bool,
+) -> Result<FunctionIndex> {
+    let files = list_source_files(cwd, snapshot, path_filters, no_ignore)?;
     let sources = read_snapshot_files(cwd, snapshot, &files);
     let all: Vec<_> = sources
         .par_iter()
@@ -243,7 +252,7 @@ fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         }
         None => Snapshot::Worktree,
     };
-    let index = load_index(cwd, &snapshot, &cli.paths)?;
+    let index = load_index(cwd, &snapshot, &cli.paths, cli.no_ignore)?;
 
     if cli.entries.is_empty() {
         let mut exported: Vec<&String> = index
@@ -297,8 +306,8 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
     }
 
     let (before, after) = rayon::join(
-        || load_index(cwd, &from, &cli.paths),
-        || load_index(cwd, &to, &cli.paths),
+        || load_index(cwd, &from, &cli.paths, cli.no_ignore),
+        || load_index(cwd, &to, &cli.paths, cli.no_ignore),
     );
     let (before, after) = (before?, after?);
 
