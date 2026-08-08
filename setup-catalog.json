@@ -779,7 +779,7 @@
       "installTarget": "github:mikeleppane/envx",
       "nextAction": "Run `envx` to browse your environment.",
       "bin": "envx",
-      "companions": ["cargo:envex"]
+      "companions": ["cargo:envex", "rust"]
     },
     {
       "id": "tool:pup",
