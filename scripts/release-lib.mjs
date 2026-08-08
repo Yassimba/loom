@@ -104,22 +104,20 @@ function pluginManifestPaths(repoRoot, pluginsRoot) {
     );
 }
 
-function cliComponent(repoRoot, pluginsRoot) {
-  const cliDir = join(repoRoot, "cli", "loom");
+function binaryCliComponent(repoRoot, id, paths) {
+  const cliDir = join(repoRoot, "cli", id);
   const manifestPath = join(cliDir, "Cargo.toml");
   if (!existsSync(manifestPath)) return undefined;
   const cargo = cargoPackage(readFileSync(manifestPath, "utf8"));
   assertVersion(cargo.version, manifestPath);
-  // The installers no longer embed a version; the published mise manifest
-  // carries the CLI's release pin instead, as the full component tag
-  // (ubi resolves "loom-v0.6.2" where a bare version would derive the
-  // wrong tag).
+  // The published mise manifest carries each CLI's full component tag;
+  // a bare semantic version would make ubi derive the wrong tag.
   const manifestPin = readFileSync(join(repoRoot, "manifest", "loom.toml"), "utf8").match(
-    /^"github:Yassimba\/loom\[exe=loom\]" = \{ version = "([^"]+)"/m,
+    new RegExp(`^"github:Yassimba/loom\\[exe=${id}\\]" = \\{ version = "([^"]+)"`, "m"),
   )?.[1];
-  if (manifestPin !== `loom-v${cargo.version}`) {
+  if (manifestPin !== `${id}-v${cargo.version}`) {
     throw new Error(
-      `loom: Cargo ${cargo.version} and manifest/loom.toml pin ${manifestPin} must match`,
+      `${id}: Cargo ${cargo.version} and manifest/loom.toml pin ${manifestPin} must match`,
     );
   }
   return {
@@ -128,20 +126,7 @@ function cliComponent(repoRoot, pluginsRoot) {
     bin: cargo.name,
     version: cargo.version,
     path: relative(repoRoot, cliDir),
-    // manifest/loom.toml is deliberately absent: tool-pin bumps are
-    // main-effective and must not trigger CLI releases. The release prep
-    // still rewrites the CLI's own pin there (versionMirrors).
-    paths: [
-      "cli/loom",
-      "install.sh",
-      "install.ps1",
-      "setup-catalog.json",
-      "skills",
-      "skills.sh.json",
-      "scripts/catalog-lib.mjs",
-      "scripts/generate-setup-catalog.mjs",
-      ...pluginManifestPaths(repoRoot, pluginsRoot),
-    ],
+    paths,
     manifestPath: relative(repoRoot, manifestPath),
     distribution: "rust-binary",
     toolchain: rustToolchain(cliDir, cargo),
@@ -150,12 +135,30 @@ function cliComponent(repoRoot, pluginsRoot) {
   };
 }
 
+function cliComponent(repoRoot, pluginsRoot) {
+  return binaryCliComponent(repoRoot, "loom", [
+    "cli/loom",
+    "install.sh",
+    "install.ps1",
+    "setup-catalog.json",
+    "skills",
+    "skills.sh.json",
+    "scripts/catalog-lib.mjs",
+    "scripts/generate-setup-catalog.mjs",
+    ...pluginManifestPaths(repoRoot, pluginsRoot),
+  ]);
+}
+
+function stackdiffComponent(repoRoot) {
+  return binaryCliComponent(repoRoot, "stackdiff", ["cli/stackdiff"]);
+}
+
 export function discoverReleaseComponents(repoRoot) {
   const pluginsRoot = join(repoRoot, "plugins");
   const plugins = readdirSync(pluginsRoot, { withFileTypes: true })
     .map((entry) => pluginComponent(repoRoot, pluginsRoot, entry))
     .filter(Boolean);
-  return [...plugins, cliComponent(repoRoot, pluginsRoot)]
+  return [...plugins, cliComponent(repoRoot, pluginsRoot), stackdiffComponent(repoRoot)]
     .filter(Boolean)
     .sort((left, right) => left.id.localeCompare(right.id));
 }

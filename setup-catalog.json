@@ -638,6 +638,17 @@
       "companions": []
     },
     {
+      "id": "tool:stackdiff",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "stackdiff",
+      "description": "Diff call graphs across Git revisions for TypeScript, Python, Go, and Rust.",
+      "installTarget": "github:Yassimba/loom[exe=stackdiff]",
+      "nextAction": "Run `stackdiff --help` in a Git repository.",
+      "bin": "stackdiff",
+      "companions": []
+    },
+    {
       "id": "tool:gh",
       "kind": "tool",
       "group": "Tools",

@@ -43,7 +43,7 @@ export function createCiPlan(repoRoot, files) {
   }));
   const windows = affected
     .filter((component) => {
-      if (component.id === "loom") return true;
+      if (component.id === "loom" || component.id === "stackdiff") return true;
       if (!component.herdrManifestPath) return false;
       return /platforms\s*=\s*\[[^\]]*"windows"/s.test(
         readFileSync(join(repoRoot, component.herdrManifestPath), "utf8"),
