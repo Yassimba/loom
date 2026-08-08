@@ -6,7 +6,7 @@
 use tree_sitter::{Node, Tree};
 
 use super::{arg_text, child_by_type, collapse_ws, consumed, doc_before, named_children, text};
-use crate::types::{line_of, CallMeta, CallStep, FunctionInfo};
+use crate::types::{line_of, CallMeta, CallStep, FunctionInfo, TypeInfo};
 
 fn params_label(params: Option<Node>, src: &str) -> String {
     let Some(params) = params else {
@@ -63,7 +63,11 @@ impl<'s> Collector<'s> {
     fn add_call(&mut self, key: String, start: usize, meta: CallMeta) {
         let mark = format!("{key}:{start}");
         if self.seen.insert(mark) {
-            self.steps.push(CallStep::Call { key, meta });
+            self.steps.push(CallStep::Call {
+                key,
+                meta,
+                count: 1,
+            });
         }
     }
 
@@ -284,4 +288,46 @@ pub fn extract(file: &str, source: &str, tree: &Tree) -> Vec<FunctionInfo> {
         visit(file, item, &mut functions, source);
     }
     functions
+}
+
+/// Struct fields for the --er view.
+pub fn extract_types(source: &str, tree: &Tree) -> Vec<TypeInfo> {
+    let mut types = Vec::new();
+    fn visit(node: Node, types: &mut Vec<TypeInfo>, src: &str) {
+        if node.kind() == "struct_item" {
+            if let Some(name) = node.child_by_field_name("name") {
+                let mut fields = Vec::new();
+                if let Some(body) = node.child_by_field_name("body") {
+                    for field in named_children(body) {
+                        if field.kind() == "field_declaration" {
+                            if let (Some(field_name), Some(ty)) = (
+                                field.child_by_field_name("name"),
+                                field.child_by_field_name("type"),
+                            ) {
+                                fields.push((
+                                    text(field_name, src).to_string(),
+                                    Some(collapse_ws(text(ty, src))),
+                                ));
+                            }
+                        }
+                    }
+                }
+                types.push(TypeInfo {
+                    name: text(name, src).to_string(),
+                    fields,
+                });
+            }
+        }
+        if matches!(node.kind(), "mod_item") {
+            if let Some(body) = node.child_by_field_name("body") {
+                for child in named_children(body) {
+                    visit(child, types, src);
+                }
+            }
+        }
+    }
+    for item in named_children(tree.root_node()) {
+        visit(item, &mut types, source);
+    }
+    types
 }

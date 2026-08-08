@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use tree_sitter::Parser;
 
 use crate::lang::{self, detect_language, Language};
-use crate::types::FunctionInfo;
+use crate::types::{FunctionInfo, TypeInfo};
 
 pub fn extract_functions(file: &str, source: &str) -> Result<Vec<FunctionInfo>> {
     let Some(language) = detect_language(file) else {
@@ -26,6 +26,26 @@ pub fn extract_functions(file: &str, source: &str) -> Result<Vec<FunctionInfo>> 
         Language::Python => lang::python::extract(file, source, &tree),
         Language::Go => lang::go::extract(file, source, &tree),
         Language::Rust => lang::rust::extract(file, source, &tree),
+    })
+}
+
+/// Type definitions in a file, for the --er view.
+pub fn extract_types(file: &str, source: &str) -> Result<Vec<TypeInfo>> {
+    let Some(language) = detect_language(file) else {
+        return Ok(Vec::new());
+    };
+    let mut parser = Parser::new();
+    parser
+        .set_language(&language.grammar())
+        .context("failed to load grammar")?;
+    let tree = parser
+        .parse(source, None)
+        .with_context(|| format!("failed to parse {file}"))?;
+    Ok(match language {
+        Language::TypeScript | Language::Tsx => lang::typescript::extract_types(source, &tree),
+        Language::Python => lang::python::extract_types(source, &tree),
+        Language::Go => lang::go::extract_types(source, &tree),
+        Language::Rust => lang::rust::extract_types(source, &tree),
     })
 }
 

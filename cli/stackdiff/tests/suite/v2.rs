@@ -317,10 +317,77 @@ fn class_view_groups_methods_by_type() {
     let index = build_index(extract_functions("app.ts", &source).unwrap());
     let tree = build_call_tree("Runner.start", &index, 12);
     let diff = diff_trees(&tree, &tree);
-    let (mermaid, _) = stackdiff::views::class_mermaid(&[diff]).unwrap();
+    let (mermaid, _) =
+        stackdiff::views::class_mermaid(&[diff], &std::collections::BTreeMap::new()).unwrap();
     assert!(mermaid.contains("class Runner {"), "{mermaid}");
     assert!(mermaid.contains("+start()"), "{mermaid}");
     assert!(mermaid.contains("+prepare()"), "{mermaid}");
+}
+
+#[test]
+fn noise_filter_hides_builtins_and_collapses_repeats() {
+    use stackdiff::noise::{scrub_index, NoiseFilter};
+    let source = diff_outdent(
+        r#"
+      export function boot() {
+        real_work();
+        real_work();
+        len(items);
+        custom_helper(items);
+      }
+    "#,
+    );
+    let mut index = build_index(extract_functions("app.ts", &source).unwrap());
+    let filter = NoiseFilter::default_enabled();
+    scrub_index(&mut index, &filter);
+    let tree = build_call_tree("boot", &index, 12);
+    let labels: Vec<&str> = tree.children.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        vec!["real_work() ×2", "custom_helper()"],
+        "{labels:?}"
+    );
+}
+
+#[test]
+fn caller_tree_inverts_the_graph() {
+    use stackdiff::calltree::{build_caller_tree, reverse_index};
+    let source = diff_outdent(
+        r#"
+      export function helper() {}
+      export function alpha() { helper(); }
+      export function beta() { helper(); }
+    "#,
+    );
+    let index = build_index(extract_functions("app.ts", &source).unwrap());
+    let reverse = reverse_index(&index);
+    let tree = build_caller_tree("helper", &index, &reverse, 3);
+    let mut callers: Vec<&str> = tree.children.iter().map(|c| c.key.as_str()).collect();
+    callers.sort();
+    assert_eq!(callers, vec!["alpha", "beta"]);
+}
+
+#[test]
+fn er_view_includes_extracted_fields() {
+    let source = diff_outdent(
+        r#"
+      class Runner {
+        retries: number;
+        start() { this.prepare(); }
+        prepare() {}
+      }
+    "#,
+    );
+    let types_list = stackdiff::extract::extract_types("app.ts", &source).unwrap();
+    let mut types = std::collections::BTreeMap::new();
+    for info in types_list {
+        types.insert(info.name, info.fields);
+    }
+    let index = build_index(extract_functions("app.ts", &source).unwrap());
+    let tree = build_call_tree("Runner.start", &index, 12);
+    let diff = diff_trees(&tree, &tree);
+    let (mermaid, _) = stackdiff::views::class_mermaid(&[diff], &types).unwrap();
+    assert!(mermaid.contains("+retries number"), "{mermaid}");
 }
 
 #[test]

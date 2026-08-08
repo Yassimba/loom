@@ -3,6 +3,8 @@
 
 use tree_sitter::{Node, Tree};
 
+use crate::types::TypeInfo;
+
 use super::{arg_text, child_by_type, collapse_ws, consumed, doc_before, named_children, text};
 use crate::types::{line_of, CallMeta, CallStep, FunctionInfo};
 
@@ -95,7 +97,11 @@ impl<'s> Collector<'s> {
             return;
         }
         self.seen.insert(mark);
-        self.steps.push(CallStep::Call { key, meta });
+        self.steps.push(CallStep::Call {
+            key,
+            meta,
+            count: 1,
+        });
     }
 
     fn call_meta(&mut self, call: Node) -> CallMeta {
@@ -293,4 +299,48 @@ pub fn extract(file: &str, source: &str, tree: &Tree) -> Vec<FunctionInfo> {
         }
     }
     functions
+}
+
+/// Struct fields for the --er view.
+pub fn extract_types(source: &str, tree: &Tree) -> Vec<TypeInfo> {
+    let mut types = Vec::new();
+    for node in named_children(tree.root_node()) {
+        if node.kind() != "type_declaration" {
+            continue;
+        }
+        for spec in named_children(node) {
+            if spec.kind() != "type_spec" {
+                continue;
+            }
+            let (Some(name), Some(body)) = (
+                spec.child_by_field_name("name"),
+                spec.child_by_field_name("type"),
+            ) else {
+                continue;
+            };
+            if body.kind() != "struct_type" {
+                continue;
+            }
+            let mut fields = Vec::new();
+            for list in named_children(body) {
+                for field in named_children(list) {
+                    if field.kind() == "field_declaration" {
+                        let ty = field
+                            .child_by_field_name("type")
+                            .map(|t| collapse_ws(text(t, source)));
+                        for id in named_children(field) {
+                            if id.kind() == "field_identifier" {
+                                fields.push((text(id, source).to_string(), ty.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+            types.push(TypeInfo {
+                name: text(name, source).to_string(),
+                fields,
+            });
+        }
+    }
+    types
 }

@@ -94,7 +94,10 @@ fn type_of(key: &str) -> Option<String> {
 /// Build mermaid `classDiagram` source from the types reached by the trees:
 /// each type with its touched methods, edges where one type's method calls
 /// into another type.
-pub fn class_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
+pub fn class_mermaid(
+    roots: &[DiffNode],
+    types: &BTreeMap<String, Vec<(String, Option<String>)>>,
+) -> Option<(String, Marks)> {
     let mut methods: BTreeMap<String, BTreeMap<String, DiffStatus>> = BTreeMap::new();
     let mut edges: BTreeMap<(String, String), DiffStatus> = BTreeMap::new();
     for root in roots {
@@ -108,6 +111,12 @@ pub fn class_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
     let mut marks = Marks::new();
     for (type_name, type_methods) in &methods {
         lines.push(format!("class {type_name} {{"));
+        for (field, field_type) in types.get(type_name).into_iter().flatten() {
+            match field_type {
+                Some(ty) => lines.push(format!("  +{field} {ty}")),
+                None => lines.push(format!("  +{field}")),
+            }
+        }
         for (method, status) in type_methods {
             lines.push(format!("  +{method}()"));
             mark(&mut marks, &format!("{method}()"), *status);
@@ -213,4 +222,65 @@ pub fn render_colored(
         .collect::<Vec<_>>()
         .join("\n");
     Ok(out)
+}
+
+/// Module zoom: one node per file, an edge when a call crosses files,
+/// statuses aggregated (any added/removed/changed edge wins over same).
+pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
+    fn file_of(node: &DiffNode) -> Option<String> {
+        node.location.as_deref().map(|location| {
+            let path = location
+                .rsplit_once(':')
+                .map(|(p, _)| p)
+                .unwrap_or(location);
+            path.rsplit('/').next().unwrap_or(path).to_string()
+        })
+    }
+    fn collect(
+        node: &DiffNode,
+        from: Option<&String>,
+        edges: &mut BTreeMap<(String, String), DiffStatus>,
+    ) {
+        let own = file_of(node).or_else(|| from.cloned());
+        if let (Some(from_file), Some(to_file)) = (from, file_of(node).as_ref()) {
+            if from_file != to_file {
+                let slot = edges
+                    .entry((from_file.clone(), to_file.clone()))
+                    .or_insert(node.status);
+                if *slot == DiffStatus::Same {
+                    *slot = node.status;
+                }
+            }
+        }
+        for child in &node.children {
+            collect(child, own.as_ref(), edges);
+        }
+    }
+    let mut edges = BTreeMap::new();
+    for root in roots {
+        collect(root, None, &mut edges);
+    }
+    if edges.is_empty() {
+        return None;
+    }
+    let mut lines = vec!["flowchart LR".to_string()];
+    let mut marks = Marks::new();
+    let mut ids: BTreeMap<&String, usize> = BTreeMap::new();
+    for (from, to) in edges.keys() {
+        let next = ids.len();
+        ids.entry(from).or_insert(next);
+        let next = ids.len();
+        ids.entry(to).or_insert(next);
+    }
+    for (file, id) in &ids {
+        lines.push(format!("n{id}[{file}]"));
+    }
+    for ((from, to), status) in &edges {
+        lines.push(format!("n{} --> n{}", ids[from], ids[to]));
+        if *status != DiffStatus::Same {
+            mark(&mut marks, from, *status);
+            mark(&mut marks, to, *status);
+        }
+    }
+    Some((lines.join("\n"), marks))
 }

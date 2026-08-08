@@ -48,6 +48,8 @@ pub enum CallStep {
     Call {
         key: String,
         meta: CallMeta,
+        /// Consecutive identical call sites collapsed (`×N` in labels).
+        count: usize,
     },
     Branch {
         key: String,
@@ -61,6 +63,7 @@ impl CallStep {
         CallStep::Call {
             key: key.into(),
             meta: CallMeta::default(),
+            count: 1,
         }
     }
 }
@@ -107,6 +110,13 @@ pub struct FunctionInfo {
     /// Ordered body steps (calls + if/else branches)
     pub steps: Vec<CallStep>,
     pub exported: bool,
+}
+
+/// A type definition, for the --er view: name plus declared fields.
+#[derive(Debug, Clone)]
+pub struct TypeInfo {
+    pub name: String,
+    pub fields: Vec<(String, Option<String>)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
