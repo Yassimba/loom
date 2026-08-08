@@ -1,6 +1,6 @@
 ---
 name: setup-project
-description: Configure this repo for the engineering skills — issue tracker, domain doc layout, ai-docs gitignore. Run once per repo before first use of the other engineering skills.
+description: Configure this repo for the engineering skills — issue tracker, domain doc layout, editor deep links, ai-docs gitignore. Run once per repo before first use of the other engineering skills.
 disable-model-invocation: true
 ---
 
@@ -10,6 +10,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 
 - **Issue tracker** — where issues live (GitHub by default; local markdown is also supported out of the box)
 - **Domain docs** — where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
+- **Editor** — which editor deep links open in (skills like `lineage-diff` emit clickable `file:line` links)
 
 ## Process
 
@@ -24,6 +25,7 @@ Look at the current repo to understand its starting state. Read what's actually 
 - `ai-docs/agents/` — does this skill's prior output already exist?
 - `.gitignore` — is `ai-docs/` already ignored?
 - `ai-docs/plans/` — sign that a local-markdown issue tracker convention is already in use
+- An `### Editor` entry in the existing `## Agent skills` block — is the editor already configured?
 
 ### 2. Present findings and ask
 
@@ -50,6 +52,18 @@ Confirm the layout:
 
 - **Single-context** — one `CONTEXT.md` + `ai-docs/adr/` at the repo root. Most repos are this.
 - **Multi-context** — `CONTEXT-MAP.md` at the root pointing to per-context `CONTEXT.md` files (typically a monorepo).
+
+**Section C — Editor.**
+
+> Explainer: Some skills (`lineage-diff`, and any that render clickable source links) emit deep links that open a file at a line in your editor. They need to know which URL scheme your editor answers to. Pick the editor you actually read code in.
+
+- **VS Code** — `vscode://file/{path}:{line}`
+- **Zed** — `zed://file/{path}:{line}`
+- **Cursor** — `cursor://file/{path}:{line}`
+- **JetBrains** (IntelliJ/PyCharm via Toolbox) — `idea://open?file={path}&line={line}`
+- **None** — skip deep links; skills render plain `path:line` text instead
+
+For anything else, ask for the editor's URL template with `{path}` and `{line}` placeholders and record it verbatim. `{path}` is always absolute.
 
 ### 3. Confirm and edit
 
@@ -82,6 +96,10 @@ The block:
 ### Domain docs
 
 [one-line summary of layout — "single-context" or "multi-context"]. See `ai-docs/agents/domain.md`.
+
+### Editor
+
+[editor name] — deep links use `[template with {path} and {line}]`.
 ```
 
 Then write the two docs files using the seed templates in this skill folder as a starting point:
