@@ -17,7 +17,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.19.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.9.1", tag_regex = "^loom-v" }
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.10.0", tag_regex = "^loom-v" }
 # core:end
 
 # agents & multiplexer
@@ -29,7 +29,7 @@ herdr = { version = "0.8.0", os = ["macos", "linux"] }
 # this repo's own extras. Component-scoped release tags, so the pin is the
 # full tag; release automation rewrites these lines (plan-releases.mjs) and
 # the mise-bump workflow restores them if `mise upgrade` moves them.
-"github:Yassimba/loom[exe=stackdiff]" = { version = "stackdiff-v0.1.0", tag_regex = "^stackdiff-v" }
+"github:Yassimba/loom[exe=stackdiff]" = { version = "stackdiff-v0.2.0", tag_regex = "^stackdiff-v" }
 
 # forges
 gh = "2.97.0"
