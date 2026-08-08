@@ -117,12 +117,14 @@ pub fn doc_before(node: Node, source: &str) -> Option<String> {
 
 /// Collapse a call-site argument to a short display text.
 pub fn arg_text(node: Node, source: &str) -> String {
-    let mut collapsed = collapse_ws(text(node, source));
-    if collapsed.len() > 24 {
-        collapsed.truncate(21);
-        collapsed.push('…');
+    let collapsed = collapse_ws(text(node, source));
+    if collapsed.chars().count() > 24 {
+        let mut short: String = collapsed.chars().take(21).collect();
+        short.push('…');
+        short
+    } else {
+        collapsed
     }
-    collapsed
 }
 
 /// Which known bindings an argument list consumes.
