@@ -10,7 +10,7 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
-The issue tracker should have been provided to you — run `/setup-project` if `ai-docs/agents/issue-tracker.md` is missing.
+The issue tracker should have been provided to you. If `ai-docs/agents/issue-tracker.md` is missing: with `br` installed, treat Beads as the tracker by default (workflows: [`issue-tracker-beads.md`](../setup-project/issue-tracker-beads.md)) and suggest `/setup-project` to record the choice; otherwise run `/setup-project`.
 
 ## Process
 

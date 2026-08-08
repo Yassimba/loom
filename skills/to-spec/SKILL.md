@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
-The issue tracker configuration should have been provided to you — run `/setup-project` if not.
+The issue tracker configuration should have been provided to you. If it is missing: with `br` installed, treat Beads as the tracker by default (workflows: [`issue-tracker-beads.md`](../setup-project/issue-tracker-beads.md)) and suggest `/setup-project` to record the choice; otherwise run `/setup-project`.
 
 ## Process
 
