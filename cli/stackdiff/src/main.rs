@@ -17,7 +17,9 @@ use stackdiff::infer::{diff_entry, infer_entries};
 use stackdiff::noise::{report as noise_report, scrub_index, NoiseFilter};
 use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
-use stackdiff::views::{class_mermaid, module_mermaid, render_colored, sequence_mermaid};
+use stackdiff::views::{
+    class_mermaid, lineage_mermaid, module_mermaid, render_colored, sequence_mermaid,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum ColorChoice {
@@ -44,6 +46,9 @@ enum View {
     Er,
     /// One node per file, cross-file call arrows
     Modules,
+    /// Call DAG at data granularity: each function drawn once, fan-in
+    /// visible, data objects as stadium nodes, bindings on the edges
+    Lineage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -240,6 +245,7 @@ impl Cli {
         self.tests |= defaults.tests;
         if self.view.is_none() && !self.boxes && !self.seq && !self.er && !self.modules {
             self.view = match defaults.view.as_deref() {
+                Some("lineage") => Some(View::Lineage),
                 Some("boxes") => Some(View::Boxes),
                 Some("seq") => Some(View::Seq),
                 Some("er") => Some(View::Er),
@@ -380,6 +386,19 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
                 Err(error) => eprintln!("--seq failed for {}: {error}", tree.key),
             }
             stat_line(cli, tree);
+        }
+        return;
+    }
+    if cli.the_view() == View::Lineage {
+        println!("{header}\n");
+        match lineage_mermaid(trees) {
+            Some((source, marks)) => {
+                match render_colored(&source, &marks, options.color, term_width()) {
+                    Ok(diagram) => println!("{diagram}"),
+                    Err(error) => eprintln!("--view lineage failed: {error}"),
+                }
+            }
+            None => println!("No resolved calls in these graphs — nothing to draw."),
         }
         return;
     }

@@ -284,3 +284,111 @@ pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
     }
     Some((lines.join("\n"), marks))
 }
+
+/// Lineage view: the call DAG at data granularity. One node per function
+/// (drawn once — convergence is visible as fan-in), data constructors as
+/// stadium nodes, edges labeled with the binding the result lands in.
+/// Branches flatten away; unresolved plumbing drops out entirely.
+pub fn lineage_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
+    #[derive(Default)]
+    struct Graph {
+        nodes: BTreeMap<String, (String, DiffStatus, bool)>,
+        edges: BTreeMap<(String, String), (Option<String>, DiffStatus)>,
+    }
+
+    fn is_data(node: &DiffNode) -> bool {
+        node.location.is_none()
+            && node
+                .key
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
+    }
+
+    fn keep(node: &DiffNode) -> bool {
+        node.location.is_some() || is_data(node)
+    }
+
+    fn merge_status(slot: &mut DiffStatus, status: DiffStatus) {
+        if *slot == DiffStatus::Same {
+            *slot = status;
+        }
+    }
+
+    fn label_of(node: &DiffNode) -> String {
+        let name = node.key.clone();
+        match &node.returns {
+            Some(ret) => clip(&format!("{name} → {ret}"), 44),
+            None => clip(&name, 44),
+        }
+    }
+
+    fn walk(node: &DiffNode, ancestor: Option<&str>, graph: &mut Graph) {
+        let own: Option<String> = if keep(node) {
+            let data = is_data(node);
+            let entry = graph
+                .nodes
+                .entry(node.key.clone())
+                .or_insert_with(|| (label_of(node), node.status, data));
+            merge_status(&mut entry.1, node.status);
+            if let Some(from) = ancestor {
+                if from != node.key {
+                    let edge = graph
+                        .edges
+                        .entry((from.to_string(), node.key.clone()))
+                        .or_insert_with(|| (node.meta.binding.clone(), node.status));
+                    merge_status(&mut edge.1, node.status);
+                }
+            }
+            Some(node.key.clone())
+        } else {
+            None
+        };
+        let next = own.as_deref().or(ancestor);
+        for child in &node.children {
+            if child.key == "…" || child.key == "▸" {
+                continue;
+            }
+            walk(child, next, graph);
+        }
+    }
+
+    let mut graph = Graph::default();
+    for root in roots {
+        walk(root, None, &mut graph);
+    }
+    if graph.edges.is_empty() {
+        return None;
+    }
+
+    let mut ids: BTreeMap<&String, usize> = BTreeMap::new();
+    for key in graph.nodes.keys() {
+        let next = ids.len();
+        ids.insert(key, next);
+    }
+    let mut lines = vec!["flowchart LR".to_string()];
+    let mut marks = Marks::new();
+    for (key, (label, status, data)) in &graph.nodes {
+        let id = ids[key];
+        if *data {
+            lines.push(format!("n{id}([{label}])"));
+        } else {
+            lines.push(format!("n{id}[{label}]"));
+        }
+        mark(&mut marks, label, *status);
+    }
+    for ((from, to), (binding, status)) in &graph.edges {
+        let (Some(from_id), Some(to_id)) = (ids.get(from), ids.get(to)) else {
+            continue;
+        };
+        match binding {
+            Some(binding) => {
+                lines.push(format!("n{from_id} -->|{binding}| n{to_id}"));
+                mark(&mut marks, binding, *status);
+            }
+            None => lines.push(format!("n{from_id} --> n{to_id}")),
+        }
+    }
+    Some((lines.join("\n"), marks))
+}
