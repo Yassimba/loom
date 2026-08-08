@@ -11,17 +11,7 @@
       "scripts/**",
       "test/**",
       "*.json",
-      "!plugins/herdr-reviewr",
-      "!plugins/herdr-project-switcher",
       "!plugins/herdr-jumplist",
-      "!plugins/pi-subagents",
-      "!plugins/mindwalk/.github",
-      "!plugins/mindwalk/assets",
-      "!plugins/mindwalk/cmd",
-      "!plugins/mindwalk/internal",
-      "!plugins/mindwalk/schema",
-      "!plugins/mindwalk/testdata",
-      "!plugins/mindwalk/web",
       "!**/*.generated.*"
     ]
   },

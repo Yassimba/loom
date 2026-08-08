@@ -8,16 +8,12 @@ Everything a coding-agent setup needs, in one repo you can install from: 50+ ski
 
 **Herdr plugins** — plugins for [Herdr](https://herdr.dev), a terminal multiplexer for coding agents. They ship as prebuilt, checksum-verified binaries, so you don't need Rust installed:
 
-- [**reviewr**](plugins/herdr-reviewr/) - Work together with your AI to review code: read its diff, comment on lines, send the comments back with one key. It also reviews GitHub PRs and GitLab MRs (checks, threads, grouped replies) without leaving the pane.
-- [**project-switcher**](plugins/herdr-project-switcher/) — fuzzy project picker with a git-aware file tree and README preview.
 - [**jumplist**](plugins/herdr-jumplist/) — jump back and forward through the panes you've focused, like editor navigation history.
 
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
 - [**openai-fast**](plugins/openai-fast/) — turn on OpenAI fast mode (the priority service tier) from inside Pi.
 - [**herdr-worktree**](plugins/herdr-worktree/) — continue the current session in a fresh Herdr-managed git worktree.
-- [**mindwalk**](plugins/mindwalk/) — run `/mindwalk` to replay the current session as light moving through a 3D map of the codebase.
-- [**subagents**](plugins/pi-subagents/) — delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run.
 - [**rewind**](plugins/rewind/) — records file checkpoints as you work; branch to an earlier message and it restores your files to match.
 - [**web-access**](plugins/web-access/) — `web_search` and `fetch_content` tools for pages, PDFs, and GitHub repos.
 
@@ -106,10 +102,8 @@ Each Pi package installs on its own:
 
 ```bash
 pi install npm:@yassimba/pi-herdr-worktree
-pi install npm:@yassimba/pi-mindwalk
 pi install npm:@yassimba/pi-openai-fast
 pi install npm:@yassimba/pi-rewind
-pi install npm:@yassimba/pi-subagents
 pi install npm:@yassimba/pi-web-access
 ```
 
@@ -121,8 +115,6 @@ Install any Herdr plugin straight from its folder in this repo:
 
 ```bash
 herdr plugin install Yassimba/ai-setup/plugins/herdr-jumplist --yes
-herdr plugin install Yassimba/ai-setup/plugins/herdr-project-switcher --yes
-herdr plugin install Yassimba/ai-setup/plugins/herdr-reviewr --yes
 ```
 
 Compiled plugins download checksum-verified binaries for macOS, Linux, or Windows from this repo's GitHub releases. No Rust needed.
@@ -168,10 +160,8 @@ For local Pi extension development, use `scripts/sync-pi-extensions.sh status` a
 This repo builds on other people's work:
 
 - Several of the coding skills are adapted from [Matt Pocock's skills](https://github.com/mattpocock/skills), and the [research](skills/research/SKILL.md) skill is his, copied verbatim.
-- [reviewr](plugins/herdr-reviewr/) began as a fork of [persiyanov/herdr-reviewr](https://github.com/persiyanov/herdr-reviewr) (MIT). It has diverged since — GitLab MRs, Windows builds, remote diff review — but the review pane at its heart is his design.
-- [subagents](plugins/pi-subagents/) is a vendored fork of [nicobailon/pi-subagents](https://github.com/nicobailon/pi-subagents) (MIT); [web-access](plugins/web-access/) and [rewind](plugins/rewind/) are reviewed distributions of his [pi-web-access](https://github.com/nicobailon/pi-web-access) and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook).
-- [mindwalk](plugins/mindwalk/) is vendored from [cosmtrek/mindwalk](https://github.com/cosmtrek/mindwalk) (MIT), created by Ricko Yu. Pi session support began with [ZacharyQin's upstream PR](https://github.com/cosmtrek/mindwalk/pull/4).
-- [ask-user](plugins/ask-user/) and [claude-bridge](plugins/claude-bridge/) are reviewed distributions of [edlsh/pi-ask-user](https://github.com/edlsh/pi-ask-user) and [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge).
+- [web-access](plugins/web-access/) and [rewind](plugins/rewind/) are reviewed distributions of [nicobailon](https://github.com/nicobailon)'s [pi-web-access](https://github.com/nicobailon/pi-web-access) and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook).
+- [claude-bridge](plugins/claude-bridge/) is a reviewed distribution of [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge).
 
 Each package's README and `THIRD_PARTY_NOTICES.md` record the exact upstream version. Thanks, all.
 

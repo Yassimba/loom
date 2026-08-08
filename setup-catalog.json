@@ -2,15 +2,6 @@
   "schemaVersion": 1,
   "resources": [
     {
-      "id": "pi-package:@yassimba/pi-ask-user",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "Ask User",
-      "description": "Interactive ask_user tool with searchable selection UI, multi-select, and freeform input",
-      "installTarget": "@yassimba/pi-ask-user",
-      "nextAction": "Start Pi and use the installed package."
-    },
-    {
       "id": "pi-package:@yassimba/pi-claude-bridge",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -29,15 +20,6 @@
       "nextAction": "Start Pi and use the installed package."
     },
     {
-      "id": "pi-package:@yassimba/pi-mindwalk",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "Mindwalk",
-      "description": "Replay the current Pi session on a 3D map of the codebase",
-      "installTarget": "@yassimba/pi-mindwalk",
-      "nextAction": "Run /mindwalk in Pi to open the current session replay."
-    },
-    {
       "id": "pi-package:@yassimba/pi-openai-fast",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -47,30 +29,12 @@
       "nextAction": "Start Pi and use the installed package."
     },
     {
-      "id": "pi-package:@yassimba/pi-reviewr-collab",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "Reviewr Collaboration",
-      "description": "Connect Pi to reviewr for review context, agent following, and local draft staging",
-      "installTarget": "@yassimba/pi-reviewr-collab",
-      "nextAction": "Start Pi and use the installed package."
-    },
-    {
       "id": "pi-package:@yassimba/pi-rewind",
       "kind": "pi-package",
       "group": "Pi packages",
       "label": "Rewind",
       "description": "File checkpoints for Pi's conversation tree: branch to an earlier message and restore files to match",
       "installTarget": "@yassimba/pi-rewind",
-      "nextAction": "Start Pi and use the installed package."
-    },
-    {
-      "id": "pi-package:@yassimba/pi-subagents",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "Subagents",
-      "description": "Delegate work to focused child agents: chains, parallel fan-out, saved workflows, TUI clarification",
-      "installTarget": "@yassimba/pi-subagents",
       "nextAction": "Start Pi and use the installed package."
     },
     {
@@ -619,24 +583,6 @@
       "label": "Pane Jumplist",
       "description": "Back/forward through pane focus history, VS Code style",
       "installTarget": "Yassimba/ai-setup/plugins/herdr-jumplist",
-      "nextAction": "Run `herdr plugin list` to see the installed plugin."
-    },
-    {
-      "id": "herdr-plugin:yassin.project-switcher",
-      "kind": "herdr-plugin",
-      "group": "Herdr plugins",
-      "label": "Project Switcher",
-      "description": "Portable fuzzy project picker that changes the focused pane's directory",
-      "installTarget": "Yassimba/ai-setup/plugins/herdr-project-switcher",
-      "nextAction": "Run `herdr plugin list` to see the installed plugin."
-    },
-    {
-      "id": "herdr-plugin:yassimba.reviewr",
-      "kind": "herdr-plugin",
-      "group": "Herdr plugins",
-      "label": "reviewr",
-      "description": "Terminal code-review sidebar for herdr: GitHub PRs and GitLab MRs.",
-      "installTarget": "Yassimba/ai-setup/plugins/herdr-reviewr",
       "nextAction": "Run `herdr plugin list` to see the installed plugin."
     }
   ]

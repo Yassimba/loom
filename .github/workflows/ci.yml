@@ -43,13 +43,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: plugins/mindwalk/go.mod
-          cache: false
       - run: npm ci
-      - run: go test ./...
-        working-directory: plugins/mindwalk
       - run: npm run check:js
       - run: bash -n install.sh
 
