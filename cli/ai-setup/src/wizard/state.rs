@@ -626,6 +626,8 @@ impl Wizard {
                 KeyCode::Down | KeyCode::Char('j') => {
                     stage.cursor = (stage.cursor + 1).min(stage.rows.len() - 1);
                 }
+                KeyCode::Char('g') => stage.cursor = 0,
+                KeyCode::Char('G') => stage.cursor = stage.rows.len() - 1,
                 KeyCode::Char(' ') => {
                     let row = stage.rows[stage.cursor];
                     self.toggle_pick_row(row);
@@ -642,6 +644,8 @@ impl Wizard {
                 KeyCode::Down | KeyCode::Char('j') => {
                     stage.cursor = (stage.cursor + 1).min(stage.items.len() - 1);
                 }
+                KeyCode::Char('g') => stage.cursor = 0,
+                KeyCode::Char('G') => stage.cursor = stage.items.len() - 1,
                 KeyCode::Char(' ') => {
                     let index = stage.items[stage.cursor];
                     if !self.model.installed[index] {
@@ -658,14 +662,25 @@ impl Wizard {
                 _ => {}
             },
             Stage::Skills(stage) => {
-                let category = &stage.categories[stage.category_cursor];
+                // The yazi ladder: h/l climb one continuous rail —
+                // [previous stage] ← categories ⇄ skills → [next stage] —
+                // and j/k in the skills pane flow across category borders.
+                let category_items = stage.categories[stage.category_cursor].items.clone();
                 match key.code {
                     KeyCode::Up | KeyCode::Char('k') => match stage.focus {
                         Focus::Categories => {
                             stage.category_cursor = stage.category_cursor.saturating_sub(1);
                             stage.skill_cursor = 0;
                         }
-                        Focus::Skills => stage.skill_cursor = stage.skill_cursor.saturating_sub(1),
+                        Focus::Skills => {
+                            if stage.skill_cursor > 0 {
+                                stage.skill_cursor -= 1;
+                            } else if stage.category_cursor > 0 {
+                                stage.category_cursor -= 1;
+                                stage.skill_cursor =
+                                    stage.categories[stage.category_cursor].items.len() - 1;
+                            }
+                        }
                     },
                     KeyCode::Down | KeyCode::Char('j') => match stage.focus {
                         Focus::Categories => {
@@ -674,23 +689,41 @@ impl Wizard {
                             stage.skill_cursor = 0;
                         }
                         Focus::Skills => {
-                            stage.skill_cursor =
-                                (stage.skill_cursor + 1).min(category.items.len() - 1);
+                            if stage.skill_cursor + 1 < category_items.len() {
+                                stage.skill_cursor += 1;
+                            } else if stage.category_cursor + 1 < stage.categories.len() {
+                                stage.category_cursor += 1;
+                                stage.skill_cursor = 0;
+                            }
                         }
+                    },
+                    KeyCode::Char('g') => match stage.focus {
+                        Focus::Categories => {
+                            stage.category_cursor = 0;
+                            stage.skill_cursor = 0;
+                        }
+                        Focus::Skills => stage.skill_cursor = 0,
+                    },
+                    KeyCode::Char('G') => match stage.focus {
+                        Focus::Categories => {
+                            stage.category_cursor = stage.categories.len() - 1;
+                            stage.skill_cursor = 0;
+                        }
+                        Focus::Skills => stage.skill_cursor = category_items.len() - 1,
                     },
                     KeyCode::Char(' ') => match stage.focus {
                         Focus::Categories => {
-                            toggle_group(&mut self.selected, &category.items, &self.model.installed)
+                            toggle_group(&mut self.selected, &category_items, &self.model.installed)
                         }
                         Focus::Skills => {
-                            let index = category.items[stage.skill_cursor];
+                            let index = category_items[stage.skill_cursor];
                             if !self.model.installed[index] {
                                 self.selected[index] = !self.selected[index];
                             }
                         }
                     },
                     KeyCode::Char('a') => {
-                        toggle_group(&mut self.selected, &category.items, &self.model.installed)
+                        toggle_group(&mut self.selected, &category_items, &self.model.installed)
                     }
                     KeyCode::Char('A') => {
                         let all = stage
@@ -706,7 +739,13 @@ impl Wizard {
                             Focus::Skills => Focus::Categories,
                         };
                     }
-                    KeyCode::Right | KeyCode::Char('l') => stage.focus = Focus::Skills,
+                    KeyCode::Right | KeyCode::Char('l') => {
+                        if stage.focus == Focus::Categories {
+                            stage.focus = Focus::Skills;
+                        } else {
+                            navigate = 1;
+                        }
+                    }
                     KeyCode::Left | KeyCode::Char('h') => {
                         if stage.focus == Focus::Skills {
                             stage.focus = Focus::Categories;
@@ -724,6 +763,16 @@ impl Wizard {
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     stage.cursor = next_setting_row(&stage.rows, stage.cursor);
+                }
+                KeyCode::Char('g') => stage.cursor = first_setting_row(&stage.rows),
+                KeyCode::Char('G') => {
+                    if let Some(last) = stage
+                        .rows
+                        .iter()
+                        .rposition(|row| matches!(row, SettingRow::Setting(_)))
+                    {
+                        stage.cursor = last;
+                    }
                 }
                 KeyCode::Char(' ') => {
                     if let SettingRow::Setting(index) = stage.rows[stage.cursor] {
