@@ -517,7 +517,7 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
         Some(Lineage::Graph(nodes, edges)) => {
             println!(
                 "{}",
-                stackdiff::dag::render_dag(&nodes, &edges, options.color)
+                stackdiff::dag::render_dag(&nodes, &edges, options.color, term_width())
             );
         }
         Some(Lineage::Overview(rows)) => {
@@ -574,7 +574,7 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
                     };
                     println!(
                         "{}",
-                        stackdiff::dag::render_dag(&nodes, &edges, options.color)
+                        stackdiff::dag::render_dag(&nodes, &edges, options.color, term_width())
                     );
                     if depth < cli.depth() {
                         println!(
