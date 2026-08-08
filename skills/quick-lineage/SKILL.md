@@ -5,7 +5,7 @@ description: Show a colored call graph in chat, fast — no files, no viewer, no
 
 # Quick Lineage
 
-One colored call graph in chat, grounded in `stackdiff` (AST-verified for TS/TSX, Python, Go) — the fast sibling of **lineage** and **blueprint**, for when the picture matters more than the ceremony.
+One colored call graph in chat, grounded in `stackdiff` (AST-verified for TS/TSX, Python, Go, Rust) — the fast sibling of **lineage** and **blueprint**, for when the picture matters more than the ceremony.
 
 ## 1. Read the branch from the conversation
 
@@ -23,15 +23,17 @@ Start at `--max-depth 2` and deepen only the limb the question lives in — full
 
 | Branch | Command |
 | --- | --- |
-| Discussed | `stackdiff --tree -e <entry> --max-depth 2` (add `<ref>` for a past world) |
-| Landed | `stackdiff <base> -e <entry> --max-depth 2` — working tree included; add `<tip>` for ref-to-ref |
+| Discussed | `stackdiff --tree -e <entry> --max-depth 2 --format markdown` (add `<ref>` for a past world) |
+| Landed | `stackdiff <base> -e <entry> --max-depth 2 --only-changes --format markdown` — working tree included; add `<tip>` for ref-to-ref |
 | Planned | the Discussed command for BEFORE rails, then hand-write `+`/`-` lines for the intended calls |
 
-Entry not found → `stackdiff --tree` lists the exported entrypoints; pick the nearest and say you did. Language outside TS/TSX/Python/Go → say stackdiff cannot parse it and trace by hand, marked as unverified.
+`--format markdown` emits the ```` ```diff ```` fence ready to paste; rich mode annotates each node with `binding = call(args) → return`, its doc line, and `path:line`. `--only-changes` trims unchanged limbs to `…` (widen with `--context N`). Add `--plain` only when the annotations drown a tiny graph.
+
+Entry not found → `stackdiff --tree` lists the exported entrypoints; pick the nearest and say you did. Language outside TS/TSX/Python/Go/Rust → say stackdiff cannot parse it and trace by hand, marked as unverified.
 
 ## 3. Show it colored
 
-Paste the output in a fenced ` ```diff ` block — the chat renders `+` green and `-` red; keep stackdiff's two-space status column so rails align. Trim rails far from the delta to one `  …` line. For **Planned**, projected lines are the design's promise, not source facts — say so above the block.
+Paste the markdown output as-is — the ```` ```diff ```` fence renders `+` green and `-` red, and the two-space status column keeps rails aligned. For **Planned**, projected lines are the design's promise, not source facts — say so above the block.
 
 Under the block, one takeaway sentence: what the graph shows about the question that prompted it.
 
