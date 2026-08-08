@@ -7,7 +7,8 @@ set -euo pipefail
 : "${GH_TOKEN:?GH_TOKEN is required}"
 
 if existing_sha="$(git rev-list -n 1 "$TAG" 2>/dev/null)"; then
-  if [[ "$existing_sha" != "$RELEASE_SHA" ]]; then
+  if [[ "$existing_sha" != "$RELEASE_SHA" ]] \
+    && ! git merge-base --is-ancestor "$RELEASE_SHA" "$existing_sha"; then
     echo "release tag $TAG points to $existing_sha, expected $RELEASE_SHA" >&2
     exit 1
   fi

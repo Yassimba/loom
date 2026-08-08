@@ -57,6 +57,7 @@ test("npm publishing treats component paths as local directories", async () => {
 
 test("manual publishing reruns target the commit that created the release plan", async () => {
   const workflow = await readFile(".github/workflows/publish-pi-package.yml", "utf8");
+  const ensureRelease = await readFile("scripts/ensure-github-release.sh", "utf8");
 
   assert.match(workflow, /release_sha=\$\(git log -1 --format=%H -- \.release-plan\.json\)/);
   assert.doesNotMatch(workflow, /^\s+GITHUB_SHA:/m);
@@ -69,6 +70,7 @@ test("manual publishing reruns target the commit that created the release plan",
     3,
   );
   assert.equal(workflow.match(/ref: \$\{\{ needs\.resolve\.outputs\.release_sha \}\}/g)?.length, 4);
+  assert.match(ensureRelease, /git merge-base --is-ancestor "\$RELEASE_SHA" "\$existing_sha"/);
 });
 
 test("release continuation targets the repository without requiring a checkout", async () => {
