@@ -2,15 +2,57 @@
   "schema": 1,
   "releases": [
     {
+      "id": "herdr-worktree",
+      "version": "1.0.0",
+      "tag": "herdr-worktree-v1.0.0",
+      "bump": "major",
+      "distribution": "npm",
+      "commits": [
+        {
+          "hash": "fb011ce4430a328e1a3b015a567b8c13fcf4aa9f",
+          "subject": "refactor!: rename agent setup to Loom"
+        }
+      ]
+    },
+    {
       "id": "loom",
-      "version": "0.6.2",
-      "tag": "loom-v0.6.2",
-      "bump": "patch",
+      "version": "0.7.0",
+      "tag": "loom-v0.7.0",
+      "bump": "minor",
       "distribution": "rust-binary",
       "commits": [
         {
-          "hash": "cb9c0041f8d322476668d2aadf78687eeea786a6",
-          "subject": "chore: reset public history"
+          "hash": "e10c5302e060bf4750ef7e765d5815a35aa6fd99",
+          "subject": "feat(skills): setup-project becomes model-invoked with real bounds"
+        },
+        {
+          "hash": "83af3b30cb2a0c8b4438570c781c9c7c9fc4cb90",
+          "subject": "feat(skills): setup-project learns Beads and the init contract"
+        },
+        {
+          "hash": "0da1b2eee4cd644ca28f90fbabfe969565eecd07",
+          "subject": "chore(catalog): format skills listing"
+        },
+        {
+          "hash": "66aa5379447525e9adec931c3c3d17f092d02451",
+          "subject": "chore(skills): sync code-review to upstream skills-poc"
+        },
+        {
+          "hash": "6e07e9f1ef5190d5e1f30d0ca16e79b268b8790a",
+          "subject": "feat(skills): adopt writing-for-agents from skills-poc"
+        }
+      ]
+    },
+    {
+      "id": "openai-fast",
+      "version": "1.0.0",
+      "tag": "openai-fast-v1.0.0",
+      "bump": "major",
+      "distribution": "npm",
+      "commits": [
+        {
+          "hash": "fb011ce4430a328e1a3b015a567b8c13fcf4aa9f",
+          "subject": "refactor!: rename agent setup to Loom"
         }
       ]
     }
