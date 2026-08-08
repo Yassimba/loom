@@ -206,6 +206,12 @@ pub struct Wizard {
     pub(crate) search: Option<String>,
     pub(crate) search_cursor: usize,
     pub(crate) show_help: bool,
+    /// True while the installed-state probe still runs in the background.
+    pub(crate) probing: bool,
+    /// Quit confirmation pending (a non-empty selection would be discarded).
+    pub(crate) confirm_quit: bool,
+    /// The last vertical direction moved; space auto-advances the same way.
+    last_dir: i8,
     /// Selection snapshots (resources, settings) for `u`; capped.
     undo_stack: Vec<(Vec<bool>, Vec<bool>)>,
 }
@@ -307,6 +313,9 @@ impl Wizard {
             search: None,
             search_cursor: 0,
             show_help: false,
+            probing: false,
+            confirm_quit: false,
+            last_dir: 1,
             undo_stack: Vec::new(),
         }
     }
@@ -643,16 +652,51 @@ impl Wizard {
             self.show_help = false;
             return None;
         }
+        if self.confirm_quit && !is_ctrl_c {
+            // Enter/y/q confirm the discard; anything else stays.
+            self.confirm_quit = false;
+            if matches!(
+                key.code,
+                KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('q')
+            ) {
+                return Some(Action::Exit(WizardOutcome::Cancelled));
+            }
+            return None;
+        }
         if self.search.is_some() && !is_ctrl_c {
             return self.handle_search_key(key.code);
         }
-        if is_ctrl_c || matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
+        if is_ctrl_c {
             if let Stage::Install(stage) = &self.stages[self.stage_index] {
                 if let Some(report) = &stage.report {
                     return Some(Action::Exit(WizardOutcome::Installed(report.clone())));
                 }
             }
             return Some(Action::Exit(WizardOutcome::Cancelled));
+        }
+        if matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
+            if let Stage::Install(stage) = &self.stages[self.stage_index] {
+                if let Some(report) = &stage.report {
+                    return Some(Action::Exit(WizardOutcome::Installed(report.clone())));
+                }
+            }
+            // Esc steps back first; on the first stage it means leaving.
+            if key.code == KeyCode::Esc && self.stage_index > 0 {
+                self.go_back();
+                return None;
+            }
+            // Quitting with picks pending asks; an empty hand just leaves.
+            if self.total_selected() > 0 {
+                self.confirm_quit = true;
+                return None;
+            }
+            return Some(Action::Exit(WizardOutcome::Cancelled));
+        }
+        // Remember the travel direction so space advances the way you move.
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') | KeyCode::Char('G') => self.last_dir = -1,
+            KeyCode::Down | KeyCode::Char('j') | KeyCode::Char('g') => self.last_dir = 1,
+            _ => {}
         }
         if key.code == KeyCode::Enter {
             return self.handle_enter();
@@ -721,8 +765,12 @@ impl Wizard {
                     if !self.model.installed[index] {
                         self.selected[index] = !self.selected[index];
                     }
-                    // Auto-advance: rapid picking is space-space-space.
-                    stage.cursor = (stage.cursor + 1).min(stage.items.len() - 1);
+                    // Auto-advance the way the cursor was travelling.
+                    stage.cursor = if self.last_dir >= 0 {
+                        (stage.cursor + 1).min(stage.items.len() - 1)
+                    } else {
+                        stage.cursor.saturating_sub(1)
+                    };
                 }
                 KeyCode::Char('a') => {
                     toggle_group(&mut self.selected, &stage.items, &self.model.installed);
@@ -792,12 +840,21 @@ impl Wizard {
                             if !self.model.installed[index] {
                                 self.selected[index] = !self.selected[index];
                             }
-                            // Auto-advance with the same cross-category flow as j.
-                            if stage.skill_cursor + 1 < category_items.len() {
-                                stage.skill_cursor += 1;
-                            } else if stage.category_cursor + 1 < stage.categories.len() {
-                                stage.category_cursor += 1;
-                                stage.skill_cursor = 0;
+                            // Auto-advance with the cross-category flow, in
+                            // the direction the cursor was travelling.
+                            if self.last_dir >= 0 {
+                                if stage.skill_cursor + 1 < category_items.len() {
+                                    stage.skill_cursor += 1;
+                                } else if stage.category_cursor + 1 < stage.categories.len() {
+                                    stage.category_cursor += 1;
+                                    stage.skill_cursor = 0;
+                                }
+                            } else if stage.skill_cursor > 0 {
+                                stage.skill_cursor -= 1;
+                            } else if stage.category_cursor > 0 {
+                                stage.category_cursor -= 1;
+                                stage.skill_cursor =
+                                    stage.categories[stage.category_cursor].items.len() - 1;
                             }
                         }
                     },
@@ -860,7 +917,11 @@ impl Wizard {
                             self.setting_touched[index] = true;
                         }
                     }
-                    stage.cursor = next_setting_row(&stage.rows, stage.cursor);
+                    stage.cursor = if self.last_dir >= 0 {
+                        next_setting_row(&stage.rows, stage.cursor)
+                    } else {
+                        previous_setting_row(&stage.rows, stage.cursor)
+                    };
                 }
                 KeyCode::Char('a') => {
                     let actionable = (0..self.model.settings.len())
@@ -1013,6 +1074,20 @@ impl Wizard {
         }
     }
 
+    /// The background probe finished: adopt the real installed marks and
+    /// drop any picks the probe proved redundant.
+    pub fn set_installed(&mut self, installed: Vec<bool>) {
+        if installed.len() == self.model.installed.len() {
+            self.model.installed = installed;
+            for (index, present) in self.model.installed.iter().enumerate() {
+                if *present {
+                    self.selected[index] = false;
+                }
+            }
+        }
+        self.probing = false;
+    }
+
     // ---- search ------------------------------------------------------------
 
     /// The current stage's resource indices that match the live query, in
@@ -1059,8 +1134,12 @@ impl Wizard {
                 }
                 self.search_cursor = 0;
             }
-            KeyCode::Up => self.search_cursor = self.search_cursor.saturating_sub(1),
+            KeyCode::Up => {
+                self.last_dir = -1;
+                self.search_cursor = self.search_cursor.saturating_sub(1);
+            }
             KeyCode::Down => {
+                self.last_dir = 1;
                 let len = self.search_matches().len();
                 if len > 0 {
                     self.search_cursor = (self.search_cursor + 1).min(len - 1);
@@ -1073,8 +1152,12 @@ impl Wizard {
                         self.push_undo();
                         self.selected[index] = !self.selected[index];
                     }
-                    // Auto-advance to keep rapid picking flowing.
-                    self.search_cursor = (self.search_cursor + 1).min(matches.len() - 1);
+                    // Auto-advance the way the cursor was travelling.
+                    self.search_cursor = if self.last_dir >= 0 {
+                        (self.search_cursor + 1).min(matches.len() - 1)
+                    } else {
+                        self.search_cursor.saturating_sub(1)
+                    };
                 }
             }
             KeyCode::Char(c) => {

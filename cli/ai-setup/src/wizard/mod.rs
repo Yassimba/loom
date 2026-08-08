@@ -28,6 +28,7 @@ pub fn run_wizard(model: Model, system: &(dyn System + Sync)) -> Result<WizardOu
         "interactive setup needs a terminal; use --skill, --pi-package, or --herdr-plugin instead"
     );
     let mut wizard = Wizard::new(model);
+    wizard.probing = true;
     let mut terminal = ratatui::init();
     let _ = execute!(std::io::stdout(), EnableMouseCapture);
     let outcome = run_loop(&mut terminal, &mut wizard, system);
@@ -42,41 +43,56 @@ fn run_loop(
     system: &(dyn System + Sync),
 ) -> Result<WizardOutcome> {
     let (sender, receiver) = mpsc::channel();
-    std::thread::scope(|scope| loop {
-        while let Ok(install_event) = receiver.try_recv() {
-            wizard.handle_install_event(install_event);
+    let (probe_sender, probe_receiver) = mpsc::channel();
+    std::thread::scope(|scope| {
+        // Probe installed state in the background so the first frame is
+        // instant; marks fill in when the managers have answered.
+        {
+            let resources = wizard.model.resources.clone();
+            let status = wizard.model.status;
+            scope.spawn(move || {
+                let _ = probe_sender.send(crate::app::detect_installed(&resources, status, system));
+            });
         }
-        terminal.draw(|frame| wizard.draw(frame))?;
-        if !event::poll(Duration::from_millis(120))? {
-            wizard.tick();
-            continue;
-        }
-        let action = match event::read()? {
-            Event::Key(key) => wizard.handle_key(key),
-            Event::Mouse(mouse) => match mouse.kind {
-                MouseEventKind::Down(MouseButton::Left) => {
-                    wizard.handle_click(mouse.column, mouse.row)
-                }
-                MouseEventKind::ScrollDown => {
-                    wizard.handle_scroll(true);
-                    None
-                }
-                MouseEventKind::ScrollUp => {
-                    wizard.handle_scroll(false);
-                    None
-                }
-                _ => None,
-            },
-            _ => None,
-        };
-        match action {
-            Some(Action::Exit(outcome)) => return Ok(outcome),
-            Some(Action::StartInstall) => {
-                let job = wizard.begin_install()?;
-                let sender = sender.clone();
-                scope.spawn(move || run_install_job(job, system, &sender));
+        loop {
+            while let Ok(install_event) = receiver.try_recv() {
+                wizard.handle_install_event(install_event);
             }
-            None => {}
+            while let Ok(installed) = probe_receiver.try_recv() {
+                wizard.set_installed(installed);
+            }
+            terminal.draw(|frame| wizard.draw(frame))?;
+            if !event::poll(Duration::from_millis(120))? {
+                wizard.tick();
+                continue;
+            }
+            let action = match event::read()? {
+                Event::Key(key) => wizard.handle_key(key),
+                Event::Mouse(mouse) => match mouse.kind {
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        wizard.handle_click(mouse.column, mouse.row)
+                    }
+                    MouseEventKind::ScrollDown => {
+                        wizard.handle_scroll(true);
+                        None
+                    }
+                    MouseEventKind::ScrollUp => {
+                        wizard.handle_scroll(false);
+                        None
+                    }
+                    _ => None,
+                },
+                _ => None,
+            };
+            match action {
+                Some(Action::Exit(outcome)) => return Ok(outcome),
+                Some(Action::StartInstall) => {
+                    let job = wizard.begin_install()?;
+                    let sender = sender.clone();
+                    scope.spawn(move || run_install_job(job, system, &sender));
+                }
+                None => {}
+            }
         }
     })
 }

@@ -94,7 +94,9 @@ fn run_interactive(
         .map(|spec| setting_state(spec, &settings_paths))
         .collect();
     let zed_present = settings_paths.zed_settings.exists();
-    let installed = detect_installed(&catalog.resources, status, system);
+    // Installed marks arrive from a background probe once the wizard is on
+    // screen; starting all-false keeps the first frame instant.
+    let installed = vec![false; catalog.resources.len()];
     let model = Model {
         resources: catalog.resources.clone(),
         presets: catalog.presets.clone(),
@@ -134,7 +136,7 @@ fn run_interactive(
 /// Which catalog resources are already on this machine. Uses the same
 /// probes as post-install verification: manager list output for plugins and
 /// packages, the global agent trees for skills.
-fn detect_installed(
+pub(crate) fn detect_installed(
     resources: &[Resource],
     status: PrerequisiteStatus,
     system: &(dyn System + Sync),

@@ -1,9 +1,9 @@
 use ai_setup::app::{install_selected, load_catalog, Selectors};
 use ai_setup::doctor::run_doctor;
 use ai_setup::update::run_updates;
-use ai_setup::RealSystem;
+use ai_setup::{RealSystem, ResourceKind};
 use anyhow::Result;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use inquire::Confirm;
 
 #[derive(Parser)]
@@ -13,8 +13,9 @@ use inquire::Confirm;
     about = "Set up Yassimba's curated skills, Pi packages, and Herdr plugins"
 )]
 struct Cli {
+    /// With no subcommand, runs the guided setup.
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -31,6 +32,8 @@ enum Command {
     },
     /// Check the setup and print actionable repairs
     Doctor,
+    /// Print shell completions (skill/tool/package names included)
+    Completions { shell: clap_complete::Shell },
 }
 
 #[derive(Args, Default)]
@@ -55,10 +58,44 @@ struct SelectionArgs {
     yes: bool,
 }
 
+/// Completions that know the catalog: the value lists for --skill,
+/// --pi-package, and --tool are baked into the generated script.
+fn print_completions(shell: clap_complete::Shell) -> Result<()> {
+    let catalog = load_catalog()?;
+    let values = |kind: ResourceKind| {
+        clap::builder::PossibleValuesParser::new(
+            catalog
+                .resources
+                .iter()
+                .filter(|resource| resource.kind == kind)
+                .map(|resource| resource.label.clone())
+                .collect::<Vec<_>>(),
+        )
+    };
+    let mut command = Cli::command();
+    for name in ["setup", "add"] {
+        command = command.mut_subcommand(name, |sub| {
+            sub.mut_arg("skills", |arg| {
+                arg.value_parser(values(ResourceKind::Skill))
+            })
+            .mut_arg("pi_packages", |arg| {
+                arg.value_parser(values(ResourceKind::PiPackage))
+            })
+            .mut_arg("tools", |arg| arg.value_parser(values(ResourceKind::Tool)))
+        });
+    }
+    clap_complete::generate(shell, &mut command, "ai-setup", &mut std::io::stdout());
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let system = RealSystem::default();
-    let success = match cli.command {
+    // Bare `ai-setup` is the guided setup — one less word to teach.
+    let command = cli
+        .command
+        .unwrap_or_else(|| Command::Setup(SelectionArgs::default()));
+    let success = match command {
         Command::Setup(args) | Command::Add(args) => {
             let catalog = load_catalog()?;
             let selectors = Selectors {
@@ -70,6 +107,10 @@ fn main() -> Result<()> {
             install_selected(&catalog, &selectors, args.yes, args.dry_run, &system)?
         }
         Command::Doctor => run_doctor(&system),
+        Command::Completions { shell } => {
+            print_completions(shell)?;
+            true
+        }
         Command::Update { yes } => {
             if !yes
                 && !Confirm::new("Update installed Yassimba tooling and resources?")

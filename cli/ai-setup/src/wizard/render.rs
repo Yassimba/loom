@@ -65,6 +65,38 @@ impl Wizard {
         if self.show_help {
             self.render_help(frame);
         }
+        if self.confirm_quit {
+            self.render_confirm_quit(frame);
+        }
+    }
+
+    fn render_confirm_quit(&self, frame: &mut Frame) {
+        let count = self.total_selected();
+        let lines = vec![
+            Line::from(format!("Discard {count} selected item(s) and quit?")),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("enter/y", Style::new().fg(ERR).bold()),
+                Span::raw(" quit · "),
+                Span::styled("any other key", Style::new().fg(ACCENT).bold()),
+                Span::raw(" keep going"),
+            ]),
+        ];
+        let width = 46.min(frame.area().width.saturating_sub(4));
+        let height = 5;
+        let area = Rect {
+            x: (frame.area().width.saturating_sub(width)) / 2,
+            y: (frame.area().height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, area);
+        frame.render_widget(
+            Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(bordered(" Quit? ", true)),
+            area,
+        );
     }
 
     fn render_help(&self, frame: &mut Frame) {
@@ -118,16 +150,19 @@ impl Wizard {
             .position(|&index| index == self.stage_index)
             .unwrap_or(0)
             + 1;
-        let status = Line::from(vec![
-            Span::styled(
-                format!("{} selected", self.total_selected()),
-                Style::new().fg(OK),
-            ),
-            Span::styled(
-                format!("  ·  step {step}/{} ", visible.len()),
-                Style::new().dim(),
-            ),
-        ]);
+        let mut spans = Vec::new();
+        if self.probing {
+            spans.push(Span::styled("scanning installed…  ·  ", Style::new().dim()));
+        }
+        spans.push(Span::styled(
+            format!("{} selected", self.total_selected()),
+            Style::new().fg(OK),
+        ));
+        spans.push(Span::styled(
+            format!("  ·  step {step}/{} ", visible.len()),
+            Style::new().dim(),
+        ));
+        let status = Line::from(spans);
         frame.render_widget(Paragraph::new(status).alignment(Alignment::Right), area);
     }
 
@@ -311,9 +346,9 @@ impl Wizard {
             .filter(|row| matches!(row, PickRow::Runtime(_)))
             .count();
         let title = if missing == 0 {
-            " Tools · all installed ".to_owned()
+            " Start ".to_owned()
         } else {
-            format!(" Tools · {missing} to install ")
+            format!(" Start · {missing} runtimes to install ")
         };
         let items = stage
             .rows
@@ -735,29 +770,53 @@ impl Wizard {
                 "Nothing picked yet. Enter leaves without changes; ← goes back.",
             ));
         } else {
+            let added = |text: String, note: Option<String>| {
+                let mut spans = vec![
+                    Span::styled("  + ", Style::new().fg(OK).bold()),
+                    Span::styled(text, Style::new().fg(OK)),
+                ];
+                if let Some(note) = note {
+                    spans.push(Span::styled(format!("   {note}"), Style::new().dim()));
+                }
+                Line::from(spans)
+            };
             let runtimes = self.selected_runtimes();
             if !runtimes.is_empty() {
-                lines.push(Line::styled("Tools", Style::new().bold()));
+                lines.push(Line::styled("Runtimes", Style::new().bold()));
                 for runtime in &runtimes {
-                    lines.push(Line::from(vec![
-                        Span::styled(format!("  {SELECTED_MARK} "), Style::new().fg(OK)),
-                        Span::raw(runtime_name(*runtime)),
-                    ]));
+                    lines.push(added(runtime_name(*runtime).to_owned(), None));
                 }
                 lines.push(Line::from(""));
             }
-            let selection = self.selection();
+            // The full delta, dependency pull-ins included, each with blame.
+            let direct = self.selection();
+            let expanded = crate::expand_skill_dependencies(&self.model.resources, direct.clone());
+            let direct_ids = direct
+                .iter()
+                .map(|resource| resource.id.clone())
+                .collect::<std::collections::HashSet<_>>();
+            let parent_of = |target: &str| {
+                expanded
+                    .iter()
+                    .find(|parent| parent.dependencies.iter().any(|dep| dep == target))
+                    .map(|parent| parent.label.clone())
+            };
+            let pi_rides_manifest = !self.model.status.pi
+                && self.model.status.mise
+                && expanded
+                    .iter()
+                    .any(|resource| resource.kind == crate::ResourceKind::PiPackage);
             for (kind, title) in [
                 (crate::ResourceKind::Tool, "Tools"),
                 (crate::ResourceKind::HerdrPlugin, "Herdr plugins"),
                 (crate::ResourceKind::PiPackage, "Pi packages"),
                 (crate::ResourceKind::Skill, "Skills"),
             ] {
-                let of_kind = selection
+                let of_kind = expanded
                     .iter()
                     .filter(|resource| resource.kind == kind)
                     .collect::<Vec<_>>();
-                if of_kind.is_empty() {
+                if of_kind.is_empty() && !(kind == crate::ResourceKind::Tool && pi_rides_manifest) {
                     continue;
                 }
                 lines.push(Line::styled(
@@ -765,11 +824,22 @@ impl Wizard {
                     Style::new().bold(),
                 ));
                 for resource in of_kind {
-                    lines.push(Line::from(vec![
-                        Span::styled(format!("  {SELECTED_MARK} "), Style::new().fg(OK)),
-                        Span::raw(resource.label.clone()),
-                        Span::styled(format!("  {}", resource.group), Style::new().dim()),
-                    ]));
+                    let note = if direct_ids.contains(&resource.id) {
+                        None
+                    } else {
+                        Some(format!(
+                            "(pulled in by {})",
+                            parent_of(&resource.install_target)
+                                .unwrap_or_else(|| "a selected skill".into())
+                        ))
+                    };
+                    lines.push(added(resource.label.clone(), note));
+                }
+                if kind == crate::ResourceKind::Tool && pi_rides_manifest {
+                    lines.push(added(
+                        "pi".into(),
+                        Some("(needed by your Pi packages)".into()),
+                    ));
                 }
                 lines.push(Line::from(""));
             }
@@ -781,7 +851,7 @@ impl Wizard {
                 ));
                 for spec in &settings {
                     lines.push(Line::from(vec![
-                        Span::styled(format!("  {SELECTED_MARK} "), Style::new().fg(OK)),
+                        Span::styled("  ~ ", Style::new().fg(WARN).bold()),
                         Span::raw(spec.label.clone()),
                         Span::styled(
                             format!(
