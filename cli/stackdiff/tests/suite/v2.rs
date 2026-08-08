@@ -136,6 +136,29 @@ fn prune_keeps_changes_with_context_and_elides_the_rest() {
 }
 
 #[test]
+fn mermaid_output_marks_added_nodes() {
+    let diff_src = diff_outdent(
+        r#"
+      export function boot() {
+        one();
+    +   two();
+      }
+    "#,
+    );
+    let (before_src, after_src) = sources_from_file_diff(&diff_src);
+    let before = build_index(extract_functions("file.before.ts", &before_src).unwrap());
+    let after = build_index(extract_functions("file.after.ts", &after_src).unwrap());
+    let diff = diff_trees(
+        &build_call_tree("boot", &before, 12),
+        &build_call_tree("boot", &after, 12),
+    );
+    let mermaid = stackdiff::render::render_mermaid(&diff);
+    assert!(mermaid.starts_with("flowchart TD"));
+    assert!(mermaid.contains("n0 --> n2[\"two()\"]"));
+    assert!(mermaid.contains("class n2 added"));
+}
+
+#[test]
 fn json_output_carries_dataflow_fields() {
     let source = diff_outdent(
         r#"

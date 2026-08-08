@@ -27,8 +27,8 @@ fn paint(status: DiffStatus, text: &str, color: bool) -> String {
         return text.to_string();
     }
     match status {
-        DiffStatus::Added => text.blue().to_string(),
-        DiffStatus::Removed => text.magenta().to_string(),
+        DiffStatus::Added => text.green().to_string(),
+        DiffStatus::Removed => text.red().to_string(),
         DiffStatus::Same => text.to_string(),
     }
 }
@@ -171,6 +171,47 @@ fn walk(
             options,
             lines,
         );
+    }
+}
+
+/// Render the tree as a Mermaid flowchart: calls as boxes, branch arms as
+/// diamonds, added nodes green, removed red.
+pub fn render_mermaid(root: &DiffNode) -> String {
+    let mut lines = vec!["flowchart TD".to_string()];
+    let mut classes: Vec<String> = Vec::new();
+    let mut counter = 0usize;
+    mermaid_walk(root, None, &mut counter, &mut lines, &mut classes);
+    lines.push("classDef added fill:#e6ffec,stroke:#1a7f37,color:#1a7f37".to_string());
+    lines.push("classDef removed fill:#ffebe9,stroke:#cf222e,color:#cf222e".to_string());
+    lines.extend(classes);
+    lines.join("\n")
+}
+
+fn mermaid_walk(
+    node: &DiffNode,
+    parent: Option<usize>,
+    counter: &mut usize,
+    lines: &mut Vec<String>,
+    classes: &mut Vec<String>,
+) {
+    let id = *counter;
+    *counter += 1;
+    let label = node_text(node, true).replace('"', "'");
+    let shape = match node.kind {
+        NodeKind::Branch => format!("n{id}{{\"{label}\"}}"),
+        NodeKind::Call => format!("n{id}[\"{label}\"]"),
+    };
+    match parent {
+        Some(parent) => lines.push(format!("n{parent} --> {shape}")),
+        None => lines.push(shape),
+    }
+    match node.status {
+        DiffStatus::Added => classes.push(format!("class n{id} added")),
+        DiffStatus::Removed => classes.push(format!("class n{id} removed")),
+        DiffStatus::Same => {}
+    }
+    for child in &node.children {
+        mermaid_walk(child, Some(id), counter, lines, classes);
     }
 }
 
