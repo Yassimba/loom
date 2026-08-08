@@ -104,7 +104,23 @@ pub fn callstack_diff_with(file_diff: &str, entry: &str, file: &str, max_depth: 
     let before_tree = build_call_tree(entry, &before, max_depth);
     let after_tree = build_call_tree(entry, &after, max_depth);
     let diff = diff_trees(&before_tree, &after_tree);
-    render_diff(&diff, RenderOptions { color: false })
+    render_diff(&diff, &RenderOptions::default())
+}
+
+/// Rich render (doc lines, locations, binding/args/returns) of a single
+/// source's call tree — the v2 layer on top of the parity fixtures.
+pub fn rich_tree(source: &str, entry: &str, file: &str) -> String {
+    let outdented = diff_outdent(source);
+    let index = build_index(extract_functions(file, &outdented).unwrap());
+    let tree = build_call_tree(entry, &index, 12);
+    let diff = diff_trees(&tree, &tree);
+    render_diff(
+        &diff,
+        &RenderOptions {
+            rich: true,
+            ..Default::default()
+        },
+    )
 }
 
 pub fn callstack_diff(file_diff: &str, entry: &str) -> String {
