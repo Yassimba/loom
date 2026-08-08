@@ -100,7 +100,7 @@
       "description": "Blueprint a change before building it — Mermaid diagrams of the design, held for approval before any code. Use before implementing non-trivial work — proactively or when the user asks to see the design first — or when another skill needs a design-approval gate.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
-      "dependencies": []
+      "dependencies": ["lineage", "lineage-diff", "mermaid-skill"]
     },
     {
       "id": "skill:brainstorming",
@@ -277,7 +277,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "setup-project",
-      "description": "Configure this repo for the engineering skills — issue tracker, domain doc layout, ai-docs gitignore. Run once per repo before first use of the other engineering skills.",
+      "description": "Configure this repo for the engineering skills — issue tracker, domain doc layout, editor deep links, ai-docs gitignore. Run once per repo before first use of the other engineering skills.",
       "installTarget": "setup-project",
       "nextAction": "Ask your coding agent to use the setup-project skill.",
       "dependencies": []
@@ -381,6 +381,26 @@
       "installTarget": "improve-codebase-architecture",
       "nextAction": "Ask your coding agent to use the improve-codebase-architecture skill.",
       "dependencies": ["codebase-design", "domain-modeling", "grilling"]
+    },
+    {
+      "id": "skill:lineage",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "lineage",
+      "description": "Trace the lineage of a command, function, method, or data object — the end-to-end alternating chain of data objects and the calls that transform them, each call carrying a one-line plain-words description. Use when the user asks for a lineage or how a value flows through a command end to end.",
+      "installTarget": "lineage",
+      "nextAction": "Ask your coding agent to use the lineage skill.",
+      "dependencies": ["writing-clearly-and-concisely", "mermaid-skill"]
+    },
+    {
+      "id": "skill:lineage-diff",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "lineage-diff",
+      "description": "Render a change as a before/after lineage diff, diff-colored per hop. Use when the user wants a before/after view of what a change did to a flow, or when another skill needs a session's work explained as a flow diff.",
+      "installTarget": "lineage-diff",
+      "nextAction": "Ask your coding agent to use the lineage-diff skill.",
+      "dependencies": ["lineage"]
     },
     {
       "id": "skill:zoom-out",
@@ -490,6 +510,16 @@
       "description": "Use when the user mentions Jira issues (e.g., \"PROJ-123\"), asks about tickets, wants to create/view/update issues, check sprint status, or manage their Jira workflow. Triggers on keywords like \"jira\", \"issue\", \"ticket\", \"sprint\", or issue key patterns.",
       "installTarget": "jira",
       "nextAction": "Ask your coding agent to use the jira skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:no-ai-slop",
+      "kind": "skill",
+      "group": "General",
+      "label": "no-ai-slop",
+      "description": "Edit drafts into sharper, more human writing while preserving the writer's personal voice, or detect AI-slop patterns without rewriting. Use when the user wants a draft clearer, more direct, more opinionated, or less AI-sounding, or asks whether writing reads as AI.",
+      "installTarget": "no-ai-slop",
+      "nextAction": "Ask your coding agent to use the no-ai-slop skill.",
       "dependencies": []
     },
     {

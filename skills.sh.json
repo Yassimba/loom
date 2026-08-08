@@ -42,6 +42,8 @@
         "domain-modeling",
         "explain-code-flow",
         "improve-codebase-architecture",
+        "lineage",
+        "lineage-diff",
         "zoom-out"
       ]
     },
@@ -64,6 +66,7 @@
         "handoff",
         "herdr",
         "jira",
+        "no-ai-slop",
         "research",
         "ai-setup",
         "teach",
