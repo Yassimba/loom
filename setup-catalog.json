@@ -22,7 +22,7 @@
         "diagnosing-bugs",
         "writing-clearly-and-concisely",
         "gh",
-        "tokei"
+        "aqua:XAMPPRocky/tokei"
       ]
     }
   ],
@@ -689,10 +689,10 @@
       "group": "Tools",
       "label": "tokei",
       "description": "Fast code-statistics tool several skills shell out to for codebase orientation.",
-      "installTarget": "tokei",
+      "installTarget": "aqua:XAMPPRocky/tokei",
       "nextAction": "Run `tokei` in a repo.",
       "bin": "tokei",
-      "companions": []
+      "companions": ["cargo:tokei", "rust"]
     },
     {
       "id": "tool:tokui",
