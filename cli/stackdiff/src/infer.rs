@@ -1,26 +1,90 @@
 //! Infer entrypoints: exported functions whose expanded call trees differ,
 //! plus any explicitly requested entries.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 use anyhow::{bail, Result};
 
-use crate::calltree::{build_call_tree, resolve_entry};
+use crate::calltree::{build_call_tree, lookup_callable, resolve_entry};
 use crate::diff::{diff_trees, tree_has_changes};
 use crate::extract::FunctionIndex;
-use crate::types::{CallMeta, CallNode, DiffNode, DiffStatus, NodeKind};
+use crate::types::{CallMeta, CallNode, CallStep, DiffNode, DiffStatus, NodeKind};
 
-fn callee_set(index: &FunctionIndex, key: &str, max_depth: usize) -> String {
-    let tree = build_call_tree(key, index, max_depth);
-    let mut parts: Vec<String> = Vec::new();
-    fn walk(node: &CallNode, depth: usize, parts: &mut Vec<String>) {
-        parts.push(format!("{}{}", "  ".repeat(depth), node.key));
-        for child in &node.children {
-            walk(child, depth + 1, parts);
+/// Structural signature of a key's expanded call tree — the same shape
+/// `build_call_tree` produces, hashed instead of built, memoized per
+/// (key, depth). Subtrees that hit a recursion cycle skip the memo so the
+/// cycle marker stays context-correct.
+struct SigCache<'i> {
+    index: &'i FunctionIndex,
+    max_depth: usize,
+    memo: HashMap<(String, usize), u64>,
+}
+
+impl<'i> SigCache<'i> {
+    fn new(index: &'i FunctionIndex, max_depth: usize) -> Self {
+        SigCache {
+            index,
+            max_depth,
+            memo: HashMap::new(),
         }
     }
-    walk(&tree, 0, &mut parts);
-    parts.join("\n")
+
+    fn tree_sig(&mut self, key: &str) -> u64 {
+        let mut visiting = HashSet::new();
+        self.call_sig(key, 0, &mut visiting).0
+    }
+
+    fn call_sig(&mut self, key: &str, depth: usize, visiting: &mut HashSet<String>) -> (u64, bool) {
+        if let Some(sig) = self.memo.get(&(key.to_string(), depth)) {
+            return (*sig, false);
+        }
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        key.hash(&mut hasher);
+        let mut cyclic = false;
+        if depth < self.max_depth {
+            if let Some(info) = lookup_callable(key, self.index) {
+                if visiting.contains(&info.key) {
+                    "⇄".hash(&mut hasher);
+                    return (hasher.finish(), true);
+                }
+                let info_key = info.key.clone();
+                let steps = info.steps.clone();
+                visiting.insert(info_key.clone());
+                cyclic = self.steps_sig(&steps, depth, visiting, &mut hasher);
+                visiting.remove(&info_key);
+            }
+        }
+        let sig = hasher.finish();
+        if !cyclic {
+            self.memo.insert((key.to_string(), depth), sig);
+        }
+        (sig, cyclic)
+    }
+
+    fn steps_sig(
+        &mut self,
+        steps: &[CallStep],
+        depth: usize,
+        visiting: &mut HashSet<String>,
+        hasher: &mut std::collections::hash_map::DefaultHasher,
+    ) -> bool {
+        let mut cyclic = false;
+        for step in steps {
+            match step {
+                CallStep::Branch { key, children, .. } => {
+                    key.hash(hasher);
+                    cyclic |= self.steps_sig(children, depth, visiting, hasher);
+                }
+                CallStep::Call { key, .. } => {
+                    let (sig, hit) = self.call_sig(key, depth + 1, visiting);
+                    sig.hash(hasher);
+                    cyclic |= hit;
+                }
+            }
+        }
+        cyclic
+    }
 }
 
 pub fn infer_entries(
@@ -45,6 +109,21 @@ pub fn infer_entries(
     }
 
     let keys: BTreeSet<&String> = before.keys().chain(after.keys()).collect();
+    let mut before_sigs = SigCache::new(before, max_depth);
+    let mut after_sigs = SigCache::new(after, max_depth);
+    let mut changed = |key: &str| {
+        let b = if before.contains_key(key) {
+            before_sigs.tree_sig(key)
+        } else {
+            0
+        };
+        let a = if after.contains_key(key) {
+            after_sigs.tree_sig(key)
+        } else {
+            0
+        };
+        b != a
+    };
     let mut candidates: Vec<String> = Vec::new();
 
     for key in &keys {
@@ -53,24 +132,14 @@ pub fn infer_entries(
             continue;
         }
 
-        let b = before.get(*key);
-        let a = after.get(*key);
-
         // Prefer exported / public-ish roots
-        let interesting =
-            b.map(|f| f.exported).unwrap_or(false) || a.map(|f| f.exported).unwrap_or(false);
+        let interesting = before.get(*key).map(|f| f.exported).unwrap_or(false)
+            || after.get(*key).map(|f| f.exported).unwrap_or(false);
         if !interesting {
             continue;
         }
 
-        let before_tree = b
-            .map(|_| callee_set(before, key, max_depth))
-            .unwrap_or_default();
-        let after_tree = a
-            .map(|_| callee_set(after, key, max_depth))
-            .unwrap_or_default();
-
-        if before_tree != after_tree {
+        if changed(key) {
             candidates.push((*key).clone());
         }
     }
@@ -81,17 +150,7 @@ pub fn infer_entries(
             if key.starts_with("new ") {
                 continue;
             }
-            let before_tree = if before.contains_key(*key) {
-                callee_set(before, key, max_depth)
-            } else {
-                String::new()
-            };
-            let after_tree = if after.contains_key(*key) {
-                callee_set(after, key, max_depth)
-            } else {
-                String::new()
-            };
-            if before_tree != after_tree {
+            if changed(key) {
                 candidates.push((*key).clone());
             }
         }

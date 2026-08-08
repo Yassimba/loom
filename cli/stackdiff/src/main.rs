@@ -324,17 +324,17 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
 
     let prune = cli.only_changes || cli.context.is_some();
     let context = cli.context.unwrap_or(1);
-    let mut diffs = Vec::new();
-    for entry in &entries {
-        let Some(diff) = diff_entry(entry, &before, &after, cli.max_depth) else {
-            continue;
-        };
-        diffs.push(if prune {
-            prune_unchanged(&diff, context)
-        } else {
-            diff
-        });
-    }
+    let diffs: Vec<_> = entries
+        .par_iter()
+        .filter_map(|entry| diff_entry(entry, &before, &after, cli.max_depth))
+        .map(|diff| {
+            if prune {
+                prune_unchanged(&diff, context)
+            } else {
+                diff
+            }
+        })
+        .collect();
 
     if diffs.is_empty() {
         println!("No callstack changes for inferred entrypoints.");
