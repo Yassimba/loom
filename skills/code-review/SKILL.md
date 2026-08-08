@@ -1,12 +1,12 @@
 ---
 name: code-review
-description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (this repo's documented coding standards) and Spec (what the originating issue/PRD asked for). Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
+description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
 ---
 
 Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 - **Standards** — does the code conform to this repo's documented coding standards?
-- **Spec** — does the code faithfully implement the originating issue / PRD / spec?
+- **Spec** — does the code faithfully implement the originating issue / spec?
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
@@ -39,11 +39,10 @@ On top of whatever the repo documents, the Standards axis always carries the **s
 
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
 - **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation — and, like any standard here, skip anything tooling already enforces.
-- **Ties break by Simple Design order** — reveals-intent beats no-duplication beats fewest-elements. When fixing one smell would introduce another, the higher rule wins.
 
-Each smell reads _what it is_ → _how to fix_; match it against the diff:
+Each smell reads *what it is* → *how to fix*; match it against the diff:
 
-- **Mysterious Name** — a name that no longer describes what the thing does *with the diff applied*; names that were honest before the change and are lies after it count. → rename it; if no honest name comes, the design's murky.
+- **Mysterious Name** — a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
 - **Duplicated Code** — the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
 - **Feature Envy** — a method that reaches into another object's data more than its own. → move the method onto the data it envies.
 - **Data Clumps** — the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
@@ -57,8 +56,6 @@ Each smell reads _what it is_ → _how to fix_; match it against the diff:
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
 ### 4. Spawn both sub-agents in parallel
-
-Send a single message with two `Agent` tool calls. Use the `general-purpose` subagent for both. Both briefs end with: "If you report no findings, state what you checked and why it passed — a bare 'clean' is not a report."
 
 **Standards sub-agent prompt** — include:
 
