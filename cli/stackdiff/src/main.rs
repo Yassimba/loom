@@ -157,7 +157,7 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = Format::Text, help_heading = "Output")]
     format: Format,
 
-    /// Shorthand for --view boxes
+    /// Shorthand for --view lineage: the connected call DAG
     #[arg(short = 'm', long, help_heading = "View")]
     boxes: bool,
 
@@ -221,7 +221,7 @@ impl Cli {
             return view;
         }
         if self.boxes {
-            View::Boxes
+            View::Lineage
         } else if self.seq {
             View::Seq
         } else if self.er {
