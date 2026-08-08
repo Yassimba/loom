@@ -47,22 +47,34 @@ fn mark_tree(node: &CallNode, status: DiffStatus) -> DiffNode {
 fn diff_children(before: &[CallNode], after: &[CallNode]) -> Vec<DiffNode> {
     let n = before.len();
     let m = after.len();
+    // Weighted LCS: matching keys pair (weight 2), and identical call-site
+    // meta upgrades the pair (weight 3) — so among same-key twins the
+    // occurrence with matching arguments wins over the merely positional one.
+    let score = |i: usize, j: usize| -> usize {
+        if before[i].key != after[j].key {
+            0
+        } else if before[i].meta == after[j].meta {
+            3
+        } else {
+            2
+        }
+    };
     let mut dp = vec![vec![0usize; m + 1]; n + 1];
-
     for i in (0..n).rev() {
         for j in (0..m).rev() {
-            dp[i][j] = if before[i].key == after[j].key {
-                dp[i + 1][j + 1] + 1
-            } else {
-                dp[i + 1][j].max(dp[i][j + 1])
+            let pair = match score(i, j) {
+                0 => 0,
+                s => dp[i + 1][j + 1] + s,
             };
+            dp[i][j] = pair.max(dp[i + 1][j]).max(dp[i][j + 1]);
         }
     }
 
     let mut result = Vec::new();
     let (mut i, mut j) = (0, 0);
     while i < n && j < m {
-        if before[i].key == after[j].key {
+        let s = score(i, j);
+        if s > 0 && dp[i][j] == dp[i + 1][j + 1] + s {
             result.push(diff_node(Some(&before[i]), Some(&after[j])));
             i += 1;
             j += 1;
@@ -134,5 +146,38 @@ pub fn prune_unchanged(node: &DiffNode, context: usize) -> DiffNode {
             meta: node.meta.clone(),
             children: Vec::new(),
         }
+    }
+}
+
+/// Expand-once: after a subtree has been shown in full, later occurrences
+/// of the same key collapse to a single "▸ shown above" stub. Runs across
+/// a whole entry list in display order.
+pub fn dedupe_subtrees(trees: &mut [DiffNode]) {
+    let mut seen = std::collections::HashSet::new();
+    for tree in trees {
+        dedupe_node(tree, &mut seen);
+    }
+}
+
+fn dedupe_node(node: &mut DiffNode, seen: &mut std::collections::HashSet<String>) {
+    if node.children.is_empty() {
+        return;
+    }
+    if !seen.insert(node.key.clone()) {
+        node.children = vec![DiffNode {
+            key: "▸".into(),
+            label: "▸ shown above".into(),
+            kind: crate::types::NodeKind::Call,
+            status: DiffStatus::Same,
+            location: None,
+            doc: None,
+            returns: None,
+            meta: crate::types::CallMeta::default(),
+            children: Vec::new(),
+        }];
+        return;
+    }
+    for child in &mut node.children {
+        dedupe_node(child, seen);
     }
 }

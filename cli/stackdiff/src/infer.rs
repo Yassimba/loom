@@ -102,7 +102,14 @@ pub fn infer_entries(
             let from_before = resolve_entry(entry, before);
             let from_after = resolve_entry(entry, after);
             let Some(key) = from_after.or(from_before) else {
-                bail!("Entrypoint not found: {entry}");
+                let close = crate::calltree::suggest_entries(entry, after, 5);
+                if close.is_empty() {
+                    bail!("Entrypoint not found: {entry}");
+                }
+                bail!(
+                    "Entrypoint not found: {entry} — did you mean: {}?",
+                    close.join(", ")
+                );
             };
             if !resolved.contains(&key) {
                 resolved.push(key);
