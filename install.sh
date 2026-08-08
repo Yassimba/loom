@@ -28,23 +28,47 @@ if ! command -v mise >/dev/null 2>&1; then
 fi
 command -v mise >/dev/null 2>&1 || { echo "$NAME: mise install failed" >&2; exit 1; }
 
-# 2. The manifest's core block only — node and the Loom CLI. Everything
-#    else is optional and chosen in the wizard, which appends to this file.
-#    An existing Loom selection is left alone (`loom update` refreshes it).
+# 2. Refresh the required core block — node and the Loom CLI — while keeping
+#    any optional tools already chosen through the wizard. This also repairs
+#    selections left incomplete by an interrupted or older bootstrap.
 mkdir -p "$CONF_D"
 selection="${CONF_D}/loom.toml"
-if [ ! -f "$selection" ]; then
-  tmp_manifest="$(mktemp)"
-  trap 'rm -f "$tmp_manifest"' EXIT INT TERM
-  curl -fsSL --retry 5 --retry-delay 3 "$MANIFEST_URL" -o "$tmp_manifest"
+tmp_manifest="$(mktemp)"
+tmp_core="$(mktemp)"
+tmp_selection="$(mktemp)"
+trap 'rm -f "$tmp_manifest" "$tmp_core" "$tmp_selection"' EXIT INT TERM
+curl -fsSL --retry 5 --retry-delay 3 "$MANIFEST_URL" -o "$tmp_manifest"
+sed -n '/^# core:begin/,/^# core:end/p' "$tmp_manifest" > "$tmp_core"
+if ! grep -q '^# core:begin' "$tmp_core" || ! grep -q '^# core:end' "$tmp_core"; then
+  echo "$NAME: manifest is missing its core block" >&2
+  exit 1
+fi
+
+if [ -f "$selection" ]; then
+  if ! awk -v core="$tmp_core" '
+    function emit_core(    line) {
+      while ((getline line < core) > 0) print line
+      close(core)
+    }
+    /^# core:begin/ { skipping = 1; next }
+    skipping { if (/^# core:end/) skipping = 0; next }
+    $0 == "[tools]" && !inserted { print; emit_core(); inserted = 1; next }
+    { print }
+    END { if (!inserted || skipping) exit 42 }
+  ' "$selection" > "$tmp_selection"; then
+    echo "$NAME: existing selection could not be safely refreshed" >&2
+    exit 1
+  fi
+else
   {
     echo "# Managed by Loom: the selected tools from the published manifest."
     echo ""
     echo "[tools]"
-    sed -n '/^# core:begin/,/^# core:end/p' "$tmp_manifest"
-  } > "$selection"
-  echo "$NAME: core tools synced to $selection"
+    cat "$tmp_core"
+  } > "$tmp_selection"
 fi
+mv "$tmp_selection" "$selection"
+echo "$NAME: core tools synced to $selection"
 
 # 3. Install the pins — node and the Loom CLI (plus any prior selection).
 mise install --yes

@@ -34,6 +34,10 @@ printf '%s\\n' '[tools]' '# core:begin' '"github:Yassimba/loom[exe=loom]" = "loo
   );
   await Promise.all([chmod(join(bin, "mise"), 0o755), chmod(join(bin, "curl"), 0o755)]);
 
+  const selection = join(home, ".config", "mise", "conf.d", "loom.toml");
+  await mkdir(dirname(selection), { recursive: true });
+  await writeFile(selection, '[tools]\ntokei = "12.1.2"\n');
+
   try {
     const env = {
       ...process.env,
@@ -55,6 +59,10 @@ printf '%s\\n' '[tools]' '# core:begin' '"github:Yassimba/loom[exe=loom]" = "loo
       1,
       "expected one persistent mise activation",
     );
+    const repairedSelection = await readFile(selection, "utf8");
+    assert.match(repairedSelection, /# core:begin/);
+    assert.match(repairedSelection, /github:Yassimba\/loom\[exe=loom\]/);
+    assert.match(repairedSelection, /tokei = "12\.1\.2"/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
