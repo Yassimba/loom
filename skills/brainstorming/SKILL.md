@@ -50,6 +50,6 @@ Open questions for `grill-with-docs`:
 Then ask (use AskUserQuestion if available):
 
 > Want to run `grill-with-docs` to refine this idea further?
-> Want to save this idea to the backlog to pick up later?
+> Want to save this idea to pick up later?
 
-If they save it: write the brief to `ai-docs/plans/<YYYY-MM-DD-project>/idea.md` (today's date, short kebab-case project slug; create the directory), and if the visual companion ran, copy its mockup HTML files from the session's `screen_dir` into `mockups/` beside the brief. Then add it to the backlog using the backlog skill. In that same directory, `/to-spec` will later write `spec.md` and `/to-tickets` will write `issues/<NNN>-<name>.md`.
+If they save it: write the brief to `ai-docs/plans/<YYYY-MM-DD-project>/idea.md` (today's date, short kebab-case project slug; create the directory), and if the visual companion ran, copy its mockup HTML files from the session's `screen_dir` into `mockups/` beside the brief. In that same directory, `/to-spec` will later write `spec.md` and `/to-tickets` will write `issues/<NNN>-<name>.md`.

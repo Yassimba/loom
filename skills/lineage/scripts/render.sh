@@ -2,7 +2,7 @@
 # render.sh — build the lineage viewer (plain lineage or before/after diff)
 # from Mermaid sources and validate them.
 #
-# Usage: render.sh [-t "Change name"] [-o out.html] [-d details.json] [-r "base..tip"] [--open] <diagram.mmd> [more.mmd ...]
+# Usage: render.sh [-t "Change name"] [-o out.html] [-d details.json] [-r "base..tip"] [--validate-browser] [--open] <diagram.mmd> [more.mmd ...]
 #
 #   -t      Page title (default: Lineage). HTML-escaped for you.
 #   -o      Output HTML path (default: first .mmd's name with .html).
@@ -11,16 +11,16 @@
 #   -r      Diff range the page describes (e.g. "744774b..HEAD"), stamped into
 #           the header. Default: the current commit of the repo containing the
 #           first .mmd, with a "working tree" marker when dirty.
+#   --validate-browser  Validate with the dedicated executable named by
+#           LINEAGE_HEADLESS_BROWSER. Never discovers or launches desktop browsers.
 #   --open  Open the built page in the default browser.
 #
 # Each .mmd file becomes one tab (the tab bar hides itself for a single
 # file); the filename (minus extension, capitalized) is the tab label.
 # Sources are HTML-escaped automatically — write plain Mermaid.
 #
-# Validation: if a Chrome/Chromium/Edge binary is found, the built page is
-# loaded headlessly and every diagram must render. Parse errors are printed
-# and the script exits 1. Without a browser (or offline) validation is
-# skipped with a warning.
+# Browser validation is opt-in because launching a user's desktop browser can
+# disrupt active sessions. When explicitly enabled, every diagram must render.
 set -euo pipefail
 
 title="Lineage"
@@ -28,6 +28,7 @@ out=""
 details=""
 range=""
 open_after=0
+validate_browser=0
 files=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,6 +36,7 @@ while [ $# -gt 0 ]; do
     -o) out="$2"; shift 2 ;;
     -d) details="$2"; shift 2 ;;
     -r) range="$2"; shift 2 ;;
+    --validate-browser) validate_browser=1; shift ;;
     --open) open_after=1; shift ;;
     -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) files+=("$1"); shift ;;
@@ -110,19 +112,12 @@ awk -v secfile="$sections_tmp" -v detfile="$details_tmp" -v title="$title_esc" -
 abs_out="$(cd "$(dirname "$out")" && pwd)/$(basename "$out")"
 echo "built: $abs_out (${#files[@]} diagram(s))"
 
-find_browser() {
-  local c
-  for c in \
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    "/Applications/Chromium.app/Contents/MacOS/Chromium" \
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
-    google-chrome chromium chromium-browser microsoft-edge; do
-    if command -v "$c" >/dev/null 2>&1; then printf '%s' "$c"; return 0; fi
-  done
-  return 1
-}
-
-if browser="$(find_browser)"; then
+if [ "$validate_browser" -eq 1 ]; then
+  browser="${LINEAGE_HEADLESS_BROWSER:-}"
+  if [ -z "$browser" ] || [ ! -x "$browser" ]; then
+    echo "error: --validate-browser requires executable LINEAGE_HEADLESS_BROWSER" >&2
+    exit 2
+  fi
   dom="$("$browser" --headless=new --disable-gpu --virtual-time-budget=15000 \
         --dump-dom "file://$abs_out" 2>/dev/null || true)"
   n_errors="$(printf '%s\n' "$dom" | grep -c 'class="blueprint-error"' || true)"
@@ -137,7 +132,7 @@ if browser="$(find_browser)"; then
     echo "OK: all ${#files[@]} diagram(s) parsed and rendered"
   fi
 else
-  echo "warning: no Chrome/Chromium/Edge found — skipped validation" >&2
+  echo "validation skipped (opt in with --validate-browser and LINEAGE_HEADLESS_BROWSER)"
 fi
 
 if [ "$open_after" -eq 1 ]; then
