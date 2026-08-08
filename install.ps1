@@ -96,7 +96,19 @@ if (-not (Test-Path $Selection)) {
 mise install --yes
 if ($LASTEXITCODE -ne 0) { throw "$Name`: mise install failed" }
 
-# 4. Hand off to the guided setup with the freshly installed tools on PATH.
+# 4. Persist shell activation, so managed tools are on PATH in new shells.
+$Activation = '(&mise activate pwsh) | Out-String | Invoke-Expression'
+$ProfileDirectory = Split-Path -Parent $PROFILE
+if ($ProfileDirectory) {
+  New-Item -ItemType Directory -Path $ProfileDirectory -Force | Out-Null
+}
+$ProfileContent = if (Test-Path $PROFILE) { [string](Get-Content $PROFILE -Raw) } else { "" }
+if (-not $ProfileContent.Contains($Activation)) {
+  Add-Content -Path $PROFILE -Value $Activation
+  Write-Host "$Name`: added mise activation to $PROFILE"
+}
+
+# 5. Hand off to the guided setup with the freshly installed tools on PATH.
 Write-Host ""
 mise exec -- loom setup
 exit $LASTEXITCODE

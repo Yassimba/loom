@@ -49,17 +49,23 @@ fi
 # 3. Install the pins — node and the Loom CLI (plus any prior selection).
 mise install --yes
 
-# 4. Shell activation, so the tools are on PATH in new shells.
+# 4. Persist shell activation, so the tools are on PATH in new shells.
 case "$(basename "${SHELL:-sh}")" in
-  zsh)  profile="~/.zshrc";  activate='eval "$(mise activate zsh)"' ;;
-  bash) profile="~/.bashrc"; activate='eval "$(mise activate bash)"' ;;
-  fish) profile="~/.config/fish/config.fish"; activate='mise activate fish | source' ;;
-  *)    profile="your shell profile"; activate='eval "$(mise activate <shell>)"' ;;
+  zsh)  profile="${HOME}/.zshrc"; activate='eval "$(mise activate zsh)"' ;;
+  bash) profile="${HOME}/.bashrc"; activate='eval "$(mise activate bash)"' ;;
+  fish) profile="${HOME}/.config/fish/config.fish"; activate='mise activate fish | source' ;;
+  *)    profile=""; activate="" ;;
 esac
-if ! mise doctor 2>/dev/null | grep -q "activated: yes"; then
+if [ -n "$profile" ]; then
+  mkdir -p "$(dirname "$profile")"
+  touch "$profile"
+  if ! grep -Fqx "$activate" "$profile"; then
+    printf '\n%s\n' "$activate" >> "$profile"
+    echo "$NAME: added mise activation to $profile"
+  fi
+else
   echo ""
-  echo "$NAME: add mise activation to ${profile} if it is not there yet:"
-  echo "  ${activate}"
+  echo "$NAME: could not detect your shell; add mise activation to its profile" >&2
 fi
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.

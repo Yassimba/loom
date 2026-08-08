@@ -76,11 +76,12 @@ impl<'i> SigCache<'i> {
                     key.hash(hasher);
                     cyclic |= self.steps_sig(children, depth, visiting, hasher);
                 }
-                CallStep::Call { key, meta } => {
+                CallStep::Call { key, meta, count } => {
                     let (sig, hit) = self.call_sig(key, depth + 1, visiting);
                     sig.hash(hasher);
                     meta.binding.hash(hasher);
                     meta.args.hash(hasher);
+                    count.hash(hasher);
                     cyclic |= hit;
                 }
             }
@@ -101,7 +102,14 @@ pub fn infer_entries(
             let from_before = resolve_entry(entry, before);
             let from_after = resolve_entry(entry, after);
             let Some(key) = from_after.or(from_before) else {
-                bail!("Entrypoint not found: {entry}");
+                let close = crate::calltree::suggest_entries(entry, after, 5);
+                if close.is_empty() {
+                    bail!("Entrypoint not found: {entry}");
+                }
+                bail!(
+                    "Entrypoint not found: {entry} — did you mean: {}?",
+                    close.join(", ")
+                );
             };
             if !resolved.contains(&key) {
                 resolved.push(key);
@@ -164,7 +172,55 @@ pub fn infer_entries(
         let bl = b.to_lowercase();
         al.cmp(&bl).then_with(|| a.cmp(b))
     });
-    Ok(candidates)
+
+    // Topmost roots only: a candidate reachable from another candidate
+    // within max_depth already appears inside that entry's tree — as its
+    // own root it would just repeat as a disconnected fragment.
+    let candidate_set: HashSet<&String> = candidates.iter().collect();
+    let reverse = crate::calltree::reverse_index(after);
+    let reverse_before = crate::calltree::reverse_index(before);
+    let roots: Vec<String> = candidates
+        .iter()
+        .filter(|candidate| {
+            !reachable_from_candidate(candidate, &reverse, &candidate_set, max_depth)
+                && !reachable_from_candidate(candidate, &reverse_before, &candidate_set, max_depth)
+        })
+        .cloned()
+        .collect();
+    Ok(if roots.is_empty() { candidates } else { roots })
+}
+
+/// Does some *other* candidate reach `key` within `depth` caller hops?
+fn reachable_from_candidate(
+    key: &str,
+    reverse: &std::collections::HashMap<String, Vec<(String, CallMeta)>>,
+    candidates: &HashSet<&String>,
+    depth: usize,
+) -> bool {
+    let mut frontier: Vec<&str> = vec![key];
+    let mut visited: HashSet<&str> = HashSet::new();
+    for _ in 0..depth {
+        let mut next = Vec::new();
+        for current in frontier {
+            let Some(edges) = reverse.get(current) else {
+                continue;
+            };
+            for (caller, _) in edges {
+                if !visited.insert(caller.as_str()) {
+                    continue;
+                }
+                if caller != key && candidates.contains(caller) {
+                    return true;
+                }
+                next.push(caller.as_str());
+            }
+        }
+        if next.is_empty() {
+            return false;
+        }
+        frontier = next;
+    }
+    false
 }
 
 pub fn diff_entry(
@@ -192,6 +248,7 @@ pub fn diff_entry(
             location: None,
             doc: None,
             returns: None,
+            signature: None,
             meta: CallMeta::default(),
             children: Vec::new(),
         };
@@ -209,6 +266,7 @@ pub fn diff_entry(
             location: None,
             doc: None,
             returns: None,
+            signature: None,
             meta: CallMeta::default(),
             children: Vec::new(),
         };

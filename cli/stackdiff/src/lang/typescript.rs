@@ -3,6 +3,8 @@
 
 use tree_sitter::{Node, Tree};
 
+use crate::types::TypeInfo;
+
 use super::{arg_text, child_by_type, collapse_ws, consumed, doc_before, named_children, text};
 use crate::types::{line_of, CallMeta, CallStep, FunctionInfo};
 
@@ -16,6 +18,29 @@ fn is_fn_like(kind: &str) -> bool {
             | "generator_function_declaration"
             | "method_definition"
     )
+}
+
+/// "(name: Type, …)" as written, None when no params carry types.
+fn typed_signature(params: Option<Node>, src: &str) -> Option<String> {
+    let params = params.filter(|p| p.kind() == "formal_parameters")?;
+    let mut parts: Vec<String> = Vec::new();
+    let mut typed = false;
+    for p in named_children(params) {
+        let name = child_by_type(p, "identifier")
+            .map(|id| text(id, src).to_string())
+            .unwrap_or_else(|| "_".to_string());
+        let ty = p
+            .child_by_field_name("type")
+            .map(|t| collapse_ws(text(t, src).trim_start_matches(':').trim()));
+        match ty {
+            Some(ty) => {
+                typed = true;
+                parts.push(format!("{name}: {ty}"));
+            }
+            None => parts.push(name),
+        }
+    }
+    typed.then(|| format!("({})", parts.join(", ")))
 }
 
 fn params_label(params: Option<Node>, src: &str) -> String {
@@ -138,7 +163,11 @@ impl<'s> Collector<'s> {
             return;
         }
         self.seen.insert(mark);
-        self.steps.push(CallStep::Call { key, meta });
+        self.steps.push(CallStep::Call {
+            key,
+            meta,
+            count: 1,
+        });
     }
 
     fn call_meta(&mut self, call: Node) -> CallMeta {
@@ -323,6 +352,7 @@ fn function_from_parts(
         line: line_of(src, fn_node.start_byte()),
         doc: doc_before(doc_node, src),
         returns: return_type(fn_node, src),
+        signature: typed_signature(params, src),
         steps: steps_from_body(body, class_name, src),
         exported,
     }
@@ -548,4 +578,38 @@ pub fn extract(file: &str, source: &str, tree: &Tree) -> Vec<FunctionInfo> {
         visit_statement(file, stmt, false, &mut functions, source);
     }
     functions
+}
+
+/// Class fields for the --er view.
+pub fn extract_types(source: &str, tree: &Tree) -> Vec<TypeInfo> {
+    let mut types = Vec::new();
+    fn visit(node: Node, types: &mut Vec<TypeInfo>, src: &str) {
+        if node.kind() == "class_declaration" {
+            if let Some(name) = node.child_by_field_name("name") {
+                let mut fields = Vec::new();
+                if let Some(body) = node.child_by_field_name("body") {
+                    for member in named_children(body) {
+                        if member.kind().ends_with("field_definition") {
+                            let Some(field) = member.child_by_field_name("name") else {
+                                continue;
+                            };
+                            let ty = member
+                                .child_by_field_name("type")
+                                .map(|t| collapse_ws(text(t, src).trim_start_matches(':').trim()));
+                            fields.push((text(field, src).to_string(), ty));
+                        }
+                    }
+                }
+                types.push(TypeInfo {
+                    name: text(name, src).to_string(),
+                    fields,
+                });
+            }
+        }
+        for child in named_children(node) {
+            visit(child, types, src);
+        }
+    }
+    visit(tree.root_node(), &mut types, source);
+    types
 }
