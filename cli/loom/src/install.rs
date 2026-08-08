@@ -1,6 +1,5 @@
 use crate::{Resource, ResourceKind, System};
 use anyhow::Result;
-use std::collections::HashSet;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Platform {
@@ -365,102 +364,193 @@ pub fn execute_install_plan_with(
     system: &(dyn System + Sync),
     observer: &mut dyn FnMut(usize, StepStatus),
 ) -> InstallReport {
-    let mut report = InstallReport::default();
-    let mut unavailable = HashSet::new();
-
-    // Prerequisites stay sequential: each one mutates the shared PATH and
-    // the next bootstrap may depend on it (npm before pi).
-    for (index, step) in plan.prerequisites.iter().enumerate() {
-        observer(index, StepStatus::Running);
-        let failure = execute_step(step, system).or_else(|| {
-            system.refresh_path();
-            (!system.command_exists(&step.manager)).then(|| {
-                format!(
-                    "installer completed, but {} is still unavailable on PATH",
-                    step.manager
-                )
-            })
-        });
-        match failure {
-            Some(message) => {
-                unavailable.insert(step.manager.clone());
-                report.failures.push(InstallFailure {
-                    target: step.target.clone(),
-                    message: message.clone(),
-                });
-                observer(index, StepStatus::Failed(message));
-            }
-            None => observer(index, StepStatus::Prepared),
+    let lanes = install_lanes(plan);
+    let mut outcomes = vec![None; plan.prerequisites.len() + plan.resources.len()];
+    let (status_sender, statuses) = std::sync::mpsc::channel::<(usize, StepStatus)>();
+    let (finish_sender, finishes) = std::sync::mpsc::channel::<(String, LaneOutcome)>();
+    let mut handle_status = |index: usize, status: StepStatus| {
+        if !matches!(status, StepStatus::Running) {
+            outcomes[index] = Some(status.clone());
         }
-    }
-
-    // Resource steps run one thread per manager: skills, pi, and herdr are
-    // independent of each other, but steps sharing a manager stay in order
-    // (concurrent `herdr plugin install`s would race its registry).
-    let mut outcomes: Vec<Option<Option<String>>> = vec![None; plan.resources.len()];
-    let mut groups: Vec<(&str, Vec<usize>)> = Vec::new();
-    for (offset, step) in plan.resources.iter().enumerate() {
-        if unavailable.contains(&step.manager) {
-            let message = format!("{} is unavailable", step.manager.to_uppercase());
-            observer(
-                plan.prerequisites.len() + offset,
-                StepStatus::Skipped(message.clone()),
-            );
-            outcomes[offset] = Some(Some(message));
-            continue;
-        }
-        match groups
-            .iter_mut()
-            .find(|(manager, _)| *manager == step.manager)
-        {
-            Some((_, offsets)) => offsets.push(offset),
-            None => groups.push((&step.manager, vec![offset])),
-        }
-    }
-
-    let (event_sender, events) = std::sync::mpsc::channel::<(usize, StepStatus)>();
+        observer(index, status);
+    };
     std::thread::scope(|scope| {
-        for (_, offsets) in &groups {
-            let event_sender = event_sender.clone();
+        let mut waiting = lanes
+            .iter()
+            .filter(|lane| lane.waits_for.is_some())
+            .collect::<Vec<_>>();
+        let mut running = 0;
+        for lane in lanes.iter().filter(|lane| lane.waits_for.is_none()) {
+            let status_sender = status_sender.clone();
+            let finish_sender = finish_sender.clone();
+            running += 1;
             scope.spawn(move || {
-                for &offset in offsets {
-                    let step = &plan.resources[offset];
-                    let _ = event_sender.send((offset, StepStatus::Running));
-                    let status = match execute_step(step, system) {
-                        Some(message) => StepStatus::Failed(message),
-                        None => StepStatus::Installed,
-                    };
-                    let _ = event_sender.send((offset, status));
-                }
+                let outcome = execute_lane(lane, system, &status_sender);
+                let _ = finish_sender.send((lane.manager.to_owned(), outcome));
             });
         }
-        drop(event_sender);
-        // The observer stays on this thread (it is not Sync); workers only
-        // send events.
-        for (offset, status) in events {
-            if !matches!(status, StepStatus::Running) {
-                outcomes[offset] = Some(match &status {
-                    StepStatus::Failed(message) => Some(message.clone()),
-                    _ => None,
+
+        while running > 0 {
+            while let Ok((index, status)) = statuses.try_recv() {
+                handle_status(index, status);
+            }
+            let Ok((manager, outcome)) =
+                finishes.recv_timeout(std::time::Duration::from_millis(10))
+            else {
+                continue;
+            };
+            running -= 1;
+
+            let mut index = 0;
+            while index < waiting.len() {
+                if waiting[index].waits_for != Some(manager.as_str()) {
+                    index += 1;
+                    continue;
+                }
+                let lane = waiting.swap_remove(index);
+                let dependency_failed =
+                    outcome.unavailable || (lane.manager == "pi" && !system.command_exists("pi"));
+                if dependency_failed {
+                    let message = format!("{} is unavailable", lane.manager.to_uppercase());
+                    for step in &lane.steps {
+                        handle_status(step.index, StepStatus::Skipped(message.clone()));
+                    }
+                    continue;
+                }
+                let status_sender = status_sender.clone();
+                let finish_sender = finish_sender.clone();
+                running += 1;
+                scope.spawn(move || {
+                    let outcome = execute_lane(lane, system, &status_sender);
+                    let _ = finish_sender.send((lane.manager.to_owned(), outcome));
                 });
             }
-            observer(plan.prerequisites.len() + offset, status);
+        }
+        while let Ok((index, status)) = statuses.try_recv() {
+            handle_status(index, status);
         }
     });
 
     // Fold outcomes in plan order so reports stay deterministic regardless
     // of which manager finished first.
-    for (step, outcome) in plan.resources.iter().zip(outcomes) {
+    let mut report = InstallReport::default();
+    for (index, outcome) in outcomes.into_iter().enumerate() {
+        let (step, resource) = if index < plan.prerequisites.len() {
+            (&plan.prerequisites[index], false)
+        } else {
+            (&plan.resources[index - plan.prerequisites.len()], true)
+        };
         match outcome {
-            Some(Some(message)) => report.failures.push(InstallFailure {
-                target: step.target.clone(),
-                message,
-            }),
-            Some(None) => report.installed.push(step.target.clone()),
-            None => {}
+            Some(StepStatus::Failed(message) | StepStatus::Skipped(message)) => {
+                report.failures.push(InstallFailure {
+                    target: step.target.clone(),
+                    message,
+                });
+            }
+            Some(StepStatus::Installed) if resource => report.installed.push(step.target.clone()),
+            _ => {}
         }
     }
     report
+}
+
+#[derive(Clone, Copy)]
+enum StepPhase {
+    Prerequisite,
+    Resource,
+}
+
+struct IndexedStep<'a> {
+    index: usize,
+    step: &'a InstallStep,
+    phase: StepPhase,
+}
+
+struct InstallLane<'a> {
+    manager: &'a str,
+    steps: Vec<IndexedStep<'a>>,
+    waits_for: Option<&'a str>,
+}
+
+fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
+    let mut lanes = Vec::<InstallLane<'_>>::new();
+    let steps =
+        plan.prerequisites
+            .iter()
+            .enumerate()
+            .map(|(index, step)| (index, step, StepPhase::Prerequisite))
+            .chain(plan.resources.iter().enumerate().map(|(offset, step)| {
+                (plan.prerequisites.len() + offset, step, StepPhase::Resource)
+            }));
+    for (index, step, phase) in steps {
+        let indexed = IndexedStep { index, step, phase };
+        match lanes.iter_mut().find(|lane| lane.manager == step.manager) {
+            Some(lane) => lane.steps.push(indexed),
+            None => lanes.push(InstallLane {
+                manager: &step.manager,
+                steps: vec![indexed],
+                waits_for: None,
+            }),
+        }
+    }
+    let pi_via_mise = plan.prerequisites.iter().any(|step| {
+        matches!(
+            &step.action,
+            StepAction::SyncTools { tools }
+                if tools.iter().any(|tool| tool == crate::manifest::PI_TOOL_KEY)
+        )
+    });
+    if pi_via_mise {
+        if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == "pi") {
+            lane.waits_for = Some("mise");
+        }
+    }
+    lanes
+}
+
+struct LaneOutcome {
+    unavailable: bool,
+}
+
+fn execute_lane(
+    lane: &InstallLane<'_>,
+    system: &dyn System,
+    sender: &std::sync::mpsc::Sender<(usize, StepStatus)>,
+) -> LaneOutcome {
+    let mut unavailable = false;
+    for indexed in &lane.steps {
+        if unavailable {
+            let message = format!("{} is unavailable", lane.manager.to_uppercase());
+            let _ = sender.send((indexed.index, StepStatus::Skipped(message)));
+            continue;
+        }
+        let _ = sender.send((indexed.index, StepStatus::Running));
+        let failure = execute_step(indexed.step, system).or_else(|| {
+            if matches!(indexed.phase, StepPhase::Prerequisite) {
+                system.refresh_path();
+                (!system.command_exists(lane.manager)).then(|| {
+                    format!(
+                        "installer completed, but {} is still unavailable on PATH",
+                        lane.manager
+                    )
+                })
+            } else {
+                None
+            }
+        });
+        let status = match failure {
+            Some(message) => {
+                if matches!(indexed.phase, StepPhase::Prerequisite) {
+                    unavailable = true;
+                }
+                StepStatus::Failed(message)
+            }
+            None if matches!(indexed.phase, StepPhase::Prerequisite) => StepStatus::Prepared,
+            None => StepStatus::Installed,
+        };
+        let _ = sender.send((indexed.index, status));
+    }
+    LaneOutcome { unavailable }
 }
 
 fn execute_step(step: &InstallStep, system: &dyn System) -> Option<String> {
