@@ -314,11 +314,7 @@ pub fn render_dag(
     let mut rendered = render_dag_profile(nodes, edges, color, PROFILES[0]);
     if let Some(limit) = max_width {
         for profile in &PROFILES[1..] {
-            let width = rendered
-                .lines()
-                .map(visible_width)
-                .max()
-                .unwrap_or(0);
+            let width = rendered.lines().map(visible_width).max().unwrap_or(0);
             if width <= limit {
                 break;
             }
@@ -475,8 +471,13 @@ fn render_dag_profile(
 
     // Geometry: column x, lanes per gap, item y.
     let mut lanes = vec![0usize; max_layer + 1];
-    for segment in &segments {
-        lanes[items[segment.b].layer] += 1;
+    {
+        let mut sources: HashSet<(usize, usize)> = HashSet::new();
+        for segment in &segments {
+            if sources.insert((items[segment.b].layer, segment.a)) {
+                lanes[items[segment.b].layer] += 1;
+            }
+        }
     }
     let mut col_w = vec![0usize; max_layer + 1];
     for (l, column) in columns.iter().enumerate() {
@@ -531,13 +532,15 @@ fn render_dag_profile(
         draw_box(&mut canvas, node);
     }
 
-    // Rails: every segment spans one gap; lanes assigned by target y.
-    let mut sorted: Vec<usize> = (0..segments.len()).collect();
-    sorted.sort_by_key(|&i| {
-        let b = &items[segments[i].b];
-        (b.layer, b.y, items[segments[i].a].y)
-    });
-    let mut lane_cursor: BTreeMap<usize, usize> = BTreeMap::new();
+    // Rails: one bus per (source, gap) — a single trunk leaves the source
+    // and splits with junctions at each target, like the tree connectors.
+    let mut groups: BTreeMap<(usize, usize), Vec<usize>> = BTreeMap::new();
+    for (i, segment) in segments.iter().enumerate() {
+        groups
+            .entry((items[segment.b].layer, segment.a))
+            .or_default()
+            .push(i);
+    }
     struct Finish {
         x: usize,
         y: usize,
@@ -547,42 +550,85 @@ fn render_dag_profile(
         arrow: bool,
     }
     let mut finishes: Vec<Finish> = Vec::new();
-    for i in sorted {
-        let segment = &segments[i];
-        let (a, b) = (&items[segment.a], &items[segment.b]);
-        let status = segment.status;
-        let sy = a.y + a.h / 2;
-        let dy = b.y + b.h / 2;
-        let start_x = a.x + a.w;
-        let gap = b.layer;
-        let cursor = lane_cursor.entry(gap).or_insert(0);
-        let lane_x = col_x[gap] - 3 - (*cursor) * 2 - 1;
+    let mut ordered: Vec<(&(usize, usize), &Vec<usize>)> = groups.iter().collect();
+    ordered.sort_by_key(|((gap, a), _)| (*gap, items[*a].y));
+    let mut lane_cursor: BTreeMap<usize, usize> = BTreeMap::new();
+    for ((gap, a), members) in ordered {
+        let source = &items[*a];
+        let sy = source.y + source.h / 2;
+        let start_x = source.x + source.w;
+        let cursor = lane_cursor.entry(*gap).or_insert(0);
+        let lane_x = col_x[*gap] - 3 - (*cursor) * 2 - 1;
         *cursor += 1;
+
+        let mut targets: Vec<&Segment> = members.iter().map(|&i| &segments[i]).collect();
+        targets.sort_by_key(|segment| items[segment.b].y);
+        let target_ys: Vec<usize> = targets
+            .iter()
+            .map(|segment| {
+                let b = &items[segment.b];
+                b.y + b.h / 2
+            })
+            .collect();
+        let top = target_ys.iter().copied().min().unwrap_or(sy).min(sy);
+        let bottom = target_ys.iter().copied().max().unwrap_or(sy).max(sy);
+        let trunk_status = targets
+            .iter()
+            .find(|t| t.status != DiffStatus::Same)
+            .map(|t| t.status)
+            .unwrap_or(DiffStatus::Same);
+
+        // trunk from the source to its lane
         for cx in start_x..lane_x {
-            canvas.rail(cx, sy, '─', status);
+            canvas.rail(cx, sy, '─', trunk_status);
         }
-        if sy == dy {
-            canvas.rail(lane_x, dy, '─', status);
-        } else {
-            let (top, bottom) = if sy < dy { (sy, dy) } else { (dy, sy) };
-            for cy in top + 1..bottom {
-                canvas.rail(lane_x, cy, '│', status);
+        // the lane itself
+        for cy in top + 1..bottom {
+            if cy != sy && !target_ys.contains(&cy) {
+                canvas.rail(lane_x, cy, '│', trunk_status);
             }
-            canvas.rail(lane_x, sy, if sy < dy { '╮' } else { '╯' }, status);
-            canvas.rail(lane_x, dy, if sy < dy { '╰' } else { '╭' }, status);
         }
-        let end_x = if segment.last { b.x } else { b.x + 1 };
-        for cx in lane_x + 1..end_x.saturating_sub(1) {
-            canvas.rail(cx, dy, '─', status);
+        // source join onto the lane
+        let source_join = if top == bottom {
+            '─'
+        } else if sy == top {
+            '╮'
+        } else if sy == bottom {
+            '╯'
+        } else {
+            '┤'
+        };
+        canvas.rail(lane_x, sy, source_join, trunk_status);
+
+        // one exit per target
+        for (segment, &ty) in targets.iter().zip(&target_ys) {
+            let b = &items[segment.b];
+            let status = segment.status;
+            if ty != sy {
+                let exit = if ty == top {
+                    '╭'
+                } else if ty == bottom {
+                    '╰'
+                } else {
+                    '├'
+                };
+                canvas.rail(lane_x, ty, exit, status);
+            } else if top != bottom {
+                canvas.rail(lane_x, ty, '┼', status);
+            }
+            let end_x = if segment.last { b.x } else { b.x + 1 };
+            for cx in lane_x + 1..end_x.saturating_sub(1) {
+                canvas.rail(cx, ty, '─', status);
+            }
+            finishes.push(Finish {
+                x: end_x,
+                y: ty,
+                status,
+                label: segment.last.then(|| segment.label.clone()).flatten(),
+                label_from: lane_x + 2,
+                arrow: segment.last,
+            });
         }
-        finishes.push(Finish {
-            x: end_x,
-            y: dy,
-            status,
-            label: segment.last.then(|| segment.label.clone()).flatten(),
-            label_from: lane_x + 2,
-            arrow: segment.last,
-        });
     }
 
     // Labels and arrowheads last, so crossing rails never eat them.
