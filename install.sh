@@ -64,4 +64,9 @@ fi
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 echo ""
+# The README pipes this script into sh, so stdin is the download pipe rather
+# than the user's terminal. Reconnect it before starting the interactive UI.
+if [ ! -t 0 ] && [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
+  exec mise exec -- loom setup </dev/tty
+fi
 exec mise exec -- loom setup
