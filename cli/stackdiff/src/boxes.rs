@@ -7,6 +7,42 @@ use crate::render::{node_text, short_loc};
 use crate::types::{DiffNode, DiffStatus, NodeKind};
 
 const MAX_LABEL: usize = 38;
+
+/// Degrees of slimming, tried in order until the graph fits the terminal.
+#[derive(Clone, Copy)]
+struct Profile {
+    docs: bool,
+    loc: bool,
+    max_label: usize,
+}
+
+const PROFILES: [Profile; 5] = [
+    Profile {
+        docs: true,
+        loc: true,
+        max_label: MAX_LABEL,
+    },
+    Profile {
+        docs: false,
+        loc: true,
+        max_label: MAX_LABEL,
+    },
+    Profile {
+        docs: false,
+        loc: false,
+        max_label: MAX_LABEL,
+    },
+    Profile {
+        docs: false,
+        loc: false,
+        max_label: 28,
+    },
+    Profile {
+        docs: false,
+        loc: false,
+        max_label: 20,
+    },
+];
 const GAP_TD: usize = 3;
 const GAP_LR: usize = 1;
 const CONNECT_TD: usize = 4;
@@ -26,6 +62,9 @@ pub struct BoxOptions {
     /// URL template with `{path}` and `{line}` holes for OSC 8 links.
     pub link: Option<String>,
     pub repo_root: Option<std::path::PathBuf>,
+    /// Terminal width; wider layouts slim themselves down to fit so rows
+    /// never wrap (wrapping shreds the boxes into stripes).
+    pub max_width: Option<usize>,
 }
 
 // GitHub-dark diff palette: bright text over a subtle tint.
@@ -138,14 +177,21 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-fn build(node: &DiffNode, options: &BoxOptions) -> Layout {
-    let label = wrap(&node_text(node, true), MAX_LABEL);
-    let doc = node
-        .doc
+fn build(node: &DiffNode, options: &BoxOptions, profile: Profile) -> Layout {
+    let label = wrap(&node_text(node, true), profile.max_label);
+    let doc = if profile.docs {
+        node.doc
+            .as_deref()
+            .map(|doc| wrap(&format!("“{doc}”"), profile.max_label))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let loc = node
+        .location
         .as_deref()
-        .map(|doc| wrap(&format!("“{doc}”"), MAX_LABEL))
-        .unwrap_or_default();
-    let loc = node.location.as_deref().map(short_loc);
+        .filter(|_| profile.loc)
+        .map(short_loc);
     let url = match (&options.link, &node.location) {
         (Some(template), Some(location)) => location.rsplit_once(':').map(|(path, line)| {
             let absolute = match &options.repo_root {
@@ -170,7 +216,11 @@ fn build(node: &DiffNode, options: &BoxOptions) -> Layout {
     let extra = doc.len() + usize::from(loc.is_some());
     let box_h = label.len() + extra + 4;
 
-    let children: Vec<Layout> = node.children.iter().map(|c| build(c, options)).collect();
+    let children: Vec<Layout> = node
+        .children
+        .iter()
+        .map(|c| build(c, options, profile))
+        .collect();
     let (sub_w, sub_h) = match options.dir {
         Direction::TopDown => {
             let kids_w: usize = children.iter().map(|c| c.sub_w).sum::<usize>()
@@ -454,7 +504,21 @@ fn style(status: DiffStatus, role: Role, color: bool) -> (String, String) {
 }
 
 pub fn render_boxes(root: &DiffNode, options: &BoxOptions) -> String {
-    let layout = build(root, options);
+    let mut layout = build(root, options, PROFILES[0]);
+    if let Some(max_width) = options.max_width {
+        for profile in &PROFILES[1..] {
+            if layout.sub_w <= max_width {
+                break;
+            }
+            layout = build(root, options, *profile);
+        }
+        if layout.sub_w > max_width {
+            eprintln!(
+                "note: graph is {} columns, terminal {} — rows will wrap; try --max-depth 2 or the text view",
+                layout.sub_w, max_width
+            );
+        }
+    }
     let mut canvas = Canvas::new(layout.sub_w, layout.sub_h);
     match options.dir {
         Direction::TopDown => place_td(&mut canvas, &layout, 0, 0),
