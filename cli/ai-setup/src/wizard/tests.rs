@@ -81,6 +81,7 @@ fn ready() -> PrerequisiteStatus {
         pi: true,
         herdr: true,
         npm: true,
+        mise: true,
         node: crate::NodeStatus::Supported,
     }
 }
@@ -157,9 +158,9 @@ fn welcome_offers_missing_runtimes_for_quick_install() {
     let Stage::Welcome(stage) = &wizard.stages[0] else {
         panic!("expected the welcome stage");
     };
-    assert_eq!(stage.rows.len(), 2, "herdr and pi are both listed");
+    assert_eq!(stage.rows.len(), 3, "mise, herdr, and pi are all listed");
     assert_eq!(
-        stage.cursor, 1,
+        stage.cursor, 2,
         "cursor starts on the first missing runtime"
     );
     // Space right on the welcome screen unchecks it, space again re-checks.
@@ -190,10 +191,10 @@ fn welcome_runtime_rows_are_clickable() {
         .hits
         .primary_list
         .expect("welcome has a runtime list");
-    // Second row: pi (herdr is installed).
-    wizard.handle_click(area.x + 2, area.y + 2);
+    // Third row: pi (mise and herdr are installed).
+    wizard.handle_click(area.x + 2, area.y + 3);
     assert!(!wizard.runtime_selected(crate::Runtime::Pi));
-    wizard.handle_click(area.x + 2, area.y + 2);
+    wizard.handle_click(area.x + 2, area.y + 3);
     assert!(wizard.runtime_selected(crate::Runtime::Pi));
 }
 
@@ -543,6 +544,7 @@ fn unbuildable_plan_blocks_confirmation() {
         pi: false,
         herdr: true,
         npm: false,
+        mise: false,
         node: crate::NodeStatus::Supported,
     };
     // Pi runtime is pre-checked because it is missing, and npm is missing

@@ -43,6 +43,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
         pi: true,
         herdr: true,
         npm: true,
+        mise: false,
         node: NodeStatus::Supported,
     };
 
@@ -115,6 +116,7 @@ fn skill_selection_expands_to_its_dependency_closure() {
             pi: true,
             herdr: true,
             npm: true,
+            mise: false,
             node: NodeStatus::Supported,
         },
         Platform::Unix,
@@ -147,6 +149,7 @@ fn missing_foundations_are_installed_before_selected_resources() {
         pi: true,
         herdr: false,
         npm: true,
+        mise: false,
         node: NodeStatus::Supported,
     };
 
@@ -175,6 +178,7 @@ fn selecting_a_pi_package_without_pi_or_npm_gives_an_actionable_error() {
         pi: false,
         herdr: true,
         npm: false,
+        mise: false,
         node: NodeStatus::Supported,
     };
 
@@ -192,6 +196,7 @@ fn explicitly_requested_runtimes_are_installed_without_dependent_resources() {
         pi: false,
         herdr: false,
         npm: true,
+        mise: false,
         node: NodeStatus::Supported,
     };
 
@@ -220,6 +225,7 @@ fn an_already_installed_runtime_request_is_a_no_op() {
             pi: true,
             herdr: true,
             npm: true,
+            mise: false,
             node: NodeStatus::Supported,
         },
         Platform::Unix,
@@ -241,6 +247,7 @@ fn an_outdated_node_blocks_a_fresh_pi_install_with_instructions() {
         pi: false,
         herdr: true,
         npm: true,
+        mise: false,
         node: NodeStatus::TooOld(16, 3, 0),
     };
 
@@ -265,10 +272,75 @@ fn an_installed_pi_does_not_care_about_node() {
         pi: true,
         herdr: true,
         npm: false,
+        mise: false,
         node: NodeStatus::Missing,
     };
 
     let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
 
     assert_eq!(plan.resources.len(), 1);
+}
+
+#[test]
+fn selected_tools_sync_through_mise_before_resources() {
+    let resources = vec![
+        resource(ResourceKind::Tool, "tool:gh", "gh"),
+        resource(
+            ResourceKind::PiPackage,
+            "pi-package:@yassimba/pi-openai-fast",
+            "@yassimba/pi-openai-fast",
+        ),
+    ];
+    // Pi is missing but mise is present: Pi rides along as a manifest tool
+    // instead of a global npm install, and an old Node must not block it.
+    let status = PrerequisiteStatus {
+        pi: false,
+        herdr: true,
+        npm: false,
+        mise: true,
+        node: NodeStatus::Missing,
+    };
+
+    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
+
+    assert_eq!(plan.prerequisites.len(), 1);
+    let step = &plan.prerequisites[0];
+    assert_eq!(step.manager, "mise");
+    assert_eq!(
+        step.action,
+        StepAction::SyncTools {
+            tools: vec![
+                "gh".to_string(),
+                "npm:@mariozechner/pi-coding-agent".to_string(),
+            ],
+        }
+    );
+    // The tool resource itself produces no separate resource step.
+    assert_eq!(plan.resources.len(), 1);
+    assert_eq!(plan.resources[0].manager, "pi");
+}
+
+#[test]
+fn tools_without_mise_get_a_mise_prerequisite() {
+    let resources = vec![resource(ResourceKind::Tool, "tool:gh", "gh")];
+    let status = PrerequisiteStatus {
+        pi: true,
+        herdr: true,
+        npm: true,
+        mise: false,
+        node: NodeStatus::Supported,
+    };
+
+    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
+
+    assert_eq!(plan.prerequisites.len(), 2);
+    assert_eq!(plan.prerequisites[0].manager, "mise");
+    assert!(matches!(
+        plan.prerequisites[0].action,
+        StepAction::Command(_)
+    ));
+    assert!(matches!(
+        plan.prerequisites[1].action,
+        StepAction::SyncTools { .. }
+    ));
 }

@@ -44,6 +44,9 @@ struct SelectionArgs {
     /// Install a Herdr plugin from this catalog; repeat for multiple plugins
     #[arg(long = "herdr-plugin")]
     herdr_plugins: Vec<String>,
+    /// Install a tool from the pinned manifest; repeat for multiple tools
+    #[arg(long = "tool")]
+    tools: Vec<String>,
     /// Show the plan without making changes
     #[arg(long)]
     dry_run: bool,
@@ -62,6 +65,7 @@ fn main() -> Result<()> {
                 skills: args.skills,
                 pi_packages: args.pi_packages,
                 herdr_plugins: args.herdr_plugins,
+                tools: args.tools,
             };
             install_selected(&catalog, &selectors, args.yes, args.dry_run, &system)?
         }

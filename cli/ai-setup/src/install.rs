@@ -65,6 +65,7 @@ pub struct PrerequisiteStatus {
     pub pi: bool,
     pub herdr: bool,
     pub npm: bool,
+    pub mise: bool,
     pub node: NodeStatus,
 }
 
@@ -75,6 +76,7 @@ pub struct PrerequisiteStatus {
 pub enum Runtime {
     Pi,
     Herdr,
+    Mise,
 }
 
 impl Runtime {
@@ -82,6 +84,7 @@ impl Runtime {
         match self {
             Self::Pi => status.pi,
             Self::Herdr => status.herdr,
+            Self::Mise => status.mise,
         }
     }
 }
@@ -125,6 +128,7 @@ pub enum VerificationSpec {
 pub enum StepAction {
     Command(CommandSpec),
     CopySkills { skills: Vec<String> },
+    SyncTools { tools: Vec<String> },
 }
 
 impl StepAction {
@@ -134,6 +138,10 @@ impl StepAction {
             Self::CopySkills { skills } => format!(
                 "copy skills into detected agent trees: {}",
                 skills.join(", ")
+            ),
+            Self::SyncTools { tools } => format!(
+                "add to the mise selection and install: {}",
+                tools.join(", ")
             ),
         }
     }
@@ -180,20 +188,57 @@ pub fn build_install_plan(
             .iter()
             .any(|resource| resource.kind == ResourceKind::HerdrPlugin);
 
-    anyhow::ensure!(
-        !needs_pi || status.pi || status.npm,
-        "installing Pi needs npm, which is not on PATH; install Node.js first"
-    );
-    // Same preflight for the Node runtime itself: a too-old Node would make
-    // `npm install` fail with an opaque engines error mid-plan.
-    if needs_pi && !status.pi {
-        if let Some(warning) = status.node.warning() {
-            anyhow::bail!("installing Pi is blocked: {warning}");
+    // Selected manifest tools install through mise; a missing Pi rides along
+    // as a tool when mise is available (the manifest pins it), and only
+    // falls back to a global npm install on mise-less machines.
+    let mut tools = resources
+        .iter()
+        .filter(|resource| resource.kind == ResourceKind::Tool)
+        .map(|tool| tool.install_target.clone())
+        .collect::<Vec<_>>();
+    let pi_via_mise = needs_pi && !status.pi && status.mise;
+    if pi_via_mise && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
+        tools.push(crate::manifest::PI_TOOL_KEY.into());
+    }
+
+    if !(needs_pi && !status.pi && status.mise) && needs_pi {
+        anyhow::ensure!(
+            status.pi || status.npm,
+            "installing Pi needs npm, which is not on PATH; install Node.js first"
+        );
+        // Same preflight for the Node runtime itself: a too-old Node would
+        // make `npm install` fail with an opaque engines error mid-plan.
+        if !status.pi {
+            if let Some(warning) = status.node.warning() {
+                anyhow::bail!("installing Pi is blocked: {warning}");
+            }
         }
     }
 
     let mut prerequisites = Vec::new();
-    if needs_pi && !status.pi {
+    if !tools.is_empty() && !status.mise {
+        prerequisites.push(prerequisite_step(
+            "mise",
+            platform,
+            "curl -fsSL https://mise.run | sh",
+            "winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements",
+        ));
+    }
+    if !tools.is_empty() {
+        // Prerequisite, not a resource step: prerequisites run sequentially,
+        // so a Pi arriving via the manifest is on PATH before any pi-package
+        // steps run (resource groups execute concurrently per manager).
+        prerequisites.push(InstallStep {
+            target: "tools".into(),
+            manager: "mise".into(),
+            action: StepAction::SyncTools {
+                tools: tools.clone(),
+            },
+            // Verified inside the sync itself: `mise install` fails loudly.
+            verification: None,
+        });
+    }
+    if needs_pi && !status.pi && !pi_via_mise {
         prerequisites.push(InstallStep {
             target: "Pi".into(),
             manager: "pi".into(),
@@ -231,7 +276,7 @@ pub fn build_install_plan(
     }
     for resource in resources {
         let (manager, command, verification) = match resource.kind {
-            ResourceKind::Skill => continue,
+            ResourceKind::Skill | ResourceKind::Tool => continue,
             ResourceKind::PiPackage => (
                 "pi",
                 CommandSpec::new(
@@ -394,6 +439,9 @@ fn execute_step(step: &InstallStep, system: &dyn System) -> Option<String> {
     let command = match &step.action {
         StepAction::CopySkills { skills } => {
             return crate::skills::install_skills(system, skills).err()
+        }
+        StepAction::SyncTools { tools } => {
+            return crate::manifest::sync_selected(system, tools).err()
         }
         StepAction::Command(command) => command,
     };

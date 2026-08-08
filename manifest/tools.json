@@ -1,0 +1,65 @@
+{
+  "comment": "Wizard metadata for the optional (non-core) tools in ai-setup.toml. Keys must match the manifest's tool keys exactly; the catalog generator validates both directions.",
+  "tools": [
+    {
+      "key": "npm:@mariozechner/pi-coding-agent",
+      "label": "pi",
+      "description": "The Pi coding agent. Required by Pi packages — selecting any of them pulls Pi in automatically.",
+      "nextAction": "Run `pi` in a project to start the agent."
+    },
+    {
+      "key": "herdr",
+      "label": "herdr",
+      "description": "Terminal multiplexer for coding agents (macOS/Linux; on Windows install from herdr.dev).",
+      "nextAction": "Run `herdr` to start the multiplexer."
+    },
+    {
+      "key": "gh",
+      "label": "gh",
+      "description": "GitHub CLI — the release, code-review, and jira skills use it for PRs and issues.",
+      "nextAction": "Run `gh auth login` once."
+    },
+    {
+      "key": "glab",
+      "label": "glab",
+      "description": "GitLab CLI — the release and code-review skills use it for MRs on GitLab projects.",
+      "nextAction": "Run `glab auth login` once."
+    },
+    {
+      "key": "tokei",
+      "label": "tokei",
+      "description": "Fast code-statistics tool several skills shell out to for codebase orientation.",
+      "nextAction": "Run `tokei` in a repo."
+    },
+    {
+      "key": "github:zdyxry/tokui",
+      "label": "tokui",
+      "description": "Interactive TUI over tokei's statistics.",
+      "nextAction": "Run `tokei -o json | tokui` in a repo."
+    },
+    {
+      "key": "uv",
+      "label": "uv",
+      "description": "Python package and project manager — the python skills assume it.",
+      "nextAction": "Run `uv init` in a Python project."
+    },
+    {
+      "key": "npm:agent-browser",
+      "label": "agent-browser",
+      "description": "Browser automation CLI the browser-usage and e2e test skills drive.",
+      "nextAction": "Ask your agent to test a website."
+    },
+    {
+      "key": "npm:@mermaid-js/mermaid-cli",
+      "label": "mermaid-cli",
+      "description": "Renders Mermaid diagrams to images (mmdc) — used by the diagram skills.",
+      "nextAction": "Ask your agent for a diagram."
+    },
+    {
+      "key": "npm:@marp-team/marp-cli",
+      "label": "marp-cli",
+      "description": "Renders Markdown slide decks — used by the marp-slide skill.",
+      "nextAction": "Ask your agent for a slide deck."
+    }
+  ]
+}

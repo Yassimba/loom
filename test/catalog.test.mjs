@@ -54,6 +54,24 @@ async function createCatalogFixture() {
     join(repoRoot, "plugins", "herdr-sample", "herdr-plugin.toml"),
     'id = "example.sample"\nname = "Sample Herdr plugin"\nversion = "1.0.0"\ndescription = "Sample Herdr capability"\n',
   );
+  await mkdir(join(repoRoot, "manifest"), { recursive: true });
+  await writeFile(
+    join(repoRoot, "manifest", "ai-setup.toml"),
+    '[tools]\n# core:begin\nnode = "24.19.0"\n# core:end\n\ngh = "2.97.0"\n',
+  );
+  await writeFile(
+    join(repoRoot, "manifest", "tools.json"),
+    JSON.stringify({
+      tools: [
+        {
+          key: "gh",
+          label: "gh",
+          description: "GitHub CLI",
+          nextAction: "Run `gh auth login` once.",
+        },
+      ],
+    }),
+  );
   return repoRoot;
 }
 
@@ -100,6 +118,15 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       description: "Sample Herdr capability",
       installTarget: "Yassimba/ai-setup/plugins/herdr-sample",
       nextAction: "Run `herdr plugin list` to see the installed plugin.",
+    },
+    {
+      id: "tool:gh",
+      kind: "tool",
+      group: "Tools",
+      label: "gh",
+      description: "GitHub CLI",
+      installTarget: "gh",
+      nextAction: "Run `gh auth login` once.",
     },
   ]);
 });

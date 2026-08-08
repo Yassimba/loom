@@ -56,13 +56,29 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   throw "$Name`: mise is installed but not on PATH yet; open a new terminal and rerun this installer"
 }
 
-# 2. The published manifest, merged by mise without touching the user's own
-#    config.toml (that file stays theirs, as a personal overlay).
+# 2. The manifest's core block only - node and the ai-setup CLI. Everything
+#    else is optional and chosen in the wizard, which appends to this file.
+#    An existing selection is left alone (ai-setup update refreshes it).
 New-Item -ItemType Directory -Path $ConfD -Force | Out-Null
-Get-Url $ManifestUrl (Join-Path $ConfD "ai-setup.toml")
-Write-Host "$Name`: manifest synced to $(Join-Path $ConfD "ai-setup.toml")"
+$Selection = Join-Path $ConfD "ai-setup.toml"
+if (-not (Test-Path $Selection)) {
+  $TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
+  try {
+    Get-Url $ManifestUrl $TmpManifest
+    $lines = Get-Content $TmpManifest
+    $begin = [array]::IndexOf($lines, "# core:begin")
+    $end = [array]::IndexOf($lines, "# core:end")
+    if ($begin -lt 0 -or $end -lt $begin) { throw "$Name`: manifest is missing its core block" }
+    $core = $lines[$begin..$end]
+    @("# Managed by ai-setup: the selected tools from the published manifest.", "", "[tools]") + $core |
+      Set-Content -Path $Selection
+    Write-Host "$Name`: core tools synced to $Selection"
+  } finally {
+    Remove-Item $TmpManifest -Force -ErrorAction SilentlyContinue
+  }
+}
 
-# 3. Install the pins - node, pi, the ai-setup CLI, and the rest.
+# 3. Install the pins - node and the ai-setup CLI (plus any prior selection).
 mise install --yes
 if ($LASTEXITCODE -ne 0) { throw "$Name`: mise install failed" }
 

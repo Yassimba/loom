@@ -188,7 +188,7 @@ pub struct Wizard {
 
 impl Wizard {
     pub fn new(model: Model) -> Self {
-        let welcome_rows = [Runtime::Herdr, Runtime::Pi]
+        let welcome_rows = [Runtime::Mise, Runtime::Herdr, Runtime::Pi]
             .into_iter()
             .map(|runtime| {
                 if runtime.installed(model.status) {
@@ -207,6 +207,12 @@ impl Wizard {
             cursor: welcome_cursor,
         })];
         for (kind, runtime, title, blurb) in [
+            (
+                ResourceKind::Tool,
+                Runtime::Mise,
+                "Tools",
+                "CLI and TUI tools from the pinned manifest, installed with mise.",
+            ),
             (
                 ResourceKind::HerdrPlugin,
                 Runtime::Herdr,
@@ -256,7 +262,7 @@ impl Wizard {
             scroll: 0,
         }));
 
-        let runtime_on = [Runtime::Herdr, Runtime::Pi]
+        let runtime_on = [Runtime::Mise, Runtime::Herdr, Runtime::Pi]
             .into_iter()
             .filter(|runtime| !runtime.installed(model.status))
             .map(|runtime| (runtime, true))
@@ -298,6 +304,7 @@ impl Wizard {
         match kind {
             ResourceKind::HerdrPlugin => Some(Runtime::Herdr),
             ResourceKind::PiPackage => Some(Runtime::Pi),
+            ResourceKind::Tool => Some(Runtime::Mise),
             ResourceKind::Skill => None,
         }
     }
