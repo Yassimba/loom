@@ -252,9 +252,7 @@ export async function readToolCatalog(repoRoot) {
     .map((match) => match[1] ?? match[2])
     .filter((key) => key !== "tools");
 
-  const claimed = new Set(
-    meta.tools.flatMap((tool) => [tool.key, ...(tool.companions ?? [])]),
-  );
+  const claimed = new Set(meta.tools.flatMap((tool) => [tool.key, ...(tool.companions ?? [])]));
   const missingMeta = optionalKeys.filter((key) => !claimed.has(key));
   const missingPin = meta.tools
     .flatMap((tool) => [tool.key, ...(tool.companions ?? [])])
