@@ -2,7 +2,9 @@ use super::state::*;
 use crate::settings::{
     KeyCommand, SettingChange, SettingSpec, SettingState, SettingsPaths, ZedKeybinding,
 };
-use crate::{Platform, PrerequisiteStatus, Resource, ResourceKind};
+use crate::{
+    Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
+};
 use pretty_assertions::assert_eq;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -106,6 +108,12 @@ fn model(status: PrerequisiteStatus) -> Model {
         status,
         platform: Platform::Unix,
         dry_run: false,
+        skill_destination: SkillDestination::new(
+            SkillAgent::ALL.to_vec(),
+            SkillScope::Global,
+            std::path::Path::new("/tmp/loom-test-home"),
+            std::path::Path::new("/tmp/loom-test-project"),
+        ),
     }
 }
 
@@ -133,7 +141,7 @@ fn stage_titles(wizard: &Wizard) -> Vec<String> {
 fn stages_run_welcome_herdr_pi_skills_settings_review_install() {
     assert_eq!(
         stage_titles(&wizard()),
-        ["Welcome", "Herdr", "Pi", "Skills", "Settings", "Review", "Install"]
+        ["Welcome", "Herdr", "Pi", "Skills", "Agents", "Settings", "Review", "Install"]
     );
 }
 
@@ -148,7 +156,34 @@ fn kinds_without_resources_get_no_stage() {
     let wizard = Wizard::new(skills_only);
     assert_eq!(
         stage_titles(&wizard),
-        ["Welcome", "Skills", "Review", "Install"]
+        ["Welcome", "Skills", "Agents", "Review", "Install"]
+    );
+}
+
+#[test]
+fn agents_stage_selects_scope_and_exact_targets() {
+    // Capability/seam: interactive destination selection. This fails if the
+    // wizard drops either the agent set or project scope before planning.
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Enter; 4]);
+    assert!(matches!(
+        wizard.stages[wizard.stage_index],
+        Stage::Agents(_)
+    ));
+    assert_eq!(wizard.skill_scope, SkillScope::Global);
+
+    press(&mut wizard, &[KeyCode::Char(' ')]); // scope row: global -> project
+    assert_eq!(wizard.skill_scope, SkillScope::Project);
+    press(&mut wizard, &[KeyCode::Char('a')]); // all selected -> none
+    press(&mut wizard, &[KeyCode::Down, KeyCode::Char(' ')]); // Claude only
+
+    let destination = wizard.skill_destination();
+    assert_eq!(destination.agents, vec![SkillAgent::Claude]);
+    assert_eq!(
+        destination.trees(),
+        vec![std::path::PathBuf::from(
+            "/tmp/loom-test-project/.claude/skills"
+        )]
     );
 }
 
@@ -177,7 +212,7 @@ fn welcome_offers_missing_runtimes_for_quick_install() {
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(wizard.runtime_selected(crate::Runtime::Pi));
     // With nothing else selected, confirming installs just the runtime.
-    let action = press(&mut wizard, &[KeyCode::Enter; 6]);
+    let action = press(&mut wizard, &[KeyCode::Enter; 7]);
     assert!(matches!(action, Some(Action::StartInstall)));
     let job = wizard.begin_install().unwrap();
     assert_eq!(job.plan.prerequisites.len(), 1);
@@ -256,7 +291,7 @@ fn an_installed_plugin_prechecks_its_keybind() {
     let mut with_reviewr = model(ready());
     with_reviewr.installed[2] = true; // reviewr is present, its keybind is not
     let mut wizard = Wizard::new(with_reviewr);
-    press(&mut wizard, &[KeyCode::Enter; 4]); // walk to settings
+    press(&mut wizard, &[KeyCode::Enter; 5]); // walk to settings
     assert_eq!(
         wizard
             .selected_settings()
@@ -285,7 +320,7 @@ fn skipping_herdr_and_pi_hides_their_stages_too() {
         .collect::<Vec<_>>();
     assert_eq!(
         visible,
-        ["Welcome", "Skills", "Settings", "Review", "Install"]
+        ["Welcome", "Skills", "Agents", "Settings", "Review", "Install"]
     );
     // Enter from Welcome lands directly on Skills.
     press(&mut wizard, &[KeyCode::Enter]);
@@ -310,6 +345,7 @@ fn space_toggles_and_enter_reaches_review_then_install() {
             KeyCode::Char(' '), // pick reviewr
             KeyCode::Enter,     // pi
             KeyCode::Enter,     // skills
+            KeyCode::Enter,     // agents
             KeyCode::Enter,     // settings
             KeyCode::Enter,     // review
             KeyCode::Enter,     // confirm → install
@@ -415,6 +451,7 @@ fn settings_precheck_follows_the_related_plugin() {
             KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
+            KeyCode::Enter,
         ],
     );
     assert_eq!(
@@ -441,6 +478,7 @@ fn a_plugin_related_zed_setting_prechecks_only_with_zed_present() {
             KeyCode::Enter,
             KeyCode::Down,
             KeyCode::Char(' '),
+            KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
@@ -473,6 +511,7 @@ fn zed_settings_precheck_when_zed_is_present() {
             KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
+            KeyCode::Enter,
         ],
     );
     assert_eq!(
@@ -499,6 +538,7 @@ fn a_user_uncheck_survives_the_precheck() {
             KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
+            KeyCode::Enter,
             KeyCode::Char(' '), // uncheck the pre-checked keybind
             KeyCode::Backspace,
             KeyCode::Enter, // re-enter settings; precheck runs again
@@ -515,6 +555,7 @@ fn applied_settings_cannot_be_selected() {
     press(
         &mut wizard,
         &[
+            KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
@@ -539,7 +580,7 @@ fn q_cancels_from_any_stage() {
 #[test]
 fn empty_selection_confirms_as_nothing_selected() {
     let mut wizard = wizard();
-    let action = press(&mut wizard, &[KeyCode::Enter; 6]);
+    let action = press(&mut wizard, &[KeyCode::Enter; 7]);
     assert!(matches!(
         action,
         Some(Action::Exit(WizardOutcome::NothingSelected))
@@ -558,7 +599,7 @@ fn unbuildable_plan_blocks_confirmation() {
     // Pi runtime is pre-checked because it is missing, and npm is missing
     // too, so the plan cannot be built.
     let mut wizard = Wizard::new(model(status));
-    let action = press(&mut wizard, &[KeyCode::Enter; 6]);
+    let action = press(&mut wizard, &[KeyCode::Enter; 7]);
     assert!(action.is_none());
     assert!(matches!(
         wizard.stages[wizard.stage_index],
@@ -582,6 +623,7 @@ fn dry_run_exits_with_the_plan_instead_of_installing() {
             KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
+            KeyCode::Enter,
         ],
     );
     let Some(Action::Exit(WizardOutcome::DryRun(plan, _))) = action else {
@@ -599,6 +641,7 @@ fn install_events_drive_the_install_screen_to_completion() {
             KeyCode::Enter,
             KeyCode::Down,
             KeyCode::Char(' '),
+            KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
             KeyCode::Enter,
@@ -634,7 +677,7 @@ fn every_stage_renders_without_panicking() {
     let mut wizard = Wizard::new(model(status));
     let backend = TestBackend::new(100, 32);
     let mut terminal = Terminal::new(backend).unwrap();
-    for _ in 0..6 {
+    for _ in 0..7 {
         terminal.draw(|frame| wizard.draw(frame)).unwrap();
         press(&mut wizard, &[KeyCode::Enter]);
     }
@@ -685,8 +728,8 @@ fn clicking_the_sidebar_jumps_only_to_visited_stages() {
     // Row 0: Welcome (visited) — jumps.
     wizard.handle_click(sidebar.x + 2, sidebar.y + 1);
     assert_eq!(wizard.stage_index, 0);
-    // Review (index 5) was never visited — stays put.
-    wizard.handle_click(sidebar.x + 2, sidebar.y + 1 + 5);
+    // Review (index 6) was never visited — stays put.
+    wizard.handle_click(sidebar.x + 2, sidebar.y + 1 + 6);
     assert_eq!(wizard.stage_index, 0);
 }
 
@@ -712,8 +755,8 @@ fn skills_pane_l_advances_to_the_next_stage() {
     );
     press(&mut wizard, &[KeyCode::Char('l')]);
     assert!(
-        matches!(wizard.stages[wizard.stage_index], Stage::Settings(_)),
-        "second l advances to the next stage"
+        matches!(wizard.stages[wizard.stage_index], Stage::Agents(_)),
+        "second l advances to the destination stage"
     );
     // And h climbs back down the same ladder.
     press(&mut wizard, &[KeyCode::Char('h')]);

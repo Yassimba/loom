@@ -2,8 +2,8 @@
 
 Issues for this repo live in the Beads graph (`.beads/issues.jsonl`), managed
 with the `br` CLI. Beads is dependency-aware: issues block each other, and
-triage is computed from the graph (`bv` — see the Beads section of AGENTS.md
-for the `--robot-*` triage workflow and the multi-agent claim protocol).
+triage is computed from the graph with `bv`. Use the `next` skill to select,
+claim, and start the next actionable issue.
 
 ## Conventions
 
@@ -33,9 +33,10 @@ br list --label <label>      # scoped listing
 
 ## Claiming and status
 
-Follow the multi-agent claim protocol in AGENTS.md: work an issue only when
-it is unclaimed or assigned to your `$BEADS_ACTOR`; claim with
-`br update <id> --claim`; close with `br close <id>`.
+Work an issue only when it is unclaimed or assigned to your `$BEADS_ACTOR`.
+Claim atomically with `br update <id> --claim`; close with `br close <id>`.
+Treat any other assignee as a live claim unless the user explicitly hands the
+issue to you.
 
 ## Wayfinding operations
 

@@ -5,7 +5,7 @@
 use crate::settings::{SettingSpec, SettingState, SettingsPaths};
 use crate::{
     build_install_plan, InstallPlan, InstallReport, Platform, PrerequisiteStatus, Resource,
-    ResourceKind, Runtime,
+    ResourceKind, Runtime, SkillAgent, SkillDestination, SkillScope,
 };
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -30,6 +30,7 @@ pub struct Model {
     pub status: PrerequisiteStatus,
     pub platform: Platform,
     pub dry_run: bool,
+    pub skill_destination: SkillDestination,
 }
 
 #[derive(Debug)]
@@ -99,6 +100,11 @@ pub(crate) struct SkillsStage {
     pub focus: Focus,
 }
 
+pub(crate) struct AgentsStage {
+    /// Row zero is scope; remaining rows follow `SkillAgent::ALL`.
+    pub cursor: usize,
+}
+
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) enum SettingRow {
     Header(String),
@@ -144,6 +150,7 @@ pub(crate) struct WelcomeStage {
 pub(crate) enum Stage {
     Welcome(WelcomeStage),
     Pick(PickStage),
+    Agents(AgentsStage),
     Skills(SkillsStage),
     Settings(SettingsStage),
     Review { scroll: u16 },
@@ -155,6 +162,7 @@ impl Stage {
         match self {
             Self::Welcome(_) => "Welcome",
             Self::Pick(stage) => stage.title,
+            Self::Agents(_) => "Agents",
             Self::Skills(_) => "Skills",
             Self::Settings(_) => "Settings",
             Self::Review { .. } => "Review",
@@ -189,12 +197,22 @@ pub(crate) struct HitMap {
     pub secondary_list: Option<(Rect, usize)>,
 }
 
+#[derive(PartialEq, Eq)]
+struct SelectionSnapshot {
+    selected: Vec<bool>,
+    setting_on: Vec<bool>,
+    agent_on: Vec<bool>,
+    skill_scope: SkillScope,
+}
+
 pub struct Wizard {
     pub(crate) model: Model,
     pub(crate) selected: Vec<bool>,
     /// Toggles for runtimes that are not yet installed.
     pub(crate) runtime_on: Vec<(Runtime, bool)>,
     pub(crate) setting_on: Vec<bool>,
+    pub(crate) agent_on: Vec<bool>,
+    pub(crate) skill_scope: SkillScope,
     /// Settings the user explicitly toggled; contextual pre-checks leave
     /// those alone.
     pub(crate) setting_touched: Vec<bool>,
@@ -213,7 +231,7 @@ pub struct Wizard {
     /// The last vertical direction moved; space auto-advances the same way.
     last_dir: i8,
     /// Selection snapshots (resources, settings) for `u`; capped.
-    undo_stack: Vec<(Vec<bool>, Vec<bool>)>,
+    undo_stack: Vec<SelectionSnapshot>,
 }
 
 impl Wizard {
@@ -279,6 +297,7 @@ impl Wizard {
                 skill_cursor: 0,
                 focus: Focus::Categories,
             }));
+            stages.push(Stage::Agents(AgentsStage { cursor: 0 }));
         }
         if !model.settings.is_empty() {
             stages.push(Stage::Settings(SettingsStage {
@@ -300,9 +319,16 @@ impl Wizard {
             .filter(|runtime| !runtime.installed(model.status))
             .map(|runtime| (runtime, true))
             .collect();
+        let agent_on = SkillAgent::ALL
+            .iter()
+            .map(|agent| model.skill_destination.agents.contains(agent))
+            .collect();
+        let skill_scope = model.skill_destination.scope;
         Self {
             selected: vec![false; model.resources.len()],
             setting_on: vec![false; model.settings.len()],
+            agent_on,
+            skill_scope,
             setting_touched: vec![false; model.settings.len()],
             runtime_on,
             stages,
@@ -389,6 +415,37 @@ impl Wizard {
             .collect()
     }
 
+    pub(crate) fn selected_agents(&self) -> Vec<SkillAgent> {
+        SkillAgent::ALL
+            .into_iter()
+            .zip(&self.agent_on)
+            .filter(|(_, on)| **on)
+            .map(|(agent, _)| agent)
+            .collect()
+    }
+
+    pub(crate) fn skill_destination(&self) -> SkillDestination {
+        let mut destination = self.model.skill_destination.clone();
+        destination.agents = self.selected_agents();
+        destination.scope = self.skill_scope;
+        destination
+    }
+
+    pub(crate) fn resource_installed(&self, index: usize) -> bool {
+        let resource = &self.model.resources[index];
+        if resource.kind == ResourceKind::Skill {
+            let destination = self.skill_destination();
+            let unchanged_destination = destination.scope == self.model.skill_destination.scope
+                && destination.agents == self.model.skill_destination.agents;
+            return (unchanged_destination && self.model.installed[index])
+                || destination
+                    .trees()
+                    .iter()
+                    .any(|tree| crate::skills::skill_present_in(tree, &resource.install_target));
+        }
+        self.model.installed[index]
+    }
+
     pub(crate) fn setting_applied(&self, index: usize) -> bool {
         self.model.setting_states[index] == SettingState::Applied
     }
@@ -406,6 +463,7 @@ impl Wizard {
             &self.selected_runtimes(),
             self.model.status,
             self.model.platform,
+            &self.skill_destination(),
         )
     }
 
@@ -416,7 +474,7 @@ impl Wizard {
     pub(crate) fn installed_count(&self, items: &[usize]) -> usize {
         items
             .iter()
-            .filter(|&&index| self.model.installed[index])
+            .filter(|&&index| self.resource_installed(index))
             .count()
     }
 
@@ -424,7 +482,7 @@ impl Wizard {
         items
             .iter()
             .copied()
-            .filter(|&index| !self.model.installed[index])
+            .filter(|&index| !self.resource_installed(index))
             .collect()
     }
 
@@ -445,9 +503,9 @@ impl Wizard {
             self.setting_on[index] = match &spec.related_resource {
                 Some(resource_id) => {
                     (selection.iter().any(|resource| resource.id == *resource_id)
-                        || self.model.resources.iter().zip(&self.model.installed).any(
-                            |(resource, installed)| *installed && resource.id == *resource_id,
-                        ))
+                        || self.model.resources.iter().enumerate().any(|(index, resource)| {
+                            self.resource_installed(index) && resource.id == *resource_id
+                        }))
                         // A Zed-targeting setting stays off without a Zed
                         // install, even when its plugin is selected.
                         && (!spec.requires_zed() || self.model.zed_present)
@@ -782,6 +840,38 @@ impl Wizard {
                 }
                 _ => {}
             },
+            Stage::Agents(stage) => match key.code {
+                KeyCode::Up | KeyCode::Char('k') => stage.cursor = stage.cursor.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => {
+                    stage.cursor = (stage.cursor + 1).min(SkillAgent::ALL.len());
+                }
+                KeyCode::Char('g') => stage.cursor = 0,
+                KeyCode::Char('G') => stage.cursor = SkillAgent::ALL.len(),
+                KeyCode::Char(' ') if stage.cursor == 0 => {
+                    self.skill_scope = match self.skill_scope {
+                        SkillScope::Global => SkillScope::Project,
+                        SkillScope::Project => SkillScope::Global,
+                    };
+                }
+                KeyCode::Char(' ') => {
+                    let index = stage.cursor - 1;
+                    self.agent_on[index] = !self.agent_on[index];
+                    stage.cursor = if self.last_dir >= 0 {
+                        (stage.cursor + 1).min(SkillAgent::ALL.len())
+                    } else {
+                        stage.cursor.saturating_sub(1)
+                    };
+                }
+                KeyCode::Char('a') | KeyCode::Char('A') => {
+                    let all_on = self.agent_on.iter().all(|on| *on);
+                    self.agent_on.fill(!all_on);
+                }
+                KeyCode::Right | KeyCode::Char('l') => navigate = 1,
+                KeyCode::Left | KeyCode::Char('h') | KeyCode::Backspace | KeyCode::Char('b') => {
+                    navigate = -1;
+                }
+                _ => {}
+            },
             Stage::Skills(stage) => {
                 // The yazi ladder: h/l climb one continuous rail —
                 // [previous stage] ← categories ⇄ skills → [next stage] —
@@ -1002,8 +1092,11 @@ impl Wizard {
         match preset {
             Preset::Empty => {}
             Preset::Everything => {
-                for (index, on) in self.selected.iter_mut().enumerate() {
-                    *on = !self.model.installed[index];
+                let available = (0..self.selected.len())
+                    .map(|index| !self.resource_installed(index))
+                    .collect::<Vec<_>>();
+                for (on, available) in self.selected.iter_mut().zip(available) {
+                    *on = available;
                 }
             }
             Preset::Catalog(preset_index) => {
@@ -1014,7 +1107,7 @@ impl Wizard {
                         .iter()
                         .position(|resource| resource.install_target == *target)
                     {
-                        if !self.model.installed[index] {
+                        if !self.resource_installed(index) {
                             self.selected[index] = true;
                         }
                     }
@@ -1040,7 +1133,12 @@ impl Wizard {
     }
 
     fn push_undo(&mut self) {
-        let snapshot = (self.selected.clone(), self.setting_on.clone());
+        let snapshot = SelectionSnapshot {
+            selected: self.selected.clone(),
+            setting_on: self.setting_on.clone(),
+            agent_on: self.agent_on.clone(),
+            skill_scope: self.skill_scope,
+        };
         if self.undo_stack.last() == Some(&snapshot) {
             return;
         }
@@ -1051,9 +1149,11 @@ impl Wizard {
     }
 
     pub(crate) fn undo(&mut self) {
-        if let Some((selected, setting_on)) = self.undo_stack.pop() {
-            self.selected = selected;
-            self.setting_on = setting_on;
+        if let Some(snapshot) = self.undo_stack.pop() {
+            self.selected = snapshot.selected;
+            self.setting_on = snapshot.setting_on;
+            self.agent_on = snapshot.agent_on;
+            self.skill_scope = snapshot.skill_scope;
         }
     }
 
@@ -1081,7 +1181,7 @@ impl Wizard {
         if installed.len() == self.model.installed.len() {
             self.model.installed = installed;
             for (index, present) in self.model.installed.iter().enumerate() {
-                if *present {
+                if *present && self.model.resources[index].kind != ResourceKind::Skill {
                     self.selected[index] = false;
                 }
             }
@@ -1093,7 +1193,7 @@ impl Wizard {
     /// when `index` is neither installed nor directly selected. Locked rows:
     /// shown as selected, not deselectable while the parent stays picked.
     pub(crate) fn required_note(&self, index: usize) -> Option<String> {
-        if self.model.installed[index] || self.selected[index] {
+        if self.resource_installed(index) || self.selected[index] {
             return None;
         }
         let target = &self.model.resources[index].id;
@@ -1115,7 +1215,7 @@ impl Wizard {
     /// Per-resource toggle blocks: installed, or required by a selection.
     fn blocked_flags(&self) -> Vec<bool> {
         (0..self.model.resources.len())
-            .map(|index| self.model.installed[index] || self.required_note(index).is_some())
+            .map(|index| self.resource_installed(index) || self.required_note(index).is_some())
             .collect()
     }
 
@@ -1179,7 +1279,7 @@ impl Wizard {
             KeyCode::Char(' ') => {
                 let matches = self.search_matches();
                 if let Some(&index) = matches.get(self.search_cursor) {
-                    if !self.model.installed[index] && self.required_note(index).is_none() {
+                    if !self.resource_installed(index) && self.required_note(index).is_none() {
                         self.push_undo();
                         self.selected[index] = !self.selected[index];
                     }
@@ -1269,7 +1369,7 @@ impl Wizard {
             let matches = self.search_matches();
             if let Some(&hit) = matches.get(index) {
                 self.search_cursor = index;
-                if !self.model.installed[hit] && self.required_note(hit).is_none() {
+                if !self.resource_installed(hit) && self.required_note(hit).is_none() {
                     self.push_undo();
                     self.selected[hit] = !self.selected[hit];
                 }
@@ -1288,8 +1388,21 @@ impl Wizard {
                 if index < stage.items.len() {
                     stage.cursor = index;
                     let item = stage.items[index];
-                    if !self.model.installed[item] && self.required_note(item).is_none() {
+                    if !self.resource_installed(item) && self.required_note(item).is_none() {
                         self.selected[item] = !self.selected[item];
+                    }
+                }
+            }
+            Stage::Agents(stage) => {
+                if index <= SkillAgent::ALL.len() {
+                    stage.cursor = index;
+                    if index == 0 {
+                        self.skill_scope = match self.skill_scope {
+                            SkillScope::Global => SkillScope::Project,
+                            SkillScope::Project => SkillScope::Global,
+                        };
+                    } else {
+                        self.agent_on[index - 1] = !self.agent_on[index - 1];
                     }
                 }
             }
@@ -1320,7 +1433,7 @@ impl Wizard {
                 stage.focus = Focus::Skills;
                 stage.skill_cursor = index;
                 let item = category.items[index];
-                if !self.model.installed[item] && self.required_note(item).is_none() {
+                if !self.resource_installed(item) && self.required_note(item).is_none() {
                     self.selected[item] = !self.selected[item];
                 }
             }

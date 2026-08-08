@@ -4,7 +4,7 @@ Loom weaves a coding-agent setup into one installable collection: 50+ skills, Pi
 
 ## What's inside
 
-**Agent skills** — 50+ skills for coding agents that read a `skills/` tree (Claude Code included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, and planning. Install one or all of them.
+**Agent skills** — 50+ skills for coding agents that read a `skills/` tree (Claude Code, Codex, OpenCode, and Pi included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, and planning. Install one or all of them.
 
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
@@ -48,7 +48,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 
 One command does the minimum and asks about the rest: it installs [mise](https://mise.jdx.dev), syncs the core of the [tool manifest](manifest/loom.toml) (node and the `loom` CLI, exact-pinned), and drops you into the guided setup. Your own `~/.config/mise/config.toml` is never touched; use it to layer personal tools on top.
 
-A wizard then walks through **tools** (Pi, herdr, gh, glab, tokei/tokui, uv, and the skills' helper CLIs — pick what you want, every one pinned to the version Yassin runs), **Pi packages**, and **skills** by category, and shows you the exact install plan before it runs anything. What you pick becomes your selection; skills are copied straight into your agents' skill trees. It ends by telling you what to try first.
+A wizard then walks through **tools** (Pi, herdr, gh, glab, tokei/tokui, uv, and the skills' helper CLIs — pick what you want, every one pinned to the version Yassin runs), **Pi packages**, and **skills** by category. For skills, you choose the agents and whether the copies belong globally or to the current project; global is the default. The review names every destination before anything runs. It ends by telling you what to try first.
 
 Tool versions move only when a new manifest lands on this repo — `loom update` re-syncs it and refreshes everything else you installed.
 
@@ -57,8 +57,10 @@ Come back to it later:
 ```bash
 loom add       # choose more capabilities
 loom update    # update installed tooling and resources
-loom doctor    # check the setup
+loom status    # check the setup
 loom add --skill tdd --herdr-plugin reviewr --yes
+loom add --skill tdd --agent codex --agent opencode --yes
+loom add --skill tdd --agent claude --scope project --yes
 ```
 
 There's also a [`loom`](skills/loom/SKILL.md) skill, so a coding agent can run this same setup for you and ask before each step.
@@ -69,11 +71,14 @@ You don't need the CLI — it just drives the tools below, and each one works on
 
 ### Agent skills
 
-The CLI installs skills natively: it detects which coding agents you have (`~/.claude`, `~/.agents`, `~/.codex`, `~/.pi/agent`) and copies the skills you pick — plus any skills they declare as dependencies — into each agent's skill tree.
+The CLI installs skills natively. Pick Claude, Codex, Pi, OpenCode, or the portable Agent Skills tree with repeatable `--agent` flags; choose `--scope project` for the current Git worktree, otherwise installation is global. Omitting `--agent` preserves the convenient default of using the agents already detected on the machine. Dependencies follow the selected skill into exactly the same destinations.
+
+Global destinations are `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills`, and `~/.config/opencode/skills`. Project destinations are `.claude/skills`, `.agents/skills` (also Codex's portable project location), `.pi/skills`, and `.opencode/skills`. OpenCode's session adapter follows the same scope, landing in the corresponding `plugins` directory so Beads claims remain resumable.
 
 ```bash
-loom add --skill tdd --yes     # one skill (and whatever it depends on)
-loom update                    # refresh installed skills, backfill new agents
+loom add --skill tdd --yes     # global, for detected agents
+loom add --skill tdd --agent codex --scope project --yes
+loom update                    # refresh each existing copy in place
 ```
 
 The repository is also on [skills.sh](https://skills.sh):

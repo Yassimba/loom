@@ -2,10 +2,10 @@ use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use inquire::Confirm;
 use loom::app::{install_selected, load_catalog, Selectors};
-use loom::doctor::run_doctor;
 use loom::init::{run_init, sync_projects, InitOptions};
+use loom::status::run_status;
 use loom::update::run_updates;
-use loom::{RealSystem, ResourceKind};
+use loom::{RealSystem, ResourceKind, SkillAgent, SkillScope};
 
 #[derive(Parser)]
 #[command(
@@ -31,8 +31,8 @@ enum Command {
         #[arg(long)]
         yes: bool,
     },
-    /// Check the setup and print actionable repairs
-    Doctor,
+    /// Show installed agents, integrations, and runtime health
+    Status,
     /// Scaffold this project's AGENTS.md and CLAUDE.md from the templates
     Init {
         /// Include the Python section (--no-python to exclude)
@@ -45,11 +45,6 @@ enum Command {
         rust: bool,
         #[arg(long, hide = true)]
         no_rust: bool,
-        /// Include the Beads issue-triage section (--no-beads to exclude)
-        #[arg(long, overrides_with = "no_beads")]
-        beads: bool,
-        #[arg(long, hide = true)]
-        no_beads: bool,
         /// Accept detection defaults without prompting
         #[arg(long)]
         yes: bool,
@@ -77,6 +72,12 @@ struct SelectionArgs {
     /// Install a tool from the pinned manifest; repeat for multiple tools
     #[arg(long = "tool")]
     tools: Vec<String>,
+    /// Install skills for this agent; repeat for multiple agents
+    #[arg(long = "agent", value_enum)]
+    agents: Vec<SkillAgent>,
+    /// Install skills globally or in the current project
+    #[arg(long, value_enum, default_value_t)]
+    scope: SkillScope,
     /// Show the plan without making changes
     #[arg(long)]
     dry_run: bool,
@@ -131,9 +132,17 @@ fn main() -> Result<()> {
                 herdr_plugins: args.herdr_plugins,
                 tools: args.tools,
             };
-            install_selected(&catalog, &selectors, args.yes, args.dry_run, &system)?
+            install_selected(
+                &catalog,
+                &selectors,
+                &args.agents,
+                args.scope,
+                args.yes,
+                args.dry_run,
+                &system,
+            )?
         }
-        Command::Doctor => run_doctor(&system),
+        Command::Status => run_status(&system),
         Command::Sync => {
             let (ok, report) = sync_projects(&system);
             if ok {
@@ -148,8 +157,6 @@ fn main() -> Result<()> {
             no_python,
             rust,
             no_rust,
-            beads,
-            no_beads,
             yes,
             force,
         } => {
@@ -160,11 +167,9 @@ fn main() -> Result<()> {
             };
             run_init(
                 &system,
-                &load_catalog()?,
                 &InitOptions {
                     python: flag(python, no_python),
                     rust: flag(rust, no_rust),
-                    beads: flag(beads, no_beads),
                     yes,
                     force,
                 },

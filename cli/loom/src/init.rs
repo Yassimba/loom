@@ -7,7 +7,7 @@
 //! land wrapped in `<!-- loom:section:<name> -->` markers so a re-run
 //! appends missing sections and never touches anything else.
 
-use crate::{skills, Catalog, System};
+use crate::{skills, System};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
@@ -15,7 +15,6 @@ use std::path::Path;
 pub struct InitOptions {
     pub python: Option<bool>,
     pub rust: Option<bool>,
-    pub beads: Option<bool>,
     pub yes: bool,
     pub force: bool,
 }
@@ -25,7 +24,7 @@ struct Section {
     template: &'static str,
 }
 
-const SECTIONS: [Section; 3] = [
+const SECTIONS: [Section; 2] = [
     Section {
         name: "python",
         template: "manifest/init/sections/python.md",
@@ -34,11 +33,9 @@ const SECTIONS: [Section; 3] = [
         name: "rust",
         template: "manifest/init/sections/rust.md",
     },
-    Section {
-        name: "beads",
-        template: "manifest/init/sections/beads.md",
-    },
 ];
+
+const RETIRED_SECTIONS: [&str; 1] = ["beads"];
 
 const BASE_TEMPLATE: &str = "manifest/init/AGENTS.base.md";
 
@@ -96,15 +93,13 @@ fn find_fence(content: &str, name: &str) -> Option<Fence> {
     })
 }
 
-/// Detection defaults: evidence in the project, or (for beads) the machine.
-fn detect(project: &Path, system: &dyn System) -> (bool, bool, bool) {
+/// Detection defaults from evidence in the project.
+fn detect(project: &Path) -> (bool, bool) {
     let python = ["pyproject.toml", "setup.py", "requirements.txt"]
         .iter()
         .any(|file| project.join(file).exists());
     let rust = project.join("Cargo.toml").exists();
-    let beads = project.join(".beads").is_dir()
-        || (system.command_exists("br") && system.command_exists("bv"));
-    (python, rust, beads)
+    (python, rust)
 }
 
 fn confirm(prompt: &str, default: bool, assume_yes: bool) -> Result<bool> {
@@ -116,23 +111,9 @@ fn confirm(prompt: &str, default: bool, assume_yes: bool) -> Result<bool> {
         .prompt()?)
 }
 
-/// The beads pair from the catalog (labels beads/beads-viewer): both or
-/// nothing — the tracker and its viewer are designed to travel together.
-fn beads_tool_keys(catalog: &Catalog) -> Vec<String> {
-    catalog
-        .resources
-        .iter()
-        .filter(|resource| {
-            resource.kind == crate::ResourceKind::Tool
-                && (resource.label == "beads" || resource.label == "beads-viewer")
-        })
-        .map(|resource| resource.install_target.clone())
-        .collect()
-}
-
-pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -> Result<bool> {
+pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     let project = std::env::current_dir().context("no current directory")?;
-    let (python_default, rust_default, beads_default) = detect(&project, system);
+    let (python_default, rust_default) = detect(&project);
 
     let python = match options.python {
         Some(explicit) => explicit,
@@ -150,32 +131,6 @@ pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -
             options.yes,
         )?,
     };
-    let beads = match options.beads {
-        Some(explicit) => explicit,
-        None => confirm(
-            "Include the Beads issue-triage section? (br + bv)",
-            beads_default,
-            options.yes,
-        )?,
-    };
-
-    // Beads works as a pair: the section assumes both the tracker (br) and
-    // the viewer (bv). Offer to install both through the tool selection.
-    if beads && !(system.command_exists("br") && system.command_exists("bv")) {
-        println!("The Beads section needs br and bv — they are designed to be installed together.");
-        if crate::manifest::mise_available(system)
-            && confirm("Install beads and beads-viewer now?", true, options.yes)?
-        {
-            let keys = beads_tool_keys(catalog);
-            match crate::manifest::sync_selected(system, &keys) {
-                Ok(_) => println!("  ✓ beads + beads-viewer added to the tool selection"),
-                Err(message) => eprintln!("  ! could not install the beads pair: {message}"),
-            }
-        } else {
-            println!("  → later: loom add --tool beads --tool beads-viewer");
-        }
-    }
-
     // Templates come from the published repo, so init output is publish-gated.
     let home = system.home_dir().context("home directory is unavailable")?;
     let staging = home.join(".cache").join("loom").join("init-staging");
@@ -189,7 +144,6 @@ pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -
         let wanted = match section.name {
             "python" => python,
             "rust" => rust,
-            "beads" => beads,
             _ => false,
         };
         if wanted {
@@ -229,6 +183,12 @@ pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -
              (the published template has moved; --force rewrites everything)"
         );
     }
+    if !outcome.removed.is_empty() {
+        println!(
+            "  ✓ AGENTS.md: removed retired {} section",
+            outcome.removed.join(", ")
+        );
+    }
 
     let claude_path = project.join("CLAUDE.md");
     match fs::read_to_string(&claude_path) {
@@ -265,6 +225,7 @@ pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -
 pub(crate) struct RenderOutcome {
     pub refreshed: Vec<&'static str>,
     pub appended: Vec<&'static str>,
+    pub removed: Vec<&'static str>,
     /// Edited inside the fence: preserved, listed so the user knows the
     /// published template moved past their copy.
     pub kept_edited: Vec<&'static str>,
@@ -320,6 +281,20 @@ fn render_agents(
             // A file without a base fence keeps its own top; init never
             // rewrites what it cannot prove it owns.
             None => {}
+        }
+    }
+    for name in RETIRED_SECTIONS {
+        if let Some(fence) = find_fence(&updated, name) {
+            let pristine = fence
+                .stamped
+                .as_deref()
+                .is_some_and(|stamped| stamped == stamp(&fence.body));
+            if pristine {
+                updated.replace_range(fence.start..fence.end, "");
+                outcome.removed.push(name);
+            } else {
+                outcome.kept_edited.push(name);
+            }
         }
     }
     if updated == current {
@@ -441,6 +416,9 @@ pub fn sync_projects(system: &dyn System) -> (bool, String) {
         if !outcome.kept_edited.is_empty() {
             notes.push(format!("kept edited {}", outcome.kept_edited.join(", ")));
         }
+        if !outcome.removed.is_empty() {
+            notes.push(format!("removed retired {}", outcome.removed.join(", ")));
+        }
         if notes.is_empty() {
             notes.push("current".into());
         }
@@ -475,6 +453,22 @@ mod tests {
         assert!(rendered.contains("<!-- loom:section:python hash:"));
         assert!(rendered.contains("- uv add"));
         assert!(rendered.contains("<!-- /loom:section:python -->"));
+    }
+
+    #[test]
+    fn sync_removes_only_pristine_retired_sections() {
+        // Capability/seam: managed-fence retirement. This fails if sync keeps
+        // obsolete context or deletes a user's edit. No expiry: permanent safety contract.
+        let pristine = format!("prefix{}suffix", wrap_section("beads", "old template"));
+        let (rendered, outcome) = render_agents(Some(&pristine), BASE, &[], false);
+        let rendered = rendered.unwrap();
+        assert!(!rendered.contains("loom:section:beads"));
+        assert_eq!(outcome.removed, vec!["beads"]);
+
+        let edited = pristine.replace("old template", "user edit");
+        let (rendered, outcome) = render_agents(Some(&edited), BASE, &[], false);
+        assert!(rendered.is_none());
+        assert_eq!(outcome.kept_edited, vec!["beads"]);
     }
 
     #[test]

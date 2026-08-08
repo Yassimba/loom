@@ -3,7 +3,8 @@ use crate::ui::{confirm_plan, print_plan};
 use crate::wizard::{run_wizard, Model, WizardOutcome};
 use crate::{
     build_install_plan, execute_install_plan, expand_skill_dependencies, Catalog, CommandSpec,
-    InstallReport, NodeStatus, Platform, PrerequisiteStatus, Resource, ResourceKind, System,
+    InstallReport, NodeStatus, Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent,
+    SkillDestination, SkillScope, System,
 };
 use anyhow::{bail, Context, Result};
 
@@ -27,6 +28,8 @@ impl Selectors {
 pub fn install_selected(
     catalog: &Catalog,
     selectors: &Selectors,
+    requested_agents: &[SkillAgent],
+    scope: SkillScope,
     assume_yes: bool,
     dry_run: bool,
     system: &(dyn System + Sync),
@@ -43,8 +46,18 @@ pub fn install_selected(
     } else {
         Platform::Unix
     };
+    let home = system.home_dir().context("home directory is unavailable")?;
+    let current_dir = system
+        .current_dir()
+        .context("current directory is unavailable")?;
+    let agents = if requested_agents.is_empty() {
+        crate::detect_skill_agents(&home)
+    } else {
+        requested_agents.to_vec()
+    };
+    let destination = SkillDestination::new(agents, scope, &home, &current_dir);
     if selectors.is_empty() {
-        return run_interactive(catalog, status, platform, dry_run, system);
+        return run_interactive(catalog, status, platform, dry_run, destination, system);
     }
 
     let resources =
@@ -53,7 +66,7 @@ pub fn install_selected(
         println!("Nothing selected; no changes made.");
         return Ok(true);
     }
-    let plan = build_install_plan(&resources, &[], status, platform)?;
+    let plan = build_install_plan(&resources, &[], status, platform, &destination)?;
     print_plan(&plan);
     if dry_run {
         println!("\nDry run; no changes made.");
@@ -85,6 +98,7 @@ fn run_interactive(
     status: PrerequisiteStatus,
     platform: Platform,
     dry_run: bool,
+    skill_destination: SkillDestination,
     system: &(dyn System + Sync),
 ) -> Result<bool> {
     let settings_paths = SettingsPaths::detect()?;
@@ -108,6 +122,7 @@ fn run_interactive(
         status,
         platform,
         dry_run,
+        skill_destination,
     };
     match run_wizard(model, system)? {
         WizardOutcome::Cancelled => {
@@ -135,11 +150,12 @@ fn run_interactive(
 
 /// Which catalog resources are already on this machine. Uses the same
 /// probes as post-install verification: manager list output for plugins and
-/// packages, the global agent trees for skills.
+/// packages, and the currently selected destination trees for skills.
 pub(crate) fn detect_installed(
     resources: &[Resource],
     status: PrerequisiteStatus,
     system: &(dyn System + Sync),
+    destination: &SkillDestination,
 ) -> Vec<bool> {
     let list_output = |present: bool, program: &str, args: &[&str]| {
         if !present {
@@ -160,10 +176,7 @@ pub(crate) fn detect_installed(
             pi.join().expect("pi probe thread"),
         )
     });
-    let skill_trees = system
-        .home_dir()
-        .map(|home| crate::detect_skill_trees(&home))
-        .unwrap_or_default();
+    let skill_trees = destination.trees();
     let selected_tools = system
         .home_dir()
         .map(|home| crate::manifest::selected_keys(&home))

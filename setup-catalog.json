@@ -216,6 +216,19 @@
       "dependencies": []
     },
     {
+      "id": "skill:next",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "next",
+      "description": "Claim the next actionable Beads task using bv and br. Use when the user asks what to work on next or asks to pick, grab, claim, or start the next task.",
+      "installTarget": "next",
+      "nextAction": "Ask your coding agent to use the next skill.",
+      "dependencies": [
+        "github:Dicklesworthstone/beads_rust",
+        "github:Dicklesworthstone/beads_viewer"
+      ]
+    },
+    {
       "id": "skill:prototype",
       "kind": "skill",
       "group": "Coding",
@@ -540,7 +553,7 @@
       "kind": "skill",
       "group": "General",
       "label": "loom",
-      "description": "Set up or troubleshoot Yassimba's curated setup through the loom CLI — exact-pinned tools via mise, agent skills, Pi packages. Use when the user asks to install this collection, add a capability (tool, skill, or Pi package), scaffold a project's AGENTS.md, update or sync the setup, or diagnose installation problems.",
+      "description": "Set up or troubleshoot Yassimba's curated setup through the loom CLI — exact-pinned tools via mise, agent-scoped global or project skills, Pi packages. Use when the user asks to install this collection, add a capability for one or more agents, install a skill globally or in the current project, scaffold AGENTS.md, update or sync the setup, or diagnose installation problems.",
       "installTarget": "loom",
       "nextAction": "Ask your coding agent to use the loom skill.",
       "dependencies": []

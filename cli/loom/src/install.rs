@@ -123,20 +123,30 @@ pub enum VerificationSpec {
 }
 
 /// What a plan step does when executed: run a manager command, or copy
-/// skills into the detected agent trees natively.
+/// skills into an exact agent-and-scope destination natively.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StepAction {
     Command(CommandSpec),
-    CopySkills { skills: Vec<String> },
-    SyncTools { tools: Vec<String> },
+    CopySkills {
+        skills: Vec<String>,
+        destination: crate::skills::SkillDestination,
+    },
+    SyncTools {
+        tools: Vec<String>,
+    },
 }
 
 impl StepAction {
     pub fn display(&self) -> String {
         match self {
             Self::Command(command) => command.display(),
-            Self::CopySkills { skills } => format!(
-                "copy skills into detected agent trees: {}",
+            Self::CopySkills {
+                skills,
+                destination,
+            } => format!(
+                "copy skills into {} targets ({}): {}",
+                destination.scope.label().to_lowercase(),
+                destination.display(),
                 skills.join(", ")
             ),
             Self::SyncTools { tools } => format!(
@@ -178,6 +188,7 @@ pub fn build_install_plan(
     runtimes: &[Runtime],
     status: PrerequisiteStatus,
     platform: Platform,
+    skill_destination: &crate::skills::SkillDestination,
 ) -> Result<InstallPlan> {
     let needs_pi = runtimes.contains(&Runtime::Pi)
         || resources
@@ -267,10 +278,17 @@ pub fn build_install_plan(
         .collect::<Vec<_>>();
     let mut steps = Vec::new();
     if !skills.is_empty() {
+        anyhow::ensure!(
+            !skill_destination.agents.is_empty(),
+            "installing skills needs at least one selected agent"
+        );
         steps.push(InstallStep {
             target: "skills".into(),
             manager: "skills".into(),
-            action: StepAction::CopySkills { skills },
+            action: StepAction::CopySkills {
+                skills,
+                destination: skill_destination.clone(),
+            },
             // Verified inside the copy itself: each tree must end up with
             // <skill>/SKILL.md.
             verification: None,
@@ -447,9 +465,10 @@ pub fn execute_install_plan_with(
 
 fn execute_step(step: &InstallStep, system: &dyn System) -> Option<String> {
     let command = match &step.action {
-        StepAction::CopySkills { skills } => {
-            return crate::skills::install_skills(system, skills).err()
-        }
+        StepAction::CopySkills {
+            skills,
+            destination,
+        } => return crate::skills::install_skills(system, skills, destination).err(),
         StepAction::SyncTools { tools } => {
             return crate::manifest::sync_selected(system, tools).err()
         }

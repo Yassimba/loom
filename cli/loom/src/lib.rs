@@ -1,12 +1,12 @@
 pub mod app;
 mod catalog;
-pub mod doctor;
 pub mod init;
 mod install;
 mod jsonc;
 pub mod manifest;
 pub mod settings;
 mod skills;
+pub mod status;
 mod system;
 mod ui;
 pub mod update;
@@ -18,5 +18,8 @@ pub use install::{
     InstallFailure, InstallPlan, InstallReport, InstallStep, NodeStatus, Platform,
     PrerequisiteStatus, Runtime, StepAction, StepStatus, VerificationSpec, PI_MIN_NODE,
 };
-pub use skills::{detect_skill_trees, expand_skill_dependencies, installed_catalog_skills};
+pub use skills::{
+    detect_skill_agents, detect_skill_trees, expand_skill_dependencies, SkillAgent,
+    SkillDestination, SkillScope,
+};
 pub use system::{CommandResult, RealSystem, System};
