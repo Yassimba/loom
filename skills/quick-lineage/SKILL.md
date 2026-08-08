@@ -27,7 +27,7 @@ Start at `--max-depth 2` and deepen only the limb the question lives in — full
 | Landed | `stackdiff <base> -e <entry> --max-depth 2 --only-changes --format markdown` — working tree included; add `<tip>` for ref-to-ref |
 | Planned | the Discussed command for BEFORE rails, then hand-write `+`/`-` lines for the intended calls |
 
-`--format markdown` emits the ```` ```diff ```` fence ready to paste; rich mode annotates each node with `binding = call(args) → return`, its doc line, and `path:line`. `--only-changes` trims unchanged limbs to `…` (widen with `--context N`). Add `--plain` only when the annotations drown a tiny graph.
+`--format markdown` emits the ```` ```diff ```` fence ready to paste; rich mode annotates each node with `binding = call(args) → return`, its doc line, and `path:line`. Unchanged limbs trim to `…` by default (widen with `--context N`, `--full` for everything). When the question is convergence — "do these paths reach the same thing?" — use `--view lineage`: the call DAG at data granularity, each function drawn once with fan-in visible, data objects as stadium nodes, bindings riding the edges.
 
 Entry not found → `stackdiff --tree` lists the exported entrypoints; pick the nearest and say you did. Language outside TS/TSX/Python/Go/Rust → say stackdiff cannot parse it and trace by hand, marked as unverified. "Who calls X" questions → `--callers -e X` inverts the graph.
 

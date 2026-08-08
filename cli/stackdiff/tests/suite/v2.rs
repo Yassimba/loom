@@ -424,6 +424,39 @@ fn twin_calls_align_by_argument_similarity() {
 }
 
 #[test]
+fn lineage_view_draws_shared_callees_once() {
+    let source = diff_outdent(
+        r#"
+      export function resolve(): Plan { return read(); }
+      export function alpha() { const plan = resolve(); }
+      export function beta() { const p = resolve(); }
+      export function boot() { alpha(); beta(); }
+    "#,
+    );
+    let index = build_index(extract_functions("app.ts", &source).unwrap());
+    let tree = build_call_tree("boot", &index, 12);
+    let diff = diff_trees(&tree, &tree);
+    let (mermaid, _) = stackdiff::views::lineage_mermaid(&[diff]).unwrap();
+    // resolve appears as ONE node, referenced by two edges.
+    assert_eq!(mermaid.matches("[resolve → Plan]").count(), 1, "{mermaid}");
+    let resolve_id = mermaid
+        .lines()
+        .find(|l| l.contains("[resolve → Plan]"))
+        .and_then(|l| l.split('[').next())
+        .unwrap()
+        .to_string();
+    let fan_in = mermaid
+        .lines()
+        .filter(|l| l.contains("-->") && l.trim_end().ends_with(resolve_id.trim()))
+        .count();
+    assert_eq!(fan_in, 2, "two edges converge on resolve:\n{mermaid}");
+    assert!(
+        mermaid.contains("|plan|"),
+        "binding rides the edge:\n{mermaid}"
+    );
+}
+
+#[test]
 fn json_output_carries_dataflow_fields() {
     let source = diff_outdent(
         r#"
