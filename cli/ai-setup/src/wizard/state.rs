@@ -907,6 +907,15 @@ impl Wizard {
                 .report
                 .as_ref()
                 .map(|report| Action::Exit(WizardOutcome::Installed(report.clone()))),
+            // A preset row is an action, not a checkbox: Enter on it means
+            // "start with this bundle" — apply, then advance.
+            Stage::Welcome(stage) => {
+                if let PickRow::Preset(preset) = stage.rows[stage.cursor] {
+                    self.apply_preset(preset);
+                }
+                self.go_forward();
+                None
+            }
             _ => {
                 self.go_forward();
                 None

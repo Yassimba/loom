@@ -856,3 +856,20 @@ fn presets_apply_and_undo() {
     press(&mut wizard, &[KeyCode::Char('u')]);
     assert_eq!(wizard.selection().len(), 6);
 }
+
+#[test]
+fn enter_on_a_preset_row_applies_it_and_starts() {
+    let mut wizard = wizard();
+    // Highlight "Everything" (G lands on Start empty; k steps up to it).
+    press(&mut wizard, &[KeyCode::Char('G'), KeyCode::Char('k')]);
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert_eq!(
+        wizard.selection().len(),
+        6,
+        "enter applied the highlighted preset"
+    );
+    assert!(
+        !matches!(wizard.stages[wizard.stage_index], Stage::Welcome(_)),
+        "and advanced past the welcome screen"
+    );
+}
