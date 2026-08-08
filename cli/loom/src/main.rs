@@ -1,15 +1,15 @@
-use ai_setup::app::{install_selected, load_catalog, Selectors};
-use ai_setup::doctor::run_doctor;
-use ai_setup::init::{run_init, sync_projects, InitOptions};
-use ai_setup::update::run_updates;
-use ai_setup::{RealSystem, ResourceKind};
 use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use inquire::Confirm;
+use loom::app::{install_selected, load_catalog, Selectors};
+use loom::doctor::run_doctor;
+use loom::init::{run_init, sync_projects, InitOptions};
+use loom::update::run_updates;
+use loom::{RealSystem, ResourceKind};
 
 #[derive(Parser)]
 #[command(
-    name = "ai-setup",
+    name = "loom",
     version,
     about = "Set up Yassimba's curated skills, Pi packages, and Herdr plugins"
 )]
@@ -111,14 +111,14 @@ fn print_completions(shell: clap_complete::Shell) -> Result<()> {
             .mut_arg("tools", |arg| arg.value_parser(values(ResourceKind::Tool)))
         });
     }
-    clap_complete::generate(shell, &mut command, "ai-setup", &mut std::io::stdout());
+    clap_complete::generate(shell, &mut command, "loom", &mut std::io::stdout());
     Ok(())
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let system = RealSystem::default();
-    // Bare `ai-setup` is the guided setup — one less word to teach.
+    // Bare `loom` is the guided setup — one less word to teach.
     let command = cli
         .command
         .unwrap_or_else(|| Command::Setup(SelectionArgs::default()));

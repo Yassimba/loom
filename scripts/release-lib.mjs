@@ -105,21 +105,21 @@ function pluginManifestPaths(repoRoot, pluginsRoot) {
 }
 
 function cliComponent(repoRoot, pluginsRoot) {
-  const cliDir = join(repoRoot, "cli", "ai-setup");
+  const cliDir = join(repoRoot, "cli", "loom");
   const manifestPath = join(cliDir, "Cargo.toml");
   if (!existsSync(manifestPath)) return undefined;
   const cargo = cargoPackage(readFileSync(manifestPath, "utf8"));
   assertVersion(cargo.version, manifestPath);
   // The installers no longer embed a version; the published mise manifest
   // carries the CLI's release pin instead, as the full component tag
-  // (ubi resolves "ai-setup-v0.6.2" where a bare version would derive the
+  // (ubi resolves "loom-v0.6.2" where a bare version would derive the
   // wrong tag).
-  const manifestPin = readFileSync(join(repoRoot, "manifest", "ai-setup.toml"), "utf8").match(
-    /^"github:Yassimba\/ai-setup\[exe=ai-setup\]" = \{ version = "([^"]+)"/m,
+  const manifestPin = readFileSync(join(repoRoot, "manifest", "loom.toml"), "utf8").match(
+    /^"github:Yassimba\/loom\[exe=loom\]" = \{ version = "([^"]+)"/m,
   )?.[1];
-  if (manifestPin !== `ai-setup-v${cargo.version}`) {
+  if (manifestPin !== `loom-v${cargo.version}`) {
     throw new Error(
-      `ai-setup: Cargo ${cargo.version} and manifest/ai-setup.toml pin ${manifestPin} must match`,
+      `loom: Cargo ${cargo.version} and manifest/loom.toml pin ${manifestPin} must match`,
     );
   }
   return {
@@ -128,11 +128,11 @@ function cliComponent(repoRoot, pluginsRoot) {
     bin: cargo.name,
     version: cargo.version,
     path: relative(repoRoot, cliDir),
-    // manifest/ai-setup.toml is deliberately absent: tool-pin bumps are
+    // manifest/loom.toml is deliberately absent: tool-pin bumps are
     // main-effective and must not trigger CLI releases. The release prep
     // still rewrites the CLI's own pin there (versionMirrors).
     paths: [
-      "cli/ai-setup",
+      "cli/loom",
       "install.sh",
       "install.ps1",
       "setup-catalog.json",
@@ -146,7 +146,7 @@ function cliComponent(repoRoot, pluginsRoot) {
     distribution: "rust-binary",
     toolchain: rustToolchain(cliDir, cargo),
     tag: `${cargo.name}-v${cargo.version}`,
-    versionMirrors: ["manifest/ai-setup.toml"],
+    versionMirrors: ["manifest/loom.toml"],
   };
 }
 

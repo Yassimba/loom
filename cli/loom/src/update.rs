@@ -8,7 +8,7 @@ struct UpdateTask {
 }
 
 pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
-    // Warn-only: ai-setup never installs or updates Node itself, but a Node
+    // Warn-only: loom never installs or updates Node itself, but a Node
     // below Pi's floor is worth flagging before Pi's own update runs. A
     // missing Node stays silent here — there is nothing installed to age.
     let node = NodeStatus::detect(system);
@@ -72,7 +72,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
                     "-ExecutionPolicy",
                     "Bypass",
                     "-Command",
-                    "irm https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.ps1 | iex",
+                    "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex",
                 ],
             )
         } else {
@@ -80,12 +80,12 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
                 "sh",
                 [
                     "-c",
-                    "curl -fsSL https://raw.githubusercontent.com/Yassimba/ai-setup/main/install.sh | sh",
+                    "curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh",
                 ],
             )
         };
         tasks.push(UpdateTask {
-            label: "AI Setup CLI",
+            label: "Loom CLI",
             commands: vec![self_update],
         });
     }

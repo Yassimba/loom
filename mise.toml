@@ -1,5 +1,5 @@
 # Contributor dev environment for this repo (activates on cd; consumers get
-# manifest/ai-setup.toml instead, synced by the CLI). Pins are exact so every
+# manifest/loom.toml instead, synced by the CLI). Pins are exact so every
 # contributor builds with the same toolchain; the mise-bump workflow proposes
 # updates.
 

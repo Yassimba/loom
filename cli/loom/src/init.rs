@@ -1,10 +1,10 @@
-//! `ai-setup init` — scaffold a project's AGENTS.md and CLAUDE.md from the
+//! `loom init` — scaffold a project's AGENTS.md and CLAUDE.md from the
 //! published templates (manifest/init/ in the repo), with sections chosen by
 //! what the project is and what the machine has.
 //!
 //! Templates are configuration: editing them in the repo and merging to main
 //! changes what every future init writes, like the tool manifest. Sections
-//! land wrapped in `<!-- ai-setup:section:<name> -->` markers so a re-run
+//! land wrapped in `<!-- loom:section:<name> -->` markers so a re-run
 //! appends missing sections and never touches anything else.
 
 use crate::{skills, Catalog, System};
@@ -43,7 +43,7 @@ const SECTIONS: [Section; 3] = [
 const BASE_TEMPLATE: &str = "manifest/init/AGENTS.base.md";
 
 fn marker_open(name: &str) -> String {
-    format!("<!-- ai-setup:section:{name}")
+    format!("<!-- loom:section:{name}")
 }
 
 /// FNV-1a over the trimmed template: enough to tell "pristine" from
@@ -59,7 +59,7 @@ fn stamp(content: &str) -> String {
 
 fn wrap_section(name: &str, content: &str) -> String {
     format!(
-        "\n<!-- ai-setup:section:{name} hash:{} -->\n\n{}\n<!-- /ai-setup:section:{name} -->\n",
+        "\n<!-- loom:section:{name} hash:{} -->\n\n{}\n<!-- /loom:section:{name} -->\n",
         stamp(content),
         content.trim_end()
     )
@@ -77,7 +77,7 @@ struct Fence {
 /// marker (inclusive). Returns None when the file has no such fence.
 fn find_fence(content: &str, name: &str) -> Option<Fence> {
     let open_prefix = marker_open(name);
-    let close = format!("<!-- /ai-setup:section:{name} -->");
+    let close = format!("<!-- /loom:section:{name} -->");
     let start = content.find(&open_prefix)?;
     let open_end = start + content[start..].find("-->")? + 3;
     let close_start = content[open_end..].find(&close)? + open_end;
@@ -172,13 +172,13 @@ pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -
                 Err(message) => eprintln!("  ! could not install the beads pair: {message}"),
             }
         } else {
-            println!("  → later: ai-setup add --tool beads --tool beads-viewer");
+            println!("  → later: loom add --tool beads --tool beads-viewer");
         }
     }
 
     // Templates come from the published repo, so init output is publish-gated.
     let home = system.home_dir().context("home directory is unavailable")?;
-    let staging = home.join(".cache").join("ai-setup").join("init-staging");
+    let staging = home.join(".cache").join("loom").join("init-staging");
     let repo_root = skills::fetch_repo(system, &staging)
         .map_err(anyhow::Error::msg)
         .context("could not fetch the templates")?;
@@ -254,7 +254,7 @@ pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -
     if let Err(error) = register_project(&home, &project) {
         eprintln!("  ! could not register the project for sync: {error}");
     } else {
-        println!("  ✓ registered for `ai-setup sync`");
+        println!("  ✓ registered for `loom sync`");
     }
 
     Ok(true)
@@ -271,8 +271,8 @@ pub(crate) struct RenderOutcome {
 }
 
 /// Build the new AGENTS.md content (None when nothing needs writing) plus a
-/// report of what moved. The contract: text inside ai-setup:section fences
-/// belongs to ai-setup and refreshes when templates change — but only while
+/// report of what moved. The contract: text inside loom:section fences
+/// belongs to Loom and refreshes when templates change — but only while
 /// pristine (its body still matches the stamped template hash). Hand-edited
 /// fences are kept and reported; everything outside fences is never touched.
 fn render_agents(
@@ -329,7 +329,7 @@ fn render_agents(
     }
 }
 
-const OWNERSHIP_NOTE: &str = "<!-- Managed by ai-setup init: text inside ai-setup:section fences is refreshed\n     from the published templates while unedited; your own content is safe anywhere\n     outside the fences (and edited fences are always left alone). -->\n";
+const OWNERSHIP_NOTE: &str = "<!-- Managed by loom init: text inside loom:section fences is refreshed\n     from the published templates while unedited; your own content is safe anywhere\n     outside the fences (and edited fences are always left alone). -->\n";
 
 fn render_fresh(base: &str, chosen: &[(&'static str, String)]) -> String {
     let mut out = String::from(OWNERSHIP_NOTE);
@@ -344,7 +344,7 @@ fn render_fresh(base: &str, chosen: &[(&'static str, String)]) -> String {
 /// them. Absolute paths, deduped; entries whose AGENTS.md vanished prune
 /// themselves on the next sync.
 fn registry_path(home: &Path) -> std::path::PathBuf {
-    home.join(".config").join("ai-setup").join("projects.json")
+    home.join(".config").join("loom").join("projects.json")
 }
 
 fn read_registry(home: &Path) -> Vec<String> {
@@ -392,7 +392,7 @@ pub fn sync_projects(system: &dyn System) -> (bool, String) {
         return (true, "  ✓ Project AGENTS.md (none registered)".into());
     }
 
-    let staging = home.join(".cache").join("ai-setup").join("sync-staging");
+    let staging = home.join(".cache").join("loom").join("sync-staging");
     let templates = skills::fetch_repo(system, &staging).and_then(|repo_root| {
         let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
             .map_err(|error| format!("template missing: {BASE_TEMPLATE}: {error}"))?;
@@ -470,11 +470,11 @@ mod tests {
         let chosen = sections(&[("python", "## Python\n- uv add")]);
         let (rendered, _) = render_agents(None, BASE, &chosen, false);
         let rendered = rendered.unwrap();
-        assert!(rendered.contains("Managed by ai-setup init"));
-        assert!(rendered.contains("<!-- ai-setup:section:base hash:"));
-        assert!(rendered.contains("<!-- ai-setup:section:python hash:"));
+        assert!(rendered.contains("Managed by loom init"));
+        assert!(rendered.contains("<!-- loom:section:base hash:"));
+        assert!(rendered.contains("<!-- loom:section:python hash:"));
         assert!(rendered.contains("- uv add"));
-        assert!(rendered.contains("<!-- /ai-setup:section:python -->"));
+        assert!(rendered.contains("<!-- /loom:section:python -->"));
     }
 
     #[test]
@@ -488,7 +488,7 @@ mod tests {
         assert!(second.contains("## My own notes"));
         assert_eq!(outcome.appended, vec!["rust"]);
         assert_eq!(
-            second.matches("<!-- /ai-setup:section:python -->").count(),
+            second.matches("<!-- /loom:section:python -->").count(),
             1,
             "existing sections are not duplicated"
         );

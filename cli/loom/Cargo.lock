@@ -3,22 +3,6 @@
 version = 4
 
 [[package]]
-name = "ai-setup"
-version = "0.6.2"
-dependencies = [
- "anyhow",
- "clap",
- "clap_complete",
- "dirs",
- "inquire",
- "pretty_assertions",
- "ratatui",
- "serde",
- "serde_json",
- "toml_edit",
-]
-
-[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -487,6 +471,22 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+
+[[package]]
+name = "loom"
+version = "0.6.2"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "dirs",
+ "inquire",
+ "pretty_assertions",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "toml_edit",
+]
 
 [[package]]
 name = "lru"

@@ -1,5 +1,5 @@
 {
-  "name": "ai-setup",
+  "name": "loom",
   "owner": {
     "name": "Yassimba"
   },
@@ -8,14 +8,14 @@
   },
   "plugins": [
     {
-      "name": "ai-setup",
+      "name": "loom",
       "source": "./",
       "description": "Reviewed skills for coding, architecture, diagrams, presentations, and general agent workflows",
       "author": {
         "name": "Yassimba"
       },
-      "homepage": "https://github.com/Yassimba/ai-setup",
-      "repository": "https://github.com/Yassimba/ai-setup",
+      "homepage": "https://github.com/Yassimba/loom",
+      "repository": "https://github.com/Yassimba/loom",
       "license": "MIT",
       "category": "development",
       "tags": [

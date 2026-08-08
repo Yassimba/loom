@@ -8,8 +8,8 @@ pub struct Check {
 }
 
 pub fn run_doctor(system: &(dyn System + Sync)) -> bool {
-    println!("ai-setup doctor\n");
-    println!("✓ {:10} ai-setup {}", "CLI", env!("CARGO_PKG_VERSION"));
+    println!("loom doctor\n");
+    println!("✓ {:10} loom {}", "CLI", env!("CARGO_PKG_VERSION"));
     print_skill_trees(system);
     print_manifest(system);
     // Every probe is an independent `<tool> --version`; run them all at once.
@@ -47,7 +47,7 @@ pub fn run_doctor(system: &(dyn System + Sync)) -> bool {
     }
     let healthy = checks.iter().all(|check| !check.installed || check.healthy);
     if healthy {
-        println!("\nHealthy. Missing managers are installed on demand by `ai-setup setup`.");
+        println!("\nHealthy. Missing managers are installed on demand by `loom setup`.");
     } else {
         println!("\nOne or more installed managers could not run. Repair them, then retry.");
     }
@@ -64,7 +64,7 @@ fn print_manifest(system: &dyn System) {
         println!("✓ {:10} {}", "manifest", target.display());
     } else {
         println!(
-            "○ {:10} not synced yet (run `ai-setup setup` or `ai-setup update`)",
+            "○ {:10} not synced yet (run `loom setup` or `loom update`)",
             "manifest"
         );
     }
