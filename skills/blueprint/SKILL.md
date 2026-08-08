@@ -22,13 +22,13 @@ The future diff carries one sparse details manifest per the lineage skill's `det
 
 The remaining axes are trigger-based - draw every axis whose trigger fires in this change:
 
-| Axis      | Mermaid type      | Draw when the change has…                                             |
-| --------- | ----------------- | --------------------------------------------------------------------- |
-| Flow      | `flowchart`       | control flow the tracer's lineage doesn't carry — a second command, a background job, an error path |
+| Axis      | Mermaid type      | Draw when the change has…                                                                              |
+| --------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
+| Flow      | `flowchart`       | control flow the tracer's lineage doesn't carry — a second command, a background job, an error path    |
 | Sequence  | `sequenceDiagram` | one temporal slice whose ordering, callback, retry, concurrency, or hand-off is not clear from lineage |
-| Structure | `classDiagram`    | a new or reshaped interface — new class, new/changed public methods   |
-| State     | `stateDiagram-v2` | a lifecycle — states an entity moves through, new/changed transitions |
-| Data      | `erDiagram`       | a new or reshaped schema — tables, columns, relationships             |
+| Structure | `classDiagram`    | a new or reshaped interface — new class, new/changed public methods                                    |
+| State     | `stateDiagram-v2` | a lifecycle — states an entity moves through, new/changed transitions                                  |
+| Data      | `erDiagram`       | a new or reshaped schema — tables, columns, relationships                                              |
 
 A trigger nominates an axis; it does not require one. Draw it only when it answers a design question lineage leaves unclear. The lineage tab alone can be the whole blueprint; name skipped nominees and why they add nothing.
 
@@ -71,7 +71,7 @@ If the human asks for a revision you believe is a mistake, explain the trade-off
 
 ## 4. Verify (after the build)
 
-The approved lineage tab is the promise; the built code must keep it. Once the build lands, run **lineage-diff** in contract mode with the same tracer — BEFORE is the approved blueprint's AFTER chain and AFTER is built source. For calldiff-supported languages, ground the built side first: `npx calldiff <ref-at-approval> -e <entry>` prints the AST-verified call-chain delta the build actually made — drift-verdict against that, not against a fresh hand-trace of the source. The verdicts read as contract outcomes:
+The approved lineage tab is the promise; the built code must keep it. Once the build lands, run **lineage-diff** in contract mode with the same tracer — BEFORE is the approved blueprint's AFTER chain and AFTER is built source. For stackdiff-supported languages (TS/TSX, Python, Go), ground the built side first: `stackdiff <ref-at-approval> -e <entry>` prints the AST-verified call-chain delta the build actually made (`--max-depth 2` keeps it readable) — drift-verdict against that, not against a fresh hand-trace of the source. The verdicts read as contract outcomes:
 
 - **unchanged** — promise kept
 - **changed** — drift: the hop exists but its signature, home, or mechanism differs from the promise — name the difference
