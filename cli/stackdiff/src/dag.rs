@@ -28,6 +28,29 @@ struct Cell {
     ch: char,
     status: DiffStatus,
     role: Role,
+    /// Rail connectivity bits: 1=up 2=down 4=left 8=right. The glyph for a
+    /// rail cell derives from this union, so crossings and junctions can
+    /// never erase each other.
+    mask: u8,
+}
+
+fn mask_char(mask: u8) -> char {
+    match mask {
+        0b0011 => '│',
+        0b1100 => '─',
+        0b1010 => '╭',
+        0b0110 => '╮',
+        0b1001 => '╰',
+        0b0101 => '╯',
+        0b1011 => '├',
+        0b0111 => '┤',
+        0b1110 => '┬',
+        0b1101 => '┴',
+        0b1111 => '┼',
+        0b0001 | 0b0010 => '│',
+        0b0100 | 0b1000 => '─',
+        _ => ' ',
+    }
 }
 
 struct Canvas {
@@ -44,6 +67,7 @@ impl Canvas {
                         ch: ' ',
                         status: DiffStatus::Same,
                         role: Role::Rail,
+                        mask: 0,
                     };
                     w
                 ];
@@ -55,30 +79,82 @@ impl Canvas {
 
     fn put(&mut self, x: usize, y: usize, ch: char, status: DiffStatus, role: Role) {
         if let Some(cell) = self.rows.get_mut(y).and_then(|row| row.get_mut(x)) {
-            *cell = Cell { ch, status, role };
+            *cell = Cell {
+                ch,
+                status,
+                role,
+                mask: 0,
+            };
         }
     }
 
-    /// Draw a rail char, merging with what's already there at crossings.
-    fn rail(&mut self, x: usize, y: usize, ch: char, status: DiffStatus) {
+    /// Union rail connectivity into a cell; boxes are untouchable.
+    fn conn(&mut self, x: usize, y: usize, bits: u8, status: DiffStatus) {
         let Some(cell) = self.rows.get_mut(y).and_then(|row| row.get_mut(x)) else {
             return;
         };
-        if cell.role != Role::Rail && cell.role != Role::Edge && cell.ch != ' ' {
-            return; // never draw over boxes
+        if cell.role != Role::Rail {
+            return;
         }
-        let merged = match (cell.ch, ch) {
-            (' ', c) => c,
-            ('─', '│') | ('│', '─') => '┼',
-            ('─', c) | (c, '─') if "╭╮╰╯".contains(c) => '┼',
-            (a, b) if a == b => a,
-            (_, c) => c,
-        };
-        cell.ch = merged;
+        cell.mask |= bits;
         if cell.status == DiffStatus::Same {
             cell.status = status;
         }
-        cell.role = Role::Rail;
+    }
+
+    /// Draw an orthogonal polyline through waypoints, unioning direction
+    /// bits cell by cell.
+    fn path(&mut self, points: &[(usize, usize)], status: DiffStatus) {
+        const U: u8 = 1;
+        const D: u8 = 2;
+        const L: u8 = 4;
+        const R: u8 = 8;
+        for pair in points.windows(2) {
+            let ((x1, y1), (x2, y2)) = (pair[0], pair[1]);
+            if y1 == y2 {
+                let (lo, hi) = if x1 <= x2 { (x1, x2) } else { (x2, x1) };
+                for x in lo..=hi {
+                    let mut bits = 0;
+                    if x > lo {
+                        bits |= L;
+                    }
+                    if x < hi {
+                        bits |= R;
+                    }
+                    self.conn(x, y1, bits, status);
+                }
+            } else {
+                let (lo, hi) = if y1 <= y2 { (y1, y2) } else { (y2, y1) };
+                for y in lo..=hi {
+                    let mut bits = 0;
+                    if y > lo {
+                        bits |= U;
+                    }
+                    if y < hi {
+                        bits |= D;
+                    }
+                    self.conn(x1, y, bits, status);
+                }
+            }
+        }
+        // Stitch the corners: each interior waypoint needs both directions.
+        for triple in points.windows(3) {
+            let ((x1, y1), (x2, y2), (x3, y3)) = (triple[0], triple[1], triple[2]);
+            let mut bits = 0;
+            if y1 != y2 {
+                bits |= if y1 < y2 { U } else { D };
+            }
+            if x1 != x2 {
+                bits |= if x1 < x2 { L } else { R };
+            }
+            if y3 != y2 {
+                bits |= if y3 < y2 { U } else { D };
+            }
+            if x3 != x2 {
+                bits |= if x3 < x2 { L } else { R };
+            }
+            self.conn(x2, y2, bits, status);
+        }
     }
 }
 
@@ -532,8 +608,8 @@ fn render_dag_profile(
         draw_box(&mut canvas, node);
     }
 
-    // Rails: one bus per (source, gap) — a single trunk leaves the source
-    // and splits with junctions at each target, like the tree connectors.
+    // Rails: one bus per (source, gap): each target is a polyline
+    // source → lane → target; shared trunk cells union into junctions.
     let mut groups: BTreeMap<(usize, usize), Vec<usize>> = BTreeMap::new();
     for (i, segment) in segments.iter().enumerate() {
         groups
@@ -561,65 +637,17 @@ fn render_dag_profile(
         let lane_x = col_x[*gap] - 3 - (*cursor) * 2 - 1;
         *cursor += 1;
 
-        let mut targets: Vec<&Segment> = members.iter().map(|&i| &segments[i]).collect();
-        targets.sort_by_key(|segment| items[segment.b].y);
-        let target_ys: Vec<usize> = targets
-            .iter()
-            .map(|segment| {
-                let b = &items[segment.b];
-                b.y + b.h / 2
-            })
-            .collect();
-        let top = target_ys.iter().copied().min().unwrap_or(sy).min(sy);
-        let bottom = target_ys.iter().copied().max().unwrap_or(sy).max(sy);
-        let trunk_status = targets
-            .iter()
-            .find(|t| t.status != DiffStatus::Same)
-            .map(|t| t.status)
-            .unwrap_or(DiffStatus::Same);
-
-        // trunk from the source to its lane
-        for cx in start_x..lane_x {
-            canvas.rail(cx, sy, '─', trunk_status);
-        }
-        // the lane itself
-        for cy in top + 1..bottom {
-            if cy != sy && !target_ys.contains(&cy) {
-                canvas.rail(lane_x, cy, '│', trunk_status);
-            }
-        }
-        // source join onto the lane
-        let source_join = if top == bottom {
-            '─'
-        } else if sy == top {
-            '╮'
-        } else if sy == bottom {
-            '╯'
-        } else {
-            '┤'
-        };
-        canvas.rail(lane_x, sy, source_join, trunk_status);
-
-        // one exit per target
-        for (segment, &ty) in targets.iter().zip(&target_ys) {
+        for &i in members {
+            let segment = &segments[i];
             let b = &items[segment.b];
+            let ty = b.y + b.h / 2;
             let status = segment.status;
-            if ty != sy {
-                let exit = if ty == top {
-                    '╭'
-                } else if ty == bottom {
-                    '╰'
-                } else {
-                    '├'
-                };
-                canvas.rail(lane_x, ty, exit, status);
-            } else if top != bottom {
-                canvas.rail(lane_x, ty, '┼', status);
-            }
             let end_x = if segment.last { b.x } else { b.x + 1 };
-            for cx in lane_x + 1..end_x.saturating_sub(1) {
-                canvas.rail(cx, ty, '─', status);
-            }
+            let tip = end_x.saturating_sub(1);
+            canvas.path(
+                &[(start_x, sy), (lane_x, sy), (lane_x, ty), (tip, ty)],
+                status,
+            );
             finishes.push(Finish {
                 x: end_x,
                 y: ty,
@@ -703,7 +731,11 @@ fn render_dag_profile(
                 flush(&mut line, &mut run, run_key);
                 run_key = (cell.status, cell.role);
             }
-            run.push(cell.ch);
+            if cell.role == Role::Rail && cell.mask != 0 {
+                run.push(mask_char(cell.mask));
+            } else {
+                run.push(cell.ch);
+            }
         }
         flush(&mut line, &mut run, run_key);
         out.push(line.trim_end().to_string());
