@@ -16,12 +16,15 @@ plus auto-discovered `skills/`, listed by `.claude-plugin/marketplace.json`
 scripts. `setup-catalog.json` is generated from reviewed skills and opted-in
 plugin metadata; the CLI embeds it, copies skills into the agent skill trees
 itself, and delegates Pi package installs to Pi.
-`manifest/ai-setup.toml` — the published tool manifest: every tool this
-setup provides, exact-pinned (node, Pi, herdr, gh, the ai-setup and
-stackdiff binaries, …). The installers and `ai-setup update` sync it to
-`~/.config/mise/conf.d/ai-setup.toml`; tools move only when a manifest
-change lands on main (the weekly `mise-bump` PR proposes bumps; release
-automation owns the ai-setup/stackdiff pins). The root `mise.toml` is the
+`manifest/ai-setup.toml` — the published tool manifest, the MENU: every
+tool this setup can provide, exact-pinned (node, Pi, herdr, gh, the
+ai-setup and stackdiff binaries, …), with wizard metadata in
+`manifest/tools.json`. What lands on a machine is the SELECTION —
+`~/.config/mise/conf.d/ai-setup.toml` holds the core block plus
+wizard-chosen tools; `ai-setup update` refreshes its pins without changing
+the set. Tool versions move only when a manifest change lands on main (the
+weekly `mise-bump` PR proposes bumps; release automation owns the
+ai-setup/stackdiff pins). The root `mise.toml` is the
 contributor dev-env + tasks, a separate file so the consumer manifest never
 activates on `cd`. See `ai-docs/adr/0002-distribute-tools-via-mise.md`.
 `drafts/` — pulled from a global agent tree, not yet reviewed.

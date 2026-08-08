@@ -30,10 +30,15 @@ at verify. Accepted drift updates the promise; the record matches reality.
 _Avoid_: deviation, mismatch
 
 **Manifest**:
-The published, exact-pinned list of tools this setup provides, synced to
-every consumer machine by the CLI. Tools change only when a new manifest
-lands on main.
+The published, exact-pinned menu of tools this setup can provide. Tools
+change version only when a new manifest lands on main.
 _Avoid_: tool list, mise config (ambiguous with the contributor dev-env)
+
+**Selection**:
+The subset of the manifest a machine actually installs: the core block plus
+the tools its user chose in the wizard. Updates refresh the selection's
+pins, never its membership.
+_Avoid_: installed tools, local manifest
 
 **Overlay**:
 A user's own machine-local mise configuration, merged on top of the

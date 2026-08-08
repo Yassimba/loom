@@ -28,13 +28,25 @@ if ! command -v mise >/dev/null 2>&1; then
 fi
 command -v mise >/dev/null 2>&1 || { echo "$NAME: mise install failed" >&2; exit 1; }
 
-# 2. The published manifest, merged by mise without touching the user's own
-#    config.toml (that file stays theirs, as a personal overlay).
+# 2. The manifest's core block only — node and the ai-setup CLI. Everything
+#    else is optional and chosen in the wizard, which appends to this file.
+#    An existing selection is left alone (`ai-setup update` refreshes it).
 mkdir -p "$CONF_D"
-curl -fsSL --retry 5 --retry-delay 3 "$MANIFEST_URL" -o "${CONF_D}/ai-setup.toml"
-echo "$NAME: manifest synced to ${CONF_D}/ai-setup.toml"
+selection="${CONF_D}/ai-setup.toml"
+if [ ! -f "$selection" ]; then
+  tmp_manifest="$(mktemp)"
+  trap 'rm -f "$tmp_manifest"' EXIT INT TERM
+  curl -fsSL --retry 5 --retry-delay 3 "$MANIFEST_URL" -o "$tmp_manifest"
+  {
+    echo "# Managed by ai-setup: the selected tools from the published manifest."
+    echo ""
+    echo "[tools]"
+    sed -n '/^# core:begin/,/^# core:end/p' "$tmp_manifest"
+  } > "$selection"
+  echo "$NAME: core tools synced to $selection"
+fi
 
-# 3. Install the pins — node, pi, the ai-setup CLI, and the rest.
+# 3. Install the pins — node and the ai-setup CLI (plus any prior selection).
 mise install --yes
 
 # 4. Shell activation, so the tools are on PATH in new shells.

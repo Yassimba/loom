@@ -12,11 +12,15 @@ pub struct Selectors {
     pub skills: Vec<String>,
     pub pi_packages: Vec<String>,
     pub herdr_plugins: Vec<String>,
+    pub tools: Vec<String>,
 }
 
 impl Selectors {
     pub fn is_empty(&self) -> bool {
-        self.skills.is_empty() && self.pi_packages.is_empty() && self.herdr_plugins.is_empty()
+        self.skills.is_empty()
+            && self.pi_packages.is_empty()
+            && self.herdr_plugins.is_empty()
+            && self.tools.is_empty()
     }
 }
 
@@ -27,22 +31,11 @@ pub fn install_selected(
     dry_run: bool,
     system: &(dyn System + Sync),
 ) -> Result<bool> {
-    // Tools come from the published mise manifest; sync it first so the plan
-    // below sees pi/node/herdr already present. Without mise the legacy
-    // detect-and-instruct path still covers everything.
-    if !dry_run && crate::manifest::mise_available(system) {
-        match crate::manifest::sync_and_install(system) {
-            Ok(target) => {
-                println!("✓ Tool manifest synced to {}", target.display());
-                system.refresh_path();
-            }
-            Err(message) => eprintln!("! Tool manifest: {message}"),
-        }
-    }
     let status = PrerequisiteStatus {
         pi: system.command_exists("pi"),
         herdr: system.command_exists("herdr"),
         npm: system.command_exists("npm"),
+        mise: crate::manifest::mise_available(system),
         node: NodeStatus::detect(system),
     };
     let platform = if cfg!(windows) {
@@ -168,10 +161,15 @@ fn detect_installed(
         .home_dir()
         .map(|home| crate::detect_skill_trees(&home))
         .unwrap_or_default();
+    let selected_tools = system
+        .home_dir()
+        .map(|home| crate::manifest::selected_keys(&home))
+        .unwrap_or_default();
 
     resources
         .iter()
         .map(|resource| match resource.kind {
+            ResourceKind::Tool => selected_tools.contains(&resource.install_target),
             ResourceKind::HerdrPlugin => herdr_plugins.as_ref().is_some_and(|output| {
                 output.contains(resource.id.trim_start_matches("herdr-plugin:"))
             }),
@@ -221,6 +219,7 @@ fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec<Res
         (ResourceKind::Skill, &selectors.skills),
         (ResourceKind::PiPackage, &selectors.pi_packages),
         (ResourceKind::HerdrPlugin, &selectors.herdr_plugins),
+        (ResourceKind::Tool, &selectors.tools),
     ] {
         for value in values {
             let matches = catalog

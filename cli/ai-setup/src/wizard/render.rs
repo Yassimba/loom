@@ -210,6 +210,10 @@ impl Wizard {
 
         let counts = [
             (
+                "tools",
+                count_kind(&self.model.resources, crate::ResourceKind::Tool),
+            ),
+            (
                 "Herdr plugins",
                 count_kind(&self.model.resources, crate::ResourceKind::HerdrPlugin),
             ),
@@ -345,6 +349,7 @@ impl Wizard {
                 let needs_it = match runtime {
                     Runtime::Pi => "packages need Pi to be installed",
                     Runtime::Herdr => "plugins need Herdr to be installed",
+                    Runtime::Mise => "tools need mise to be installed",
                 };
                 let note = if on {
                     Span::styled(" — will be installed", Style::new().fg(OK))
@@ -619,6 +624,7 @@ impl Wizard {
             }
             let selection = self.selection();
             for (kind, title) in [
+                (crate::ResourceKind::Tool, "Tools"),
                 (crate::ResourceKind::HerdrPlugin, "Herdr plugins"),
                 (crate::ResourceKind::PiPackage, "Pi packages"),
                 (crate::ResourceKind::Skill, "Skills"),
@@ -870,6 +876,7 @@ fn runtime_name(runtime: Runtime) -> &'static str {
     match runtime {
         Runtime::Pi => "Pi",
         Runtime::Herdr => "Herdr",
+        Runtime::Mise => "mise",
     }
 }
 
@@ -879,6 +886,7 @@ fn runtime_blurb(runtime: Runtime) -> &'static str {
         Runtime::Herdr => {
             "Herdr is a terminal multiplexer for coding agents. The plugins run inside it."
         }
+        Runtime::Mise => "mise installs the pinned tools from the published manifest.",
     }
 }
 

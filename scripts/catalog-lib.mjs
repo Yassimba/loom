@@ -202,11 +202,49 @@ export async function readHerdrPluginCatalog(repoRoot) {
   return resources.sort((left, right) => left.label.localeCompare(right.label));
 }
 
+/// Optional tools from the published mise manifest: the manifest carries the
+/// pins (the menu), manifest/tools.json carries the wizard metadata. The two
+/// key sets must match exactly — a pin without metadata can't be offered, and
+/// metadata without a pin can't be installed.
+export async function readToolCatalog(repoRoot) {
+  const manifestRaw = await readFile(join(repoRoot, "manifest", "ai-setup.toml"), "utf8");
+  const meta = JSON.parse(await readFile(join(repoRoot, "manifest", "tools.json"), "utf8"));
+
+  const withoutCore = manifestRaw.replace(/^# core:begin[\s\S]*?^# core:end$/m, "");
+  const toolsSection = withoutCore.slice(withoutCore.indexOf("[tools]"));
+  const optionalKeys = [...toolsSection.matchAll(/^(?:"([^"]+)"|([A-Za-z0-9@._/-]+))\s*=/gm)]
+    .map((match) => match[1] ?? match[2])
+    .filter((key) => key !== "tools");
+
+  const metaByKey = new Map(meta.tools.map((tool) => [tool.key, tool]));
+  const missingMeta = optionalKeys.filter((key) => !metaByKey.has(key));
+  const missingPin = meta.tools.filter((tool) => !optionalKeys.includes(tool.key));
+  if (missingMeta.length > 0) {
+    throw new Error(`manifest tools missing metadata in tools.json: ${missingMeta.join(", ")}`);
+  }
+  if (missingPin.length > 0) {
+    throw new Error(
+      `tools.json entries missing from the manifest: ${missingPin.map((tool) => tool.key).join(", ")}`,
+    );
+  }
+
+  return meta.tools.map((tool) => ({
+    id: `tool:${tool.label}`,
+    kind: "tool",
+    group: "Tools",
+    label: tool.label,
+    description: tool.description,
+    installTarget: tool.key,
+    nextAction: tool.nextAction,
+  }));
+}
+
 export async function buildSetupCatalog(repoRoot) {
-  const [piPackages, skills, herdrPlugins] = await Promise.all([
+  const [piPackages, skills, herdrPlugins, tools] = await Promise.all([
     readPiPackageCatalog(repoRoot),
     readReviewedSkillCatalog(repoRoot),
     readHerdrPluginCatalog(repoRoot),
+    readToolCatalog(repoRoot),
   ]);
-  return [...piPackages, ...skills, ...herdrPlugins];
+  return [...piPackages, ...skills, ...herdrPlugins, ...tools];
 }

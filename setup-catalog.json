@@ -575,6 +575,96 @@
       "installTarget": "wtf",
       "nextAction": "Ask your coding agent to use the wtf skill.",
       "dependencies": []
+    },
+    {
+      "id": "tool:pi",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "pi",
+      "description": "The Pi coding agent. Required by Pi packages — selecting any of them pulls Pi in automatically.",
+      "installTarget": "npm:@mariozechner/pi-coding-agent",
+      "nextAction": "Run `pi` in a project to start the agent."
+    },
+    {
+      "id": "tool:herdr",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "herdr",
+      "description": "Terminal multiplexer for coding agents (macOS/Linux; on Windows install from herdr.dev).",
+      "installTarget": "herdr",
+      "nextAction": "Run `herdr` to start the multiplexer."
+    },
+    {
+      "id": "tool:gh",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "gh",
+      "description": "GitHub CLI — the release, code-review, and jira skills use it for PRs and issues.",
+      "installTarget": "gh",
+      "nextAction": "Run `gh auth login` once."
+    },
+    {
+      "id": "tool:glab",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "glab",
+      "description": "GitLab CLI — the release and code-review skills use it for MRs on GitLab projects.",
+      "installTarget": "glab",
+      "nextAction": "Run `glab auth login` once."
+    },
+    {
+      "id": "tool:tokei",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "tokei",
+      "description": "Fast code-statistics tool several skills shell out to for codebase orientation.",
+      "installTarget": "tokei",
+      "nextAction": "Run `tokei` in a repo."
+    },
+    {
+      "id": "tool:tokui",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "tokui",
+      "description": "Interactive TUI over tokei's statistics.",
+      "installTarget": "github:zdyxry/tokui",
+      "nextAction": "Run `tokei -o json | tokui` in a repo."
+    },
+    {
+      "id": "tool:uv",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "uv",
+      "description": "Python package and project manager — the python skills assume it.",
+      "installTarget": "uv",
+      "nextAction": "Run `uv init` in a Python project."
+    },
+    {
+      "id": "tool:agent-browser",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "agent-browser",
+      "description": "Browser automation CLI the browser-usage and e2e test skills drive.",
+      "installTarget": "npm:agent-browser",
+      "nextAction": "Ask your agent to test a website."
+    },
+    {
+      "id": "tool:mermaid-cli",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "mermaid-cli",
+      "description": "Renders Mermaid diagrams to images (mmdc) — used by the diagram skills.",
+      "installTarget": "npm:@mermaid-js/mermaid-cli",
+      "nextAction": "Ask your agent for a diagram."
+    },
+    {
+      "id": "tool:marp-cli",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "marp-cli",
+      "description": "Renders Markdown slide decks — used by the marp-slide skill.",
+      "installTarget": "npm:@marp-team/marp-cli",
+      "nextAction": "Ask your agent for a slide deck."
     }
   ]
 }
