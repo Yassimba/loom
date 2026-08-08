@@ -171,12 +171,34 @@ const MACROS: &[&str] = &[
     "debug_assert!",
 ];
 
+/// Per-repo defaults from `.stackdiff.toml` `[defaults]`.
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Defaults {
+    pub max_depth: Option<usize>,
+    pub context: Option<usize>,
+    pub view: Option<String>,
+    pub dir: Option<String>,
+    pub link: Option<String>,
+    #[serde(default)]
+    pub tests: bool,
+}
+
+/// The whole `.stackdiff.toml`: noise globs plus defaults.
 #[derive(Debug, Default, Deserialize)]
-struct Config {
+pub struct FileConfig {
     #[serde(default)]
     hide: Vec<String>,
     #[serde(default)]
     show: Vec<String>,
+    #[serde(default)]
+    pub defaults: Defaults,
+}
+
+pub fn load_file(repo: &std::path::Path) -> FileConfig {
+    std::fs::read_to_string(repo.join(".stackdiff.toml"))
+        .ok()
+        .and_then(|text| toml::from_str(&text).ok())
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Default)]
@@ -231,10 +253,7 @@ impl NoiseFilter {
 
     /// Default filter plus any `.stackdiff.toml` at the repo root.
     pub fn load(repo: &std::path::Path, enabled: bool, extra_hide: &[String]) -> Self {
-        let config: Config = std::fs::read_to_string(repo.join(".stackdiff.toml"))
-            .ok()
-            .and_then(|text| toml::from_str(&text).ok())
-            .unwrap_or_default();
+        let config = load_file(repo);
         let mut hide = config.hide;
         hide.extend(extra_hide.iter().cloned());
         NoiseFilter {

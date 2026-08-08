@@ -231,3 +231,52 @@ fn expand_callers(
     visiting.remove(&resolved_key);
     node
 }
+
+/// Closest entry keys to a miss, for "did you mean" suggestions.
+pub fn suggest_entries(entry: &str, index: &FunctionIndex, limit: usize) -> Vec<String> {
+    let needle = entry.to_lowercase();
+    let mut scored: Vec<(i64, &String)> = index
+        .keys()
+        .filter(|key| !key.starts_with("new "))
+        .filter_map(|key| {
+            let hay = key.to_lowercase();
+            let score = if hay == needle {
+                1000
+            } else if hay.contains(&needle) {
+                600 - (hay.len() as i64 - needle.len() as i64)
+            } else if needle.contains(&hay) && hay.len() >= 4 {
+                300 + hay.len() as i64
+            } else {
+                let base = hay.rsplit(['.', ':']).next().unwrap_or(&hay);
+                let dist = edit_distance(&needle, base);
+                if dist <= 3 {
+                    100 - dist as i64 * 20
+                } else {
+                    return None;
+                }
+            };
+            Some((score, key))
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(b.1)));
+    scored
+        .into_iter()
+        .take(limit)
+        .map(|(_, k)| k.clone())
+        .collect()
+}
+
+fn edit_distance(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut current = vec![i + 1];
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            current.push((prev[j] + cost).min(prev[j + 1] + 1).min(current[j] + 1));
+        }
+        prev = current;
+    }
+    prev[b.len()]
+}

@@ -391,6 +391,39 @@ fn er_view_includes_extracted_fields() {
 }
 
 #[test]
+fn twin_calls_align_by_argument_similarity() {
+    let diff_src = diff_outdent(
+        r#"
+      export function boot() {
+    +   wrap(alpha);
+        wrap(beta);
+      }
+    "#,
+    );
+    let (before_src, after_src) = sources_from_file_diff(&diff_src);
+    let before = build_index(extract_functions("file.before.ts", &before_src).unwrap());
+    let after = build_index(extract_functions("file.after.ts", &after_src).unwrap());
+    let diff = diff_trees(
+        &build_call_tree("boot", &before, 12),
+        &build_call_tree("boot", &after, 12),
+    );
+    // The pre-existing wrap(beta) must read unchanged; wrap(alpha) is the add.
+    let statuses: Vec<(String, stackdiff::types::DiffStatus)> = diff
+        .children
+        .iter()
+        .map(|c| (c.meta.args.join(","), c.status))
+        .collect();
+    assert_eq!(
+        statuses,
+        vec![
+            ("alpha".to_string(), stackdiff::types::DiffStatus::Added),
+            ("beta".to_string(), stackdiff::types::DiffStatus::Same),
+        ],
+        "{statuses:?}"
+    );
+}
+
+#[test]
 fn json_output_carries_dataflow_fields() {
     let source = diff_outdent(
         r#"
