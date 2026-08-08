@@ -15,10 +15,9 @@ use stackdiff::git::{
 use stackdiff::infer::{diff_entry, infer_entries};
 use stackdiff::noise::{report as noise_report, scrub_index, NoiseFilter};
 use stackdiff::render::{diff_stat, render_diff, render_mermaid, RenderOptions};
+use stackdiff::seq::{render_sequence, sequence_events};
 use stackdiff::types::{DiffNode, DiffStatus, Snapshot};
-use stackdiff::views::{
-    class_mermaid, lineage_graph, module_mermaid, render_colored, sequence_mermaid, Lineage,
-};
+use stackdiff::views::{class_graph, lineage_graph, module_graph, Lineage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum ColorChoice {
@@ -414,16 +413,19 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
         trees
     };
     if cli.the_view() == View::Seq {
-        println!("{header}\n");
+        println!(
+            "{header}
+"
+        );
         for (index, tree) in trees.iter().enumerate() {
             if index > 0 {
                 println!();
             }
-            let (source, marks) = sequence_mermaid(tree);
-            match render_colored(&source, &marks, options.color, term_width(), &cli.palette()) {
-                Ok(diagram) => println!("{diagram}"),
-                Err(error) => eprintln!("--seq failed for {}: {error}", tree.key),
-            }
+            let (participants, events) = sequence_events(tree);
+            println!(
+                "{}",
+                render_sequence(&participants, &events, options.color, &cli.palette())
+            );
             stat_line(cli, tree);
         }
         return;
@@ -434,27 +436,41 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
         return;
     }
     if cli.the_view() == View::Modules {
-        println!("{header}\n");
-        match module_mermaid(trees) {
-            Some((source, marks)) => {
-                match render_colored(&source, &marks, options.color, term_width(), &cli.palette()) {
-                    Ok(diagram) => println!("{diagram}"),
-                    Err(error) => eprintln!("--modules failed: {error}"),
-                }
-            }
+        println!(
+            "{header}
+"
+        );
+        match module_graph(trees) {
+            Some((nodes, edges)) => println!(
+                "{}",
+                stackdiff::dag::render_dag(
+                    &nodes,
+                    &edges,
+                    options.color,
+                    term_width(),
+                    &cli.palette()
+                )
+            ),
             None => println!("No cross-file calls in these graphs — nothing to draw."),
         }
         return;
     }
     if cli.the_view() == View::Er {
-        println!("{header}\n");
-        match class_mermaid(trees, &load_types(cli)) {
-            Some((source, marks)) => {
-                match render_colored(&source, &marks, options.color, term_width(), &cli.palette()) {
-                    Ok(diagram) => println!("{diagram}"),
-                    Err(error) => eprintln!("--er failed: {error}"),
-                }
-            }
+        println!(
+            "{header}
+"
+        );
+        match class_graph(trees, &load_types(cli)) {
+            Some((nodes, edges)) => println!(
+                "{}",
+                stackdiff::dag::render_dag(
+                    &nodes,
+                    &edges,
+                    options.color,
+                    term_width(),
+                    &cli.palette()
+                )
+            ),
             None => println!("No Type.method calls in these graphs — nothing to draw."),
         }
         return;

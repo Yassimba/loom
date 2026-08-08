@@ -6,18 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::types::{DiffNode, DiffStatus, NodeKind};
-
-/// A label expected in the rendered output: paint it by status, and wrap
-/// it in an OSC 8 hyperlink when a url is attached.
-#[derive(Debug)]
-pub struct Mark {
-    pub label: String,
-    pub status: DiffStatus,
-    pub url: Option<String>,
-}
-
-pub type Marks = Vec<Mark>;
+use crate::types::{DiffNode, DiffStatus};
 
 fn clip(text: &str, max: usize) -> String {
     let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -27,69 +16,6 @@ fn clip(text: &str, max: usize) -> String {
         short
     } else {
         collapsed
-    }
-}
-
-fn participant(node: &DiffNode, fallback: &str) -> String {
-    node.location
-        .as_deref()
-        .and_then(|location| {
-            let path = location
-                .rsplit_once(':')
-                .map(|(p, _)| p)
-                .unwrap_or(location);
-            path.rsplit('/').next().map(str::to_string)
-        })
-        .unwrap_or_else(|| fallback.to_string())
-}
-
-fn mark(marks: &mut Marks, label: &str, status: DiffStatus) {
-    if status != DiffStatus::Same && !label.is_empty() {
-        marks.push(Mark {
-            label: label.to_string(),
-            status,
-            url: None,
-        });
-    }
-}
-
-/// Build mermaid `sequenceDiagram` source from a diff tree.
-pub fn sequence_mermaid(root: &DiffNode) -> (String, Marks) {
-    let mut lines = vec!["sequenceDiagram".to_string()];
-    let mut marks = Marks::new();
-    let home = participant(root, "«entry»");
-    walk_sequence(root, &home, &mut lines, &mut marks);
-    (lines.join("\n"), marks)
-}
-
-fn walk_sequence(node: &DiffNode, from: &str, lines: &mut Vec<String>, marks: &mut Marks) {
-    for child in &node.children {
-        if child.key == "…" {
-            continue;
-        }
-        match child.kind {
-            NodeKind::Branch => {
-                let condition = clip(&child.label, 40);
-                lines.push(format!("alt {condition}"));
-                mark(marks, &condition, child.status);
-                walk_sequence(child, from, lines, marks);
-                lines.push("end".to_string());
-            }
-            NodeKind::Call => {
-                let to = participant(child, from);
-                let message = clip(&child.label, 48);
-                lines.push(format!("{from}->>{to}: {message}"));
-                mark(marks, &message, child.status);
-                walk_sequence(child, &to, lines, marks);
-                if let Some(returns) = &child.returns {
-                    if to != *from {
-                        let reply = clip(returns, 32);
-                        lines.push(format!("{to}-->>{from}: {reply}"));
-                        mark(marks, &reply, child.status);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -106,10 +32,12 @@ fn type_of(key: &str) -> Option<String> {
 /// Build mermaid `classDiagram` source from the types reached by the trees:
 /// each type with its touched methods, edges where one type's method calls
 /// into another type.
-pub fn class_mermaid(
+/// Class/ER view as a graph: one box per type with fields and touched
+/// methods stacked inside, edges where one type's methods call another's.
+pub fn class_graph(
     roots: &[DiffNode],
     types: &BTreeMap<String, Vec<(String, Option<String>)>>,
-) -> Option<(String, Marks)> {
+) -> Option<(Vec<GraphNode>, Vec<GraphEdge>)> {
     let mut methods: BTreeMap<String, BTreeMap<String, DiffStatus>> = BTreeMap::new();
     let mut edges: BTreeMap<(String, String), DiffStatus> = BTreeMap::new();
     for root in roots {
@@ -118,30 +46,45 @@ pub fn class_mermaid(
     if methods.is_empty() {
         return None;
     }
-
-    let mut lines = vec!["classDiagram".to_string()];
-    let mut marks = Marks::new();
-    for (type_name, type_methods) in &methods {
-        lines.push(format!("class {type_name} {{"));
-        for (field, field_type) in types.get(type_name).into_iter().flatten() {
-            match field_type {
-                Some(ty) => lines.push(format!("  +{field} {ty}")),
-                None => lines.push(format!("  +{field}")),
+    let nodes: Vec<GraphNode> = methods
+        .iter()
+        .map(|(type_name, type_methods)| {
+            let mut label = type_name.clone();
+            for (field, field_type) in types.get(type_name).into_iter().flatten() {
+                label.push('\n');
+                match field_type {
+                    Some(ty) => label.push_str(&format!("{field}: {ty}")),
+                    None => label.push_str(field),
+                }
             }
-        }
-        for (method, status) in type_methods {
-            lines.push(format!("  +{method}()"));
-            mark(&mut marks, &format!("{method}()"), *status);
-        }
-        lines.push("}".to_string());
-    }
-    for ((from, to), status) in &edges {
-        lines.push(format!("{from} ..> {to}"));
-        if *status != DiffStatus::Same {
-            mark(&mut marks, &format!("{from} ..> {to}"), *status);
-        }
-    }
-    Some((lines.join("\n"), marks))
+            let mut status = DiffStatus::Same;
+            for (method, method_status) in type_methods {
+                label.push('\n');
+                label.push_str(&format!("+{method}()"));
+                if status == DiffStatus::Same {
+                    status = *method_status;
+                }
+            }
+            GraphNode {
+                key: type_name.clone(),
+                label,
+                status,
+                data: false,
+                loc: None,
+                url: None,
+            }
+        })
+        .collect();
+    let edge_list: Vec<GraphEdge> = edges
+        .iter()
+        .map(|((from, to), status)| GraphEdge {
+            from: from.clone(),
+            to: to.clone(),
+            label: None,
+            status: *status,
+        })
+        .collect();
+    Some((nodes, edge_list))
 }
 
 /// Connected clusters of the lineage graph, largest change first, each
@@ -246,117 +189,10 @@ fn collect_classes(
     }
 }
 
-fn paint(status: DiffStatus, text: &str, palette: &crate::theme::Palette) -> String {
-    match palette.open(status, false) {
-        Some(open) => format!("{open}{text}\x1b[0m"),
-        None => text.to_string(),
-    }
-}
-
-/// Render mermaid source through mermaid-text, painting and hyperlinking
-/// the marked labels. Tries both flow directions and keeps whichever fits
-/// the terminal best (narrow enough first, then shortest).
-pub fn render_colored(
-    source: &str,
-    marks: &Marks,
-    color: bool,
-    max_width: Option<usize>,
-    palette: &crate::theme::Palette,
-) -> anyhow::Result<String> {
-    render_colored_flip(source, marks, color, max_width, true, palette)
-}
-
-pub fn render_colored_flip(
-    source: &str,
-    marks: &Marks,
-    color: bool,
-    max_width: Option<usize>,
-    auto_flip: bool,
-    palette: &crate::theme::Palette,
-) -> anyhow::Result<String> {
-    // Double-rendering to pick a direction is only worth it on small graphs.
-    let rendered = if auto_flip && source.lines().count() <= 120 {
-        best_layout(source, max_width)?
-    } else {
-        mermaid_text::render_with_width(source, max_width)
-            .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))?
-    };
-    let mut sorted: Vec<&Mark> = marks.iter().collect();
-    sorted.sort_by_key(|mark| std::cmp::Reverse(mark.label.chars().count()));
-    let out = rendered
-        .lines()
-        .map(|line| {
-            let mut line = line.to_string();
-            for mark in &sorted {
-                if let Some(at) = line.find(mark.label.as_str()) {
-                    let painted = if color {
-                        paint(mark.status, &mark.label, palette)
-                    } else {
-                        mark.label.clone()
-                    };
-                    let shown = match &mark.url {
-                        Some(url) => {
-                            format!("\x1b]8;;{url}\x1b\\{painted}\x1b]8;;\x1b\\")
-                        }
-                        None => painted,
-                    };
-                    if !color && mark.url.is_none() {
-                        break;
-                    }
-                    line = format!("{}{}{}", &line[..at], shown, &line[at + mark.label.len()..]);
-                    break;
-                }
-            }
-            line
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    Ok(out)
-}
-
-fn best_layout(source: &str, max_width: Option<usize>) -> anyhow::Result<String> {
-    let render = |src: &str| {
-        mermaid_text::render_with_width(src, max_width)
-            .map_err(|error| anyhow::anyhow!("mermaid-text failed: {error}"))
-    };
-    let Some(flipped) = flip_direction(source) else {
-        return render(source);
-    };
-    let first = render(source)?;
-    let second = match render(&flipped) {
-        Ok(second) => second,
-        Err(_) => return Ok(first),
-    };
-    let measure = |text: &str| {
-        let width = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
-        let height = text.lines().count();
-        (width, height)
-    };
-    let (w1, h1) = measure(&first);
-    let (w2, h2) = measure(&second);
-    let limit = max_width.unwrap_or(usize::MAX);
-    let pick_second = match (w1 <= limit, w2 <= limit) {
-        (true, false) => false,
-        (false, true) => true,
-        // Both fit (or neither): prefer the smaller footprint.
-        _ => w2 * h2 < w1 * h1,
-    };
-    Ok(if pick_second { second } else { first })
-}
-
-fn flip_direction(source: &str) -> Option<String> {
-    if let Some(rest) = source.strip_prefix("flowchart LR") {
-        Some(format!("flowchart TD{rest}"))
-    } else {
-        source
-            .strip_prefix("flowchart TD")
-            .map(|rest| format!("flowchart LR{rest}"))
-    }
-}
-
-/// Module zoom: one node per file, an edge when a call crosses files,
-/// statuses aggregated (any added/removed/changed edge wins over same).
-pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
+/// Module zoom as a graph: one node per file, an edge when a call
+/// crosses files, statuses aggregated.
+pub fn module_graph(roots: &[DiffNode]) -> Option<(Vec<GraphNode>, Vec<GraphEdge>)> {
+    let mut edges: BTreeMap<(String, String), DiffStatus> = BTreeMap::new();
     fn file_of(node: &DiffNode) -> Option<String> {
         node.location.as_deref().map(|location| {
             let path = location
@@ -386,33 +222,36 @@ pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
             collect(child, own.as_ref(), edges);
         }
     }
-    let mut edges = BTreeMap::new();
     for root in roots {
         collect(root, None, &mut edges);
     }
     if edges.is_empty() {
         return None;
     }
-    let mut lines = vec!["flowchart LR".to_string()];
-    let mut marks = Marks::new();
-    let mut ids: BTreeMap<&String, usize> = BTreeMap::new();
-    for (from, to) in edges.keys() {
-        let next = ids.len();
-        ids.entry(from).or_insert(next);
-        let next = ids.len();
-        ids.entry(to).or_insert(next);
-    }
-    for (file, id) in &ids {
-        lines.push(format!("n{id}[{file}]"));
-    }
-    for ((from, to), status) in &edges {
-        lines.push(format!("n{} --> n{}", ids[from], ids[to]));
-        if *status != DiffStatus::Same {
-            mark(&mut marks, from, *status);
-            mark(&mut marks, to, *status);
-        }
-    }
-    Some((lines.join("\n"), marks))
+    let mut names: Vec<&String> = edges.keys().flat_map(|(from, to)| [from, to]).collect();
+    names.sort();
+    names.dedup();
+    let nodes: Vec<GraphNode> = names
+        .iter()
+        .map(|name| GraphNode {
+            key: (*name).clone(),
+            label: (*name).clone(),
+            status: DiffStatus::Same,
+            data: false,
+            loc: None,
+            url: None,
+        })
+        .collect();
+    let edge_list: Vec<GraphEdge> = edges
+        .iter()
+        .map(|((from, to), status)| GraphEdge {
+            from: from.clone(),
+            to: to.clone(),
+            label: None,
+            status: *status,
+        })
+        .collect();
+    Some((nodes, edge_list))
 }
 
 /// A node of the lineage graph, renderer-agnostic.
