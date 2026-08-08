@@ -924,3 +924,46 @@ fn space_advances_in_the_direction_of_travel() {
     };
     assert_eq!(stage.cursor, 1, "top-to-bottom travel: space steps down");
 }
+
+#[test]
+fn dependencies_lock_as_required_and_cannot_be_deselected() {
+    let mut model = model(ready());
+    // tdd (index 3) pulls in the mermaid tool through its dependencies.
+    model
+        .resources
+        .push(resource(ResourceKind::Tool, "Tools", "mermaid-cli"));
+    model.installed.push(false);
+    model.resources[3].dependencies = vec!["mermaid-cli".to_string()];
+    let mut wizard = Wizard::new(model);
+    let tool_index = wizard.model.resources.len() - 1;
+
+    // Nothing selected: the tool is a free row.
+    assert!(wizard.required_note(tool_index).is_none());
+
+    // Selecting tdd locks the tool as required by it.
+    wizard.selected[3] = true;
+    assert_eq!(wizard.required_note(tool_index).as_deref(), Some("tdd"));
+
+    // Toggling the locked row in the Tools stage does nothing.
+    press(&mut wizard, &[KeyCode::Enter]); // Tools stage (first pick stage)
+    let Stage::Pick(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected the tools pick stage");
+    };
+    let position = stage
+        .items
+        .iter()
+        .position(|&item| item == tool_index)
+        .expect("tool is listed");
+    for _ in 0..position {
+        press(&mut wizard, &[KeyCode::Char('j')]);
+    }
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(
+        !wizard.selected[tool_index],
+        "a required row cannot be toggled into an explicit selection"
+    );
+
+    // Deselecting the parent releases the lock.
+    wizard.selected[3] = false;
+    assert!(wizard.required_note(tool_index).is_none());
+}

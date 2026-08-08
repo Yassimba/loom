@@ -1049,6 +1049,16 @@ impl Wizard {
                 Span::styled(" — installed", Style::new().dim()),
             ]));
         }
+        if let Some(parent) = self.required_note(index) {
+            return ListItem::new(Line::from(vec![
+                Span::styled(" ◉ ", Style::new().fg(OK)),
+                Span::styled(resource.label.as_str(), Style::new().dim()),
+                Span::styled(
+                    format!(" — required by {parent}"),
+                    Style::new().fg(OK).dim(),
+                ),
+            ]));
+        }
         let (mark, mark_style) = mark_for(self.selected[index]);
         ListItem::new(Line::from(vec![
             Span::styled(format!(" {mark} "), mark_style),

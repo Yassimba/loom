@@ -62,19 +62,20 @@ async function readSkillDependencies(skillRoot) {
   try {
     raw = await readFile(depsPath, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT") return [];
+    if (error?.code === "ENOENT") return { skills: [], tools: [] };
     throw error;
   }
   const value = parse(raw);
-  const skills = value?.skills;
-  if (
-    !Array.isArray(skills) ||
-    skills.length === 0 ||
-    !skills.every((name) => typeof name === "string" && name.length > 0)
-  ) {
-    throw new Error(`deps.yml must hold a non-empty skills list of names: ${depsPath}`);
+  const skills = value?.skills ?? [];
+  const tools = value?.tools ?? [];
+  const names = (list) =>
+    Array.isArray(list) && list.every((name) => typeof name === "string" && name.length > 0);
+  if (!names(skills) || !names(tools) || skills.length + tools.length === 0) {
+    throw new Error(
+      `deps.yml must hold non-empty skills and/or tools lists of names: ${depsPath}`,
+    );
   }
-  return skills;
+  return { skills, tools };
 }
 
 export async function readReviewedSkillCatalog(repoRoot) {
@@ -93,7 +94,7 @@ export async function readReviewedSkillCatalog(repoRoot) {
     if (typeof candidate.frontmatter.description !== "string") {
       throw new Error(`skill description is missing: ${name}`);
     }
-    for (const dependency of candidate.dependencies) {
+    for (const dependency of candidate.dependencies.skills) {
       if (!reviewed.has(dependency)) {
         throw new Error(`skill ${name} depends on unreviewed skill: ${dependency}`);
       }
@@ -106,7 +107,8 @@ export async function readReviewedSkillCatalog(repoRoot) {
       description: candidate.frontmatter.description,
       installTarget: name,
       nextAction: `Ask your coding agent to use the ${name} skill.`,
-      dependencies: candidate.dependencies,
+      dependencies: candidate.dependencies.skills,
+      toolDependencies: candidate.dependencies.tools,
     };
   });
 }
@@ -125,7 +127,7 @@ function rejectDependencyCycles(entries, index) {
     if (visited.has(name)) return;
     visited.add(name);
     stack.push(name);
-    for (const dependency of index.get(name)?.dependencies ?? []) visit(dependency);
+    for (const dependency of index.get(name)?.dependencies?.skills ?? []) visit(dependency);
     stack.pop();
   };
   for (const { name } of entries) visit(name);
@@ -291,6 +293,20 @@ export async function buildSetupCatalog(repoRoot) {
     readHerdrPluginCatalog(repoRoot),
     readToolCatalog(repoRoot),
   ]);
+  // Tool deps are declared by wizard label; resolve to install targets so
+  // the CLI's one expansion walk covers skills and tools alike.
+  const toolTargets = new Map(tools.map((tool) => [tool.label, tool.installTarget]));
+  for (const skill of skills) {
+    const targets = (skill.toolDependencies ?? []).map((label) => {
+      const target = toolTargets.get(label);
+      if (!target) {
+        throw new Error(`skill ${skill.label} depends on unknown tool: ${label}`);
+      }
+      return target;
+    });
+    skill.dependencies = [...skill.dependencies, ...targets];
+    delete skill.toolDependencies;
+  }
   return [...piPackages, ...skills, ...herdrPlugins, ...tools];
 }
 

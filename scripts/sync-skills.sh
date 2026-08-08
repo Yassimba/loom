@@ -239,18 +239,26 @@ import json, re, sys
 from pathlib import Path
 repo = Path(sys.argv[1])
 shared = {s for g in json.loads((repo/"skills.sh.json").read_text())["groupings"] for s in g["skills"]}
+tool_labels = {t["label"] for t in json.loads((repo/"manifest"/"tools.json").read_text())["tools"]}
 graph, bad = {}, []
 for f in repo.glob("skills/*/deps.yml"):
     skill = f.parent.name
-    deps = re.findall(r"^\s*-\s+([\w-]+)\s*$", f.read_text(), re.M)
+    text = f.read_text()
+    def section(key):
+        m = re.search(rf"^{key}:\s*$((?:\n\s*-\s+[^\n]+)*)", text, re.M)
+        return re.findall(r"-\s+([\w-]+)", m.group(1)) if m else []
+    deps, tools = section("skills"), section("tools")
     graph[skill] = deps
-    if not deps:
+    if not deps and not tools:
         bad.append(f"{f.relative_to(repo)}: declares no deps — delete the file instead")
     for name in deps:
         if name not in shared:
             bad.append(f"{f.relative_to(repo)}: dep '{name}' is not a shared skill")
         if not (repo/"skills"/name/"SKILL.md").exists():
             bad.append(f"{f.relative_to(repo)}: dep path skills/{name} does not exist")
+    for name in tools:
+        if name not in tool_labels:
+            bad.append(f"{f.relative_to(repo)}: tool dep '{name}' is not in manifest/tools.json")
 seen, stack = set(), []
 def visit(n):
     if n in stack:
