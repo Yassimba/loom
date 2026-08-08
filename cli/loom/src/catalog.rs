@@ -43,6 +43,10 @@ pub struct Resource {
     /// `pi install npm:<target>@<version>` and update only when the pin does.
     #[serde(default)]
     pub version: Option<String>,
+    /// Per-OS variant keys installed alongside the primary (tool resources
+    /// only); mise os filters decide which applies on each machine.
+    #[serde(default)]
+    pub companions: Vec<String>,
 }
 
 /// A curated selection bundle from manifest/presets.json, offered on the
