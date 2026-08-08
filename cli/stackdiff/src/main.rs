@@ -548,7 +548,7 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
                 })
                 .collect();
             loop {
-                let picked = dialoguer::Select::new()
+                let picked = dialoguer::FuzzySelect::new()
                     .with_prompt(format!(
                         "Graph too big to draw — {} clusters. Open one (Esc quits)",
                         rows.len()
@@ -610,7 +610,7 @@ fn stat_line(cli: &Cli, tree: &DiffNode) {
 /// Entrypoints grouped by file, optionally filtered.
 fn list_entries(index: &FunctionIndex, snapshot: &Snapshot, filter: Option<&str>) {
     let mut by_file: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
-    for (key, info) in index {
+    for (key, info) in index.iter() {
         if !info.exported || key.starts_with("new ") {
             continue;
         }
@@ -638,7 +638,8 @@ fn list_entries(index: &FunctionIndex, snapshot: &Snapshot, filter: Option<&str>
     }
 }
 
-/// A missed entry gets suggestions, not a shrug.
+/// A missed entry gets suggestions — and on a terminal, a fuzzy picker
+/// seeded with them instead of an error.
 fn miss(entry: &str, index: &FunctionIndex) {
     let close = stackdiff::calltree::suggest_entries(entry, index, 5);
     if close.is_empty() {
@@ -649,6 +650,30 @@ fn miss(entry: &str, index: &FunctionIndex) {
             close.join(", ")
         );
     }
+}
+
+/// Resolve an entry, or let the user pick from close matches on a tty.
+fn resolve_or_pick(entry: &str, index: &FunctionIndex) -> Option<String> {
+    if let Some(key) = stackdiff::calltree::resolve_entry(entry, index) {
+        return Some(key);
+    }
+    if !std::io::stdout().is_terminal() {
+        miss(entry, index);
+        return None;
+    }
+    let close = stackdiff::calltree::suggest_entries(entry, index, 15);
+    if close.is_empty() {
+        miss(entry, index);
+        return None;
+    }
+    let picked = dialoguer::FuzzySelect::new()
+        .with_prompt(format!("{entry:?} not found — pick one (Esc quits)"))
+        .items(&close)
+        .default(0)
+        .interact_opt()
+        .ok()
+        .flatten()?;
+    Some(close[picked].clone())
 }
 
 fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
@@ -701,8 +726,7 @@ fn run_tree(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
     let reverse = cli.callers.then(|| reverse_index(&index));
     let mut trees = Vec::new();
     for entry in &cli.entries {
-        let Some(resolved) = stackdiff::calltree::resolve_entry(entry, &index) else {
-            miss(entry, &index);
+        let Some(resolved) = resolve_or_pick(entry, &index) else {
             continue;
         };
         trees.push(tree_as_diff(&match &reverse {
@@ -783,7 +807,21 @@ fn run_diff(cli: &Cli, cwd: &Path, color: bool) -> Result<i32> {
         return Ok(0);
     }
 
-    let entries = infer_entries(&before, &after, &cli.entries, cli.depth())?;
+    // Resolve explicit entries up front so a typo becomes a fuzzy pick,
+    // not a hard error from inference.
+    let explicit: Vec<String> = cli
+        .entries
+        .iter()
+        .filter_map(|entry| {
+            stackdiff::calltree::resolve_entry(entry, &after)
+                .or_else(|| stackdiff::calltree::resolve_entry(entry, &before))
+                .or_else(|| resolve_or_pick(entry, &after))
+        })
+        .collect();
+    if !cli.entries.is_empty() && explicit.is_empty() {
+        return Ok(1);
+    }
+    let entries = infer_entries(&before, &after, &explicit, cli.depth())?;
 
     if entries.is_empty() {
         println!(
