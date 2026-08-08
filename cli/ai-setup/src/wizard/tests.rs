@@ -681,3 +681,81 @@ fn clicking_the_sidebar_jumps_only_to_visited_stages() {
     wizard.handle_click(sidebar.x + 2, sidebar.y + 1 + 5);
     assert_eq!(wizard.stage_index, 0);
 }
+
+#[test]
+fn skills_pane_l_advances_to_the_next_stage() {
+    let mut wizard = wizard();
+    // Walk to Skills (Herdr, Pi stages), enter the skills pane, then l again.
+    press(
+        &mut wizard,
+        &[KeyCode::Enter, KeyCode::Enter, KeyCode::Enter],
+    );
+    assert!(matches!(
+        wizard.stages[wizard.stage_index],
+        Stage::Skills(_)
+    ));
+    press(&mut wizard, &[KeyCode::Char('l')]);
+    assert!(
+        matches!(
+            &wizard.stages[wizard.stage_index],
+            Stage::Skills(stage) if stage.focus == Focus::Skills
+        ),
+        "first l focuses the skills pane"
+    );
+    press(&mut wizard, &[KeyCode::Char('l')]);
+    assert!(
+        matches!(wizard.stages[wizard.stage_index], Stage::Settings(_)),
+        "second l advances to the next stage"
+    );
+    // And h climbs back down the same ladder.
+    press(&mut wizard, &[KeyCode::Char('h')]);
+    assert!(matches!(
+        wizard.stages[wizard.stage_index],
+        Stage::Skills(_)
+    ));
+}
+
+#[test]
+fn skills_pane_j_flows_across_category_borders() {
+    let mut wizard = wizard();
+    press(
+        &mut wizard,
+        &[KeyCode::Enter, KeyCode::Enter, KeyCode::Enter],
+    );
+    // Enter the skills pane of "Coding" (tdd, refactor) and walk past its end.
+    press(
+        &mut wizard,
+        &[KeyCode::Char('l'), KeyCode::Char('j'), KeyCode::Char('j')],
+    );
+    let Stage::Skills(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected the skills stage");
+    };
+    assert_eq!(
+        (stage.category_cursor, stage.skill_cursor),
+        (1, 0),
+        "j past the last Coding skill lands on the first Diagrams skill"
+    );
+    // k climbs back into the previous category, at its last skill.
+    press(&mut wizard, &[KeyCode::Char('k')]);
+    let Stage::Skills(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected the skills stage");
+    };
+    assert_eq!((stage.category_cursor, stage.skill_cursor), (0, 1));
+}
+
+#[test]
+fn g_and_shift_g_jump_to_list_edges() {
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Enter]); // Herdr pick stage (1 item)
+    press(&mut wizard, &[KeyCode::Enter]); // Pi pick stage (2 items)
+    press(&mut wizard, &[KeyCode::Char('G')]);
+    let Stage::Pick(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected a pick stage");
+    };
+    assert_eq!(stage.cursor, stage.items.len() - 1);
+    press(&mut wizard, &[KeyCode::Char('g')]);
+    let Stage::Pick(stage) = &wizard.stages[wizard.stage_index] else {
+        panic!("expected a pick stage");
+    };
+    assert_eq!(stage.cursor, 0);
+}

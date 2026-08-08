@@ -118,19 +118,19 @@ impl Wizard {
 
     fn render_footer(&mut self, frame: &mut Frame, area: Rect) {
         let hint = match &self.stages[self.stage_index] {
-            Stage::Welcome(_) => " space toggle · ↑↓ move · enter start · q quit",
+            Stage::Welcome(_) => " space toggle · j/k move · l/enter start · q quit",
             Stage::Pick(_) => {
-                " space toggle · a all · ↑↓/click move · enter next · ← back · q quit"
+                " space toggle · a all · j/k move · h/l back/next · enter next · q quit"
             }
             Stage::Skills(_) => {
-                " space toggle · a category · A everything · tab panes · enter next · ← back"
+                " space toggle · a category · A everything · j/k flow · h/l panes+steps · enter next"
             }
             Stage::Settings(_) => {
-                " space toggle · a all · ↑↓ move · enter review · ← back · q quit"
+                " space toggle · a all · j/k move · h/l back/next · enter review · q quit"
             }
-            Stage::Review { .. } => " enter install · ↑↓ scroll · ← back · q quit",
+            Stage::Review { .. } => " enter install · j/k scroll · h back · q quit",
             Stage::Install(stage) if stage.running => " installing… please wait",
-            Stage::Install(_) => " enter finish · ↑↓ scroll",
+            Stage::Install(_) => " enter finish · j/k scroll",
         };
         let [hint_area, back_area, _, next_area, _] = Layout::horizontal([
             Constraint::Min(0),
