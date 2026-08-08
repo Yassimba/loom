@@ -93,7 +93,8 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     // Skills, Pi, Herdr, the tool manifest, and the self-update touch
     // disjoint state, so all lanes run concurrently; each lane prints once,
     // when it finishes.
-    let lanes = std::iter::once("Shared skills")
+    let lanes = ["Shared skills", "Project AGENTS.md files"]
+        .into_iter()
         .chain(mise.then_some("Tool manifest (mise)"))
         .chain(tasks.iter().map(|task| task.label))
         .collect::<Vec<_>>()
@@ -106,6 +107,12 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             let line_sender = line_sender.clone();
             scope.spawn(move || {
                 let _ = line_sender.send(update_installed_skills(system, catalog));
+            });
+        }
+        {
+            let line_sender = line_sender.clone();
+            scope.spawn(move || {
+                let _ = line_sender.send(crate::init::sync_projects(system));
             });
         }
         if mise {

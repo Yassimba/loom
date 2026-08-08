@@ -251,6 +251,12 @@ pub fn run_init(system: &dyn System, catalog: &Catalog, options: &InitOptions) -
         }
     }
 
+    if let Err(error) = register_project(&home, &project) {
+        eprintln!("  ! could not register the project for sync: {error}");
+    } else {
+        println!("  ✓ registered for `ai-setup sync`");
+    }
+
     Ok(true)
 }
 
@@ -332,6 +338,118 @@ fn render_fresh(base: &str, chosen: &[(&'static str, String)]) -> String {
         out.push_str(&wrap_section(name, content));
     }
     out
+}
+
+/// Machine-local list of projects init has scaffolded, so sync can walk
+/// them. Absolute paths, deduped; entries whose AGENTS.md vanished prune
+/// themselves on the next sync.
+fn registry_path(home: &Path) -> std::path::PathBuf {
+    home.join(".config").join("ai-setup").join("projects.json")
+}
+
+fn read_registry(home: &Path) -> Vec<String> {
+    fs::read_to_string(registry_path(home))
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+fn write_registry(home: &Path, projects: &[String]) -> Result<()> {
+    let path = registry_path(home);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(
+        &path,
+        format!("{}\n", serde_json::to_string_pretty(projects)?),
+    )?;
+    Ok(())
+}
+
+fn register_project(home: &Path, project: &Path) -> Result<()> {
+    let entry = project.display().to_string();
+    let mut projects = read_registry(home);
+    if !projects.contains(&entry) {
+        projects.push(entry);
+        write_registry(home, &projects)?;
+    }
+    Ok(())
+}
+
+/// Refresh every registered project's AGENTS.md from the published
+/// templates: pristine fences update, edited fences are kept and named,
+/// nothing outside a fence is touched, and no new sections are added —
+/// section choices stay with `init` in the project. Returns (ok, report).
+pub fn sync_projects(system: &dyn System) -> (bool, String) {
+    let Some(home) = system.home_dir() else {
+        return (
+            false,
+            "  ! Project AGENTS.md: home directory is unavailable".into(),
+        );
+    };
+    let projects = read_registry(&home);
+    if projects.is_empty() {
+        return (true, "  ✓ Project AGENTS.md (none registered)".into());
+    }
+
+    let staging = home.join(".cache").join("ai-setup").join("sync-staging");
+    let templates = skills::fetch_repo(system, &staging).and_then(|repo_root| {
+        let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
+            .map_err(|error| format!("template missing: {BASE_TEMPLATE}: {error}"))?;
+        let mut sections = Vec::new();
+        for section in &SECTIONS {
+            let content = fs::read_to_string(repo_root.join(section.template))
+                .map_err(|error| format!("template missing: {}: {error}", section.template))?;
+            sections.push((section.name, content));
+        }
+        Ok((base, sections))
+    });
+    let _ = fs::remove_dir_all(&staging);
+    let (base, sections) = match templates {
+        Ok(templates) => templates,
+        Err(message) => return (false, format!("  ! Project AGENTS.md: {message}")),
+    };
+
+    let mut report = String::from("  ✓ Project AGENTS.md files");
+    let mut ok = true;
+    let mut surviving = Vec::new();
+    for project in &projects {
+        let agents_path = Path::new(project).join("AGENTS.md");
+        let Ok(existing) = fs::read_to_string(&agents_path) else {
+            report.push_str(&format!("\n      {project}: gone, unregistered"));
+            continue;
+        };
+        surviving.push(project.clone());
+        // Only the sections this project already carries.
+        let chosen: Vec<(&'static str, String)> = sections
+            .iter()
+            .filter(|(name, _)| find_fence(&existing, name).is_some())
+            .map(|(name, content)| (*name, content.clone()))
+            .collect();
+        let (updated, outcome) = render_agents(Some(&existing), &base, &chosen, false);
+        if let Some(content) = updated {
+            if let Err(error) = fs::write(&agents_path, content) {
+                report.push_str(&format!("\n      {project}: write failed: {error}"));
+                ok = false;
+                continue;
+            }
+        }
+        let mut notes = Vec::new();
+        if !outcome.refreshed.is_empty() {
+            notes.push(format!("refreshed {}", outcome.refreshed.join(", ")));
+        }
+        if !outcome.kept_edited.is_empty() {
+            notes.push(format!("kept edited {}", outcome.kept_edited.join(", ")));
+        }
+        if notes.is_empty() {
+            notes.push("current".into());
+        }
+        report.push_str(&format!("\n      {project}: {}", notes.join(" · ")));
+    }
+    if surviving.len() != projects.len() {
+        let _ = write_registry(&home, &surviving);
+    }
+    (ok, report)
 }
 
 #[cfg(test)]
