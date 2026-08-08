@@ -8,8 +8,8 @@ use crate::render::node_text;
 use crate::types::{DiffNode, DiffStatus};
 
 const MAX_LABEL: usize = 38;
-const GAP: usize = 2;
-const CONNECT_ROWS: usize = 3;
+const GAP: usize = 3;
+const CONNECT_ROWS: usize = 4;
 
 struct Layout {
     lines: Vec<String>,
@@ -49,8 +49,9 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 
 fn build(node: &DiffNode) -> Layout {
     let lines = wrap(&node_text(node, true), MAX_LABEL);
-    let box_w = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0) + 4;
-    let box_h = lines.len() + 2;
+    // 2 border cols + 2-space margins; 2 border rows + blank padding rows.
+    let box_w = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0) + 6;
+    let box_h = lines.len() + 4;
     let children: Vec<Layout> = node.children.iter().map(build).collect();
     let kids_w: usize =
         children.iter().map(|c| c.sub_w).sum::<usize>() + GAP * children.len().saturating_sub(1);
@@ -73,10 +74,20 @@ fn build(node: &DiffNode) -> Layout {
     }
 }
 
+/// What a cell is part of — Same-status cells draw frames and rails dim so
+/// label text and status-colored boxes carry the eye.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Role {
+    Frame,
+    Label,
+    Arrow,
+}
+
 #[derive(Clone, Copy)]
 struct Cell {
     ch: char,
     status: DiffStatus,
+    role: Role,
 }
 
 struct Canvas {
@@ -90,7 +101,8 @@ impl Canvas {
                 vec![
                     Cell {
                         ch: ' ',
-                        status: DiffStatus::Same
+                        status: DiffStatus::Same,
+                        role: Role::Frame,
                     };
                     w
                 ];
@@ -99,9 +111,9 @@ impl Canvas {
         }
     }
 
-    fn put(&mut self, x: usize, y: usize, ch: char, status: DiffStatus) {
+    fn put(&mut self, x: usize, y: usize, ch: char, status: DiffStatus, role: Role) {
         if let Some(cell) = self.rows.get_mut(y).and_then(|row| row.get_mut(x)) {
-            *cell = Cell { ch, status };
+            *cell = Cell { ch, status, role };
         }
     }
 }
@@ -109,21 +121,23 @@ impl Canvas {
 fn draw_box(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
     let status = layout.status;
     let w = layout.box_w;
-    canvas.put(x, y, '╭', status);
-    canvas.put(x + w - 1, y, '╮', status);
-    canvas.put(x, y + layout.box_h - 1, '╰', status);
-    canvas.put(x + w - 1, y + layout.box_h - 1, '╯', status);
+    canvas.put(x, y, '╭', status, Role::Frame);
+    canvas.put(x + w - 1, y, '╮', status, Role::Frame);
+    canvas.put(x, y + layout.box_h - 1, '╰', status, Role::Frame);
+    canvas.put(x + w - 1, y + layout.box_h - 1, '╯', status, Role::Frame);
     for col in x + 1..x + w - 1 {
-        canvas.put(col, y, '─', status);
-        canvas.put(col, y + layout.box_h - 1, '─', status);
+        canvas.put(col, y, '─', status, Role::Frame);
+        canvas.put(col, y + layout.box_h - 1, '─', status, Role::Frame);
+    }
+    for row in y + 1..y + layout.box_h - 1 {
+        canvas.put(x, row, '│', status, Role::Frame);
+        canvas.put(x + w - 1, row, '│', status, Role::Frame);
     }
     for (index, line) in layout.lines.iter().enumerate() {
-        let row = y + 1 + index;
-        canvas.put(x, row, '│', status);
-        canvas.put(x + w - 1, row, '│', status);
+        let row = y + 2 + index;
         let pad = (w - 2 - line.chars().count()) / 2;
         for (offset, ch) in line.chars().enumerate() {
-            canvas.put(x + 1 + pad + offset, row, ch, status);
+            canvas.put(x + 1 + pad + offset, row, ch, status, Role::Label);
         }
     }
 }
@@ -144,8 +158,9 @@ fn place(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
     let stem_row = y + layout.box_h;
     let bus_row = stem_row + 1;
     let drop_row = stem_row + 2;
+    let arrow_row = stem_row + 3;
 
-    canvas.put(parent_cx, stem_row, '│', layout.status);
+    canvas.put(parent_cx, stem_row, '│', layout.status, Role::Frame);
 
     let centers: Vec<(usize, DiffStatus)> = {
         let mut centers = Vec::new();
@@ -167,7 +182,7 @@ fn place(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
         .unwrap_or(parent_cx)
         .max(parent_cx);
     for col in left..=right {
-        canvas.put(col, bus_row, '─', DiffStatus::Same);
+        canvas.put(col, bus_row, '─', DiffStatus::Same, Role::Frame);
     }
     for &(cx, status) in &centers {
         let junction = if cx == left && cx < parent_cx {
@@ -179,15 +194,16 @@ fn place(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
         } else {
             '┬'
         };
-        canvas.put(cx, bus_row, junction, status);
-        canvas.put(cx, drop_row, '▼', status);
+        canvas.put(cx, bus_row, junction, status, Role::Frame);
+        canvas.put(cx, drop_row, '│', status, Role::Frame);
+        canvas.put(cx, arrow_row, '▼', status, Role::Arrow);
     }
     if left < parent_cx && parent_cx < right {
-        canvas.put(parent_cx, bus_row, '┴', layout.status);
+        canvas.put(parent_cx, bus_row, '┴', layout.status, Role::Frame);
     } else if parent_cx == left && centers.iter().all(|(c, _)| *c != parent_cx) {
-        canvas.put(parent_cx, bus_row, '╰', layout.status);
+        canvas.put(parent_cx, bus_row, '╰', layout.status, Role::Frame);
     } else if parent_cx == right && centers.iter().all(|(c, _)| *c != parent_cx) {
-        canvas.put(parent_cx, bus_row, '╯', layout.status);
+        canvas.put(parent_cx, bus_row, '╯', layout.status, Role::Frame);
     }
 
     for child in &layout.children {
@@ -196,7 +212,7 @@ fn place(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
     }
 }
 
-fn paint(status: DiffStatus, text: &str, color: bool) -> String {
+fn paint(status: DiffStatus, role: Role, text: &str, color: bool) -> String {
     if !color || text.trim().is_empty() {
         return text.to_string();
     }
@@ -204,7 +220,11 @@ fn paint(status: DiffStatus, text: &str, color: bool) -> String {
         DiffStatus::Added => text.green().to_string(),
         DiffStatus::Removed => text.red().to_string(),
         DiffStatus::Changed => text.yellow().to_string(),
-        DiffStatus::Same => text.to_string(),
+        // Unchanged structure recedes: dim frames, plain text and arrows.
+        DiffStatus::Same => match role {
+            Role::Frame => text.dimmed().to_string(),
+            Role::Label | Role::Arrow => text.to_string(),
+        },
     }
 }
 
@@ -217,16 +237,16 @@ pub fn render_boxes(root: &DiffNode, color: bool) -> String {
     for row in &canvas.rows {
         let mut line = String::new();
         let mut run = String::new();
-        let mut run_status = DiffStatus::Same;
+        let mut run_key = (DiffStatus::Same, Role::Frame);
         for cell in row {
-            if cell.status != run_status {
-                line.push_str(&paint(run_status, &run, color));
+            if (cell.status, cell.role) != run_key {
+                line.push_str(&paint(run_key.0, run_key.1, &run, color));
                 run.clear();
-                run_status = cell.status;
+                run_key = (cell.status, cell.role);
             }
             run.push(cell.ch);
         }
-        line.push_str(&paint(run_status, &run, color));
+        line.push_str(&paint(run_key.0, run_key.1, &run, color));
         out.push(line.trim_end().to_string());
     }
     out.join("\n")
