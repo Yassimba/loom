@@ -13,7 +13,7 @@ pub enum Platform {
 pub const PI_MIN_NODE: (u32, u32, u32) = (20, 6, 0);
 
 /// What `node --version` said, reduced to the decision the planner needs.
-/// ai-setup never installs or updates Node itself — it detects and instructs.
+/// loom never installs or updates Node itself — it detects and instructs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeStatus {
     Missing,
@@ -194,7 +194,9 @@ pub fn build_install_plan(
     let mut tools = resources
         .iter()
         .filter(|resource| resource.kind == ResourceKind::Tool)
-        .map(|tool| tool.install_target.clone())
+        .flat_map(|tool| {
+            std::iter::once(tool.install_target.clone()).chain(tool.companions.iter().cloned())
+        })
         .collect::<Vec<_>>();
     let pi_via_mise = needs_pi && !status.pi && status.mise;
     if pi_via_mise && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {

@@ -613,7 +613,8 @@
       "description": "The Pi coding agent. Required by Pi packages — selecting any of them pulls Pi in automatically.",
       "installTarget": "npm:@mariozechner/pi-coding-agent",
       "nextAction": "Run `pi` in a project to start the agent.",
-      "bin": "pi"
+      "bin": "pi",
+      "companions": []
     },
     {
       "id": "tool:herdr",
@@ -623,7 +624,8 @@
       "description": "Terminal multiplexer for coding agents (macOS/Linux; on Windows install from herdr.dev).",
       "installTarget": "herdr",
       "nextAction": "Run `herdr` to start the multiplexer.",
-      "bin": "herdr"
+      "bin": "herdr",
+      "companions": []
     },
     {
       "id": "tool:gh",
@@ -633,7 +635,8 @@
       "description": "GitHub CLI — the release, code-review, and jira skills use it for PRs and issues.",
       "installTarget": "gh",
       "nextAction": "Run `gh auth login` once.",
-      "bin": "gh"
+      "bin": "gh",
+      "companions": []
     },
     {
       "id": "tool:glab",
@@ -643,7 +646,8 @@
       "description": "GitLab CLI — the release and code-review skills use it for MRs on GitLab projects.",
       "installTarget": "glab",
       "nextAction": "Run `glab auth login` once.",
-      "bin": "glab"
+      "bin": "glab",
+      "companions": []
     },
     {
       "id": "tool:tokei",
@@ -653,7 +657,8 @@
       "description": "Fast code-statistics tool several skills shell out to for codebase orientation.",
       "installTarget": "tokei",
       "nextAction": "Run `tokei` in a repo.",
-      "bin": "tokei"
+      "bin": "tokei",
+      "companions": []
     },
     {
       "id": "tool:tokui",
@@ -663,7 +668,8 @@
       "description": "Interactive TUI over tokei's statistics.",
       "installTarget": "github:zdyxry/tokui",
       "nextAction": "Run `tokei -o json | tokui` in a repo.",
-      "bin": "tokui"
+      "bin": "tokui",
+      "companions": []
     },
     {
       "id": "tool:uv",
@@ -673,7 +679,8 @@
       "description": "Python package and project manager — the python skills assume it.",
       "installTarget": "uv",
       "nextAction": "Run `uv init` in a Python project.",
-      "bin": "uv"
+      "bin": "uv",
+      "companions": []
     },
     {
       "id": "tool:agent-browser",
@@ -683,7 +690,8 @@
       "description": "Browser automation CLI the browser-usage and e2e test skills drive.",
       "installTarget": "npm:agent-browser",
       "nextAction": "Ask your agent to test a website.",
-      "bin": "agent-browser"
+      "bin": "agent-browser",
+      "companions": []
     },
     {
       "id": "tool:mermaid-cli",
@@ -693,7 +701,8 @@
       "description": "Renders Mermaid diagrams to images (mmdc) — used by the diagram skills.",
       "installTarget": "npm:@mermaid-js/mermaid-cli",
       "nextAction": "Ask your agent for a diagram.",
-      "bin": "mmdc"
+      "bin": "mmdc",
+      "companions": []
     },
     {
       "id": "tool:marp-cli",
@@ -703,7 +712,8 @@
       "description": "Renders Markdown slide decks — used by the marp-slide skill.",
       "installTarget": "npm:@marp-team/marp-cli",
       "nextAction": "Ask your agent for a slide deck.",
-      "bin": "marp"
+      "bin": "marp",
+      "companions": []
     },
     {
       "id": "tool:beads",
@@ -713,7 +723,8 @@
       "description": "Beads (br): local-first issue tracker for coding agents — tasks in SQLite with JSONL export for git. Rust port of Steve Yegge's beads.",
       "installTarget": "github:Dicklesworthstone/beads_rust",
       "nextAction": "Run `br quickstart` in a repo.",
-      "bin": "br"
+      "bin": "br",
+      "companions": []
     },
     {
       "id": "tool:beads-viewer",
@@ -723,7 +734,8 @@
       "description": "Beads viewer (bv): graph-aware TUI over the Beads tracker — kanban, dependency DAG, critical path.",
       "installTarget": "github:Dicklesworthstone/beads_viewer",
       "nextAction": "Run `bv` in a repo with Beads issues.",
-      "bin": "bv"
+      "bin": "bv",
+      "companions": []
     },
     {
       "id": "tool:glab-tui",
@@ -733,7 +745,8 @@
       "description": "Terminal UI for GitLab and GitHub on top of glab/gh: issues, MRs, pipelines, runners, releases.",
       "installTarget": "github:rcieri/glab-tui",
       "nextAction": "Run `glab-tui` in a repo with a GitLab or GitHub remote.",
-      "bin": "glab-tui"
+      "bin": "glab-tui",
+      "companions": []
     },
     {
       "id": "tool:gitleaks",
@@ -743,7 +756,8 @@
       "description": "Secret scanner for git repos - catches committed credentials before they ship.",
       "installTarget": "gitleaks",
       "nextAction": "Run `gitleaks git` in a repo.",
-      "bin": "gitleaks"
+      "bin": "gitleaks",
+      "companions": []
     },
     {
       "id": "tool:zoxide",
@@ -753,17 +767,19 @@
       "description": "Smarter cd that learns your habits: `z` jumps to frecent directories, `zi` picks interactively.",
       "installTarget": "zoxide",
       "nextAction": "Add `eval \"$(zoxide init zsh)\"` to your shell profile, then `z <dir>`.",
-      "bin": "zoxide"
+      "bin": "zoxide",
+      "companions": []
     },
     {
       "id": "tool:envx",
       "kind": "tool",
       "group": "Tools",
       "label": "envx",
-      "description": "Environment variable manager with a TUI and CLI (crates.io `envex`; builds with cargo).",
-      "installTarget": "cargo:envex",
+      "description": "Environment variable manager with a TUI and CLI. Native binaries on Linux/Windows; builds via cargo on macOS (crates.io `envex`).",
+      "installTarget": "github:mikeleppane/envx",
       "nextAction": "Run `envx` to browse your environment.",
-      "bin": "envx"
+      "bin": "envx",
+      "companions": ["cargo:envex"]
     },
     {
       "id": "tool:pup",
@@ -773,7 +789,8 @@
       "description": "Datadog API CLI for agents and humans: 200+ commands over metrics, logs, monitors, traces.",
       "installTarget": "github:DataDog/pup",
       "nextAction": "Run `pup auth login` once.",
-      "bin": "pup"
+      "bin": "pup",
+      "companions": []
     }
   ]
 }

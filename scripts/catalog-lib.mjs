@@ -145,7 +145,7 @@ export async function readPiPackageCatalog(repoRoot) {
       throw error;
     }
     const manifest = JSON.parse(raw);
-    const catalog = manifest?.aiSetup?.catalog;
+    const catalog = manifest?.loom?.catalog;
     if (!catalog) continue;
     if (manifest.private) throw new Error(`setup Pi package is private: ${manifestPath}`);
     if (
@@ -153,7 +153,7 @@ export async function readPiPackageCatalog(repoRoot) {
       typeof catalog.description !== "string" ||
       typeof manifest.name !== "string"
     ) {
-      throw new Error(`invalid aiSetup.catalog metadata: ${manifestPath}`);
+      throw new Error(`invalid loom.catalog metadata: ${manifestPath}`);
     }
     resources.push({
       id: `pi-package:${manifest.name}`,
@@ -231,7 +231,7 @@ export async function readHerdrPluginCatalog(repoRoot) {
       group: "Herdr plugins",
       label: parseTomlString(content, "name", manifestPath),
       description: parseTomlString(content, "description", manifestPath),
-      installTarget: `Yassimba/ai-setup/plugins/${entry.name}`,
+      installTarget: `Yassimba/loom/plugins/${entry.name}`,
       nextAction: "Run `herdr plugin list` to see the installed plugin.",
     });
   }
@@ -243,7 +243,7 @@ export async function readHerdrPluginCatalog(repoRoot) {
 /// key sets must match exactly — a pin without metadata can't be offered, and
 /// metadata without a pin can't be installed.
 export async function readToolCatalog(repoRoot) {
-  const manifestRaw = await readFile(join(repoRoot, "manifest", "ai-setup.toml"), "utf8");
+  const manifestRaw = await readFile(join(repoRoot, "manifest", "loom.toml"), "utf8");
   const meta = JSON.parse(await readFile(join(repoRoot, "manifest", "tools.json"), "utf8"));
 
   const withoutCore = manifestRaw.replace(/^# core:begin[\s\S]*?^# core:end$/m, "");
@@ -252,9 +252,14 @@ export async function readToolCatalog(repoRoot) {
     .map((match) => match[1] ?? match[2])
     .filter((key) => key !== "tools");
 
-  const metaByKey = new Map(meta.tools.map((tool) => [tool.key, tool]));
-  const missingMeta = optionalKeys.filter((key) => !metaByKey.has(key));
-  const missingPin = meta.tools.filter((tool) => !optionalKeys.includes(tool.key));
+  const claimed = new Set(
+    meta.tools.flatMap((tool) => [tool.key, ...(tool.companions ?? [])]),
+  );
+  const missingMeta = optionalKeys.filter((key) => !claimed.has(key));
+  const missingPin = meta.tools
+    .flatMap((tool) => [tool.key, ...(tool.companions ?? [])])
+    .filter((key) => !optionalKeys.includes(key))
+    .map((key) => ({ key }));
   if (missingMeta.length > 0) {
     throw new Error(`manifest tools missing metadata in tools.json: ${missingMeta.join(", ")}`);
   }
@@ -275,6 +280,9 @@ export async function readToolCatalog(repoRoot) {
     // The executable a PATH probe should look for; most tools are named
     // after themselves (mermaid-cli ships mmdc, marp-cli ships marp).
     bin: tool.bin ?? tool.label,
+    // Per-OS variant keys installed alongside the primary; mise os filters
+    // decide which actually applies on each machine.
+    companions: tool.companions ?? [],
   }));
 }
 

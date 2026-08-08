@@ -21,6 +21,7 @@ fn resource(kind: ResourceKind, group: &str, label: &str) -> Resource {
         dependencies: Vec::new(),
         bin: None,
         version: None,
+        companions: Vec::new(),
     }
 }
 

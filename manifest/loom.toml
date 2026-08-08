@@ -40,9 +40,11 @@ glab = "1.112.0"
 # hygiene & navigation
 gitleaks = "8.30.1"
 zoxide = "0.10.0"
-# envx ships no macos-arm64 release asset, so it builds from crates.io
-# (published there as `envex`, binary `envx`)
-"cargo:envex" = "0.6.2"
+# envx per OS: native release binaries where upstream ships them; only
+# macos (no arm64 asset upstream) builds from crates.io (published as
+# `envex`, binary `envx`). One wizard tool, companion keys.
+"github:mikeleppane/envx" = { version = "v0.6.2", os = ["linux", "windows"] }
+"cargo:envex" = { version = "0.6.2", os = ["macos"] }
 
 # observability
 "github:DataDog/pup" = "v1.10.5"

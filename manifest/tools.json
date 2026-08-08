@@ -98,11 +98,14 @@
       "nextAction": "Add `eval \"$(zoxide init zsh)\"` to your shell profile, then `z <dir>`."
     },
     {
-      "key": "cargo:envex",
+      "key": "github:mikeleppane/envx",
       "label": "envx",
       "bin": "envx",
-      "description": "Environment variable manager with a TUI and CLI (crates.io `envex`; builds with cargo).",
-      "nextAction": "Run `envx` to browse your environment."
+      "description": "Environment variable manager with a TUI and CLI. Native binaries on Linux/Windows; builds via cargo on macOS (crates.io `envex`).",
+      "nextAction": "Run `envx` to browse your environment.",
+      "companions": [
+        "cargo:envex"
+      ]
     },
     {
       "key": "github:DataDog/pup",

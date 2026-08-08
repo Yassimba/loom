@@ -41,7 +41,7 @@ async function createCatalogFixture() {
     JSON.stringify({
       name: "@example/pi-sample",
       description: "Package fallback",
-      aiSetup: {
+      loom: {
         catalog: {
           label: "Sample",
           description: "Sample Pi package",
@@ -56,7 +56,7 @@ async function createCatalogFixture() {
   );
   await mkdir(join(repoRoot, "manifest"), { recursive: true });
   await writeFile(
-    join(repoRoot, "manifest", "ai-setup.toml"),
+    join(repoRoot, "manifest", "loom.toml"),
     '[tools]\n# core:begin\nnode = "24.19.0"\n# core:end\n\ngh = "2.97.0"\n',
   );
   await writeFile(
@@ -116,7 +116,7 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       group: "Herdr plugins",
       label: "Sample Herdr plugin",
       description: "Sample Herdr capability",
-      installTarget: "Yassimba/ai-setup/plugins/herdr-sample",
+      installTarget: "Yassimba/loom/plugins/herdr-sample",
       nextAction: "Run `herdr plugin list` to see the installed plugin.",
     },
     {
@@ -128,6 +128,7 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       installTarget: "gh",
       nextAction: "Run `gh auth login` once.",
       bin: "gh",
+      companions: [],
     },
   ]);
 });

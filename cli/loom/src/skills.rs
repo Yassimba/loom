@@ -303,6 +303,7 @@ mod tests {
             dependencies: dependencies.iter().map(ToString::to_string).collect(),
             bin: None,
             version: None,
+            companions: Vec::new(),
         }
     }
 

@@ -1,4 +1,4 @@
-use ai_setup::{
+use loom::{
     build_install_plan, expand_skill_dependencies, CommandSpec, NodeStatus, Platform,
     PrerequisiteStatus, Resource, ResourceKind, Runtime, StepAction, VerificationSpec,
 };
@@ -16,6 +16,7 @@ fn resource(kind: ResourceKind, id: &str, target: &str) -> Resource {
         dependencies: Vec::new(),
         bin: None,
         version: None,
+        companions: Vec::new(),
     }
 }
 
@@ -38,7 +39,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
         resource(
             ResourceKind::HerdrPlugin,
             "herdr-plugin:yassin.jumplist",
-            "Yassimba/ai-setup/plugins/herdr-jumplist",
+            "Yassimba/loom/plugins/herdr-jumplist",
         ),
     ];
     let status = PrerequisiteStatus {
@@ -70,7 +71,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
                 [
                     "plugin",
                     "install",
-                    "Yassimba/ai-setup/plugins/herdr-jumplist",
+                    "Yassimba/loom/plugins/herdr-jumplist",
                     "--yes",
                 ],
             )),
@@ -144,7 +145,7 @@ fn missing_foundations_are_installed_before_selected_resources() {
         resource(
             ResourceKind::HerdrPlugin,
             "herdr-plugin:yassin.jumplist",
-            "Yassimba/ai-setup/plugins/herdr-jumplist",
+            "Yassimba/loom/plugins/herdr-jumplist",
         ),
     ];
     let status = PrerequisiteStatus {
@@ -345,4 +346,29 @@ fn tools_without_mise_get_a_mise_prerequisite() {
         plan.prerequisites[1].action,
         StepAction::SyncTools { .. }
     ));
+}
+
+#[test]
+fn tool_companions_join_the_mise_sync() {
+    let mut envx = resource(ResourceKind::Tool, "tool:envx", "github:mikeleppane/envx");
+    envx.companions = vec!["cargo:envex".to_string()];
+    let status = PrerequisiteStatus {
+        pi: true,
+        herdr: true,
+        npm: true,
+        mise: true,
+        node: NodeStatus::Supported,
+    };
+
+    let plan = build_install_plan(&[envx], &[], status, Platform::Unix).unwrap();
+
+    assert_eq!(
+        plan.prerequisites[0].action,
+        StepAction::SyncTools {
+            tools: vec![
+                "github:mikeleppane/envx".to_string(),
+                "cargo:envex".to_string(),
+            ],
+        }
+    );
 }
