@@ -102,10 +102,22 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
     if !current.is_empty() {
         lines.push(current);
     }
-    if lines.is_empty() {
-        lines.push(String::new());
+    // Hard-break words a wrap can't split (long dotted identifiers).
+    let mut broken = Vec::new();
+    for line in lines {
+        if line.chars().count() <= width {
+            broken.push(line);
+            continue;
+        }
+        let chars: Vec<char> = line.chars().collect();
+        for chunk in chars.chunks(width) {
+            broken.push(chunk.iter().collect());
+        }
     }
-    lines
+    if broken.is_empty() {
+        broken.push(String::new());
+    }
+    broken
 }
 
 struct Placed {
@@ -284,8 +296,77 @@ struct Item {
     y: usize,
 }
 
-/// Render the lineage graph left→right with layered layout.
-pub fn render_dag(nodes: &[GraphNode], edges: &[GraphEdge], color: bool) -> String {
+/// Render the lineage graph left→right with layered layout, slimming
+/// boxes (drop locations, tighten label wrap) until it fits the terminal
+/// so rows never wrap into visual debris.
+pub fn render_dag(
+    nodes: &[GraphNode],
+    edges: &[GraphEdge],
+    color: bool,
+    max_width: Option<usize>,
+) -> String {
+    const PROFILES: [(usize, bool); 4] = [
+        (MAX_LABEL, true),
+        (MAX_LABEL, false),
+        (26, false),
+        (20, false),
+    ];
+    let mut rendered = render_dag_profile(nodes, edges, color, PROFILES[0]);
+    if let Some(limit) = max_width {
+        for profile in &PROFILES[1..] {
+            let width = rendered
+                .lines()
+                .map(visible_width)
+                .max()
+                .unwrap_or(0);
+            if width <= limit {
+                break;
+            }
+            rendered = render_dag_profile(nodes, edges, color, *profile);
+        }
+    }
+    rendered
+}
+
+/// Printable width of an emitted line (ANSI/OSC sequences excluded).
+fn visible_width(line: &str) -> usize {
+    let mut width = 0;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            match chars.next() {
+                Some('[') => {
+                    for c in chars.by_ref() {
+                        if c.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    // OSC ... terminated by ESC \ or BEL
+                    let mut prev = ' ';
+                    for c in chars.by_ref() {
+                        if c == '\u{7}' || (prev == '\x1b' && c == '\\') {
+                            break;
+                        }
+                        prev = c;
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            width += 1;
+        }
+    }
+    width
+}
+
+fn render_dag_profile(
+    nodes: &[GraphNode],
+    edges: &[GraphEdge],
+    color: bool,
+    (max_label, show_loc): (usize, bool),
+) -> String {
     let layer = layers(nodes, edges);
     let index: HashMap<&str, usize> = nodes
         .iter()
@@ -299,18 +380,19 @@ pub fn render_dag(nodes: &[GraphNode], edges: &[GraphEdge], color: bool) -> Stri
         .iter()
         .enumerate()
         .map(|(i, node)| {
-            let lines = wrap(&node.label, MAX_LABEL);
+            let lines = wrap(&node.label, max_label);
+            let loc = node.loc.as_ref().filter(|_| show_loc);
             let content = lines
                 .iter()
                 .map(|l| l.chars().count())
-                .chain(node.loc.iter().map(|l| l.chars().count()))
+                .chain(loc.iter().map(|l| l.chars().count()))
                 .max()
                 .unwrap_or(0);
             Item {
                 real: Some(i),
                 layer: layer[i],
                 w: content + 4,
-                h: lines.len() + 2 + usize::from(node.loc.is_some()),
+                h: lines.len() + 2 + usize::from(loc.is_some()),
                 x: 0,
                 y: 0,
             }
@@ -433,8 +515,8 @@ pub fn render_dag(nodes: &[GraphNode], edges: &[GraphEdge], color: bool) -> Stri
             let i = item.real?;
             let node = &nodes[i];
             Some(Placed {
-                lines: wrap(&node.label, MAX_LABEL),
-                loc: node.loc.clone(),
+                lines: wrap(&node.label, max_label),
+                loc: node.loc.clone().filter(|_| show_loc),
                 url: node.url.clone(),
                 status: node.status,
                 data: node.data,

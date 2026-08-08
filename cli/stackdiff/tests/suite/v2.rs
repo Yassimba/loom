@@ -453,7 +453,7 @@ fn lineage_view_draws_shared_callees_once() {
             .any(|e| e.label.as_deref() == Some("plan") || e.label.as_deref() == Some("p")),
         "binding rides the edge"
     );
-    let drawn = stackdiff::dag::render_dag(&nodes, &edges, false);
+    let drawn = stackdiff::dag::render_dag(&nodes, &edges, false, Some(200));
     assert_eq!(
         drawn.matches("resolve → Plan").count(),
         1,
