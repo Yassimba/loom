@@ -8,6 +8,7 @@ pub mod infer;
 pub mod lang;
 pub mod noise;
 pub mod render;
+pub mod seq;
 pub mod theme;
 pub mod types;
 pub mod views;

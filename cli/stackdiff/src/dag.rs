@@ -443,7 +443,11 @@ fn render_dag_profile(
         .iter()
         .enumerate()
         .map(|(i, node)| {
-            let lines = wrap(&node.label, max_label);
+            let lines: Vec<String> = node
+                .label
+                .split('\n')
+                .flat_map(|part| wrap(part, max_label))
+                .collect();
             let loc = node.loc.as_ref().filter(|_| show_loc);
             let content = lines
                 .iter()
@@ -583,7 +587,11 @@ fn render_dag_profile(
             let i = item.real?;
             let node = &nodes[i];
             Some(Placed {
-                lines: wrap(&node.label, max_label),
+                lines: node
+                    .label
+                    .split('\n')
+                    .flat_map(|part| wrap(part, max_label))
+                    .collect(),
                 loc: node.loc.clone().filter(|_| show_loc),
                 url: node.url.clone(),
                 status: node.status,

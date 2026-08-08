@@ -287,22 +287,25 @@ fn sequence_view_orders_messages_and_marks_changes() {
         &build_call_tree("boot", &before, 12),
         &build_call_tree("boot", &after, 12),
     );
-    let (source, marks) = stackdiff::views::sequence_mermaid(&diff);
-    assert!(source.starts_with("sequenceDiagram"), "{source}");
-    assert!(source.contains("two()"), "{source}");
+    let (participants, events) = stackdiff::seq::sequence_events(&diff);
+    assert!(!participants.is_empty());
+    let texts: Vec<String> = events
+        .iter()
+        .filter_map(|event| match event {
+            stackdiff::seq::Event::Message { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, vec!["one()", "two()"], "{texts:?}");
+    let drawn =
+        stackdiff::seq::render_sequence(&participants, &events, true, &stackdiff::theme::DARK);
     assert!(
-        marks
-            .iter()
-            .any(|mark| mark.label == "two()"
-                && mark.status == stackdiff::types::DiffStatus::Added),
-        "{marks:?}"
+        drawn.contains("\u{1b}[38;2;63;185;80m"),
+        "added message painted green:\n{drawn:?}"
     );
-    let colored =
-        stackdiff::views::render_colored(&source, &marks, true, Some(100), &stackdiff::theme::DARK)
-            .unwrap();
     assert!(
-        colored.contains("\u{1b}[38;2;63;185;80mtwo()\u{1b}[0m"),
-        "{colored:?}"
+        drawn.contains("▶") || drawn.contains("◀") || drawn.contains("╮"),
+        "{drawn}"
     );
 }
 
@@ -319,11 +322,11 @@ fn class_view_groups_methods_by_type() {
     let index = build_index(extract_functions("app.ts", &source).unwrap());
     let tree = build_call_tree("Runner.start", &index, 12);
     let diff = diff_trees(&tree, &tree);
-    let (mermaid, _) =
-        stackdiff::views::class_mermaid(&[diff], &std::collections::BTreeMap::new()).unwrap();
-    assert!(mermaid.contains("class Runner {"), "{mermaid}");
-    assert!(mermaid.contains("+start()"), "{mermaid}");
-    assert!(mermaid.contains("+prepare()"), "{mermaid}");
+    let (nodes, _) =
+        stackdiff::views::class_graph(&[diff], &std::collections::BTreeMap::new()).unwrap();
+    let runner = nodes.iter().find(|n| n.key == "Runner").unwrap();
+    assert!(runner.label.contains("+start()"), "{}", runner.label);
+    assert!(runner.label.contains("+prepare()"), "{}", runner.label);
 }
 
 #[test]
@@ -388,8 +391,9 @@ fn er_view_includes_extracted_fields() {
     let index = build_index(extract_functions("app.ts", &source).unwrap());
     let tree = build_call_tree("Runner.start", &index, 12);
     let diff = diff_trees(&tree, &tree);
-    let (mermaid, _) = stackdiff::views::class_mermaid(&[diff], &types).unwrap();
-    assert!(mermaid.contains("+retries number"), "{mermaid}");
+    let (nodes, _) = stackdiff::views::class_graph(&[diff], &types).unwrap();
+    let runner = nodes.iter().find(|n| n.key == "Runner").unwrap();
+    assert!(runner.label.contains("retries: number"), "{}", runner.label);
 }
 
 #[test]
