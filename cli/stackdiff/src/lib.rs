@@ -1,5 +1,6 @@
 pub mod boxes;
 pub mod calltree;
+pub mod dag;
 pub mod diff;
 pub mod extract;
 pub mod git;

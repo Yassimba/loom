@@ -416,6 +416,26 @@ pub fn module_mermaid(roots: &[DiffNode]) -> Option<(String, Marks)> {
     Some((lines.join("\n"), marks))
 }
 
+/// A node of the lineage graph, renderer-agnostic.
+#[derive(Debug, Clone)]
+pub struct GraphNode {
+    pub key: String,
+    pub label: String,
+    pub status: DiffStatus,
+    pub data: bool,
+    pub loc: Option<String>,
+    pub url: Option<String>,
+}
+
+/// An edge of the lineage graph.
+#[derive(Debug, Clone)]
+pub struct GraphEdge {
+    pub from: String,
+    pub to: String,
+    pub label: Option<String>,
+    pub status: DiffStatus,
+}
+
 /// Lineage view: the call DAG at data granularity. One node per function
 /// (drawn once — convergence is visible as fan-in), data constructors as
 /// stadium nodes, edges labeled with the binding the result lands in.
@@ -431,14 +451,13 @@ pub struct ClusterRow {
 /// What the lineage view decided to show: the graph, or — past the size
 /// limit — its connected clusters with entry hints.
 pub enum Lineage {
-    Graph(String, Marks),
+    Graph(Vec<GraphNode>, Vec<GraphEdge>),
     Overview(Vec<ClusterRow>),
 }
 
-pub fn lineage_mermaid(
+pub fn lineage_graph(
     roots: &[DiffNode],
     link: Option<(&str, Option<&std::path::Path>)>,
-    dir: &str,
     limit: Option<usize>,
 ) -> Option<Lineage> {
     #[derive(Default)]
@@ -526,53 +545,43 @@ pub fn lineage_mermaid(
         }
     }
 
-    let mut ids: BTreeMap<&String, usize> = BTreeMap::new();
-    for key in graph.nodes.keys() {
-        let next = ids.len();
-        ids.insert(key, next);
-    }
-    let mut lines = vec![format!("flowchart {dir}")];
-    let mut marks = Marks::new();
-    for (key, (label, status, data, location)) in &graph.nodes {
-        let id = ids[key];
-        if *data {
-            lines.push(format!("n{id}([{label}])"));
-        } else {
-            lines.push(format!("n{id}[{label}]"));
-        }
-        let url = match (link, location) {
-            (Some((template, root)), Some(location)) => {
-                location.rsplit_once(':').map(|(path, line)| {
-                    let absolute = match root {
-                        Some(root) => root.join(path).to_string_lossy().into_owned(),
-                        None => path.to_string(),
-                    };
-                    template
-                        .replace("{path}", &absolute)
-                        .replace("{line}", line)
-                })
-            }
-            _ => None,
-        };
-        if *status != DiffStatus::Same || url.is_some() {
-            marks.push(Mark {
+    let nodes: Vec<GraphNode> = graph
+        .nodes
+        .iter()
+        .map(|(key, (label, status, data, location))| {
+            let url = match (link, location) {
+                (Some((template, root)), Some(location)) => {
+                    location.rsplit_once(':').map(|(path, line)| {
+                        let absolute = match root {
+                            Some(root) => root.join(path).to_string_lossy().into_owned(),
+                            None => path.to_string(),
+                        };
+                        template
+                            .replace("{path}", &absolute)
+                            .replace("{line}", line)
+                    })
+                }
+                _ => None,
+            };
+            GraphNode {
+                key: key.clone(),
                 label: label.clone(),
                 status: *status,
+                data: *data,
+                loc: location.as_deref().map(crate::render::short_loc),
                 url,
-            });
-        }
-    }
-    for ((from, to), (binding, status)) in &graph.edges {
-        let (Some(from_id), Some(to_id)) = (ids.get(from), ids.get(to)) else {
-            continue;
-        };
-        match binding {
-            Some(binding) => {
-                lines.push(format!("n{from_id} -->|{binding}| n{to_id}"));
-                mark(&mut marks, binding, *status);
             }
-            None => lines.push(format!("n{from_id} --> n{to_id}")),
-        }
-    }
-    Some(Lineage::Graph(lines.join("\n"), marks))
+        })
+        .collect();
+    let edge_list: Vec<GraphEdge> = graph
+        .edges
+        .iter()
+        .map(|((from, to), (binding, status))| GraphEdge {
+            from: from.clone(),
+            to: to.clone(),
+            label: binding.clone(),
+            status: *status,
+        })
+        .collect();
+    Some(Lineage::Graph(nodes, edge_list))
 }
