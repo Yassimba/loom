@@ -1,6 +1,6 @@
 [package]
 name = "stackdiff"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Diff call stacks across git commits, or print one world's call tree (--tree). Rust port of npm calldiff by Tanishq Kancharla (MIT)."
 license = "MIT"

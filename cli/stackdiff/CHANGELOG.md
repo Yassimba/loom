@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-08
+
 ## [0.1.0] - 2026-08-08
 
 - feat(stackdiff): --seq and --er diagram views from call data (`ef3f10a`)
