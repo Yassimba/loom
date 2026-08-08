@@ -237,18 +237,37 @@ fn boxes_render_draws_statused_boxes() {
         &build_call_tree("boot", &before, 12),
         &build_call_tree("boot", &after, 12),
     );
-    let plain = stackdiff::boxes::render_boxes(&diff, false);
+    use stackdiff::boxes::{render_boxes, BoxOptions, Direction};
+    let plain = render_boxes(&diff, &BoxOptions::default());
     assert!(plain.contains("╭"), "draws rounded boxes:\n{plain}");
     assert!(
         plain.contains("│  two()  │"),
         "boxes the added call:\n{plain}"
     );
-    assert!(plain.contains("▼"), "draws connector arrows:\n{plain}");
-    let colored = stackdiff::boxes::render_boxes(&diff, true);
+    assert!(plain.contains("▶"), "left-right arrows:\n{plain}");
+    let colored = render_boxes(
+        &diff,
+        &BoxOptions {
+            color: true,
+            ..Default::default()
+        },
+    );
     assert!(
-        colored.contains("\u{1b}[32m"),
+        colored.contains("\u{1b}[38;2;63;185;80m"),
         "added box painted green:\n{colored:?}"
     );
+    assert!(
+        colored.contains("\u{1b}[48;2;14;40;22m"),
+        "added box carries its background tint:\n{colored:?}"
+    );
+    let td = render_boxes(
+        &diff,
+        &BoxOptions {
+            dir: Direction::TopDown,
+            ..Default::default()
+        },
+    );
+    assert!(td.contains("▼"), "top-down keeps vertical arrows:\n{td}");
 }
 
 #[test]

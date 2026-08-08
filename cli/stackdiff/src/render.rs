@@ -79,6 +79,18 @@ pub(crate) fn node_text(node: &DiffNode, rich: bool) -> String {
     text
 }
 
+/// Compact display form of a location: basename:line. The full path still
+/// backs the hyperlink; the screen only pays for the file name.
+pub(crate) fn short_loc(location: &str) -> String {
+    match location.rsplit_once(':') {
+        Some((path, line)) => {
+            let name = path.rsplit('/').next().unwrap_or(path);
+            format!("{name}:{line}")
+        }
+        None => location.to_string(),
+    }
+}
+
 fn location_suffix(node: &DiffNode, options: &RenderOptions) -> String {
     if !options.rich {
         return String::new();
@@ -86,7 +98,7 @@ fn location_suffix(node: &DiffNode, options: &RenderOptions) -> String {
     let Some(location) = &node.location else {
         return String::new();
     };
-    let shown = dim(location, options.color);
+    let shown = dim(&short_loc(location), options.color);
     let Some(template) = &options.link else {
         return format!("  {shown}");
     };

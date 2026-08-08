@@ -5,7 +5,7 @@ use anyhow::Result;
 use clap::{ArgAction, Parser, ValueEnum};
 
 use rayon::prelude::*;
-use stackdiff::boxes::render_boxes;
+use stackdiff::boxes::{render_boxes, BoxOptions, Direction};
 use stackdiff::calltree::build_call_tree;
 use stackdiff::diff::prune_unchanged;
 use stackdiff::extract::{build_index, extract_functions, FunctionIndex};
@@ -21,6 +21,12 @@ enum ColorChoice {
     Auto,
     Always,
     Never,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Dir {
+    Lr,
+    Td,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -103,6 +109,10 @@ struct Cli {
     #[arg(short = 'm', long)]
     boxes: bool,
 
+    /// Box-graph direction: lr grows down the terminal, td grows across
+    #[arg(long, value_enum, default_value_t = Dir::Lr)]
+    dir: Dir,
+
     /// Append a +added/-removed summary per entry (diff mode)
     #[arg(long)]
     stat: bool,
@@ -126,18 +136,28 @@ struct Cli {
     paths: Vec<String>,
 }
 
+/// Resolve the hyperlink template: --link, then $STACKDIFF_EDITOR, then the
+/// terminal's own editor (Zed/VS Code terminals), then file://. "none" turns
+/// links off.
 fn link_template(cli: &Cli) -> Option<String> {
     let choice = cli
         .link
         .clone()
-        .or_else(|| std::env::var("STACKDIFF_EDITOR").ok())?;
-    Some(match choice.as_str() {
-        "zed" => "zed://file/{path}:{line}".to_string(),
-        "vscode" => "vscode://file/{path}:{line}".to_string(),
-        "cursor" => "cursor://file/{path}:{line}".to_string(),
-        "file" => "file://{path}".to_string(),
-        template => template.to_string(),
-    })
+        .or_else(|| std::env::var("STACKDIFF_EDITOR").ok())
+        .or_else(|| match std::env::var("TERM_PROGRAM").ok()?.as_str() {
+            "zed" => Some("zed".to_string()),
+            "vscode" => Some("vscode".to_string()),
+            _ => None,
+        })
+        .unwrap_or_else(|| "file".to_string());
+    match choice.as_str() {
+        "none" => None,
+        "zed" => Some("zed://file/{path}:{line}".to_string()),
+        "vscode" => Some("vscode://file/{path}:{line}".to_string()),
+        "cursor" => Some("cursor://file/{path}:{line}".to_string()),
+        "file" => Some("file://{path}".to_string()),
+        template => Some(template.to_string()),
+    }
 }
 
 fn render_options(cli: &Cli, cwd: &Path, color: bool) -> RenderOptions {
@@ -200,12 +220,21 @@ fn tree_as_diff(node: &stackdiff::types::CallNode) -> DiffNode {
 
 fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOptions) {
     if cli.boxes {
+        let box_options = BoxOptions {
+            color: options.color,
+            dir: match cli.dir {
+                Dir::Lr => Direction::LeftRight,
+                Dir::Td => Direction::TopDown,
+            },
+            link: link_template(cli),
+            repo_root: options.repo_root.clone(),
+        };
         println!("{header}\n");
         for (index, tree) in trees.iter().enumerate() {
             if index > 0 {
                 println!();
             }
-            println!("{}", render_boxes(tree, options.color));
+            println!("{}", render_boxes(tree, &box_options));
             stat_line(cli, tree);
         }
         return;
