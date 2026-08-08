@@ -297,7 +297,9 @@ fn sequence_view_orders_messages_and_marks_changes() {
                 && mark.status == stackdiff::types::DiffStatus::Added),
         "{marks:?}"
     );
-    let colored = stackdiff::views::render_colored(&source, &marks, true, Some(100)).unwrap();
+    let colored =
+        stackdiff::views::render_colored(&source, &marks, true, Some(100), &stackdiff::theme::DARK)
+            .unwrap();
     assert!(
         colored.contains("\u{1b}[38;2;63;185;80mtwo()\u{1b}[0m"),
         "{colored:?}"
@@ -453,7 +455,8 @@ fn lineage_view_draws_shared_callees_once() {
             .any(|e| e.label.as_deref() == Some("plan") || e.label.as_deref() == Some("p")),
         "binding rides the edge"
     );
-    let drawn = stackdiff::dag::render_dag(&nodes, &edges, false, Some(200));
+    let drawn =
+        stackdiff::dag::render_dag(&nodes, &edges, false, Some(200), &stackdiff::theme::DARK);
     assert_eq!(
         drawn.matches("resolve() → Plan").count(),
         1,

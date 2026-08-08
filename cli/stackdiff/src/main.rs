@@ -28,6 +28,13 @@ enum ColorChoice {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ThemeArg {
+    Auto,
+    Dark,
+    Light,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum Dir {
     Lr,
     Td,
@@ -195,6 +202,10 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = ColorChoice::Auto, help_heading = "Output")]
     color: ColorChoice,
 
+    /// Status palette: auto reads COLORFGBG, dark/light force one
+    #[arg(long, value_enum, help_heading = "Output")]
+    theme: Option<ThemeArg>,
+
     /// Repository to operate on (defaults to the current directory)
     #[arg(long, short = 'C')]
     repo: Option<PathBuf>,
@@ -208,6 +219,14 @@ struct Cli {
 /// terminal's own editor (Zed/VS Code terminals), then file://. "none" turns
 /// links off.
 impl Cli {
+    fn palette(&self) -> stackdiff::theme::Palette {
+        stackdiff::theme::Palette::pick(match self.theme {
+            Some(ThemeArg::Dark) => stackdiff::theme::Theme::Dark,
+            Some(ThemeArg::Light) => stackdiff::theme::Theme::Light,
+            _ => stackdiff::theme::Theme::Auto,
+        })
+    }
+
     fn depth(&self) -> usize {
         self.max_depth.unwrap_or(3)
     }
@@ -239,6 +258,13 @@ impl Cli {
 
     /// Fill unset flags from .stackdiff.toml [defaults].
     fn absorb(&mut self, defaults: &stackdiff::noise::Defaults) {
+        if self.theme.is_none() {
+            self.theme = match defaults.theme.as_deref() {
+                Some("dark") => Some(ThemeArg::Dark),
+                Some("light") => Some(ThemeArg::Light),
+                _ => None,
+            };
+        }
         self.max_depth = self.max_depth.or(defaults.max_depth);
         self.context = self.context.or(defaults.context);
         self.link = self.link.clone().or_else(|| defaults.link.clone());
@@ -394,7 +420,7 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
                 println!();
             }
             let (source, marks) = sequence_mermaid(tree);
-            match render_colored(&source, &marks, options.color, term_width()) {
+            match render_colored(&source, &marks, options.color, term_width(), &cli.palette()) {
                 Ok(diagram) => println!("{diagram}"),
                 Err(error) => eprintln!("--seq failed for {}: {error}", tree.key),
             }
@@ -411,7 +437,7 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
         println!("{header}\n");
         match module_mermaid(trees) {
             Some((source, marks)) => {
-                match render_colored(&source, &marks, options.color, term_width()) {
+                match render_colored(&source, &marks, options.color, term_width(), &cli.palette()) {
                     Ok(diagram) => println!("{diagram}"),
                     Err(error) => eprintln!("--modules failed: {error}"),
                 }
@@ -424,7 +450,7 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
         println!("{header}\n");
         match class_mermaid(trees, &load_types(cli)) {
             Some((source, marks)) => {
-                match render_colored(&source, &marks, options.color, term_width()) {
+                match render_colored(&source, &marks, options.color, term_width(), &cli.palette()) {
                     Ok(diagram) => println!("{diagram}"),
                     Err(error) => eprintln!("--er failed: {error}"),
                 }
@@ -443,6 +469,7 @@ fn print_trees(cli: &Cli, header: &str, trees: &[DiffNode], options: &RenderOpti
             link: link_template(cli),
             repo_root: options.repo_root.clone(),
             max_width: term_width(),
+            palette: cli.palette(),
         };
         println!("{header}\n");
         for (index, tree) in trees.iter().enumerate() {
@@ -517,7 +544,13 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
         Some(Lineage::Graph(nodes, edges)) => {
             println!(
                 "{}",
-                stackdiff::dag::render_dag(&nodes, &edges, options.color, term_width())
+                stackdiff::dag::render_dag(
+                    &nodes,
+                    &edges,
+                    options.color,
+                    term_width(),
+                    &cli.palette()
+                )
             );
         }
         Some(Lineage::Overview(rows)) => {
@@ -574,7 +607,13 @@ fn show_lineage(cli: &Cli, trees: &[DiffNode], options: &RenderOptions, rebuild:
                     };
                     println!(
                         "{}",
-                        stackdiff::dag::render_dag(&nodes, &edges, options.color, term_width())
+                        stackdiff::dag::render_dag(
+                            &nodes,
+                            &edges,
+                            options.color,
+                            term_width(),
+                            &cli.palette()
+                        )
                     );
                     if depth < cli.depth() {
                         println!(

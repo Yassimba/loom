@@ -143,8 +143,8 @@ pub fn infer_entries(
         }
 
         // Prefer exported / public-ish roots
-        let interesting = before.get(*key).map(|f| f.exported).unwrap_or(false)
-            || after.get(*key).map(|f| f.exported).unwrap_or(false);
+        let interesting = before.get(key).map(|f| f.exported).unwrap_or(false)
+            || after.get(key).map(|f| f.exported).unwrap_or(false);
         if !interesting {
             continue;
         }

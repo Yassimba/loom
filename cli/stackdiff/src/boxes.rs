@@ -4,6 +4,7 @@
 //! down the terminal instead of across it; top→down available via --dir.
 
 use crate::render::{node_text, short_loc};
+use crate::theme::Palette;
 use crate::types::{DiffNode, DiffStatus, NodeKind};
 
 const MAX_LABEL: usize = 38;
@@ -65,12 +66,8 @@ pub struct BoxOptions {
     /// Terminal width; wider layouts slim themselves down to fit so rows
     /// never wrap (wrapping shreds the boxes into stripes).
     pub max_width: Option<usize>,
+    pub palette: Palette,
 }
-
-// GitHub-dark diff palette: bright text over a subtle tint.
-const ADDED: ((u8, u8, u8), (u8, u8, u8)) = ((63, 185, 80), (14, 40, 22));
-const REMOVED: ((u8, u8, u8), (u8, u8, u8)) = ((248, 81, 73), (45, 17, 17));
-const CHANGED: ((u8, u8, u8), (u8, u8, u8)) = ((210, 153, 34), (43, 35, 10));
 
 /// What a cell is part of; decides styling within its status.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -556,42 +553,23 @@ fn place_lr(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
     }
 }
 
-fn style(status: DiffStatus, role: Role, color: bool) -> (String, String) {
+fn style(status: DiffStatus, role: Role, color: bool, palette: &Palette) -> (String, String) {
     if !color {
         return (String::new(), String::new());
     }
-    let tint = |((fr, fg, fb), (br, bg, bb)): ((u8, u8, u8), (u8, u8, u8)), inside: bool| {
-        if inside {
-            format!("\x1b[38;2;{fr};{fg};{fb}m\x1b[48;2;{br};{bg};{bb}m")
-        } else {
-            format!("\x1b[38;2;{fr};{fg};{fb}m")
-        }
-    };
     let inside = matches!(
         role,
         Role::Frame | Role::Fill | Role::Text | Role::Doc | Role::Loc | Role::Badge
     );
     if role == Role::Edge {
-        return match status {
-            DiffStatus::Same => ("\x1b[2;3m".to_string(), "\x1b[0m".to_string()),
-            _ => (
-                tint(
-                    match status {
-                        DiffStatus::Added => ADDED,
-                        DiffStatus::Removed => REMOVED,
-                        _ => CHANGED,
-                    },
-                    false,
-                ),
-                "\x1b[0m".to_string(),
-            ),
+        return match palette.open(status, false) {
+            None => ("\x1b[2;3m".to_string(), "\x1b[0m".to_string()),
+            Some(open) => (open, "\x1b[0m".to_string()),
         };
     }
-    let prefix = match status {
-        DiffStatus::Added => tint(ADDED, inside),
-        DiffStatus::Removed => tint(REMOVED, inside),
-        DiffStatus::Changed => tint(CHANGED, inside),
-        DiffStatus::Same => match role {
+    let prefix = match palette.open(status, inside) {
+        Some(open) => open,
+        None => match role {
             Role::Frame | Role::Rail | Role::Doc | Role::Loc | Role::Edge => "\x1b[2m".to_string(),
             Role::Text | Role::Arrow | Role::Fill | Role::Badge => String::new(),
         },
@@ -645,7 +623,7 @@ pub fn render_boxes(root: &DiffNode, options: &BoxOptions) -> String {
             if run.is_empty() {
                 return;
             }
-            let (open, close) = style(key.0, key.1, options.color);
+            let (open, close) = style(key.0, key.1, options.color, &options.palette);
             line.push_str(&open);
             line.push_str(run);
             line.push_str(&close);

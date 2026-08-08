@@ -61,7 +61,10 @@ fn extension(file: &str) -> &str {
 }
 
 fn shared_components(a: &str, b: &str) -> usize {
-    a.split('/').zip(b.split('/')).take_while(|(x, y)| x == y).count()
+    a.split('/')
+        .zip(b.split('/'))
+        .take_while(|(x, y)| x == y)
+        .count()
 }
 
 impl FunctionIndex {
