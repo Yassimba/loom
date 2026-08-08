@@ -19,7 +19,8 @@ test("the Unix bootstrap persists mise activation exactly once", async () => {
     `#!/bin/sh
 case "$1" in
   doctor) echo "activated: no" ;;
-  install|exec) exit 0 ;;
+  install) exit 0 ;;
+  exec) printf '%s\\n' "$@" > "$HOME/mise-exec-args" ;;
 esac
 `,
   );
@@ -46,19 +47,36 @@ printf '%s\\n' '[tools]' '# core:begin' '"github:Yassimba/loom[exe=loom]" = "loo
       PATH: `${bin}:/usr/bin:/bin`,
     };
     for (let run = 0; run < 2; run += 1) {
-      const result = spawnSync("sh", [join(repoRoot, "install.sh")], {
-        encoding: "utf8",
-        env,
-      });
+      const result = spawnSync(
+        "sh",
+        [join(repoRoot, "install.sh"), "--skill", "tdd", "--agent", "codex", "--yes"],
+        {
+          encoding: "utf8",
+          env,
+        },
+      );
       assert.equal(result.status, 0, result.stderr || result.stdout);
     }
 
     const bashrc = await readFile(join(home, ".bashrc"), "utf8");
     assert.equal(
-      bashrc.match(/eval "\$\(mise activate bash\)"/g)?.length,
+      bashrc.match(/eval "\$\("[^"]+\/mise" activate bash\)"/g)?.length,
       1,
       "expected one persistent mise activation",
     );
+    assert.match(bashrc, /export PATH="[^"]+:\$PATH"/);
+    assert.match(bashrc, new RegExp(join(bin, "mise").replaceAll("/", "\\/")));
+    assert.deepEqual((await readFile(join(home, "mise-exec-args"), "utf8")).trim().split("\n"), [
+      "exec",
+      "--",
+      "loom",
+      "setup",
+      "--skill",
+      "tdd",
+      "--agent",
+      "codex",
+      "--yes",
+    ]);
     const repairedSelection = await readFile(selection, "utf8");
     assert.match(repairedSelection, /# core:begin/);
     assert.match(repairedSelection, /github:Yassimba\/loom\[exe=loom\]/);
@@ -71,7 +89,8 @@ printf '%s\\n' '[tools]' '# core:begin' '"github:Yassimba/loom[exe=loom]" = "loo
 test("the PowerShell bootstrap persists mise activation idempotently", async () => {
   const script = await readFile(join(repoRoot, "install.ps1"), "utf8");
 
-  assert.match(script, /\$Activation = ['"]\(&mise activate pwsh\)/);
+  assert.match(script, /\$MiseExe = \(Get-Command mise/);
+  assert.match(script, /\$Activation = ".*\$MiseExe' activate pwsh\)/);
   assert.match(script, /\.Contains\(\$Activation\)/);
   assert.match(script, /Add-Content -Path \$PROFILE -Value \$Activation/);
 });

@@ -37,5 +37,15 @@ test("PowerShell accepts annotated core manifest markers", async () => {
 test("piped Unix bootstrap reconnects interactive setup to the terminal", async () => {
   const installer = await readFile(join(repoRoot, "install.sh"), "utf8");
 
-  assert.match(installer, /exec mise exec -- loom setup <\/dev\/tty/);
+  assert.match(installer, /exec mise exec -- loom setup "\$@" <\/dev\/tty/);
+});
+
+test("bootstraps forward explicit setup selectors", async () => {
+  const [unix, windows] = await Promise.all([
+    readFile(join(repoRoot, "install.sh"), "utf8"),
+    readFile(join(repoRoot, "install.ps1"), "utf8"),
+  ]);
+
+  assert.match(unix, /loom setup "\$@"/);
+  assert.match(windows, /loom setup @SetupArgs/);
 });

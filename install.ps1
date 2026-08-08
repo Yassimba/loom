@@ -1,3 +1,7 @@
+param(
+  [string[]]$SetupArgs = @()
+)
+
 $ErrorActionPreference = "Stop"
 # Loom bootstrap: ensure mise, sync the published tool manifest into
 # mise's conf.d, install its exact pins (including the Loom CLI itself),
@@ -117,7 +121,9 @@ mise install --yes
 if ($LASTEXITCODE -ne 0) { throw "$Name`: mise install failed" }
 
 # 4. Persist shell activation, so managed tools are on PATH in new shells.
-$Activation = '(&mise activate pwsh) | Out-String | Invoke-Expression'
+$MiseExe = (Get-Command mise -ErrorAction Stop).Source.Replace("'", "''")
+$MiseDir = (Split-Path -Parent $MiseExe).Replace("'", "''")
+$Activation = "`$env:Path = '$MiseDir;' + `$env:Path; (& '$MiseExe' activate pwsh) | Out-String | Invoke-Expression"
 $ProfileDirectory = Split-Path -Parent $PROFILE
 if ($ProfileDirectory) {
   New-Item -ItemType Directory -Path $ProfileDirectory -Force | Out-Null
@@ -130,5 +136,5 @@ if (-not $ProfileContent.Contains($Activation)) {
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 Write-Host ""
-mise exec -- loom setup
+mise exec -- loom setup @SetupArgs
 exit $LASTEXITCODE
