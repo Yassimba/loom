@@ -87,6 +87,8 @@ enum Role {
     Loc,
     /// Connector lines between boxes
     Rail,
+    /// Branch condition riding on a connector
+    Edge,
     /// Arrowheads
     Arrow,
     /// The +/−/! badge in the top border
@@ -138,6 +140,8 @@ impl Canvas {
 }
 
 struct Layout {
+    /// Branch condition on the incoming connector ("if cond", "else · if b")
+    edge: Option<(String, DiffStatus)>,
     label: Vec<String>,
     doc: Vec<String>,
     loc: Option<String>,
@@ -175,6 +179,46 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
         lines.push(String::new());
     }
     lines
+}
+
+/// Children of `node` as layouts: branch arms dissolve into edge labels on
+/// their children's connectors; empty branches stay as dashed boxes.
+fn child_layouts(
+    node: &DiffNode,
+    options: &BoxOptions,
+    profile: Profile,
+    edge: Option<&(String, DiffStatus)>,
+) -> Vec<Layout> {
+    let mut children = Vec::new();
+    for child in &node.children {
+        // An unchanged branch arm with no surviving calls says nothing here.
+        if child.kind == NodeKind::Branch
+            && child.children.is_empty()
+            && child.status == DiffStatus::Same
+        {
+            continue;
+        }
+        if child.kind == NodeKind::Branch && !child.children.is_empty() {
+            let condition = child.label.clone();
+            let composed = match edge {
+                Some((outer, status)) => (
+                    format!("{outer} · {condition}"),
+                    if *status == DiffStatus::Same {
+                        child.status
+                    } else {
+                        *status
+                    },
+                ),
+                None => (condition, child.status),
+            };
+            children.extend(child_layouts(child, options, profile, Some(&composed)));
+        } else {
+            let mut layout = build(child, options, profile);
+            layout.edge = edge.cloned();
+            children.push(layout);
+        }
+    }
+    children
 }
 
 fn build(node: &DiffNode, options: &BoxOptions, profile: Profile) -> Layout {
@@ -216,11 +260,7 @@ fn build(node: &DiffNode, options: &BoxOptions, profile: Profile) -> Layout {
     let extra = doc.len() + usize::from(loc.is_some());
     let box_h = label.len() + extra + 4;
 
-    let children: Vec<Layout> = node
-        .children
-        .iter()
-        .map(|c| build(c, options, profile))
-        .collect();
+    let children = child_layouts(node, options, profile, None);
     let (sub_w, sub_h) = match options.dir {
         Direction::TopDown => {
             let kids_w: usize = children.iter().map(|c| c.sub_w).sum::<usize>()
@@ -236,17 +276,19 @@ fn build(node: &DiffNode, options: &BoxOptions, profile: Profile) -> Layout {
         Direction::LeftRight => {
             let kids_h: usize = children.iter().map(|c| c.sub_h).sum::<usize>()
                 + GAP_LR * children.len().saturating_sub(1);
+            let connect = CONNECT_LR + edge_column(&children);
             let kids_w = children
                 .iter()
                 .map(|c| c.sub_w)
                 .max()
-                .map(|w| w + CONNECT_LR)
+                .map(|w| w + connect)
                 .unwrap_or(0);
             (box_w + kids_w, box_h.max(kids_h))
         }
     };
 
     Layout {
+        edge: None,
         label,
         doc,
         loc,
@@ -258,6 +300,27 @@ fn build(node: &DiffNode, options: &BoxOptions, profile: Profile) -> Layout {
         sub_w,
         sub_h,
         children,
+    }
+}
+
+/// Width the edge-label column needs for this sibling set.
+fn edge_column(children: &[Layout]) -> usize {
+    children
+        .iter()
+        .filter_map(|c| c.edge.as_ref())
+        .map(|(label, _)| clip_edge(label).chars().count() + 2)
+        .max()
+        .unwrap_or(0)
+}
+
+fn clip_edge(label: &str) -> String {
+    let collapsed: String = label.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() > 28 {
+        let mut short: String = collapsed.chars().take(27).collect();
+        short.push('…');
+        short
+    } else {
+        collapsed
     }
 }
 
@@ -388,6 +451,14 @@ fn place_td(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
         canvas.put(cx, drop_row, '│', status, Role::Rail);
         canvas.put(cx, arrow_row, '▼', status, Role::Arrow);
     }
+    for (child, &(cx, _)) in layout.children.iter().zip(&centers) {
+        if let Some((label, edge_status)) = &child.edge {
+            let text = clip_edge(label);
+            for (offset, ch) in text.chars().enumerate() {
+                canvas.put(cx + 2 + offset, drop_row, ch, *edge_status, Role::Edge);
+            }
+        }
+    }
     if left < parent_cx && parent_cx < right {
         canvas.put(parent_cx, bus_row, '┴', layout.status, Role::Rail);
     } else if parent_cx == left && centers.iter().all(|(c, _)| *c != parent_cx) {
@@ -412,7 +483,8 @@ fn place_lr(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
     let parent_cy = node_y + layout.box_h / 2;
     let edge = x + layout.box_w - 1;
     let bus_col = edge + 2;
-    let child_x = x + layout.box_w + CONNECT_LR;
+    let label_w = edge_column(&layout.children);
+    let child_x = x + layout.box_w + CONNECT_LR + label_w;
 
     let mut centers: Vec<(usize, DiffStatus)> = Vec::new();
     let mut cy = y;
@@ -436,7 +508,7 @@ fn place_lr(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
     for row in top..=bottom {
         canvas.put(bus_col, row, '│', DiffStatus::Same, Role::Rail);
     }
-    for &(cy, status) in &centers {
+    for (child, &(cy, status)) in layout.children.iter().zip(&centers) {
         let junction = if cy == top && cy < parent_cy {
             '╭'
         } else if cy == bottom && cy > parent_cy {
@@ -445,8 +517,26 @@ fn place_lr(canvas: &mut Canvas, layout: &Layout, x: usize, y: usize) {
             '├'
         };
         canvas.put(bus_col, cy, junction, status, Role::Rail);
-        canvas.put(bus_col + 1, cy, '─', status, Role::Rail);
-        canvas.put(bus_col + 2, cy, '▶', status, Role::Arrow);
+        let mut col = bus_col + 1;
+        canvas.put(col, cy, '─', status, Role::Rail);
+        col += 1;
+        if let Some((label, edge_status)) = &child.edge {
+            let text = clip_edge(label);
+            canvas.put(col, cy, ' ', *edge_status, Role::Edge);
+            col += 1;
+            for ch in text.chars() {
+                canvas.put(col, cy, ch, *edge_status, Role::Edge);
+                col += 1;
+            }
+            canvas.put(col, cy, ' ', *edge_status, Role::Edge);
+            col += 1;
+        }
+        let arrow_col = child_x.saturating_sub(1);
+        while col < arrow_col {
+            canvas.put(col, cy, '─', status, Role::Rail);
+            col += 1;
+        }
+        canvas.put(arrow_col, cy, '▶', status, Role::Arrow);
     }
     let parent_join = if parent_cy == top && centers.iter().all(|(c, _)| *c != parent_cy) {
         '╮'
@@ -481,12 +571,28 @@ fn style(status: DiffStatus, role: Role, color: bool) -> (String, String) {
         role,
         Role::Frame | Role::Fill | Role::Text | Role::Doc | Role::Loc | Role::Badge
     );
+    if role == Role::Edge {
+        return match status {
+            DiffStatus::Same => ("\x1b[2;3m".to_string(), "\x1b[0m".to_string()),
+            _ => (
+                tint(
+                    match status {
+                        DiffStatus::Added => ADDED,
+                        DiffStatus::Removed => REMOVED,
+                        _ => CHANGED,
+                    },
+                    false,
+                ),
+                "\x1b[0m".to_string(),
+            ),
+        };
+    }
     let prefix = match status {
         DiffStatus::Added => tint(ADDED, inside),
         DiffStatus::Removed => tint(REMOVED, inside),
         DiffStatus::Changed => tint(CHANGED, inside),
         DiffStatus::Same => match role {
-            Role::Frame | Role::Rail | Role::Doc | Role::Loc => "\x1b[2m".to_string(),
+            Role::Frame | Role::Rail | Role::Doc | Role::Loc | Role::Edge => "\x1b[2m".to_string(),
             Role::Text | Role::Arrow | Role::Fill | Role::Badge => String::new(),
         },
     };
