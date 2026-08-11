@@ -86,6 +86,16 @@
       "nextAction": "Ask Pi to search the web."
     },
     {
+      "id": "skill:bdd",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "bdd",
+      "description": "Behavior-Driven Development as a collaboration and specification practice, with pytest-bdd and behave as the bundled automation references. Use when defining behavior through concrete examples or acceptance criteria, writing or reviewing Gherkin .feature files, wiring pytest-bdd or behave step definitions, or checking that tests still express business behavior rather than implementation.",
+      "installTarget": "bdd",
+      "nextAction": "Ask your coding agent to use the bdd skill.",
+      "dependencies": []
+    },
+    {
       "id": "skill:blueprint",
       "kind": "skill",
       "group": "Coding",

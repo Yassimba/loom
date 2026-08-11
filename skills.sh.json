@@ -6,6 +6,7 @@
       "title": "Coding",
       "description": "The development loop \u2014 planning, TDD, debugging, review, release \u2014 plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
+        "bdd",
         "blueprint",
         "brainstorming",
         "browser-usage",
