@@ -1,6 +1,6 @@
 # Gherkin reference
 
-Framework-agnostic syntax and style for `.feature` files. Treat Gherkin as a product specification first, runner input second — the quality gate in [SKILL.md](SKILL.md) applies to every scenario before glue code exists.
+Framework-agnostic syntax and style for `.feature` files. Treat Gherkin as a product specification first, runner input second — the quality gate in [SKILL.md](../SKILL.md) applies to every scenario before glue code exists.
 
 ## File structure
 
@@ -93,7 +93,7 @@ Write Gherkin in the language the domain experts speak; a `# language: nl` first
 
 ## The quality gate, expanded
 
-The six-point gate in [SKILL.md](SKILL.md) is the single source; these are its worked examples, keyed by gate item. **BRIEF** — Business language, Real data, Intention revealing, Essential, Focused — compresses the whole gate.
+The six-point gate in [SKILL.md](../SKILL.md) is the single source; these are its worked examples, keyed by gate item. **BRIEF** — Business language, Real data, Intention revealing, Essential, Focused — compresses the whole gate.
 
 - **Gate 2, domain language.** "Imagine it's 1922": the behavior reads without computers. `When "Bob" logs in` — the field-by-field click path, row ids, endpoints, and status codes live in glue.
 - **Gate 3, concrete.** Real names, dates, amounts: "Carla has a 20% summer discount expiring on 2026-08-31" — against "a user has a discount … the result is correct".
@@ -115,7 +115,7 @@ Step-level rules the gate implies:
 
 ## Review checklist
 
-Scenario review is the quality gate in [SKILL.md](SKILL.md) applied per scenario, plus the syntax-section rules above (Background length, Outline deduplication, table restraint). Glue review, framework-neutral:
+Scenario review is the quality gate in [SKILL.md](../SKILL.md) applied per scenario, plus the syntax-section rules above (Background length, Outline deduplication, table restraint). Glue review, framework-neutral:
 
 - Only steps that existing scenarios use — speculative step definitions are dead weight.
 - Steps organized by domain concept, reused through helpers.
