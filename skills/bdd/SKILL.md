@@ -7,7 +7,7 @@ description: Behavior-Driven Development as a collaboration and specification pr
 
 BDD builds shared understanding of a problem through concrete examples, written in business language, agreed before implementation. The examples become executable specifications; running them drives the code. The order is fixed: **conversation first, capture second, automation last**. A team running Gherkin without the conversation has test automation, not BDD.
 
-Two automation layers are bundled: [pytest-bdd](pytest-bdd.md) and [behave](behave.md). The practice and the Gherkin carry to any stack — see [Other automation layers](#other-automation-layers).
+Two automation layers are bundled: [pytest-bdd](references/pytest-bdd.md) and [behave](references/behave.md). The practice and the Gherkin carry to any stack — see [Other automation layers](#other-automation-layers).
 
 ## Preflight: does this deserve Gherkin?
 
@@ -19,12 +19,12 @@ Gate every "add a BDD test" impulse:
 
 ## Workflow
 
-1. **Discover.** Write down Who / What / Why, the business rules, examples, and open questions — before touching a test framework. Done when every rule carries at least one positive and one negative example and every unknown is a recorded question rather than a guess. Working solo, simulate the Three Amigos (business, development, quality) and mark which points are inference needing user confirmation. Detail and templates: [practice.md](practice.md).
-2. **Formulate.** Draft Gherkin — `Given` context, `When` event, `Then` observable outcome — in domain language. Run every scenario through the quality gate below before writing any glue code. Syntax and style: [gherkin.md](gherkin.md).
-3. **Automate** — only when the user asks for implementation. The framework is a project fact — check the declared dependencies for `behave` or `pytest-bdd` (a `features/steps/` tree with `environment.py` means behave) and join what is there. Only greenfield picks: pytest-bdd when the project already runs pytest (the usual Python default), behave when feature files should run standalone. Mechanics: [pytest-bdd.md](pytest-bdd.md) / [behave.md](behave.md). Bind scenarios, watch the run fail first, write the smallest code that passes.
+1. **Discover.** Write down Who / What / Why, the business rules, examples, and open questions — before touching a test framework. Done when every rule carries at least one positive and one negative example and every unknown is a recorded question rather than a guess. Working solo, simulate the Three Amigos (business, development, quality) and mark which points are inference needing user confirmation. Detail and templates: [practice.md](references/practice.md).
+2. **Formulate.** Draft Gherkin — `Given` context, `When` event, `Then` observable outcome — in domain language. Run every scenario through the quality gate below before writing any glue code. Syntax and style: [gherkin.md](references/gherkin.md).
+3. **Automate** — only when the user asks for implementation. The framework is a project fact — check the declared dependencies for `behave` or `pytest-bdd` (a `features/steps/` tree with `environment.py` means behave) and join what is there. Only greenfield picks: pytest-bdd when the project already runs pytest (the usual Python default), behave when feature files should run standalone. Mechanics: [pytest-bdd.md](references/pytest-bdd.md) / [behave.md](references/behave.md). Bind scenarios, watch the run fail first, write the smallest code that passes.
 4. **Refactor.** Keep scenario language stable while extracting helpers and fixtures; add boundary examples and counterexamples; report the red→green evidence and unresolved questions.
 
-A review-only request ("review this Gherkin", "is this good BDD?") stops after step 2 plus the checklist in [gherkin.md](gherkin.md): report findings and the smallest corrections, change no files.
+A review-only request ("review this Gherkin", "is this good BDD?") stops after step 2 plus the checklist in [gherkin.md](references/gherkin.md): report findings and the smallest corrections, change no files.
 
 ## Gherkin quality gate
 
