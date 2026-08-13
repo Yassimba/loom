@@ -103,7 +103,7 @@
       "description": "Blueprint a change before building it — Mermaid diagrams of the design, held for approval before any code. Use before implementing non-trivial work — proactively or when the user asks to see the design first — or when another skill needs a design-approval gate.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
-      "dependencies": ["lineage", "lineage-diff", "mermaid-skill"]
+      "dependencies": ["lineage", "lineage-diff", "mermaid-skill", "npm:calldiff"]
     },
     {
       "id": "skill:brainstorming",
@@ -369,6 +369,16 @@
       "dependencies": ["next"]
     },
     {
+      "id": "skill:calldiff",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "calldiff",
+      "description": "Diff call stacks across git commits — like git diff, but for who-calls-whom. Shows which callees appeared, disappeared, or moved under an entrypoint across 22 languages (diff, tree, and reach). Use for agentic code review when call flow changed and line diffs bury the shape of the change.",
+      "installTarget": "calldiff",
+      "nextAction": "Ask your coding agent to use the calldiff skill.",
+      "dependencies": ["npm:calldiff"]
+    },
+    {
       "id": "skill:codebase-design",
       "kind": "skill",
       "group": "Architecture",
@@ -416,7 +426,7 @@
       "description": "Show a colored call graph in chat, fast — no files, no viewer, no gate. Use when the user wants to see the call graph or flow of a function, command, or object under discussion; after changes land, to show what they did to the flow; or before making changes, to show what you are about to do to it.",
       "installTarget": "quick-lineage",
       "nextAction": "Ask your coding agent to use the quick-lineage skill.",
-      "dependencies": []
+      "dependencies": ["calldiff", "npm:calldiff"]
     },
     {
       "id": "skill:lineage",
@@ -436,7 +446,7 @@
       "description": "Render a change as a before/after lineage diff, diff-colored per hop. Use when the user wants a before/after view of what a change did to a flow, or when another skill needs a session's work explained as a flow diff.",
       "installTarget": "lineage-diff",
       "nextAction": "Ask your coding agent to use the lineage-diff skill.",
-      "dependencies": ["lineage"]
+      "dependencies": ["lineage", "npm:calldiff"]
     },
     {
       "id": "skill:zoom-out",
@@ -671,14 +681,14 @@
       "companions": []
     },
     {
-      "id": "tool:stackdiff",
+      "id": "tool:calldiff",
       "kind": "tool",
       "group": "Tools",
-      "label": "stackdiff",
-      "description": "Diff call graphs across Git revisions for TypeScript, Python, Go, and Rust.",
-      "installTarget": "github:Yassimba/loom[exe=stackdiff]",
-      "nextAction": "Run `stackdiff --help` in a Git repository.",
-      "bin": "stackdiff",
+      "label": "calldiff",
+      "description": "Diff call stacks across git commits — who-calls-whom across 22 languages (diff, tree, reach).",
+      "installTarget": "npm:calldiff",
+      "nextAction": "Run `calldiff diff` in a git repository.",
+      "bin": "calldiff",
       "companions": []
     },
     {

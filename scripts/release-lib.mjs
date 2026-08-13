@@ -149,16 +149,12 @@ function cliComponent(repoRoot, pluginsRoot) {
   ]);
 }
 
-function stackdiffComponent(repoRoot) {
-  return binaryCliComponent(repoRoot, "stackdiff", ["cli/stackdiff"]);
-}
-
 export function discoverReleaseComponents(repoRoot) {
   const pluginsRoot = join(repoRoot, "plugins");
   const plugins = readdirSync(pluginsRoot, { withFileTypes: true })
     .map((entry) => pluginComponent(repoRoot, pluginsRoot, entry))
     .filter(Boolean);
-  return [...plugins, cliComponent(repoRoot, pluginsRoot), stackdiffComponent(repoRoot)]
+  return [...plugins, cliComponent(repoRoot, pluginsRoot)]
     .filter(Boolean)
     .sort((left, right) => left.id.localeCompare(right.id));
 }

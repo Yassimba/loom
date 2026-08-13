@@ -5,40 +5,15 @@ description: Show a colored call graph in chat, fast — no files, no viewer, no
 
 # Quick Lineage
 
-One colored call graph in chat, grounded in `stackdiff` (AST-verified for TS/TSX, Python, Go, Rust) — the fast sibling of **lineage** and **blueprint**, for when the picture matters more than the ceremony.
+Give the call stack plus the data in- and outflow, straight into chat. Name the entry and the comparison in one line before running — silently picking is how the wrong graph gets drawn. Use `calldiff` (full CLI reference: invoke the `calldiff` skill):
 
-## 1. Read the branch from the conversation
+- Current shape: `calldiff tree --entry <entry> --maxDepth 2` (add `<ref>` for a past world, `--locs` for file:line)
+- What changed: `calldiff diff --entry <entry> --maxDepth 2` — git-diff semantics: no refs → HEAD vs worktree
+- Planned change: the tree command for the rails, then hand-write the intended `+`/`-` lines — projected, a design's promise, and said so above the block
+- "Does this reach X": `calldiff reach --entry <entry> --to X`
 
-Infer both the **entry** (the function, command, or object's method the conversation centers on — with several candidates, the one whose call tree covers the most of what was discussed) and the **branch**:
+Entry unknown or not found → `calldiff tree --file <path>` expands that file's exports; pick the nearest and say you did. A language calldiff can't parse → trace by hand, marked unverified.
 
-- **Discussed** — the user is asking about something as it is → one world, current source.
-- **Landed** — changes exist (session edits, working tree, a named ref) → diff the worlds.
-- **Planned** — the change is still intent → real BEFORE rails plus a projected `±` overlay.
+calldiff gives the calls; you add the data — annotate each hop with what goes in and what comes out (`args → return`).
 
-State the choice in one line ("quick lineage of `run`, landed changes vs HEAD") before running anything. Done when: the entry and branch are named in chat — silently picking is how the wrong graph gets drawn.
-
-## 2. Run stackdiff
-
-Start at `--max-depth 2` and deepen only the limb the question lives in — full depth buries the point.
-
-| Branch | Command |
-| --- | --- |
-| Discussed | `stackdiff --tree -e <entry> --max-depth 2 --format markdown` (add `<ref>` for a past world) |
-| Landed | `stackdiff <base> -e <entry> --max-depth 2 --only-changes --format markdown` — working tree included; add `<tip>` for ref-to-ref |
-| Planned | the Discussed command for BEFORE rails, then hand-write `+`/`-` lines for the intended calls |
-
-`--format markdown` emits the ```` ```diff ```` fence ready to paste; rich mode annotates each node with `binding = call(args) → return`, its doc line, and `path:line`. Unchanged limbs trim to `…` by default (widen with `--context N`, `--full` for everything). When the question is convergence — "do these paths reach the same thing?" — use `--view lineage`: the call DAG at data granularity, each function drawn once with fan-in visible, data objects as stadium nodes, bindings riding the edges.
-
-Entry not found → `stackdiff --tree` lists the exported entrypoints; pick the nearest and say you did. Language outside TS/TSX/Python/Go/Rust → say stackdiff cannot parse it and trace by hand, marked as unverified. "Who calls X" questions → `--callers -e X` inverts the graph.
-
-### Tuning noise
-
-Builtin/plumbing calls (`len()`, `clone()`, `str()`, `println!`) hide by default so the graph is your code talking to your code. When a graph still reads cluttered, tighten it in one loop: run `stackdiff --noise-report` (a frequency table of unresolved calls, marked `hidden`/`shown`), add `hide = ["glob", …]` globs for the framework plumbing you see to `.stackdiff.toml` at the repo root (`show = […]` rescues false positives), and re-run. `--noise` reveals everything when you suspect the filter ate signal.
-
-## 3. Show it colored
-
-Paste the markdown output as-is — the ```` ```diff ```` fence renders `+` green and `-` red (`!` marks a same-call-different-arguments change), and the two-space status column keeps rails aligned. For **Planned**, projected lines are the design's promise, not source facts — say so above the block.
-
-Under the block, one takeaway sentence: what the graph shows about the question that prompted it.
-
-Done when: the graph is in chat with every `+`/`-` line either machine-verified by stackdiff or explicitly marked projected, and the takeaway names what changed or will change.
+Paste inside a ```diff fence (`+` green, `-` red). Done when every line in the graph is verified, projected, or unverified by name — and one takeaway sentence answers the question that prompted it.

@@ -2,8 +2,8 @@ name: mise-bump
 
 # Weekly pin bumps for the published tool manifest and the contributor dev
 # env. Merging the PR is publishing: `loom update` reads main. The
-# repo's own binaries (loom, stackdiff) are excluded — their pins move
-# with their releases via plan-releases.mjs.
+# repo's own binary (loom) is excluded — its pin moves
+# with its releases via plan-releases.mjs.
 
 on:
   schedule:
@@ -58,7 +58,7 @@ jobs:
           published = subprocess.run(
               ["git", "show", f"HEAD:{path}"], capture_output=True, text=True
           ).stdout
-          for exe in ("loom", "stackdiff"):
+          for exe in ("loom",):
               pattern = rf'^"github:Yassimba/loom\[exe={exe}\]" = .*$'
               keep = re.search(pattern, published, re.M)
               if keep:
@@ -75,6 +75,6 @@ jobs:
             Weekly `mise upgrade --bump` across `mise.toml` and
             `manifest/loom.toml`. Merging publishes the new pins —
             `loom update` syncs the manifest from main. Release-owned
-            pins (loom, stackdiff) are restored to their released
+            pins (loom) are restored to their released
             versions before the PR is opened.
           delete-branch: true

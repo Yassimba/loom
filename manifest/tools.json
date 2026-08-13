@@ -14,10 +14,10 @@
       "nextAction": "Run `herdr` to start the multiplexer."
     },
     {
-      "key": "github:Yassimba/loom[exe=stackdiff]",
-      "label": "stackdiff",
-      "description": "Diff call graphs across Git revisions for TypeScript, Python, Go, and Rust.",
-      "nextAction": "Run `stackdiff --help` in a Git repository."
+      "key": "npm:calldiff",
+      "label": "calldiff",
+      "description": "Diff call stacks across git commits — who-calls-whom across 22 languages (diff, tree, reach).",
+      "nextAction": "Run `calldiff diff` in a git repository."
     },
     {
       "key": "gh",
