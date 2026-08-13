@@ -15,7 +15,6 @@ async function fixture() {
   await mkdir(join(root, "plugins", "herdr-prebuilt"), { recursive: true });
   await mkdir(join(root, "plugins", "herdr-source"), { recursive: true });
   await mkdir(join(root, "cli", "loom"), { recursive: true });
-  await mkdir(join(root, "cli", "stackdiff"), { recursive: true });
   await writeFile(
     join(root, "plugins", "pi-example", "package.json"),
     JSON.stringify({ name: "@example/pi-example", version: "1.2.3" }),
@@ -40,14 +39,10 @@ async function fixture() {
     join(root, "cli", "loom", "Cargo.toml"),
     '[package]\nname = "loom"\nversion = "0.1.0"\n',
   );
-  await writeFile(
-    join(root, "cli", "stackdiff", "Cargo.toml"),
-    '[package]\nname = "stackdiff"\nversion = "0.1.0"\n',
-  );
   await mkdir(join(root, "manifest"), { recursive: true });
   await writeFile(
     join(root, "manifest", "loom.toml"),
-    '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.1.0", tag_regex = "^loom-v" }\n"github:Yassimba/loom[exe=stackdiff]" = { version = "stackdiff-v0.1.0", tag_regex = "^stackdiff-v" }\n',
+    '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.1.0", tag_regex = "^loom-v" }\n',
   );
   return root;
 }
@@ -95,7 +90,6 @@ test("discovers npm, prebuilt Rust, source Rust, and CLI releases from manifests
       { id: "herdr-source", distribution: "rust-source", version: "0.4.0" },
       { id: "loom", distribution: "rust-binary", version: "0.1.0" },
       { id: "pi-example", distribution: "npm", version: "1.2.3" },
-      { id: "stackdiff", distribution: "rust-binary", version: "0.1.0" },
     ],
   );
 });
@@ -104,7 +98,7 @@ test("rejects drift between CLI and manifest pin versions", async () => {
   const root = await fixture();
   await writeFile(
     join(root, "manifest", "loom.toml"),
-    '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v9.9.9", tag_regex = "^loom-v" }\n"github:Yassimba/loom[exe=stackdiff]" = { version = "stackdiff-v0.1.0", tag_regex = "^stackdiff-v" }\n',
+    '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v9.9.9", tag_regex = "^loom-v" }\n',
   );
 
   assert.throws(
@@ -144,14 +138,14 @@ test("CI matrices include only affected Rust projects and Windows-capable projec
     ["herdr-source"],
   );
 
-  const stackdiffPlan = createCiPlan(root, ["cli/stackdiff/src/main.rs"]);
+  const loomPlan = createCiPlan(root, ["cli/loom/src/main.rs"]);
   assert.deepEqual(
-    stackdiffPlan.linux.map(({ id }) => id),
-    ["stackdiff"],
+    loomPlan.linux.map(({ id }) => id),
+    ["loom"],
   );
   assert.deepEqual(
-    stackdiffPlan.windows.map(({ id }) => id),
-    ["stackdiff"],
+    loomPlan.windows.map(({ id }) => id),
+    ["loom"],
   );
 });
 

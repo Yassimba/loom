@@ -19,13 +19,13 @@ trees at global or current-project scope, and delegates Pi package installs
 to Pi.
 `manifest/loom.toml` — the published tool manifest, the MENU: every
 tool this setup can provide, exact-pinned (node, Pi, herdr, gh, the
-loom and stackdiff binaries, …), with wizard metadata in
+loom binary, …), with wizard metadata in
 `manifest/tools.json`. What lands on a machine is the SELECTION —
 `~/.config/mise/conf.d/loom.toml` holds the core block plus
 wizard-chosen tools; `loom update` refreshes its pins without changing
 the set. Tool versions move only when a manifest change lands on main (the
 weekly `mise-bump` PR proposes bumps; release automation owns the
-loom/stackdiff pins). The root `mise.toml` is the
+loom pin). The root `mise.toml` is the
 contributor dev-env + tasks, a separate file so the consumer manifest never
 activates on `cd`. See `ai-docs/adr/0002-distribute-tools-via-mise.md`.
 `drafts/` — pulled from a global agent tree, not yet reviewed.

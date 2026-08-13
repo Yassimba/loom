@@ -71,7 +71,7 @@ If the human asks for a revision you believe is a mistake, explain the trade-off
 
 ## 4. Verify (after the build)
 
-The approved lineage tab is the promise; the built code must keep it. Once the build lands, run **lineage-diff** in contract mode with the same tracer — BEFORE is the approved blueprint's AFTER chain and AFTER is built source. For stackdiff-supported languages (TS/TSX, Python, Go, Rust), ground the built side first: `stackdiff <ref-at-approval> -e <entry>` prints the AST-verified call-chain delta the build actually made (`--max-depth 2` keeps it readable) — drift-verdict against that, not against a fresh hand-trace of the source. The verdicts read as contract outcomes:
+The approved lineage tab is the promise; the built code must keep it. Once the build lands, run **lineage-diff** in contract mode with the same tracer — BEFORE is the approved blueprint's AFTER chain and AFTER is built source. For languages calldiff parses (22), ground the built side first: `calldiff diff <ref-at-approval> --entry <entry>` prints the AST-verified call-chain delta the build actually made (`--maxDepth 2` keeps it readable) — drift-verdict against that, not against a fresh hand-trace of the source. The verdicts read as contract outcomes:
 
 - **unchanged** — promise kept
 - **changed** — drift: the hop exists but its signature, home, or mechanism differs from the promise — name the difference

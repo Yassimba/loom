@@ -22,8 +22,3 @@ run = "npm run audit"
 [tasks.catalog]
 description = "Regenerate setup-catalog.json"
 run = "npm run catalog:generate"
-
-[tasks.stackdiff]
-description = "Build and test the stackdiff crate"
-dir = "cli/stackdiff"
-run = ["cargo fmt --check", "cargo clippy --all-targets -- -D warnings", "cargo test"]
