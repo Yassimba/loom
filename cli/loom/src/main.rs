@@ -5,7 +5,7 @@ use loom::app::{install_selected, load_catalog, Selectors};
 use loom::init::{run_init, sync_projects, InitOptions};
 use loom::status::run_status;
 use loom::update::run_updates;
-use loom::{RealSystem, ResourceKind, SkillAgent, SkillScope};
+use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope};
 
 #[derive(Parser)]
 #[command(
@@ -86,10 +86,8 @@ struct SelectionArgs {
     yes: bool,
 }
 
-/// Completions that know the catalog: the value lists for --skill,
-/// --pi-package, and --tool are baked into the generated script.
-fn print_completions(shell: clap_complete::Shell) -> Result<()> {
-    let catalog = load_catalog()?;
+/// Add each catalog-backed selector value to the CLI command.
+fn completion_command(catalog: &Catalog) -> clap::Command {
     let values = |kind: ResourceKind| {
         clap::builder::PossibleValuesParser::new(
             catalog
@@ -109,9 +107,19 @@ fn print_completions(shell: clap_complete::Shell) -> Result<()> {
             .mut_arg("pi_packages", |arg| {
                 arg.value_parser(values(ResourceKind::PiPackage))
             })
+            .mut_arg("herdr_plugins", |arg| {
+                arg.value_parser(values(ResourceKind::HerdrPlugin))
+            })
             .mut_arg("tools", |arg| arg.value_parser(values(ResourceKind::Tool)))
         });
     }
+    command
+}
+
+/// Print shell completions with each catalog selector value.
+fn print_completions(shell: clap_complete::Shell) -> Result<()> {
+    let catalog = load_catalog()?;
+    let mut command = completion_command(&catalog);
     clap_complete::generate(shell, &mut command, "loom", &mut std::io::stdout());
     Ok(())
 }
@@ -196,4 +204,55 @@ fn main() -> Result<()> {
         std::process::exit(1);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use loom::Resource;
+
+    #[test]
+    fn selection_completion_includes_herdr_plugin_catalog_values() {
+        let catalog = Catalog {
+            schema_version: 1,
+            presets: vec![],
+            resources: vec![Resource {
+                id: "herdr-plugin:reviewr".to_string(),
+                kind: ResourceKind::HerdrPlugin,
+                group: "Herdr plugins".to_string(),
+                label: "reviewr".to_string(),
+                description: "Review agent".to_string(),
+                install_target: "reviewr".to_string(),
+                next_action: "Run reviewr".to_string(),
+                dependencies: vec![],
+                bin: None,
+                version: None,
+                companions: vec![],
+            }],
+        };
+
+        let command = completion_command(&catalog);
+        for name in ["setup", "add"] {
+            let subcommand = command
+                .get_subcommands()
+                .find(|subcommand| subcommand.get_name() == name)
+                .expect("selection subcommand");
+            let argument = subcommand
+                .get_arguments()
+                .find(|argument| argument.get_id() == "herdr_plugins")
+                .expect("Herdr plugin argument");
+            let values = argument
+                .get_value_parser()
+                .possible_values()
+                .expect("catalog-backed values")
+                .map(|value| value.get_name().to_string())
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                values,
+                ["reviewr"],
+                "a missing Herdr value parser hides valid plugins from shell completion"
+            );
+        }
+    }
 }

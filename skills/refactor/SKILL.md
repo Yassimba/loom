@@ -1,186 +1,382 @@
 ---
 name: refactor
-description: Net-negative refactoring — deep analysis biased toward deletion, so the codebase ends smaller. Use when the user says "refactor", "simplify", or "modernize", or when you notice entropy, duplication, or over-abstraction.
+description: Happy-path-first design — deep modules, type-driven invariants, evidence-driven complexity, patterns that pay rent. Use when the user says "refactor", "simplify", "modernize", or when a change's design should read use-case-first.
 ---
 
 # Refactor
 
-Improve code structure without changing external behavior. **Net-negative** is both the goal and the measure: fewer lines in the codebase after than before — the smallest end state, not the smallest change. Writing 50 lines that delete 200 is a net win; keeping 14 functions to avoid writing 2 is a net loss. More code begets more code — entropy accumulates. A net-positive change must buy a concrete, needed invariant (better types, enforced immutability) — and the commit body must name which.
+Optimize the design for the normal user flow. If the happy path is 95% of runtime behavior, it should be approximately 95% of the code readers see.
 
-Iron laws: every "tests still pass" claim needs fresh test output; unexpected breakage gets root-caused, not patched.
+Start with context:
 
-## Load a Mindset
+- inspect the existing code, callsites, data flow
+- understand the real use case before choosing abstractions
+- preserve good repository patterns; do not impose a generic architecture
 
-Pick the mindset that fits the target scope, read its section in [references/mindsets.md](references/mindsets.md), and open your report by naming it and its core principle.
+**Reinvented wheels first:** before designing anything, check the ecosystem — hand-rolled logic yields to the stdlib, a dependency already in the project has (new) functionality that can clean up our implementation a lot or a great package for the usecase. 
 
-| Mindset                 | Pick when                          |
-| ----------------------- | ---------------------------------- |
-| Simplicity vs Easy      | Untangling coupled concepts        |
-| Design Is Taking Apart  | Splitting a god object             |
-| Data Over Abstractions  | Too many custom types              |
-| PAGNI                   | Deciding what survives deletion    |
+The best code is code you don't write!
 
-Tools, loaded when the work calls for them:
+**Suggest first:** invoke the `write-simply` skill then propose before changing — a numbered list, each item one sentence plus a before → after snippet. The user picks; apply only the picks.
 
-| Tool                                             | Load when                                                                   |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| [references/patterns.md](references/patterns.md) | Applying a change — 7 refactoring patterns with before/after Python code    |
-| [references/python.md](references/python.md)     | Target is Python — modernization smells and the exact quality-gate commands |
+**Measure:** on Python projects, `complexipy <target>` flags too-complex functions — prime suggestion candidates. Run `tokei <modules>` before and after, and end with the per-module line delta. Offer to install a missing tool (`uvx complexipy`, `brew install tokei`).
 
-## What To Refactor
+## Design Vocabulary
 
-### Entropy and bloat
+Translate the intent into established software design language:
 
-- Dead code, unused imports, unreachable branches
-- Wrapper classes adding no behavior over what they wrap
-- Abstractions with a single implementation (delete the abstraction, keep the implementation — unless it abstracts over a third-party library)
-- Features nobody uses — delete them
-- "Flexibility" that's never exercised — delete it
+| Desired quality | Established terminology |
+| --- | --- |
+| Main methods read almost like English | Composed Method, intention-revealing interface, use-case orchestration |
+| Orchestrators call well-named services | Application Service, Use Case Interactor, Transaction Script |
+| Ugly mechanics stay below a clean interface | Information hiding, deep modules, complexity pulled downward |
+| Domain logic does not contain process and network code | Functional Core / Imperative Shell, Ports and Adapters |
+| Code is organized around user behavior | Vertical Slice Architecture, use-case-driven architecture, Screaming Architecture |
+| Types enforce invariants | Type-driven design, making illegal states unrepresentable |
+| Boundary checks produce trusted values | Parse, Don't Validate, smart constructors, refinement types |
+| Constructors and assertions enforce contracts | Design by Contract, preconditions, postconditions, invariants |
+| Invalid conditions leave before the normal flow | Guard clauses, fail-fast design |
+| Imagined requirements do not create code | YAGNI, evolutionary design, avoid speculative generality |
+| Reuse follows real repetition | Rule of Three, semantic compression |
+| Helpers hide meaningful complexity | Deep rather than shallow modules, locality of behavior |
+| State and behavior have one owner | Encapsulation, Tell Don't Ask, Information Expert |
 
-### Structural complexity
+When deeper design work is required, the primary sources and reading order live in [references/sources.md](references/sources.md).
 
-- Functions longer than 30 lines
-- Nesting deeper than 2 levels (flatten with guard clauses / early returns)
-- Functions with more than 4 positional parameters
+## Patterns Must Pay Rent
 
-### Duplication
+Patterns, layers, abstractions, objects, interfaces, and files are costs. Use them only when they produce a concrete readability, maintenance, correctness, testing, or change-isolation gain larger than their cost.
 
-- Copy-paste logic across functions or modules (Rule of Three: 3rd occurrence = extract)
-- Near-identical classes differing by one or two fields
+- architecture must be proportional to the real problem
+- a pattern name is vocabulary for a design that emerged, not a requirement to manufacture that design
+- start with the smallest honest use-case implementation, often a direct Transaction Script or vertical slice
+- extract a port, repository, service, value object, or module only when it owns a real invariant, hides real complexity, has multiple real implementations, removes stable duplication, or creates a proven boundary
+- judge an abstraction by total system cost: implementation lines, interfaces, files, call hops, configuration, tests, and concepts a reader must learn
+- an abstraction that moves ten obvious lines into five files is negative value
+- a repository that only renames one database call is a shallow module, not architecture
+- do not create `Controller -> Service -> Repository` chains because a diagram, framework, blog post, or pattern says they should exist
+- prefer a simple direct method until real domain complexity gives the code a natural cut point
 
-### Naming and clarity
+**Pattern reference:** [references/python-patterns/](references/python-patterns/README.md) holds reference implementations of the classic patterns. Check it both ways while reviewing: 
+(1) something here becomes clearer with a pattern shown there; 
+(2) we already use a similar pattern —> clean our implementation against the reference. 
 
-- Vague names (`data`, `result`, `info`, `handle`, `process`, `manager`, `helper`, `util`)
-- Misleading names — the name promises less than the code does (a `get_` that also mutates, a `check_` that also saves); rename to what it actually does
-- Abbreviations that hurt readability (`cfg`, `mgr`, `ctx` used inconsistently; well-known ones like `api`, `url`, `id`, `db` are fine)
-- Single-letter variables in business logic (allowed: `i/j/k` in tight numeric loops, `x/y/z` for coordinates, math-notation in math functions)
-- Booleans without an `is_`/`has_`/`can_`/`should_` prefix (`user.active` → `user.is_active`)
-- Boolean flags whose call sites read ambiguously (`run(true)`)
-- Magic numbers — promote to named constants with units (`time.sleep(3600)` → `ONE_HOUR_IN_SECONDS`)
+Rent still applies.
 
-### Type safety
+Screaming Architecture does not mean "add architecture layers." It means the system should reveal its domain and use cases instead of its frameworks. `invoice/pay.py` can scream the use case more clearly than `controllers/`, `services/`, and `repositories/` full of pass-through methods.
 
-- Bags of untyped data (`dict[str, Any]`-style) where a record type fits
-- Stringly-typed dispatch (`if kind == "sql"`) — promote to an enum or protocol
-- Mutable collections holding data that never changes
+DON'T apply a repository pattern to ten obvious lines:
 
-### Coupling and cohesion
+```python
+class UserController:
+    def __init__(self, service: UserService):
+        self.service = service
 
-- God classes mixing I/O, business logic, orchestration
-- Re-parse coupling (module A generates files, module B re-parses them — share the IR)
-- Deep inheritance hierarchies where composition works
+    def get(self, id: str) -> User:
+        return self.service.get(id)
 
-## Bias Toward Deletion
+class UserService:
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
 
-Deletion is the default; keeping is what needs justification. Three questions for every finding:
+    def get(self, id: str) -> User:
+        return self.repository.get(id)
 
-1. **What's the smallest codebase that solves this?** Not the smallest change — the smallest result. Could this be 2 functions instead of 14? Could it be 0 (delete the feature)?
-2. **Is the change net-negative?** "Better organized", "more flexible", "cleaner separation" — if it's more code, it's more entropy, whatever it's called.
-3. **What does this make obsolete?** Every change is a chance to delete whatever was only needed by the thing being replaced.
-
-Deletion legitimately loses when: the codebase is already minimal for what it does; a framework's conventions demand the structure; compliance mandates it; or the code is a PAGNI ([references/mindsets.md](references/mindsets.md)) — structure that would cost 10× to retrofit (observability, auth boundaries, event schemas), worth keeping even while under-used.
-
-## Workflow
-
-### 1. Analyze
-
-- Read every file in the target scope
-- Sweep all six "What To Refactor" categories against every file. Analysis is complete only when every category is accounted for — each has findings or is explicitly reported clean.
-- Severity per finding: **high** (blocks maintainability), **medium** (hurts readability), **low** (style / modernization)
-- For every finding, first ask: can we DELETE this instead of fixing it?
-
-### 2. Plan
-
-- Order changes by dependency (data types first, consumers last)
-- Identify public-API impact — any import break?
-- Refactors preserve behavior; wanting a new test signals you've crossed into a behavior change — write it as a failing test first
-- Measure before: `tokei <target>` — record the Code count (not comments/blanks); set the net-negative target for after. If tokei is missing, offer to install it (`brew` / `winget` / `scoop` / `cargo install tokei`)
-
-### 3. Refactor
-
-- **One refactoring per commit.** Small, atomic, reviewable.
-- After each change, run the project's linter, type checker, and test suite (Python: gate commands in [references/python.md](references/python.md)); existing tests stay green throughout
-
-### 4. Verify
-
-- Full quality gate passes
-- Old code is fully gone: no `_old` aliases, no `# removed` comments, no rename-only placeholders, no orphaned imports
-- Measure after: `tokei <target>` again and compare Code counts — net-negative, or the commit body names the invariant the extra lines bought
-
-## Arguments
-
-| Invocation                           | Scope                       |
-| ------------------------------------ | --------------------------- |
-| `/refactor`                          | Scan full project directory |
-| `/refactor src/app/core/`            | Scan specific package       |
-| `/refactor src/app/core/registry.py` | Scan single file            |
-
-## Output Format
-
-Present findings as a categorized report:
-
-```markdown
-## Refactoring Report: <target>
-
-**Mindsets loaded:** <e.g. Simplicity vs Easy>
-**Core principles applied:** <1 line each>
-
-### High Severity
-
-- **Entropy** — `src/app/compat.py` — entire module is dead code, 0 imports reference it
-
-### Medium Severity
-
-- **Type Safety** — `src/app/core/config.py:18` — `dict[str, Any]` should be a record type
-
-### Low Severity
-
-- **Modernization** — `src/app/types.py:5` — `Optional[str]` → `str | None`
-
-### Categories clean
-
-- <categories swept with zero findings>
-
-### Proposed Changes (in dependency order)
-
-1. Delete `src/app/compat.py` (dead code, -140 lines)
-2. ...
-
-### Line Count (tokei Code column)
-
-- Before: <N>
-- After (target): <M>
-- Delta: -<K>
+class UserRepository:
+    def get(self, id: str) -> User:
+        return database.select_user(id)
 ```
 
-Then present via `AskUserQuestion`:
+DO keep a simple use case simple:
 
-```yaml
-question: "Apply refactoring plan?"
-header: "Plan"
-options:
-  - label: "Apply all (Recommended)"
-    description: "One commit per step; run quality gate after each"
-  - label: "Walk step-by-step"
-    description: "Confirm each step before applying"
-  - label: "Skip and report"
-    description: "Save the report; human partner decides"
-  - label: "Revise"
-    description: "I'll suggest changes to the plan"
+```python
+async def get_user(id: UserId) -> User:
+    return await database.select_user(id)
 ```
 
-Running unattended (autonomous invocation, background session): skip the question and default to "Skip and report".
+Add a repository later only when data access becomes a meaningful domain port or hides stable complexity that callers should not know.
 
-## Commit Message
+## 1. Happy-Path-First Orchestration
 
-Each refactor commit:
+Make orchestration read almost like English:
 
+```python
+version = read_bundled_version()
+await install_exact_version(version)
+await verify_installed_version(version)
+await restart_server()
 ```
-refactor(<scope>): <what was removed or deepened>
 
-<body: why this reduces entropy>
+Top-level methods coordinate a use case. They should call well-named domain methods, interfaces, and services. They should not contain parsing, process plumbing, protocol details, state surgery, or long validation branches.
 
-Lines: -<K>
+DON'T make the orchestrator own every detail:
+
+```python
+async def update(input: str) -> None:
+    if not input:
+        raise ValueError("missing version")
+    result = subprocess.run(["wsl", "bash", "-lc", build_script(input)], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr)
+    installed = parse_version(run_version_command())
+    if installed != input:
+        raise RuntimeError("wrong version")
+    kill_existing_process()
+    start_process()
 ```
 
-No `Co-Authored-By`.
+DO expose the use case and push mechanics behind deep boundaries:
+
+```python
+async def update(version: Version) -> None:
+    await server.stop()
+    await cli.install(version)
+    await cli.require_version(version)
+    await server.start()
+```
+
+## 2. Progressive Disclosure And Guard Clauses
+
+Use progressive disclosure:
+
+- show the happy path first
+- move necessary mechanics behind narrow, strongly named boundaries
+- isolate ugly platform or integration logic in the lowest-level small method that owns it
+- prefer early guards, returns, assertions, and throws so invalid inputs and failed invariants leave immediately
+- keep the valid path flat and linear; do not nest it inside defensive branches
+- let errors reach the existing user-facing boundary unless recovery is an explicit product requirement
+
+## 3. Deliberate Interfaces And Behavior Ownership
+
+Design interfaces deliberately:
+
+- names must describe domain intent, not implementation mechanics
+- dependencies should be explicit and required dependencies should be impossible to omit
+- prefer small cohesive interfaces over bags of callbacks, booleans, and optional behavior switches
+- put state and its invariants behind one owner
+- keep IO in infrastructure and integrations; keep domain decisions out of wrappers
+- use classes, services, value objects, or modules when they provide real encapsulation, identity, lifecycle, or polymorphism; do not use OOP as ceremony
+
+## 4. Type-Driven Invariants
+
+Use the type system as design:
+
+- make invalid states unrepresentable where practical
+- parse and validate external, persisted, IPC, and network data once at the boundary
+- use domain types for meaningful IDs, versions, paths, URLs, states, and results
+- return values that answer the caller's actual question
+- do not use `any`, loose string protocols, or nullable states when a precise type can express the contract
+
+Make invariants executable:
+
+- enforce invariants through constructors, schemas, value objects, branded types, required parameters, and narrow method signatures
+- validate once when data enters the domain; internal methods should receive trusted values instead of repeatedly checking raw data
+- use guards and assertions for conditions that must already be true at a callsite
+- make required state explicit in parameters instead of reading optional ambient state deep in the flow
+- make illegal combinations impossible to construct, not merely documented
+- keep invariant ownership close to the type, object, or service that controls the state
+
+DON'T validate raw values and then throw away what the check proved:
+
+```python
+validate_version(input)
+await install(input)  # still a raw string
+```
+
+DO parse into a trusted domain value once:
+
+```python
+version = Version.parse(input)
+await install(version)
+```
+
+DON'T represent mutually exclusive states with nullable fields and booleans:
+
+```python
+@dataclass
+class Server:
+    starting: bool = False
+    url: str | None = None
+    error: str | None = None
+```
+
+DO model the legal states directly:
+
+```python
+@dataclass(frozen=True)
+class Stopped: ...
+
+@dataclass(frozen=True)
+class Starting: ...
+
+@dataclass(frozen=True)
+class Ready:
+    url: ServerUrl
+
+@dataclass(frozen=True)
+class Failed:
+    error: ServerError
+
+type ServerState = Stopped | Starting | Ready | Failed
+```
+
+DON'T pass a loose bag of optional callbacks and behavior flags:
+
+```python
+create_server(start=start, stop=stop, read=read, retry=True, legacy=False)
+```
+
+DO require a cohesive interface that answers the caller's real needs:
+
+```python
+create_server(process=server_process, cli=wsl_cli)
+```
+
+## 5. Evidence Before Complexity
+
+Be aggressively pragmatic:
+
+- prefer one obvious path and one source of truth
+- remove duplication, stale compatibility code, speculative safeguards, theoretical race handling, and fallback chains
+- do not defend against theoretical or unproven edge cases; wait until a real runtime, log, test reproduction, persisted state, or user report proves the case exists
+- when runtime evidence proves an edge case, fix the smallest real failure at the boundary that owns it; do not build a general defense system around one incident
+- never justify complexity with "could", "might", or "what if" alone; state the observed failure and its likelihood
+- do not preserve a bad interface only to avoid changing internal callsites
+- do not create a helper for every line; extract only a real concept, reusable operation, or complex boundary
+- prefer less code, fewer names, fewer branches, and net-negative diffs when behavior permits
+
+DON'T add lifecycle machinery for an imagined race:
+
+```python
+attempts: dict[Id, int] = {}
+# counters, stale ownership checks, retries, cleanup, and fallback paths
+# added because two calls might theoretically overlap
+```
+
+DO implement the observed flow directly:
+
+```python
+await stop_server(id)
+await install_cli(version)
+await start_server(id)
+```
+
+When a real runtime later reports `Text file busy`, use that evidence to add the smallest owned fix: make `stopServer` await process exit before installation. Do not build a general lifecycle framework.
+
+## 6. Proportional Failures And Flat Control Flow
+
+Keep failures proportional:
+
+- handle common operational failures clearly
+- fail fast on broken invariants, invalid state, and failed commands
+- do not bury the happy path under code for events that should not happen
+- an uncommon case gets code only after concrete runtime evidence; if its fix needs substantial machinery, explain the observed failure, frequency, and complexity cost before adding it
+
+DON'T bury the valid path in nested conditionals:
+
+```python
+if config:
+    if config.enabled:
+        if server.ready:
+            return run(config)
+return None
+```
+
+DO reject invalid conditions first and leave the valid path flat:
+
+```python
+if not config:
+    return None
+if not config.enabled:
+    return None
+assert server.ready
+return run(config)
+```
+
+## 7. Deep Modules, Not Helper Shrapnel
+
+DON'T create shallow helpers that force readers to reconstruct one operation:
+
+```python
+prepare_update()
+do_update()
+finish_update()
+```
+
+DO keep tightly related simple code together, or extract one deep operation whose interface hides real complexity:
+
+```python
+await cli.install_exact_version(version)
+```
+
+## 8. Encapsulation And State Ownership
+
+DON'T ask for owned state and mutate it elsewhere:
+
+```python
+if session.status() == "pending":
+    session.messages().append(message)
+    session.set_status("active")
+```
+
+DO tell the owner the domain operation:
+
+```python
+session.promote(message)
+```
+
+## 9. Domain Core And Infrastructure Boundaries
+
+DON'T leak infrastructure into domain decisions:
+
+```python
+def promote(message: Message) -> None:
+    subprocess.run(["wsl.exe", ...])
+    database.insert(message)
+```
+
+DO keep domain decisions in the core and IO in ports, adapters, or the imperative shell:
+
+```python
+event = session.promote(message)
+await session_store.append(event)
+```
+
+## 10. Tests At Stable Boundaries
+
+Tests should prove behavior through real boundaries. Do not test one-line helpers, duplicate implementation logic, or build large mock systems for small changes.
+
+DON'T test the implementation sentence by sentence:
+
+```python
+assert server_id_for("Debian") == "wsl:Debian"
+assert should_restart(available=False) is True
+```
+
+DO test the stable use-case boundary and observable order:
+
+```python
+await controller.update("Debian")
+assert events == ["stop", "install", "verify", "start"]
+```
+
+Prune and compress the suite:
+
+- Delete tests that prove nothing — assignment checks, mirror-the-implementation asserts, tests that cannot fail. Keep only tests that would catch a real regression.
+- Harden while shrinking with property-based testing: Hypothesis in Python; elsewhere suggest the ecosystem's framework (fast-check, proptest, jqwik). Collapse hand-written case lists into properties and strengthen the surviving tests; note `hypothesis.stateful` exists, reach for it only when a stateful model is genuinely warranted.
+- Collapse further with pytest fixtures, shared fixtures in `conftest.py`, and `@pytest.mark.parametrize`.
+
+## 11. Smells With Hard Edges
+
+- Thresholds: functions ≤30 lines, nesting ≤2, ≤4 positional parameters.
+- Names: concrete (`data`, `info`, `manager`, `helper` say nothing), honest (a `get_` that also mutates is a lie), booleans read `is_`/`has_`/`can_`; magic numbers become named constants with units.
+- Comments say *why* only — delete what-comments; no `# type: ignore` / cast escapes where a precise type exists.
+
+## Completion Standard
+
+Finish the complete change, run focused verification, delete temporary artifacts, and do one final simplification pass. The result should feel boring, obvious, typed, cohesive, and native to the codebase.
+
+The combined style is: **happy-path-first, use-case-oriented design with deep modules, type-driven invariants, boundary isolation, and evidence-driven complexity.**
+
+Task / scope:
+$ARGUMENTS

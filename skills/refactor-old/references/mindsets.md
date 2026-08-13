@@ -1,5 +1,5 @@
 ---
-description: The four mindsets that calibrate the deletion bias — pick the one that fits the target scope and name it in the report.
+description: The five mindsets that calibrate the deletion bias — pick the one that fits the target scope and name it in the report.
 ---
 
 # Mindsets
@@ -37,6 +37,23 @@ Model the information, not the behavior: what data exists, what are the relation
 
 - [The Value of Values](https://www.infoq.com/presentations/Value-Values/) — Rich Hickey on data vs objects
 - [Data-Oriented Design](https://www.dataorienteddesign.com/dodbook/) — Richard Fabian
+
+## Happy Path First
+
+If the happy path is 95% of runtime behavior, it should be roughly 95% of the code readers see. Top-level functions orchestrate a use case in language that reads almost like English; parsing, process plumbing, and protocol details live below deep, well-named boundaries — complexity pulled downward. A shallow helper that only renames a step is the opposite of depth: depth is a small interface hiding real mechanics.
+
+Trust flows from boundaries. Parse external data once, into a type that carries the proof of validity, and let the interior receive trusted values — every interior re-check is then deletable, not just discouraged. Invalid conditions leave through guard clauses at the top; the valid path stays flat. Model mutually exclusive states directly so illegal combinations can't be constructed.
+
+Complexity needs evidence. An edge case earns code only after a real runtime failure — a log, a reproduction, a user report — proves it exists, and then it gets the smallest fix at the boundary that owns it, not a general defense system. "Could", "might", and "what if" are not evidence. Patterns pay rent the same way: extract a port, repository, or value object only when it owns a real invariant, hides real complexity, or removes stable duplication — duplication is cheaper than the wrong abstraction.
+
+- [A Philosophy of Software Design](https://stanford.edu/~ouster/cgi-bin/aposd.php) — Ousterhout on deep modules and pulling complexity downward
+- [Parse, Don't Validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) — Alexis King
+- [Making Illegal States Unrepresentable](https://fsharpforfunandprofit.com/posts/designing-with-types-making-illegal-states-unrepresentable/) — Scott Wlaschin
+- [Functional Core, Imperative Shell](https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell) — Gary Bernhardt
+- [The Wrong Abstraction](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction) — Sandi Metz
+- [YAGNI](https://martinfowler.com/bliki/Yagni.html) — Fowler on the four costs of speculative capability
+- [Semantic Compression](https://caseymuratori.com/blog_0015) — Muratori: make code usable before making it reusable
+- [The Grug Brained Developer](https://grugbrain.dev/) — pragmatic complexity control
 
 ## PAGNI: Probably Are Gonna Need It
 

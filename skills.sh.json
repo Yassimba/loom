@@ -16,7 +16,7 @@
         "diagnosing-bugs",
         "e2e-test",
         "grill-with-docs",
-        "grill-with-examples",
+        "guided-review",
         "implement",
         "loop-me",
         "merge",
@@ -32,7 +32,8 @@
         "to-spec",
         "to-tickets",
         "update-docstrings",
-        "wayfinder"
+        "wayfinder",
+        "whats-next"
       ]
     },
     {
@@ -52,7 +53,7 @@
     {
       "title": "Diagrams",
       "description": "Turn systems and data into pictures \u2014 draw.io, Mermaid, and infographics.",
-      "skills": ["drawio-skill", "infographic-designer", "mermaid-skill"]
+      "skills": ["drawio-skill", "mermaid-skill"]
     },
     {
       "title": "Presentations",
@@ -75,6 +76,7 @@
         "wizard",
         "write-documentation",
         "write-readme",
+        "write-simply",
         "writing-clearly-and-concisely",
         "writing-for-agents",
         "wtf"

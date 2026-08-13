@@ -1,6 +1,6 @@
 ---
 name: next
-description: Claim the next actionable Beads task using bv and br. Use when the user asks what to work on next or asks to pick, grab, claim, or start the next task.
+description: Claim the next actionable Beads task using bv and br. Use when the user asks to pick, grab, claim, or start the next task; a preview without claiming belongs to whats-next.
 ---
 
 # Next
