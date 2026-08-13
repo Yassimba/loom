@@ -18,6 +18,8 @@ Every docstring is read by a first-time reader: someone with the source in front
 - **State the rule, not the citation.** No "ADR-0019", "per the RFC", "as the design doc says", plan/PRD titles, or issue IDs. The decision may well _live_ in an ADR — that is correct, and it is exactly why the docstring must not point at it: the reader cannot open ADR-0019 from the source. Write the rule the code follows, in plain terms. Bad: `the stable ADR-0019 token path`. Good: `the stable token path; sibling ids are independent, so an unrelated add or delete never renumbers a node`. The only names a docstring may carry are code symbols the reader can resolve in the same codebase (a class, a function, a config key).
 - **Gloss project jargon at first use.** The first time a domain term appears in a file, give it a one-line gloss — `a "ksub" (kabelsubgroep) is a bundle of cable segments owned by one transformer` — then use it freely; the reader can grep back to the definition.
 
+**Register:** invoke the `write-simply` skill (via the Skill tool) — every docstring and comment follows its register. Mood still follows the dialect.
+
 ## Public vs internal
 
 | Symbol kind                                                                                   | Treatment                                                                                                                          |

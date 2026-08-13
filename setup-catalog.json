@@ -9,7 +9,7 @@
         "brainstorming",
         "wayfinder",
         "grill-with-docs",
-        "grill-with-examples",
+        "bdd",
         "grilling",
         "to-spec",
         "to-tickets",
@@ -93,7 +93,7 @@
       "description": "Behavior-Driven Development as a collaboration and specification practice, with pytest-bdd and behave as the bundled automation references. Use when defining behavior through concrete examples or acceptance criteria, writing or reviewing Gherkin .feature files, wiring pytest-bdd or behave step definitions, or checking that tests still express business behavior rather than implementation.",
       "installTarget": "bdd",
       "nextAction": "Ask your coding agent to use the bdd skill.",
-      "dependencies": []
+      "dependencies": ["write-simply"]
     },
     {
       "id": "skill:blueprint",
@@ -143,7 +143,7 @@
       "description": "Use when creating a git commit — the user asks to commit, or a unit of work is complete and ready to commit.",
       "installTarget": "commit",
       "nextAction": "Ask your coding agent to use the commit skill.",
-      "dependencies": ["diagnosing-bugs", "writing-clearly-and-concisely"]
+      "dependencies": ["diagnosing-bugs", "write-simply", "writing-clearly-and-concisely"]
     },
     {
       "id": "skill:database-pro",
@@ -186,14 +186,14 @@
       "dependencies": ["domain-modeling", "grilling"]
     },
     {
-      "id": "skill:grill-with-examples",
+      "id": "skill:guided-review",
       "kind": "skill",
       "group": "Coding",
-      "label": "grill-with-examples",
-      "description": "Example-map a ticket or spec - grill the user for rules and concrete examples, write them into the ticket, ready to become the test list for the TDD loop.",
-      "installTarget": "grill-with-examples",
-      "nextAction": "Ask your coding agent to use the grill-with-examples skill.",
-      "dependencies": ["grilling", "tdd"]
+      "label": "guided-review",
+      "description": "Guided code review that walks the human through a diff in small, semantically ordered chunks, each approved individually, until they can vouch for every line. Use when an agent produced more change than the user has followed, when the user must review a PR or branch they didn't write, or when they ask to be walked through a diff.",
+      "installTarget": "guided-review",
+      "nextAction": "Ask your coding agent to use the guided-review skill.",
+      "dependencies": ["write-simply"]
     },
     {
       "id": "skill:implement",
@@ -230,7 +230,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "next",
-      "description": "Claim the next actionable Beads task using bv and br. Use when the user asks what to work on next or asks to pick, grab, claim, or start the next task.",
+      "description": "Claim the next actionable Beads task using bv and br. Use when the user asks to pick, grab, claim, or start the next task; a preview without claiming belongs to whats-next.",
       "installTarget": "next",
       "nextAction": "Ask your coding agent to use the next skill.",
       "dependencies": [
@@ -263,10 +263,10 @@
       "kind": "skill",
       "group": "Coding",
       "label": "refactor",
-      "description": "Net-negative refactoring — deep analysis biased toward deletion, so the codebase ends smaller. Use when the user says \"refactor\", \"simplify\", or \"modernize\", or when you notice entropy, duplication, or over-abstraction.",
+      "description": "Happy-path-first design — deep modules, type-driven invariants, evidence-driven complexity, patterns that pay rent. Use when the user says \"refactor\", \"simplify\", \"modernize\", or when a change's design should read use-case-first.",
       "installTarget": "refactor",
       "nextAction": "Ask your coding agent to use the refactor skill.",
-      "dependencies": []
+      "dependencies": ["write-simply"]
     },
     {
       "id": "skill:release",
@@ -346,7 +346,7 @@
       "description": "Add or update docstrings, doc comments, and inline comments in source code — any language. Use when the user wants docstrings written or fixed, a conversion to a doc style (NumPy, TSDoc, rustdoc), or a comment cleanup. Source files only — README/ADR/prose docs belong to write-documentation / write-readme.",
       "installTarget": "update-docstrings",
       "nextAction": "Ask your coding agent to use the update-docstrings skill.",
-      "dependencies": ["writing-clearly-and-concisely"]
+      "dependencies": ["write-simply", "writing-clearly-and-concisely"]
     },
     {
       "id": "skill:wayfinder",
@@ -357,6 +357,16 @@
       "installTarget": "wayfinder",
       "nextAction": "Ask your coding agent to use the wayfinder skill.",
       "dependencies": ["domain-modeling", "grilling", "prototype", "setup-project"]
+    },
+    {
+      "id": "skill:whats-next",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "whats-next",
+      "description": "Preview the next actionable Beads task — its context and a sketch of the approach, claiming nothing. Use when the user asks what's next or what to work on next, or wants to size up the coming task before committing to it.",
+      "installTarget": "whats-next",
+      "nextAction": "Ask your coding agent to use the whats-next skill.",
+      "dependencies": ["next"]
     },
     {
       "id": "skill:codebase-design",
@@ -383,7 +393,7 @@
       "kind": "skill",
       "group": "Architecture",
       "label": "explain-code-flow",
-      "description": "Generate a visual architecture walkthrough for a feature in the current codebase. Use when the user asks how a feature works at a high level — \"explain X\", \"how does X work\", \"trace the X flow\".",
+      "description": "Architecture walkthrough: explain how a feature works in the current codebase with brief context, ASCII diagrams, runtime dataflow, and file:line anchors. Use when the user asks for a big-picture explanation, architecture map, or end-to-end feature flow.",
       "installTarget": "explain-code-flow",
       "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
       "dependencies": ["writing-clearly-and-concisely"]
@@ -446,16 +456,6 @@
       "description": "Generate draw.io diagrams — .drawio XML exported to PNG/SVG/PDF/JPG via the desktop CLI. Use when the user asks for draw.io specifically, or a requested diagram needs what Mermaid's auto-layout can't give — custom styling, swimlanes, or a rich shape vocabulary (network topology, ML/DL model figures). Default and proactive diagramming belongs to mermaid-skill.",
       "installTarget": "drawio-skill",
       "nextAction": "Ask your coding agent to use the drawio-skill skill.",
-      "dependencies": []
-    },
-    {
-      "id": "skill:infographic-designer",
-      "kind": "skill",
-      "group": "Diagrams",
-      "label": "infographic-designer",
-      "description": "Design infographics — structured visual summaries of a topic, dataset, or content. Use when the user asks for an infographic or infographic blueprint, or shares content and wants it presented visually (\"can you make this visual?\").\n",
-      "installTarget": "infographic-designer",
-      "nextAction": "Ask your coding agent to use the infographic-designer skill.",
       "dependencies": []
     },
     {
@@ -607,6 +607,16 @@
       "installTarget": "write-readme",
       "nextAction": "Ask your coding agent to use the write-readme skill.",
       "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:write-simply",
+      "kind": "skill",
+      "group": "General",
+      "label": "write-simply",
+      "description": "Prose register for short technical prose — ASD-STE100 Simplified Technical English plus Zinsser's four principles. Use when writing docstrings, comments, commit messages, or similar compact prose, or when another skill calls for the register.",
+      "installTarget": "write-simply",
+      "nextAction": "Ask your coding agent to use the write-simply skill.",
+      "dependencies": []
     },
     {
       "id": "skill:writing-clearly-and-concisely",

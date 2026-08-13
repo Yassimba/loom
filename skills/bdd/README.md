@@ -2,6 +2,19 @@
 
 An agent skill for Behavior-Driven Development. The agent agrees on concrete examples in business language before it writes any test code.
 
+## BDD and Gherkin in one minute
+
+BDD is a way to agree on what software must do before you build it. Business and developers discuss concrete examples until they share one understanding. Gherkin records those examples in a form anyone can read:
+
+```gherkin
+Scenario: Transfer within the daily limit
+  Given Alice has $430 in her checking account
+  When Alice transfers $125 to Bob
+  Then Alice's checking balance is $305
+```
+
+Each scenario is a specification and a test at the same time. `Given` sets the context, `When` triggers one action, `Then` checks the visible result.
+
 ## What it does
 
 The agent follows four steps:
@@ -12,6 +25,13 @@ The agent follows four steps:
 4. **Refactor**: clean the glue code. The scenario language stays stable.
 
 When you ask for a review, the agent stops after step 2. It reports findings and changes no files.
+
+## Which framework?
+
+Who writes the Gherkin decides:
+
+- **Developers write it, domain experts review it**: use pytest-bdd. The scenarios live inside the pytest suite and run with the rest of the tests.
+- **The business writes it**: use behave. Feature files are the entry point, so non-developers own them without touching test code.
 
 ## Files
 

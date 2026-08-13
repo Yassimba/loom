@@ -1,10 +1,10 @@
 ---
-description: 7 refactoring patterns with before/after Python code — load when applying a change.
+description: 10 refactoring patterns with before/after Python code — load when applying a change.
 ---
 
 # Refactoring Pattern Catalog
 
-7 refactoring patterns with before/after Python code. The shapes generalize to any language; the concrete Python smells live in [python.md](python.md).
+10 refactoring patterns with before/after Python code. The shapes generalize to any language; the concrete Python smells live in [python.md](python.md).
 
 ---
 
@@ -371,3 +371,138 @@ class TemplateRenderer[T]:
 ```
 
 **Why:** The protocol defines the contract. `ASTRenderer` and `TemplateRenderer` are convenience bases — any class with `render()` and `filename()` satisfies the protocol without inheriting anything.
+
+---
+
+## 8. Parse, Don't Validate
+
+**Smell:** A raw value is checked, then passed on as the same raw type — so every downstream function re-checks it. This is the root cause behind defensive slop: interior null checks and try/except exist because no type carries the proof of validity.
+
+### Before
+
+```python
+def update_server(version: str) -> None:
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError(f"Bad version: {version}")
+    stop_server()
+    install(version)  # still a raw string
+
+def install(version: str) -> None:
+    if not version:  # paranoid re-validation
+        raise ValueError("missing version")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):  # checked again
+        raise ValueError(f"Bad version: {version}")
+    ...
+```
+
+### After
+
+```python
+@dataclass(frozen=True, slots=True)
+class Version:
+    major: int
+    minor: int
+    patch: int
+
+    @classmethod
+    def parse(cls, raw: str) -> Version:
+        major, minor, patch = map(int, raw.split("."))
+        return cls(major, minor, patch)
+
+def update_server(raw: str) -> None:
+    version = Version.parse(raw)  # validated once, at the boundary
+    stop_server()
+    install(version)              # trusted from here on
+
+def install(version: Version) -> None:
+    ...  # no checks — the type is the proof
+```
+
+**Why:** Validation happens once and produces a type that carries the proof. Every interior re-check becomes deletable, not just discouraged — the type checker enforces what the runtime checks used to.
+
+---
+
+## 9. Make Illegal States Unrepresentable
+
+**Smell:** Mutually exclusive states modeled as nullable fields plus booleans, so most constructible combinations are meaningless.
+
+### Before
+
+```python
+@dataclass
+class Server:
+    starting: bool = False
+    ready: bool = False
+    url: str | None = None
+    error: str | None = None
+# what does starting=True, ready=True, error="boom" mean?
+```
+
+### After
+
+```python
+@dataclass(frozen=True, slots=True)
+class Stopped: ...
+
+@dataclass(frozen=True, slots=True)
+class Starting: ...
+
+@dataclass(frozen=True, slots=True)
+class Ready:
+    url: str
+
+@dataclass(frozen=True, slots=True)
+class Failed:
+    error: str
+
+type ServerState = Stopped | Starting | Ready | Failed
+
+def describe(state: ServerState) -> str:
+    match state:
+        case Ready(url=url):
+            return f"serving at {url}"
+        case Failed(error=error):
+            return f"failed: {error}"
+        case _:
+            return "not ready"
+```
+
+**Why:** Only the four legal states can be constructed. `Ready` always has a URL, `Failed` always has an error — the null checks and flag cross-checks that guarded the old bag disappear.
+
+---
+
+## 10. Happy-Path Orchestration
+
+**Smell:** A use-case function owning every mechanic — argument checking, process plumbing, output parsing, state surgery — so the actual flow is invisible.
+
+### Before
+
+```python
+def update(raw_version: str) -> None:
+    if not raw_version:
+        raise ValueError("missing version")
+    proc = subprocess.run(["cli", "install", raw_version], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr)
+    out = subprocess.run(["cli", "--version"], capture_output=True, text=True)
+    installed = out.stdout.strip().removeprefix("cli ")
+    if installed != raw_version:
+        raise RuntimeError(f"expected {raw_version}, got {installed}")
+    for p in psutil.process_iter():
+        if p.name() == "server":
+            p.kill()
+    subprocess.Popen(["server", "--daemon"])
+```
+
+### After
+
+```python
+def update(raw_version: str) -> None:
+    version = Version.parse(raw_version)
+    server.stop()
+    cli.install(version)
+    cli.require_version(version)
+    server.start()
+```
+
+**Why:** The use case reads like English; each line hides real mechanics behind a deep, named boundary. The failure mode to avoid while extracting is shrapnel — `prepare_update()` / `do_update()` / `finish_update()` renames steps without hiding anything. Extract operations (`cli.install`), not phases.
