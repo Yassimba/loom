@@ -423,7 +423,7 @@
       "kind": "skill",
       "group": "Architecture",
       "label": "quick-lineage",
-      "description": "Show a colored call graph in chat, fast — no files, no viewer, no gate. Use when the user wants to see the call graph or flow of a function, command, or object under discussion; after changes land, to show what they did to the flow; or before making changes, to show what you are about to do to it.",
+      "description": "Show an ASCII call graph with per-hop data in- and outflow in chat, fast — no files, no viewer, no gate. Use when the user wants to see the call graph or flow of a function, command, or object under discussion; after changes land, to show what they did to the flow; or before making changes, to show what you are about to do to it.",
       "installTarget": "quick-lineage",
       "nextAction": "Ask your coding agent to use the quick-lineage skill.",
       "dependencies": ["calldiff", "npm:calldiff"]
