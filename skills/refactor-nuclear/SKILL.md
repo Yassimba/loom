@@ -132,6 +132,24 @@ When you identify a code-quality problem, prefer suggestions like:
 Do not be satisfied with "maybe rename this" feedback when the real issue is structural.
 Do not be satisfied with a merely cleaner version of the same messy idea if there is a plausible path to a much simpler idea.
 
+## Suggest First
+
+Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the problem and the remedy with its concrete benefit, followed by:
+
+This is what the code looks like before:
+
+<before-snippet>
+the current code, trimmed to the lines that change
+</before-snippet>
+
+and after:
+
+<after-snippet>
+the proposed code
+</after-snippet>
+
+Wait for the user's picks; apply only the picks.
+
 ## Review Tone
 
 Be direct, serious, and demanding about quality.
