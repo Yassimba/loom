@@ -732,6 +732,17 @@
       "companions": []
     },
     {
+      "id": "tool:tuicr",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "tuicr",
+      "description": "Code review TUI with vim keybindings — annotate diffs, PRs, or MRs and export to GitHub or clipboard.",
+      "installTarget": "github:agavra/tuicr",
+      "nextAction": "Run `tuicr` in a repo with changes.",
+      "bin": "tuicr",
+      "companions": []
+    },
+    {
       "id": "tool:gh",
       "kind": "tool",
       "group": "Tools",

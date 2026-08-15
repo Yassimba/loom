@@ -20,6 +20,13 @@
       "nextAction": "Run `calldiff diff` in a git repository."
     },
     {
+      "key": "github:agavra/tuicr",
+      "label": "tuicr",
+      "bin": "tuicr",
+      "description": "Code review TUI with vim keybindings — annotate diffs, PRs, or MRs and export to GitHub or clipboard.",
+      "nextAction": "Run `tuicr` in a repo with changes."
+    },
+    {
       "key": "gh",
       "label": "gh",
       "description": "GitHub CLI — the release, code-review, and jira skills use it for PRs and issues.",

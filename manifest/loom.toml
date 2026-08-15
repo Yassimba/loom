@@ -29,6 +29,9 @@ herdr = { version = "0.8.0", os = ["macos", "linux"] }
 # call-stack diffing for agentic code review
 "npm:calldiff" = "0.5.0"
 
+# code review TUI (annotate diffs, export to GitHub or clipboard)
+"github:agavra/tuicr" = "v0.22.0"
+
 # forges
 gh = "2.97.0"
 glab = "1.112.0"
