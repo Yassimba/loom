@@ -1,51 +1,89 @@
 ---
 name: refactor
-description: Happy-path-first design — deep modules, type-driven invariants, evidence-driven complexity, patterns that pay rent. Use when the user says "refactor", "simplify", "modernize", or when a change's design should read use-case-first.
+description: Refactor with clear orchestration, strong interfaces, and happy-path-first design
 ---
 
-# Refactor
-
-Optimize the design for the normal user flow. If the happy path is 95% of runtime behavior, it should be approximately 95% of the code readers see.
+Refactor the requested code, but optimize the design for the normal user flow. If the happy path is 95% of runtime behavior, it should be approximately 95% of the code readers see.
 
 Start with context:
 
-- inspect the existing code, callsites, data flow
+- inspect the existing code, callsites, data flow, and nearby conventions
 - understand the real use case before choosing abstractions
 - preserve good repository patterns; do not impose a generic architecture
 
-**Reinvented wheels first:** before designing anything, check the ecosystem — hand-rolled logic yields to the stdlib, a dependency already in the project has (new) functionality that can clean up our implementation a lot or a great package for the usecase. 
+## Suggest First
 
-The best code is code you don't write!
+Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the change and its concrete benefit, followed by:
 
-**Suggest first:** invoke the `write-simply` skill then propose before changing — a numbered list, each item one sentence plus a before → after snippet. The user picks; apply only the picks.
+This is what the code looks like before:
 
-**Measure:** on Python projects, `complexipy <target>` flags too-complex functions — prime suggestion candidates. Run `tokei <modules>` before and after, and end with the per-module line delta. Offer to install a missing tool (`uvx complexipy`, `brew install tokei`).
+<before-snippet>
+the current code, trimmed to the lines that change
+</before-snippet>
+
+and after:
+
+<after-snippet>
+the proposed code
+</after-snippet>
+
+Wait for the user's picks; apply only the picks.
 
 ## Design Vocabulary
 
 Translate the intent into established software design language:
 
-| Desired quality | Established terminology |
-| --- | --- |
-| Main methods read almost like English | Composed Method, intention-revealing interface, use-case orchestration |
-| Orchestrators call well-named services | Application Service, Use Case Interactor, Transaction Script |
-| Ugly mechanics stay below a clean interface | Information hiding, deep modules, complexity pulled downward |
-| Domain logic does not contain process and network code | Functional Core / Imperative Shell, Ports and Adapters |
-| Code is organized around user behavior | Vertical Slice Architecture, use-case-driven architecture, Screaming Architecture |
-| Types enforce invariants | Type-driven design, making illegal states unrepresentable |
-| Boundary checks produce trusted values | Parse, Don't Validate, smart constructors, refinement types |
-| Constructors and assertions enforce contracts | Design by Contract, preconditions, postconditions, invariants |
-| Invalid conditions leave before the normal flow | Guard clauses, fail-fast design |
-| Imagined requirements do not create code | YAGNI, evolutionary design, avoid speculative generality |
-| Reuse follows real repetition | Rule of Three, semantic compression |
-| Helpers hide meaningful complexity | Deep rather than shallow modules, locality of behavior |
-| State and behavior have one owner | Encapsulation, Tell Don't Ask, Information Expert |
+| Desired quality                                        | Established terminology                                                           |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Main methods read almost like English                  | Composed Method, intention-revealing interface, use-case orchestration            |
+| Orchestrators call well-named services                 | Application Service, Use Case Interactor, Transaction Script                      |
+| Ugly mechanics stay below a clean interface            | Information hiding, deep modules, complexity pulled downward                      |
+| Domain logic does not contain process and network code | Functional Core / Imperative Shell, Ports and Adapters                            |
+| Code is organized around user behavior                 | Vertical Slice Architecture, use-case-driven architecture, Screaming Architecture |
+| Types enforce invariants                               | Type-driven design, making illegal states unrepresentable                         |
+| Boundary checks produce trusted values                 | Parse, Don't Validate, smart constructors, refinement types                       |
+| Constructors and assertions enforce contracts          | Design by Contract, preconditions, postconditions, invariants                     |
+| Invalid conditions leave before the normal flow        | Guard clauses, fail-fast design                                                   |
+| Imagined requirements do not create code               | YAGNI, evolutionary design, avoid speculative generality                          |
+| Reuse follows real repetition                          | Rule of Three, semantic compression                                               |
+| Helpers hide meaningful complexity                     | Deep rather than shallow modules, locality of behavior                            |
+| State and behavior have one owner                      | Encapsulation, Tell Don't Ask, Information Expert                                 |
 
-When deeper design work is required, the primary sources and reading order live in [references/sources.md](references/sources.md).
+## Source Material
+
+Use these established design ideas as practical tools, not doctrine:
+
+- **deep modules and complexity pulled downward** from John Ousterhout's [A Philosophy of Software Design](https://stanford.edu/~ouster/cgi-bin/aposd.php) and his [discussion with Robert Martin](https://github.com/johnousterhout/aposd-vs-clean-code)
+- **functional core, imperative shell** and value boundaries from Gary Bernhardt's [Boundaries](https://www.destroyallsoftware.com/talks/boundaries) and [Functional Core, Imperative Shell](https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell)
+- **type-driven design and making illegal states unrepresentable** from Scott Wlaschin's [designing with types](https://fsharpforfunandprofit.com/posts/designing-with-types-making-illegal-states-unrepresentable/) and [Domain Modeling Made Functional](https://pragprog.com/titles/swdddf/domain-modeling-made-functional/)
+- **parse, don't validate** from [Alexis King](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+- **Design by Contract** through preconditions, postconditions, assertions, and invariants from [Bertrand Meyer and Eiffel](https://www.eiffel.org/doc/solutions/Design_by_Contract_and_Assertions)
+- **guard clauses** from Fowler's [Replace Nested Conditional with Guard Clauses](https://refactoring.com/catalog/replaceNestedConditionalWithGuardClauses.html)
+- **YAGNI and evolutionary design** from Fowler's [YAGNI](https://martinfowler.com/bliki/Yagni.html)
+- **semantic compression** and waiting for real examples before extracting reuse from [Casey Muratori](https://caseymuratori.com/blog_0015)
+- **ports and adapters** from Cockburn's original [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
+- **vertical slices** from Jimmy Bogard's [Vertical Slice Architecture](https://www.jimmybogard.com/vertical-slice-architecture/)
+- **use-case-driven structure** from [Screaming Architecture](https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html) and simple request workflows from Fowler's [Transaction Script](https://martinfowler.com/eaaCatalog/transactionScript.html)
+- **locality of behavior** from [Carson Gross](https://htmx.org/essays/locality-of-behaviour/) and pragmatic complexity control from [The Grug Brained Developer](https://grugbrain.dev/)
+- **encapsulation and behavior ownership** from Fowler's balanced treatment of [Tell, Don't Ask](https://martinfowler.com/bliki/TellDontAsk.html)
 
 ## Patterns Must Pay Rent
 
 Patterns, layers, abstractions, objects, interfaces, and files are costs. Use them only when they produce a concrete readability, maintenance, correctness, testing, or change-isolation gain larger than their cost.
+
+Direct references for this principle:
+
+- Sandi Metz, [The Wrong Abstraction](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction): "duplication is far cheaper than the wrong abstraction" and "prefer duplication over the wrong abstraction"
+- Kent C. Dodds, [AHA Programming](https://kentcdodds.com/blog/aha-programming): Avoid Hasty Abstractions; wait until real use cases reveal the common shape
+- Dan Abramov, [Goodbye, Clean Code](https://overreacted.io/goodbye-clean-code/): removing duplication can reduce the ability to change requirements and make code less maintainable
+- John Ousterhout, [A Philosophy of Software Design](https://stanford.edu/~ouster/cgi-bin/aposd.php): deep modules hide substantial complexity behind small interfaces; shallow modules and classitis add interfaces without reducing cognitive load
+- Jimmy Bogard, [Vertical Slice Architecture](https://www.jimmybogard.com/vertical-slice-architecture/): reject mandatory `Controller -> Service -> Repository` gates and let each use case adopt only the structure it needs
+- Martin Fowler, [YAGNI](https://martinfowler.com/bliki/Yagni.html): speculative capabilities and abstractions impose build cost, delay cost, carry cost, and repair cost
+- Martin Fowler, [Beck Design Rules](https://martinfowler.com/bliki/BeckDesignRules.html): after correctness, intention, and duplication, prefer the fewest possible classes and methods
+- Casey Muratori, [Semantic Compression](https://caseymuratori.com/blog_0015): make code usable before making it reusable; extract only after real examples expose the shared semantics
+- Carson Gross, [The Grug Brained Developer](https://grugbrain.dev/): do not factor too early; wait for narrow, stable cut points to emerge from working code
+- Joel Spolsky, [Don't Let Architecture Astronauts Scare You](https://www.joelonsoftware.com/2001/04/21/dont-let-architecture-astronauts-scare-you/): abstraction can rise so far above the real user problem that it stops producing useful software
+- Carson Gross, [Locality of Behaviour](https://htmx.org/essays/locality-of-behaviour/): an abstraction is harmful when readers must search distant files to discover what a local unit does
 
 - architecture must be proportional to the real problem
 - a pattern name is vocabulary for a design that emerged, not a requirement to manufacture that design
@@ -57,41 +95,37 @@ Patterns, layers, abstractions, objects, interfaces, and files are costs. Use th
 - do not create `Controller -> Service -> Repository` chains because a diagram, framework, blog post, or pattern says they should exist
 - prefer a simple direct method until real domain complexity gives the code a natural cut point
 
-**Pattern reference:** [references/python-patterns/](references/python-patterns/README.md) holds reference implementations of the classic patterns. Check it both ways while reviewing: 
-(1) something here becomes clearer with a pattern shown there; 
-(2) we already use a similar pattern —> clean our implementation against the reference. 
-
-Rent still applies.
-
 Screaming Architecture does not mean "add architecture layers." It means the system should reveal its domain and use cases instead of its frameworks. `invoice/pay.py` can scream the use case more clearly than `controllers/`, `services/`, and `repositories/` full of pass-through methods.
 
 DON'T apply a repository pattern to ten obvious lines:
 
 ```python
 class UserController:
-    def __init__(self, service: UserService):
+    def __init__(self, service: UserService) -> None:
         self.service = service
 
-    def get(self, id: str) -> User:
-        return self.service.get(id)
+    def get(self, user_id: str) -> User:
+        return self.service.get(user_id)
+
 
 class UserService:
-    def __init__(self, repository: UserRepository):
+    def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 
-    def get(self, id: str) -> User:
-        return self.repository.get(id)
+    def get(self, user_id: str) -> User:
+        return self.repository.get(user_id)
+
 
 class UserRepository:
-    def get(self, id: str) -> User:
-        return database.select_user(id)
+    def get(self, user_id: str) -> User:
+        return database.select_user(user_id)
 ```
 
 DO keep a simple use case simple:
 
 ```python
-async def get_user(id: UserId) -> User:
-    return await database.select_user(id)
+async def get_user(user_id: UserId) -> User:
+    return await database.select_user(user_id)
 ```
 
 Add a repository later only when data access becomes a meaningful domain port or hides stable complexity that callers should not know.
@@ -112,17 +146,18 @@ Top-level methods coordinate a use case. They should call well-named domain meth
 DON'T make the orchestrator own every detail:
 
 ```python
-async def update(input: str) -> None:
-    if not input:
+async def update(raw_version: str) -> None:
+    if not raw_version:
         raise ValueError("missing version")
-    result = subprocess.run(["wsl", "bash", "-lc", build_script(input)], capture_output=True, text=True)
-    if result.returncode != 0:
+    process = await asyncio.create_subprocess_exec("wsl", "bash", "-lc", build_script(raw_version))
+    result = await collect_output(process)
+    if result.code != 0:
         raise RuntimeError(result.stderr)
-    installed = parse_version(run_version_command())
-    if installed != input:
+    installed = parse_version(await run_version_command())
+    if installed != raw_version:
         raise RuntimeError("wrong version")
-    kill_existing_process()
-    start_process()
+    await kill_existing_process()
+    await start_process()
 ```
 
 DO expose the use case and push mechanics behind deep boundaries:
@@ -165,7 +200,7 @@ Use the type system as design:
 - parse and validate external, persisted, IPC, and network data once at the boundary
 - use domain types for meaningful IDs, versions, paths, URLs, states, and results
 - return values that answer the caller's actual question
-- do not use `any`, loose string protocols, or nullable states when a precise type can express the contract
+- do not use `Any`, loose string protocols, or nullable states when a precise type can express the contract
 
 Make invariants executable:
 
@@ -179,14 +214,14 @@ Make invariants executable:
 DON'T validate raw values and then throw away what the check proved:
 
 ```python
-validate_version(input)
-await install(input)  # still a raw string
+validate_version(raw)
+await install(raw)  # still a raw string
 ```
 
 DO parse into a trusted domain value once:
 
 ```python
-version = Version.parse(input)
+version = Version.parse(raw)
 await install(version)
 ```
 
@@ -195,7 +230,7 @@ DON'T represent mutually exclusive states with nullable fields and booleans:
 ```python
 @dataclass
 class Server:
-    starting: bool = False
+    starting: bool
     url: str | None = None
     error: str | None = None
 ```
@@ -206,16 +241,20 @@ DO model the legal states directly:
 @dataclass(frozen=True)
 class Stopped: ...
 
+
 @dataclass(frozen=True)
 class Starting: ...
+
 
 @dataclass(frozen=True)
 class Ready:
     url: ServerUrl
 
+
 @dataclass(frozen=True)
 class Failed:
     error: ServerError
+
 
 type ServerState = Stopped | Starting | Ready | Failed
 ```
@@ -248,7 +287,7 @@ Be aggressively pragmatic:
 DON'T add lifecycle machinery for an imagined race:
 
 ```python
-attempts: dict[Id, int] = {}
+attempts: dict[ServerId, int] = {}
 # counters, stale ownership checks, retries, cleanup, and fallback paths
 # added because two calls might theoretically overlap
 ```
@@ -256,9 +295,9 @@ attempts: dict[Id, int] = {}
 DO implement the observed flow directly:
 
 ```python
-await stop_server(id)
+await stop_server(server_id)
 await install_cli(version)
-await start_server(id)
+await start_server(server_id)
 ```
 
 When a real runtime later reports `Text file busy`, use that evidence to add the smallest owned fix: make `stopServer` await process exit before installation. Do not build a general lifecycle framework.
@@ -285,7 +324,7 @@ return None
 DO reject invalid conditions first and leave the valid path flat:
 
 ```python
-if not config:
+if config is None:
     return None
 if not config.enabled:
     return None
@@ -330,7 +369,7 @@ session.promote(message)
 DON'T leak infrastructure into domain decisions:
 
 ```python
-def promote(message: Message) -> None:
+def promote(self, message: Message) -> None:
     subprocess.run(["wsl.exe", ...])
     database.insert(message)
 ```
@@ -350,7 +389,7 @@ DON'T test the implementation sentence by sentence:
 
 ```python
 assert server_id_for("Debian") == "wsl:Debian"
-assert should_restart(available=False) is True
+assert should_restart(Status(available=False))
 ```
 
 DO test the stable use-case boundary and observable order:
@@ -360,21 +399,24 @@ await controller.update("Debian")
 assert events == ["stop", "install", "verify", "start"]
 ```
 
-Prune and compress the suite:
+## Reading Order
 
-- Delete tests that prove nothing — assignment checks, mirror-the-implementation asserts, tests that cannot fail. Keep only tests that would catch a real regression.
-- Harden while shrinking with property-based testing: Hypothesis in Python; elsewhere suggest the ecosystem's framework (fast-check, proptest, jqwik). Collapse hand-written case lists into properties and strengthen the surviving tests; note `hypothesis.stateful` exists, reach for it only when a stateful model is genuinely warranted.
-- Collapse further with pytest fixtures, shared fixtures in `conftest.py`, and `@pytest.mark.parametrize`.
+When deeper design work is required, prefer this order:
 
-## 11. Smells With Hard Edges
-
-- Thresholds: functions ≤30 lines, nesting ≤2, ≤4 positional parameters.
-- Names: concrete (`data`, `info`, `manager`, `helper` say nothing), honest (a `get_` that also mutates is a lie), booleans read `is_`/`has_`/`can_`; magic numbers become named constants with units.
-- Comments say *why* only — delete what-comments; no `# type: ignore` / cast escapes where a precise type exists.
+1. [A Philosophy of Software Design](https://stanford.edu/~ouster/cgi-bin/aposd.php)
+2. [Ousterhout versus Clean Code](https://github.com/johnousterhout/aposd-vs-clean-code)
+3. [Parse, Don't Validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+4. [Making Illegal States Unrepresentable](https://fsharpforfunandprofit.com/posts/designing-with-types-making-illegal-states-unrepresentable/)
+5. [Functional Core, Imperative Shell](https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell)
+6. [YAGNI](https://martinfowler.com/bliki/Yagni.html)
+7. [Semantic Compression](https://caseymuratori.com/blog_0015)
+8. [Vertical Slice Architecture](https://www.jimmybogard.com/vertical-slice-architecture/)
+9. [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
+10. [Locality of Behaviour](https://htmx.org/essays/locality-of-behaviour/)
 
 ## Completion Standard
 
-Finish the complete change, run focused verification, delete temporary artifacts, and do one final simplification pass. The result should feel boring, obvious, typed, cohesive, and native to the codebase.
+Finish the approved picks completely, run focused verification, delete temporary artifacts, and do one final simplification pass. The result should feel boring, obvious, typed, cohesive, and native to the codebase.
 
 The combined style is: **happy-path-first, use-case-oriented design with deep modules, type-driven invariants, boundary isolation, and evidence-driven complexity.**
 

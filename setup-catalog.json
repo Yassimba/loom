@@ -259,13 +259,43 @@
       "dependencies": []
     },
     {
+      "id": "skill:record-library",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "record-library",
+      "description": "Record a library in the refactor-oss catalog — the package plus the hand-roll it retires — so future scans hunt with it.",
+      "installTarget": "record-library",
+      "nextAction": "Ask your coding agent to use the record-library skill.",
+      "dependencies": []
+    },
+    {
       "id": "skill:refactor",
       "kind": "skill",
       "group": "Coding",
       "label": "refactor",
-      "description": "Happy-path-first design — deep modules, type-driven invariants, evidence-driven complexity, patterns that pay rent. Use when the user says \"refactor\", \"simplify\", \"modernize\", or when a change's design should read use-case-first.",
+      "description": "Refactor with clear orchestration, strong interfaces, and happy-path-first design",
       "installTarget": "refactor",
       "nextAction": "Ask your coding agent to use the refactor skill.",
+      "dependencies": ["write-simply"]
+    },
+    {
+      "id": "skill:refactor-nuclear",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "refactor-nuclear",
+      "description": "Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. Use for a thermo-nuclear code quality review, thermonuclear review, deep code quality audit, or especially harsh maintainability review.",
+      "installTarget": "refactor-nuclear",
+      "nextAction": "Ask your coding agent to use the refactor-nuclear skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:refactor-tests",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "refactor-tests",
+      "description": "Refactor a test suite — prune tests that prove nothing, collapse case lists into properties, parametrize, and measure the shrink. Use after a refactor lands, when tests mirror the implementation, or when the suite's cost outgrows the faults it catches.",
+      "installTarget": "refactor-tests",
+      "nextAction": "Ask your coding agent to use the refactor-tests skill.",
       "dependencies": ["write-simply"]
     },
     {
@@ -317,6 +347,16 @@
       "installTarget": "terraform-engineer",
       "nextAction": "Ask your coding agent to use the terraform-engineer skill.",
       "dependencies": []
+    },
+    {
+      "id": "skill:ticket-overview",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ticket-overview",
+      "description": "Beads/BV ticket map with ASCII dependencies and product context. Use when the user asks for: (1) the complete issue graph, (2) roadmap workstreams and execution leverage, or (3) what a set of tickets is building.",
+      "installTarget": "ticket-overview",
+      "nextAction": "Ask your coding agent to use the ticket-overview skill.",
+      "dependencies": ["write-simply"]
     },
     {
       "id": "skill:to-spec",
