@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refactor Patterns"
+  short_description: "Apply classic patterns where they pay rent"
+  default_prompt: "Use $refactor-patterns to apply or align classic design patterns in this code."

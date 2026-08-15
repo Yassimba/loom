@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ticket Overview"
+  short_description: "Explain a Beads ticket graph in context"
+  default_prompt: "Use $ticket-overview to explain the complete ticket graph and its main workstreams."

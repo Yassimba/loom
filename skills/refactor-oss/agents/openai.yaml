@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refactor OSS"
+  short_description: "Replace hand-rolled code with ecosystem packages, scoped or repo-wide"
+  default_prompt: "Use $refactor-oss to replace hand-rolled code with stdlib or package functionality."
