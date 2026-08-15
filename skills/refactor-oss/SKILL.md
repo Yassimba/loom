@@ -26,19 +26,19 @@ Done when you can say, for the scope, which packages are available and which cat
 
 For each piece of hand-rolled machinery in scope, apply the catalog's standing orders ([LIBRARIES.md](LIBRARIES.md)).
 
-Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the hand-roll, its replacement, and the code it deletes, followed by:
+Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the hand-roll, its replacement, and the code it deletes, followed by two fenced Markdown code blocks tagged with the code's source language:
 
 This is what the code looks like before:
 
-<before-snippet>
+```LANGUAGE
 the current code, trimmed to the lines that change
-</before-snippet>
+```
 
 and after:
 
-<after-snippet>
+```LANGUAGE
 the proposed code
-</after-snippet>
+```
 
 Custom code that is genuinely the right call — error recovery, domain-specific semantics, code smaller than the dependency it would pull in — is listed as keep-with-reason instead of a suggestion.
 
