@@ -134,19 +134,19 @@ Do not be satisfied with a merely cleaner version of the same messy idea if ther
 
 ## Suggest First
 
-Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the problem and the remedy with its concrete benefit, followed by:
+Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the problem and the remedy with its concrete benefit, followed by two fenced Markdown code blocks tagged with the code's source language:
 
 This is what the code looks like before:
 
-<before-snippet>
+```LANGUAGE
 the current code, trimmed to the lines that change
-</before-snippet>
+```
 
 and after:
 
-<after-snippet>
+```LANGUAGE
 the proposed code
-</after-snippet>
+```
 
 Wait for the user's picks; apply only the picks.
 

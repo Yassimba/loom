@@ -9,19 +9,19 @@ Refactor the requested tests so every surviving test proves behavior through a s
 
 ## Suggest First
 
-Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the change and the production fault the surviving test still catches, followed by:
+Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the change and the production fault the surviving test still catches, followed by two fenced Markdown code blocks tagged with the code's source language:
 
 This is what the code looks like before:
 
-<before-snippet>
+```LANGUAGE
 the current test code, trimmed to the lines that change
-</before-snippet>
+```
 
 and after:
 
-<after-snippet>
+```LANGUAGE
 the proposed test code
-</after-snippet>
+```
 
 Wait for the user's picks; apply only the picks.
 
