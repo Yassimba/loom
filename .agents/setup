@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+run_step() {
+	local label="$1"
+	shift
+	printf '\n[setup] %s\n' "$label"
+	time "$@"
+}
+
+missing_packages=()
+command -v curl >/dev/null 2>&1 || missing_packages+=(curl)
+command -v cc >/dev/null 2>&1 || missing_packages+=(build-essential)
+command -v rsync >/dev/null 2>&1 || missing_packages+=(rsync)
+
+if ((${#missing_packages[@]})); then
+	run_step "update apt metadata" sudo apt-get update
+	run_step "install system packages: ${missing_packages[*]}" sudo apt-get install -y "${missing_packages[@]}"
+fi
+
+mise_bin="$HOME/.local/bin/mise"
+if [[ ! -x "$mise_bin" ]]; then
+	run_step "install mise" bash -c 'curl -fsSL https://mise.run | sh'
+fi
+
+profile_marker="# loom mise activation"
+touch "$HOME/.bash_profile"
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile"; then
+	cat >>"$HOME/.bash_profile" <<'EOF'
+
+# loom mise activation
+if [[ -x "$HOME/.local/bin/mise" ]]; then
+	eval "$("$HOME/.local/bin/mise" activate bash)"
+fi
+EOF
+fi
+
+export MISE_YES=1
+run_step "trust contributor tool configuration" "$mise_bin" trust mise.toml
+run_step "install pinned Node and Rust toolchains" "$mise_bin" install
+run_step "install npm dependencies from package-lock.json" "$mise_bin" exec -- npm ci
+
+printf '\n[setup] complete\n'

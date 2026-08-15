@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This repository has no persistent services or tunnels to repair on wake.
+printf '[resume] no reconnect work required\n'
