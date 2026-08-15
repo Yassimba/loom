@@ -3,18 +3,38 @@
   "releases": [
     {
       "id": "loom",
-      "version": "0.10.1",
-      "tag": "loom-v0.10.1",
-      "bump": "patch",
+      "version": "0.11.0",
+      "tag": "loom-v0.11.0",
+      "bump": "minor",
       "distribution": "rust-binary",
       "commits": [
         {
-          "hash": "503aacfef9758213a7ac70311d37c267e77de396",
-          "subject": "fix(bootstrap): verify clean installs across platforms (#45)"
+          "hash": "3fe285f07f4c63da58df22bff34496566c792bfd",
+          "subject": "feat(skills): split refactor into a family; add refactor-nuclear"
         },
         {
-          "hash": "fb7628eaf39f9c5d0cb6e7273d8c53c359b7acdf",
-          "subject": "fix(bootstrap): recover Linux installs without Rust (#43)"
+          "hash": "6deb25618452a0f9d40ad57952bdd8807ab620af",
+          "subject": "feat(quick-lineage): render ASCII call graph with per-hop dataflow"
+        },
+        {
+          "hash": "9d1ac9f604c7e8499b1ac680c7c641c879f8a475",
+          "subject": "feat(tools): replace stackdiff with calldiff"
+        },
+        {
+          "hash": "1b37fde9e530fcb8cb4a167ec68282fb636704f0",
+          "subject": "feat(skills): add write-simply, guided-review, whats-next; redo refactor"
+        },
+        {
+          "hash": "4b2737c520f7e9d0d44c3c0512300ffb405fe559",
+          "subject": "docs(skills): bdd readme and references/ layout"
+        },
+        {
+          "hash": "ce8a29d4f396611f1169a3212a5306655d59d578",
+          "subject": "feat(skills): bdd — examples-first specs with pytest-bdd and behave"
+        },
+        {
+          "hash": "d4e8c828267d7b5348276af17fe1beb827aea6ef",
+          "subject": "fix(next): report ready epics when no leaf task exists"
         }
       ]
     }
