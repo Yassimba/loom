@@ -135,18 +135,21 @@ function binaryCliComponent(repoRoot, id, paths) {
   };
 }
 
-function cliComponent(repoRoot, pluginsRoot) {
-  return binaryCliComponent(repoRoot, "loom", [
-    "cli/loom",
-    "install.sh",
-    "install.ps1",
-    "setup-catalog.json",
-    "skills",
-    "skills.sh.json",
-    "scripts/catalog-lib.mjs",
-    "scripts/generate-setup-catalog.mjs",
-    ...pluginManifestPaths(repoRoot, pluginsRoot),
-  ]);
+function cliComponents(repoRoot, pluginsRoot) {
+  return [
+    binaryCliComponent(repoRoot, "loom", [
+      "cli/loom",
+      "install.sh",
+      "install.ps1",
+      "setup-catalog.json",
+      "skills",
+      "skills.sh.json",
+      "scripts/catalog-lib.mjs",
+      "scripts/generate-setup-catalog.mjs",
+      ...pluginManifestPaths(repoRoot, pluginsRoot),
+    ]),
+    binaryCliComponent(repoRoot, "loom-teams", ["cli/loom-teams"]),
+  ];
 }
 
 export function discoverReleaseComponents(repoRoot) {
@@ -154,7 +157,7 @@ export function discoverReleaseComponents(repoRoot) {
   const plugins = readdirSync(pluginsRoot, { withFileTypes: true })
     .map((entry) => pluginComponent(repoRoot, pluginsRoot, entry))
     .filter(Boolean);
-  return [...plugins, cliComponent(repoRoot, pluginsRoot)]
+  return [...plugins, ...cliComponents(repoRoot, pluginsRoot)]
     .filter(Boolean)
     .sort((left, right) => left.id.localeCompare(right.id));
 }
