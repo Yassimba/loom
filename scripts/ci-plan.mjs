@@ -43,7 +43,8 @@ export function createCiPlan(repoRoot, files) {
   }));
   const windows = affected
     .filter((component) => {
-      if (component.id === "loom") return true;
+      // Repo-owned binary CLIs (cli/<name>) ship Windows release targets.
+      if (component.path.replaceAll("\\", "/").startsWith("cli/")) return true;
       if (!component.herdrManifestPath) return false;
       return /platforms\s*=\s*\[[^\]]*"windows"/s.test(
         readFileSync(join(repoRoot, component.herdrManifestPath), "utf8"),

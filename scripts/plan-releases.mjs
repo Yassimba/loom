@@ -114,18 +114,17 @@ function updateVersion(component, version) {
     replaceTomlVersion(join(repoRoot, component.herdrManifestPath), version);
   }
   // The published mise manifest pins this repo's own binaries; keep each
-  // component's pin in step with its release. A commented-out pin (a binary
-  // not yet in the manifest) is left alone.
-  if (component.id === "loom") {
-    const manifestTomlPath = join(repoRoot, "manifest", "loom.toml");
-    const raw = readFileSync(manifestTomlPath, "utf8");
-    const pinPattern = new RegExp(
-      `^("github:Yassimba/loom\\[exe=${component.id}\\]" = \\{ version = ")[^"]+`,
-      "m",
-    );
-    if (pinPattern.test(raw)) {
-      writeFileSync(manifestTomlPath, raw.replace(pinPattern, `$1${component.id}-v${version}`));
-    }
+  // component's pin in step with its release. A missing pin (a binary not
+  // in the manifest) is left alone.
+  const manifestTomlPath = join(repoRoot, "manifest", "loom.toml");
+  if (!existsSync(manifestTomlPath)) return;
+  const raw = readFileSync(manifestTomlPath, "utf8");
+  const pinPattern = new RegExp(
+    `^("github:Yassimba/loom\\[exe=${component.id}\\]" = \\{ version = ")[^"]+`,
+    "m",
+  );
+  if (pinPattern.test(raw)) {
+    writeFileSync(manifestTomlPath, raw.replace(pinPattern, `$1${component.id}-v${version}`));
   }
 }
 
