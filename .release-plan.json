@@ -3,38 +3,39 @@
   "releases": [
     {
       "id": "loom",
-      "version": "0.11.0",
-      "tag": "loom-v0.11.0",
+      "version": "0.12.0",
+      "tag": "loom-v0.12.0",
       "bump": "minor",
       "distribution": "rust-binary",
       "commits": [
         {
-          "hash": "3fe285f07f4c63da58df22bff34496566c792bfd",
-          "subject": "feat(skills): split refactor into a family; add refactor-nuclear"
+          "hash": "8f66bf746dc30ed63e18119f699ae6ac6a07be6c",
+          "subject": "feat(loom-teams): add Teams calendar CLI with install pipeline (#50)"
         },
         {
-          "hash": "6deb25618452a0f9d40ad57952bdd8807ab620af",
-          "subject": "feat(quick-lineage): render ASCII call graph with per-hop dataflow"
+          "hash": "35b0666f908b87cb87acd24e8a75ebb24f938539",
+          "subject": "fix(skills): render refactor snippets as code blocks (#49)"
         },
         {
-          "hash": "9d1ac9f604c7e8499b1ac680c7c641c879f8a475",
-          "subject": "feat(tools): replace stackdiff with calldiff"
+          "hash": "33a5a504536609bc870eb1c61abbc86cb4ea157c",
+          "subject": "feat(manifest): add tuicr code review TUI"
         },
         {
-          "hash": "1b37fde9e530fcb8cb4a167ec68282fb636704f0",
-          "subject": "feat(skills): add write-simply, guided-review, whats-next; redo refactor"
-        },
+          "hash": "1137bb32fcaf111bd37fd3cc241744755661bb75",
+          "subject": "feat(skills): add suggest-first gate to refactor-nuclear"
+        }
+      ]
+    },
+    {
+      "id": "loom-teams",
+      "version": "0.2.0",
+      "tag": "loom-teams-v0.2.0",
+      "bump": "initial",
+      "distribution": "rust-binary",
+      "commits": [
         {
-          "hash": "4b2737c520f7e9d0d44c3c0512300ffb405fe559",
-          "subject": "docs(skills): bdd readme and references/ layout"
-        },
-        {
-          "hash": "ce8a29d4f396611f1169a3212a5306655d59d578",
-          "subject": "feat(skills): bdd — examples-first specs with pytest-bdd and behave"
-        },
-        {
-          "hash": "d4e8c828267d7b5348276af17fe1beb827aea6ef",
-          "subject": "fix(next): report ready epics when no leaf task exists"
+          "hash": "8f66bf746dc30ed63e18119f699ae6ac6a07be6c",
+          "subject": "feat(loom-teams): add Teams calendar CLI with install pipeline (#50)"
         }
       ]
     }
