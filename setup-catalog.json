@@ -24,6 +24,25 @@
         "gh",
         "aqua:XAMPPRocky/tokei"
       ]
+    },
+    {
+      "id": "observability",
+      "label": "Datadog / pup",
+      "description": "the pup CLI plus Datadog skills — logs, APM, monitors, debugger, CI flakes",
+      "targets": [
+        "dd-pup",
+        "dd-apm",
+        "dd-logs",
+        "dd-monitors",
+        "dd-debugger",
+        "dd-symdb",
+        "dd-docs",
+        "dd-code-generation",
+        "dd-triage-flaky-test",
+        "dd-unblock-pr",
+        "dd-file-issue",
+        "github:DataDog/pup"
+      ]
     }
   ],
   "resources": [
@@ -34,17 +53,8 @@
       "label": "claude-bridge",
       "description": "Use Claude models inside Pi through your Claude subscription. By elidickinson.",
       "installTarget": "pi-claude-bridge",
-      "version": "0.6.3",
+      "version": "0.7.0",
       "nextAction": "Run /model in Pi and pick a Claude model."
-    },
-    {
-      "id": "pi-package:@yassimba/pi-herdr-worktree",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "Herdr Worktree",
-      "description": "Continue the active Pi session in a fresh Herdr git worktree",
-      "installTarget": "@yassimba/pi-herdr-worktree",
-      "nextAction": "Start Pi and use the installed package."
     },
     {
       "id": "pi-package:@yassimba/pi-openai-fast",
@@ -72,7 +82,7 @@
       "label": "subagents",
       "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
       "installTarget": "pi-subagents",
-      "version": "0.43.0",
+      "version": "0.53.0",
       "nextAction": "Ask Pi to delegate a task to a subagent."
     },
     {
@@ -82,7 +92,7 @@
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "installTarget": "pi-web-access",
-      "version": "0.19.0",
+      "version": "0.24.0",
       "nextAction": "Ask Pi to search the web."
     },
     {
@@ -100,10 +110,10 @@
       "kind": "skill",
       "group": "Coding",
       "label": "blueprint",
-      "description": "Blueprint a change before building it — Mermaid diagrams of the design, held for approval before any code. Use before implementing non-trivial work — proactively or when the user asks to see the design first — or when another skill needs a design-approval gate.",
+      "description": "Blueprint a change before building it — three ASCII views of the design, held for approval before any code. Use before implementing non-trivial work — proactively or when the user asks to see the design first — or when another skill needs a design-approval gate.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
-      "dependencies": ["lineage", "lineage-diff", "mermaid-skill", "npm:calldiff"]
+      "dependencies": ["show-me", "calldiff", "npm:calldiff"]
     },
     {
       "id": "skill:brainstorming",
@@ -466,37 +476,27 @@
       "description": "Show an ASCII call graph with per-hop data in- and outflow in chat, fast — no files, no viewer, no gate. Use when the user wants to see the call graph or flow of a function, command, or object under discussion; after changes land, to show what they did to the flow; or before making changes, to show what you are about to do to it.",
       "installTarget": "quick-lineage",
       "nextAction": "Ask your coding agent to use the quick-lineage skill.",
-      "dependencies": ["calldiff", "npm:calldiff"]
+      "dependencies": ["show-me", "calldiff", "npm:calldiff"]
     },
     {
-      "id": "skill:lineage",
+      "id": "skill:literate-programming",
       "kind": "skill",
       "group": "Architecture",
-      "label": "lineage",
-      "description": "Trace the lineage of a command, function, method, or data object — the end-to-end alternating chain of data objects and the calls that transform them, each call carrying a one-line plain-words description. Use when the user asks for a lineage or how a value flows through a command end to end.",
-      "installTarget": "lineage",
-      "nextAction": "Ask your coding agent to use the lineage skill.",
-      "dependencies": ["writing-clearly-and-concisely", "mermaid-skill"]
-    },
-    {
-      "id": "skill:lineage-diff",
-      "kind": "skill",
-      "group": "Architecture",
-      "label": "lineage-diff",
-      "description": "Render a change as a before/after lineage diff, diff-colored per hop. Use when the user wants a before/after view of what a change did to a flow, or when another skill needs a session's work explained as a flow diff.",
-      "installTarget": "lineage-diff",
-      "nextAction": "Ask your coding agent to use the lineage-diff skill.",
-      "dependencies": ["lineage", "npm:calldiff"]
-    },
-    {
-      "id": "skill:zoom-out",
-      "kind": "skill",
-      "group": "Architecture",
-      "label": "zoom-out",
-      "description": "Zoom out — map the modules and callers around unfamiliar code at a higher layer of abstraction.",
-      "installTarget": "zoom-out",
-      "nextAction": "Ask your coding agent to use the zoom-out skill.",
+      "label": "literate-programming",
+      "description": "Transform a codebase into a literate program — a .lit.md essay that weaves prose, diagrams, and named chunks and tangles back to source. Use when the user asks for a literate program, .lit.md, weave, tangle, or wants the system written as a narrative that can regenerate the files.",
+      "installTarget": "literate-programming",
+      "nextAction": "Ask your coding agent to use the literate-programming skill.",
       "dependencies": []
+    },
+    {
+      "id": "skill:show-me",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "show-me",
+      "description": "Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.",
+      "installTarget": "show-me",
+      "nextAction": "Ask your coding agent to use the show-me skill.",
+      "dependencies": ["write-simply"]
     },
     {
       "id": "skill:drawio-skill",
@@ -513,7 +513,7 @@
       "kind": "skill",
       "group": "Diagrams",
       "label": "mermaid-skill",
-      "description": "Generate Mermaid diagrams as code (.mmd) and export to PNG/SVG/PDF with mmdc. Use when the user wants a diagram — flowchart, sequence, class, ER, state, gantt, git graph, architecture, timeline, mindmap — proactively when explaining a system with 3+ components, a runtime flow, a schema, or a lifecycle, and when another skill (e.g. blueprint) needs a diagram authored or exported to an image.",
+      "description": "Generate Mermaid diagrams as code (.mmd) and export to PNG/SVG/PDF with mmdc. Use when the user wants a diagram — flowchart, sequence, class, ER, state, gantt, git graph, architecture, timeline, mindmap — proactively when explaining a system with 3+ components, a runtime flow, a schema, or a lifecycle, and when another skill (e.g. show-me) needs a diagram authored or exported to an image.",
       "installTarget": "mermaid-skill",
       "nextAction": "Ask your coding agent to use the mermaid-skill skill.",
       "dependencies": ["npm:@mermaid-js/mermaid-cli"]
@@ -537,6 +537,116 @@
       "installTarget": "pptx",
       "nextAction": "Ask your coding agent to use the pptx skill.",
       "dependencies": []
+    },
+    {
+      "id": "skill:dd-apm",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-apm",
+      "description": "APM - traces, services, dependencies, performance analysis.",
+      "installTarget": "dd-apm",
+      "nextAction": "Ask your coding agent to use the dd-apm skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-code-generation",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-code-generation",
+      "description": "Use pup CLI for immediate Datadog operations or generate code for integration into applications",
+      "installTarget": "dd-code-generation",
+      "nextAction": "Ask your coding agent to use the dd-code-generation skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-debugger",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-debugger",
+      "description": "Live Debugger - inspect runtime argument/variable values in production by placing log probes on methods. Use when asked what values a function receives, what parameters look like at runtime, or to capture live data from running services without redeploying.",
+      "installTarget": "dd-debugger",
+      "nextAction": "Ask your coding agent to use the dd-debugger skill.",
+      "dependencies": ["dd-pup", "dd-symdb", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-docs",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-docs",
+      "description": "Datadog docs lookup using docs.datadoghq.com/llms.txt and linked Markdown pages.",
+      "installTarget": "dd-docs",
+      "nextAction": "Ask your coding agent to use the dd-docs skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:dd-file-issue",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-file-issue",
+      "description": "File GitHub issues to the right repository (pup CLI or plugin)",
+      "installTarget": "dd-file-issue",
+      "nextAction": "Ask your coding agent to use the dd-file-issue skill.",
+      "dependencies": ["gh"]
+    },
+    {
+      "id": "skill:dd-logs",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-logs",
+      "description": "Log management - search, pipelines, archives, and cost control.",
+      "installTarget": "dd-logs",
+      "nextAction": "Ask your coding agent to use the dd-logs skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-monitors",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-monitors",
+      "description": "Monitor management - create, update, mute, and alerting best practices.",
+      "installTarget": "dd-monitors",
+      "nextAction": "Ask your coding agent to use the dd-monitors skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-pup",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-pup",
+      "description": "Datadog CLI (pup). OAuth2 auth with token refresh.",
+      "installTarget": "dd-pup",
+      "nextAction": "Ask your coding agent to use the dd-pup skill.",
+      "dependencies": ["github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-symdb",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-symdb",
+      "description": "Symbol Database - search service symbols, find probe-able methods.",
+      "installTarget": "dd-symdb",
+      "nextAction": "Ask your coding agent to use the dd-symdb skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-triage-flaky-test",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-triage-flaky-test",
+      "description": "Load when investigating a specific flaky test. Gets history, failure pattern, and category, then recommends fix, quarantine, or escalate.",
+      "installTarget": "dd-triage-flaky-test",
+      "nextAction": "Ask your coding agent to use the dd-triage-flaky-test skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-unblock-pr",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-unblock-pr",
+      "description": "Load when investigating a failing PR CI pipeline or checking PR health. Attributes each CI failure as flaky, infra, or regression, proposes a targeted action, and reports code coverage.",
+      "installTarget": "dd-unblock-pr",
+      "nextAction": "Ask your coding agent to use the dd-unblock-pr skill.",
+      "dependencies": ["dd-pup", "dd-triage-flaky-test", "github:DataDog/pup"]
     },
     {
       "id": "skill:grill-me",
@@ -606,6 +716,16 @@
       "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
       "installTarget": "research",
       "nextAction": "Ask your coding agent to use the research skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:stop-slop",
+      "kind": "skill",
+      "group": "General",
+      "label": "stop-slop",
+      "description": "Remove AI writing patterns from prose. Use when drafting, editing, or reviewing text to eliminate predictable AI tells.",
+      "installTarget": "stop-slop",
+      "nextAction": "Ask your coding agent to use the stop-slop skill.",
       "dependencies": []
     },
     {

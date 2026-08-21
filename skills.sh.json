@@ -50,9 +50,8 @@
         "explain-code-flow",
         "improve-codebase-architecture",
         "quick-lineage",
-        "lineage",
-        "lineage-diff",
-        "zoom-out"
+        "literate-programming",
+        "show-me"
       ]
     },
     {
@@ -66,6 +65,23 @@
       "skills": ["marp-slide", "pptx"]
     },
     {
+      "title": "Observability",
+      "description": "Datadog via the pup CLI — auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
+      "skills": [
+        "dd-apm",
+        "dd-code-generation",
+        "dd-debugger",
+        "dd-docs",
+        "dd-file-issue",
+        "dd-logs",
+        "dd-monitors",
+        "dd-pup",
+        "dd-symdb",
+        "dd-triage-flaky-test",
+        "dd-unblock-pr"
+      ]
+    },
+    {
       "title": "General",
       "description": "Interviewing, teaching, writing, and note-taking \u2014 skills for the work around the code.",
       "skills": [
@@ -76,6 +92,7 @@
         "jira",
         "no-ai-slop",
         "research",
+        "stop-slop",
         "loom",
         "teach",
         "wizard",

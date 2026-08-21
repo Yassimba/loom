@@ -1,7 +1,7 @@
 # Skills & Tooling
 
 The repo-level context: the shared agent skills, the design-approval family
-(blueprint, lineage, callplan), and the tools they invoke.
+(blueprint, callplan), and the tools they invoke.
 
 ## Language
 
@@ -17,12 +17,12 @@ diffs between two git worlds. A diverged port of the npm `calldiff` package.
 _Avoid_: calldiff (reserve for the upstream npm tool), rust-calldiff
 
 **Blueprint**:
-The Mermaid/HTML design-approval skill — diagrams rendered to a viewer page,
-gated on approval. The heavier sibling the callplan experiment tests against.
+The ASCII design-approval skill — three chat pictures (where it sits, the
+flow, the callgraph), gated on approval.
 
 **Promise**:
-The approved design artifact a build must keep — a blueprint's lineage tab or
-an approved callplan. What verify compares built code against.
+The approved design artifact a build must keep — a blueprint's three ASCII
+views or an approved callplan. What verify compares built code against.
 
 **Drift**:
 Any difference between the promise and the built code's real behavior, found

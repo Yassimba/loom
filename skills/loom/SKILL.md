@@ -5,7 +5,7 @@ description: Set up or troubleshoot Yassimba's curated setup through the loom CL
 
 # Loom
 
-The `loom` CLI is the single setup interface: it syncs exact-pinned tools through mise, copies skills into Claude, Agents, Codex, Pi, and OpenCode trees itself, and delegates Pi packages to Pi. Every install goes through it — the CLI is the installer.
+The `loom` CLI is the single setup interface: it syncs exact-pinned tools through mise, copies skills into Claude, Agents, Codex, Pi, OpenCode, Cursor, and Grok trees itself, and delegates Pi packages to Pi. Every install goes through it — the CLI is the installer.
 
 ## Start
 
@@ -33,7 +33,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 
 - Guided setup (bare `loom` does the same): `loom setup`
 - Add capabilities by name: `loom add --tool <name> --skill <name> --pi-package <name>`
-- Target skill agents: repeat `--agent claude|agents|codex|pi|opencode`; omit it to use detected agents
+- Target skill agents: repeat `--agent claude|agents|codex|pi|opencode|cursor|grok`; omit it to use detected agents
 - Choose skill scope: `--scope global|project` (default: `global`; project resolves the current Git worktree)
 - Scaffold this project's `AGENTS.md` + `CLAUDE.md`: `loom init` (run inside the project; `--python` / `--rust` skip the prompts)
 - Refresh every initialized project's `AGENTS.md` from the templates: `loom sync`

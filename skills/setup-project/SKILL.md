@@ -9,7 +9,7 @@ Scaffold the per-repo configuration that the engineering skills assume:
 
 - **Issue tracker** — where issues live (GitHub by default; local markdown is also supported out of the box)
 - **Domain docs** — where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
-- **Editor** — which editor deep links open in (skills like `lineage-diff` emit clickable `file:line` links)
+- **Editor** — which editor deep links open in (skills that emit clickable `file:line` links)
 
 ## Process
 
@@ -58,7 +58,7 @@ Confirm the layout:
 
 **Section C — Editor.**
 
-> Explainer: Some skills (`lineage-diff`, and any that render clickable source links) emit deep links that open a file at a line in your editor. They need to know which URL scheme your editor answers to. Pick the editor you actually read code in.
+> Explainer: Some skills (`show-me`, and any that render clickable source links) emit deep links that open a file at a line in your editor. They need to know which URL scheme your editor answers to. Pick the editor you actually read code in.
 
 - **VS Code** — `vscode://file/{path}:{line}`
 - **Zed** — `zed://file/{path}:{line}`

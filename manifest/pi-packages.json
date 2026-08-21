@@ -3,14 +3,14 @@
   "packages": [
     {
       "name": "pi-subagents",
-      "version": "0.43.0",
+      "version": "0.53.0",
       "label": "subagents",
       "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
       "nextAction": "Ask Pi to delegate a task to a subagent."
     },
     {
       "name": "pi-web-access",
-      "version": "0.19.0",
+      "version": "0.24.0",
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "nextAction": "Ask Pi to search the web."
@@ -24,7 +24,7 @@
     },
     {
       "name": "pi-claude-bridge",
-      "version": "0.6.3",
+      "version": "0.7.0",
       "label": "claude-bridge",
       "description": "Use Claude models inside Pi through your Claude subscription. By elidickinson.",
       "nextAction": "Run /model in Pi and pick a Claude model."

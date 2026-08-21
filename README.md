@@ -4,12 +4,11 @@ Loom weaves a coding-agent setup into one installable collection: 50+ skills, Pi
 
 ## What's inside
 
-**Agent skills** — 50+ skills for coding agents that read a `skills/` tree (Claude Code, Codex, OpenCode, and Pi included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, and planning. Install one or all of them.
+**Agent skills** — 70+ skills for coding agents that read a `skills/` tree (Claude Code, Codex, OpenCode, and Pi included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, and planning. The Observability group is Datadog via [pup](https://github.com/DataDog/pup) — logs, APM, monitors, live debugger, CI flakes. Install one or all of them.
 
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
 - [**openai-fast**](plugins/openai-fast/) — turn on OpenAI fast mode (the priority service tier) from inside Pi.
-- [**herdr-worktree**](plugins/herdr-worktree/) — continue the current session in a fresh Herdr-managed git worktree.
 - **subagents**, **web-access**, **rewind**, **claude-bridge** — installed straight from their upstream npm packages, [exact-pinned](manifest/pi-packages.json) so they update only when this repo bumps the pin.
 
 ## The engineering flow
@@ -71,9 +70,9 @@ You don't need the CLI — it just drives the tools below, and each one works on
 
 ### Agent skills
 
-The CLI installs skills natively. Pick Claude, Codex, Pi, OpenCode, or the portable Agent Skills tree with repeatable `--agent` flags; choose `--scope project` for the current Git worktree, otherwise installation is global. Omitting `--agent` preserves the convenient default of using the agents already detected on the machine. Dependencies follow the selected skill into exactly the same destinations.
+The CLI installs skills natively. Pick Claude, Codex, Pi, OpenCode, Cursor, Grok, or the portable Agent Skills tree with repeatable `--agent` flags; choose `--scope project` for the current Git worktree, otherwise installation is global. Omitting `--agent` preserves the convenient default of using the agents already detected on the machine. Dependencies follow the selected skill into exactly the same destinations.
 
-Global destinations are `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills`, and `~/.config/opencode/skills`. Project destinations are `.claude/skills`, `.agents/skills` (also Codex's portable project location), `.pi/skills`, and `.opencode/skills`. OpenCode's session adapter follows the same scope, landing in the corresponding `plugins` directory so Beads claims remain resumable.
+Global destinations are `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills`, `~/.config/opencode/skills`, `~/.cursor/skills`, and `~/.grok/skills`. Project destinations are `.claude/skills`, `.agents/skills` (also Codex's portable project location), `.pi/skills`, `.opencode/skills`, `.cursor/skills`, and `.grok/skills`. OpenCode's session adapter follows the same scope, landing in the corresponding `plugins` directory so Beads claims remain resumable.
 
 ```bash
 loom add --skill tdd --yes     # global, for detected agents
@@ -99,7 +98,6 @@ Claude Code users can get the same skills from its marketplace:
 Each Pi package installs on its own:
 
 ```bash
-pi install npm:@yassimba/pi-herdr-worktree
 pi install npm:@yassimba/pi-openai-fast
 pi install npm:pi-subagents
 pi install npm:pi-web-access
@@ -150,6 +148,7 @@ For local Pi extension development, use `scripts/sync-pi-extensions.sh status` a
 This repo builds on other people's work:
 
 - Several of the coding skills are adapted from [Matt Pocock's skills](https://github.com/mattpocock/skills), and the [research](skills/research/SKILL.md) skill is his, copied verbatim.
+- The Datadog `dd-*` skills are copied from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 (Apache 2.0); the `pup` CLI is pinned in the tool manifest.
 - subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); claude-bridge is [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge). All install pinned from upstream npm.
 
 Each package's README and `THIRD_PARTY_NOTICES.md` record the exact upstream version. Thanks, all.
