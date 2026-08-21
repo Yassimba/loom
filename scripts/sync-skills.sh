@@ -38,8 +38,8 @@ DRAFTS="$REPO/drafts"
 PRIMARY="$HOME/.claude/skills"
 
 # link/unlink/status touch all of these. Narrow with
-# --tree claude|agents|codex|pi|opencode.
-TREES=("$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills" "$HOME/.pi/agent/skills" "$HOME/.config/opencode/skills")
+# --tree claude|agents|codex|pi|opencode|cursor|grok.
+TREES=("$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills" "$HOME/.pi/agent/skills" "$HOME/.config/opencode/skills" "$HOME/.cursor/skills" "$HOME/.grok/skills")
 
 say()  { printf '%s\n' "$*"; }
 item() { printf '  %s\n' "$*"; }
@@ -312,10 +312,10 @@ main() {
 
   if [ -n "$want_tree" ]; then
     case "$want_tree" in
-      claude|agents|codex) TREES=("$HOME/.$want_tree/skills") ;;
+      claude|agents|codex|cursor|grok) TREES=("$HOME/.$want_tree/skills") ;;
       pi) TREES=("$HOME/.pi/agent/skills") ;;
       opencode) TREES=("$HOME/.config/opencode/skills") ;;
-      *) die "--tree must be one of: claude agents codex pi opencode" ;;
+      *) die "--tree must be one of: claude agents codex pi opencode cursor grok" ;;
     esac
     PRIMARY="${TREES[0]}"
   fi
@@ -328,7 +328,7 @@ main() {
     unlink)  cmd_unlink "${args[0]:-}" ;;
     promote) cmd_promote "${args[@]+"${args[@]}"}" ;;
     deps)    cmd_deps ;;
-    *) die "usage: $0 {status|link|pull|unlink|promote|deps} [name] [--tree claude|agents|codex|pi|opencode]" ;;
+    *) die "usage: $0 {status|link|pull|unlink|promote|deps} [name] [--tree claude|agents|codex|pi|opencode|cursor|grok]" ;;
   esac
 }
 

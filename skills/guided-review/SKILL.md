@@ -10,7 +10,7 @@ The common joke: a 5-line PR gets 10 comments; a 5000-line PR gets "LGTM" and me
 ## Ground rules
 
 - Invoke the `write-simply` skill (via the Skill tool) — every chunk message follows its register.
-- Use 100× less text than you normally would. Simple is king — and when a chunk can't be explained simply, treat that as a finding: the code may be overly complex, and a simpler solution is *actually* the smarter option. (Code that looks stupidly easy is incredibly difficult to write.)
+- Use 100× less text than you normally would. Simple is king — and when a chunk can't be explained simply, treat that as a finding: the code may be overly complex, and a simpler solution is _actually_ the smarter option. (Code that looks stupidly easy is incredibly difficult to write.)
 - Code is an unfortunate means to an end. If the reviewer doesn't know the end, the guided review failed its job — open with the end, not the code.
 - A tiny visualization says a thousand words: call-site sketches, before/after trees, touch-point maps in small ASCII. A wall of text overloads the reviewer.
 - The user approves every chunk by replying manually in chat. Never call AskUserQuestion — present the chunk, stop, and wait for their message. Approval advances to the next chunk; a question or objection reopens the current one.

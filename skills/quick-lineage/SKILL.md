@@ -5,7 +5,7 @@ description: Show an ASCII call graph with per-hop data in- and outflow in chat,
 
 # Quick Lineage
 
-Give the call graph plus the data in- and outflow, straight into chat. Name the entry and the comparison in one line before running — silently picking is how the wrong graph gets drawn. Use `npx calldiff` (full CLI reference: invoke the `calldiff` skill):
+Give the call graph plus the data in- and outflow, straight into chat. Invoke the `show-me` skill (via the Skill tool) — the graph follows its formats. Name the entry and the comparison in one line before running — silently picking is how the wrong graph gets drawn. Use `npx calldiff` (full CLI reference: invoke the `calldiff` skill):
 
 - Current shape: `npx calldiff tree --entry <entry> --maxDepth 2 --locs` (add `<ref>` for a past world)
 - What changed: `npx calldiff diff --entry <entry> --maxDepth 2` — git-diff semantics: no refs → HEAD vs worktree

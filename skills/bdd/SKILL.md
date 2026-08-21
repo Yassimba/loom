@@ -14,7 +14,6 @@ Two automation layers are bundled: [pytest-bdd](references/pytest-bdd.md) and [b
 Gate every "add a BDD test" impulse:
 
 - The behavior is stable and business-meaningful — not scaffolding, framework glue, or an implementation still finding its shape.
-- The scenario states a user intent or observable outcome, not internal mechanics.
 - The sentence helps someone imagine a real use of this project. A scenario that reads as a natural-language translation of a technical test gets rewritten, or dropped in favor of a plain pytest test.
 
 ## Workflow

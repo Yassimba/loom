@@ -1,0 +1,6 @@
+# Skills/tools this skill invokes; installers pull them in transitively.
+skills:
+  - dd-pup
+  - dd-triage-flaky-test
+tools:
+  - pup

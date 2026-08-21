@@ -1,6 +1,6 @@
 ---
 name: mermaid-skill
-description: Generate Mermaid diagrams as code (.mmd) and export to PNG/SVG/PDF with mmdc. Use when the user wants a diagram — flowchart, sequence, class, ER, state, gantt, git graph, architecture, timeline, mindmap — proactively when explaining a system with 3+ components, a runtime flow, a schema, or a lifecycle, and when another skill (e.g. blueprint) needs a diagram authored or exported to an image.
+description: Generate Mermaid diagrams as code (.mmd) and export to PNG/SVG/PDF with mmdc. Use when the user wants a diagram — flowchart, sequence, class, ER, state, gantt, git graph, architecture, timeline, mindmap — proactively when explaining a system with 3+ components, a runtime flow, a schema, or a lifecycle, and when another skill (e.g. show-me) needs a diagram authored or exported to an image.
 ---
 
 # Mermaid Diagrams

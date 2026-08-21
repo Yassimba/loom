@@ -16,6 +16,7 @@ Apply these wherever this catalog is in hand:
 - **functools.lru_cache / cache** — single-site memoisation dicts.
 - **pathlib.Path.from_uri** (3.13+) — `file://` URI parsing incl. Windows drive-letter and UNC edge cases.
 - **difflib.get_close_matches** — basic "did you mean" suggestions.
+- **textwrap.wrap** — word-boundary wrapping, maximum line counts, and long-word/hyphen policies.
 
 ## Python — general
 
@@ -45,3 +46,26 @@ Apply these wherever this catalog is in hand:
 - **sqlglot** — SQL identifier parsing per dialect, DML building, dialect translation; check `dialect=` is actually passed.
 - **pygls** — LSP position encoding (UTF-16 codec), `file://` URIs, workspace/buffer store, at the protocol edge only.
 - **jinja2** — ad-hoc `{{ }}` substitution regexes, when template awareness matters.
+- **construct** — parallel `struct` format strings, tuple indexing, packet size checks, and separate binary encoders/decoders.
+- **crcmod** — hand-written CRC polynomial loops for named standard CRC variants.
+
+## JavaScript — web platform
+
+- **EventTarget** — local `Map<event, Set<handler>>` subscriber registries.
+- **Intl.NumberFormat** — hand-written currency separators, rounding, grouping, and symbols.
+- **HTMLDialogElement** — modal backdrops, Escape handling, inert backgrounds, focus trapping, and focus restoration.
+- **CSS Grid/Flex, container/viewport units, and aspect-ratio** — resize listeners and hard-coded viewport arithmetic used only for layout.
+- **Object.groupBy** — reduce loops that group records by a derived key, when the deployed browser baseline supports it.
+
+## JavaScript — general
+
+- **vue** (`Transition` and local components) — custom transition frameworks and repeated view-frame or presentation markup.
+- **tailwindcss** — parallel component CSS for standard layout, controls, spinners, and pulse animations.
+- **@microsoft/fetch-event-source** — duplicated EventSource connection, retry, abort, response validation, and event-stream parsing machinery.
+- **xstate** — distributed workflow status strings, legal-transition checks, delayed callbacks, and async-effect lifecycle cleanup.
+- **openapi-typescript** — hand-copied OpenAPI request/response vocabulary and drift-prone TypeScript declarations.
+- **openapi-fetch** — hand-built endpoint strings, parameter placement, request serialization, and response typing over an authoritative OpenAPI contract.
+- **@vueuse/core** — WebSocket reconnect loops plus component-owned timers, animation frames, media queries, keyboard chords, and event-listener cleanup.
+- **@tanstack/vue-query** — repeated remote loading/error state, polling loops, request deduplication, and cache invalidation in Vue.
+- **pinia-plugin-persistedstate** — manual localStorage synchronization and Pinia hydration plumbing.
+- **lucide-vue-next** — hand-drawn and duplicated inline SVG icon inventories in Vue.

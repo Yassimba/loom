@@ -38,7 +38,8 @@ them.
 The repo is the only real copy of each skill. `scripts/sync-skills.sh link`
 symlinks `skills/<name>` and `personal/<name>` into the global agent trees
 (`~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`,
-`~/.pi/agent/skills`, and `~/.config/opencode/skills`), so an edit made from
+`~/.pi/agent/skills`, `~/.config/opencode/skills`, `~/.cursor/skills`,
+and `~/.grok/skills`), so an edit made from
 either side is the same file and
 syncing means committing. `pull` brings
 a diverged or unknown global skill back into the repo (unknown ones land in

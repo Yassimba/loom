@@ -29,6 +29,8 @@ setup_args=(
   --agent agents
   --agent claude
   --agent codex
+  --agent cursor
+  --agent grok
   --agent opencode
   --agent pi
   --yes
@@ -75,6 +77,8 @@ for skill_root in \
   "${HOME}/.claude/skills" \
   "${HOME}/.codex/skills" \
   "${HOME}/.config/opencode/skills" \
+  "${HOME}/.cursor/skills" \
+  "${HOME}/.grok/skills" \
   "${HOME}/.pi/agent/skills"; do
   test -f "$skill_root/next/SKILL.md"
 done
@@ -108,6 +112,8 @@ find "${HOME}/.agents/skills/next" \
   "${HOME}/.claude/skills/next" \
   "${HOME}/.codex/skills/next" \
   "${HOME}/.config/opencode/skills/next" \
+  "${HOME}/.cursor/skills/next" \
+  "${HOME}/.grok/skills/next" \
   "${HOME}/.pi/agent/skills/next" \
   -type f -print | sort >"$evidence_dir/installed-files.txt"
 cp "$selection" "$evidence_dir/loom.toml"

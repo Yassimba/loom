@@ -1,5 +1,6 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
 skills:
+  - show-me
   - calldiff
 tools:
   - calldiff

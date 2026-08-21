@@ -14,6 +14,8 @@ $SetupArgs = @(
   "--agent", "agents",
   "--agent", "claude",
   "--agent", "codex",
+  "--agent", "cursor",
+  "--agent", "grok",
   "--agent", "opencode",
   "--agent", "pi",
   "--yes"
@@ -94,6 +96,8 @@ $SkillRoots = @(
   (Join-Path $HOME ".claude\skills"),
   (Join-Path $HOME ".codex\skills"),
   (Join-Path $HOME ".config\opencode\skills"),
+  (Join-Path $HOME ".cursor\skills"),
+  (Join-Path $HOME ".grok\skills"),
   (Join-Path $HOME ".pi\agent\skills")
 )
 foreach ($SkillRoot in $SkillRoots) {
