@@ -136,6 +136,16 @@
       "dependencies": ["npm:agent-browser"]
     },
     {
+      "id": "skill:clarify-code",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "clarify-code",
+      "description": "First-read clarity for working code: rename opaque identifiers and align nearby prose while preserving behavior and architecture. Use when a newcomer cannot infer purpose from the local code.",
+      "installTarget": "clarify-code",
+      "nextAction": "Ask your coding agent to use the clarify-code skill.",
+      "dependencies": ["write-simply"]
+    },
+    {
       "id": "skill:code-review",
       "kind": "skill",
       "group": "Coding",
@@ -647,6 +657,16 @@
       "installTarget": "dd-unblock-pr",
       "nextAction": "Ask your coding agent to use the dd-unblock-pr skill.",
       "dependencies": ["dd-pup", "dd-triage-flaky-test", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:eli5",
+      "kind": "skill",
+      "group": "General",
+      "label": "eli5",
+      "description": "Explain something new fast for a smart adult who has never used the topic. Use for \"/eli5 [topic]\", \"eli5 this\", \"break this down for me\", \"I know nothing about X, catch me up\", or another request for a quick plain-language explanation of how something works.",
+      "installTarget": "eli5",
+      "nextAction": "Ask your coding agent to use the eli5 skill.",
+      "dependencies": []
     },
     {
       "id": "skill:grill-me",

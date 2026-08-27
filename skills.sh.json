@@ -10,6 +10,7 @@
         "blueprint",
         "brainstorming",
         "browser-usage",
+        "clarify-code",
         "code-review",
         "commit",
         "database-pro",
@@ -85,6 +86,7 @@
       "title": "General",
       "description": "Interviewing, teaching, writing, and note-taking \u2014 skills for the work around the code.",
       "skills": [
+        "eli5",
         "grill-me",
         "grilling",
         "handoff",
