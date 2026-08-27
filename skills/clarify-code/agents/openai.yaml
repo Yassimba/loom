@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clarify Code"
+  short_description: "Make code clear on its first read"
+  default_prompt: "Use $clarify-code to make this working code self-explanatory to a first-time reader while preserving behavior."
