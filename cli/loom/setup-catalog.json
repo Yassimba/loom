@@ -12,6 +12,26 @@
       "nextAction": "Run /model in Pi and pick a Claude model."
     },
     {
+      "id": "pi-package:pi-autoresearch",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "autoresearch",
+      "description": "Run autonomous optimization loops: change code, benchmark it, keep improvements, and revert regressions. By davebcn87.",
+      "installTarget": "pi-autoresearch",
+      "version": "1.6.2",
+      "nextAction": "Run /autoresearch with an optimization target in Pi."
+    },
+    {
+      "id": "pi-package:@companion-ai/feynman",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "feynman",
+      "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
+      "installTarget": "@companion-ai/feynman",
+      "version": "0.3.47",
+      "nextAction": "Ask Pi to run /deepresearch on a scientific topic."
+    },
+    {
       "id": "pi-package:@yassimba/pi-openai-fast",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -89,6 +109,21 @@
       "installTarget": "browser-usage",
       "nextAction": "Ask your coding agent to use the browser-usage skill.",
       "dependencies": ["npm:agent-browser"]
+    },
+    {
+      "id": "skill:changeset-walkthrough",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "changeset-walkthrough",
+      "description": "Guided walkthrough of a git change, chaptered, with diagram-design figures showing what moved and what stayed. Every box opens its code in Plannotator, annotatable. Use to review a branch, PR, or range visually rather than file by file, or when a diff is too large to understand in path order.",
+      "installTarget": "changeset-walkthrough",
+      "nextAction": "Ask your coding agent to use the changeset-walkthrough skill.",
+      "dependencies": [
+        "writing-clearly-and-concisely",
+        "diagram-design",
+        "plannotator",
+        "explain-code-flow"
+      ]
     },
     {
       "id": "skill:clarify-code",
@@ -458,7 +493,7 @@
       "kind": "skill",
       "group": "Presentations",
       "label": "frontend-slides",
-      "description": "Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch. Helps non-designers discover their aesthetic through visual exploration rather than abstract choices.",
+      "description": "Build a self-contained HTML slide deck that runs in the browser. Use when the user wants a presentation, slides for a talk or a pitch, a PPT/PPTX converted to web, or an existing HTML deck improved.",
       "installTarget": "frontend-slides",
       "nextAction": "Ask your coding agent to use the frontend-slides skill.",
       "dependencies": ["diagram-design", "stop-the-slop"]
