@@ -129,11 +129,14 @@ If user provides an image folder:
 
 ## Phase 2: Style Discovery
 
-### Step 2.0-pre: House style
+### Step 2.0-pre: Default template
 
-First check whether the project already has a house style: a `house-style` skill under `.claude/skills/`, or a `HOUSE-STYLE.md` at the repo root. When one exists, read it, tell the user the deck is being built in that style, and go straight to Phase 3 — the deck's look is already decided, so style previews only offer choices the project has ruled out.
+Signal Rail is the default. Build the deck in it unless something below overrides it: read [bold-template-pack/templates/signal-rail/design.md](bold-template-pack/templates/signal-rail/design.md), derive the accent from the deck's subject (one accent, or one per workstream when the deck spans several), pick the two type families for that subject, tell the user the direction in a sentence, and go to Phase 3. Skip the previews — the layout system is settled, and only the colour and type are being chosen.
 
-A house style outranks everything this skill says about design, including the fixed 1920×1080 stage and the aesthetic guidance above: its stage size, stylesheets, fonts, and slide-layout contracts are the design system, copied verbatim rather than re-derived. Every other phase runs unchanged.
+Two things override it:
+
+- **A project house style** — a `house-style` skill under `.claude/skills/`, or a `HOUSE-STYLE.md` at the repo root. Read it and follow it instead. A house style outranks everything this skill says about design, including the fixed 1920×1080 stage and the aesthetic guidance above: its stage size, stylesheets, fonts, and layout contracts are the design system, copied verbatim rather than re-derived.
+- **The brief, or the user asking to see options** — a warm, consumer, marketing, or celebratory deck argues against a flat dark technical system. Run the style discovery below instead.
 
 ### Step 2.0: Generate 3 Style Previews Directly
 
@@ -220,7 +223,7 @@ If the user's stated needs are mixed, choose the closer of the two modes instead
 
 Never let high density become visual clutter. If a high-density slide starts to overflow, split it or redesign it into a clearer structure.
 
-If the user selected a bold template from `bold-template-pack`, read that one template's full `design.md` before generating. Do not read the other bold templates. Treat `design.md` as the design recipe:
+Signal Rail decks and bold-template decks follow the same rule: read that one template's full `design.md` before generating. Do not read the other bold templates. Treat `design.md` as the design recipe:
 
 - Preserve its fonts, palette, decorative vocabulary, spacing rhythm, and component grammar.
 - Generate the final deck as a fixed 1920×1080 stage scaled uniformly to the viewport, regardless of whether the source template originally used `deck-stage.js` or viewport-fluid CSS.
