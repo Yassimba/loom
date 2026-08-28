@@ -15,6 +15,7 @@ use std::path::Path;
 pub struct InitOptions {
     pub python: Option<bool>,
     pub rust: Option<bool>,
+    pub adhd: Option<bool>,
     pub yes: bool,
     pub force: bool,
 }
@@ -24,7 +25,7 @@ struct Section {
     template: &'static str,
 }
 
-const SECTIONS: [Section; 2] = [
+const SECTIONS: [Section; 3] = [
     Section {
         name: "python",
         template: "manifest/init/sections/python.md",
@@ -32,6 +33,10 @@ const SECTIONS: [Section; 2] = [
     Section {
         name: "rust",
         template: "manifest/init/sections/rust.md",
+    },
+    Section {
+        name: "i-have-adhd",
+        template: "manifest/init/sections/i-have-adhd.md",
     },
 ];
 
@@ -131,6 +136,14 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
             options.yes,
         )?,
     };
+    let adhd = match options.adhd {
+        Some(explicit) => explicit,
+        None => confirm(
+            "Keep ADHD-friendly output on for this project?",
+            false,
+            options.yes,
+        )?,
+    };
     // Templates come from the published repo, so init output is publish-gated.
     let home = system.home_dir().context("home directory is unavailable")?;
     let staging = home.join(".cache").join("loom").join("init-staging");
@@ -144,6 +157,7 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         let wanted = match section.name {
             "python" => python,
             "rust" => rust,
+            "i-have-adhd" => adhd,
             _ => false,
         };
         if wanted {

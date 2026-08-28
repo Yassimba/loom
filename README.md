@@ -149,6 +149,10 @@ This repo builds on other people's work:
 
 - Several of the coding skills are adapted from [Matt Pocock's skills](https://github.com/mattpocock/skills), and the [research](skills/research/SKILL.md) skill is his, copied verbatim.
 - The Datadog `dd-*` skills are copied from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 (Apache 2.0); the `pup` CLI is pinned in the tool manifest.
+- The [Impeccable](skills/impeccable/SKILL.md) design skill is from [pbakaus/impeccable](https://github.com/pbakaus/impeccable) v4.1.2 (Apache 2.0).
+- The [i-have-adhd](skills/i-have-adhd/SKILL.md) skill is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` (MIT).
+- The six [Ponytail](skills/ponytail/SKILL.md) skills are from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 (MIT).
+- The [Diagram Design](skills/diagram-design/SKILL.md) skill is from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.7 at `ac490fd` (MIT; bundled icon notices included).
 - subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); claude-bridge is [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge). All install pinned from upstream npm.
 
 Each package's README and `THIRD_PARTY_NOTICES.md` record the exact upstream version. Thanks, all.

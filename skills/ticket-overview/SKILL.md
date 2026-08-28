@@ -67,7 +67,7 @@ Done when membership, association, and execution order are unambiguous, and ever
 
 ## 5. Write the map
 
-Invoke the `write-simply` skill (via the Skill tool). Apply its register to all prose while keeping ticket IDs, BV field names, and graph terms exact.
+Invoke the `writing-clearly-and-concisely` skill (via the Skill tool). Apply its register to all prose while keeping ticket IDs, BV field names, and graph terms exact.
 
 For a roadmap, include:
 
