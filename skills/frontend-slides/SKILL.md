@@ -131,7 +131,7 @@ If user provides an image folder:
 
 ### Step 2.0-pre: Default template
 
-Signal Rail is the default. Build the deck in it unless something below overrides it: read [bold-template-pack/templates/signal-rail/design.md](bold-template-pack/templates/signal-rail/design.md), derive the accent from the deck's subject (one accent, or one per workstream when the deck spans several), pick the two type families for that subject, tell the user the direction in a sentence, and go to Phase 3. Skip the previews — the layout system is settled, and only the colour and type are being chosen.
+Signal Rail is the default. Build the deck in it unless something below overrides it: read [bold-template-pack/templates/signal-rail/design.md](bold-template-pack/templates/signal-rail/design.md), derive the accent from the deck's subject (one accent, or one per topic when the deck spans several, which the rail then tracks), pick the two type families for that subject, tell the user the direction in a sentence, and go to Phase 3. Skip the previews — the layout system is settled, and only the colour and type are being chosen.
 
 Two things override it:
 

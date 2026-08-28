@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Signal Rail
-description: "A dark technical deck system for platform, product-suite, and engineering decks. A flat near-black navy canvas, one accent colour derived from the deck's own subject, a left rail that tracks which workstream a slide belongs to, and a hairline that runs from the slide's eyebrow out to the top-right corner. Ten fixed layouts — nothing is composed freehand. Type is a single variable sans for display and body plus a wide-tracked all-caps label face; the palette carries the meaning, so backgrounds stay flat and decoration stays to hairlines."
+description: "A dark technical deck system for platform, product-suite, and engineering decks. A flat near-black navy canvas, one accent colour derived from the deck's own subject, a left rail that tracks which topic a slide belongs to, and a hairline that runs from the slide's eyebrow out to the top-right corner. Ten fixed layouts — nothing is composed freehand. Type is a single variable sans for display and body plus a wide-tracked all-caps label face; the palette carries the meaning, so backgrounds stay flat and decoration stays to hairlines."
 
 colors:
   bg: "#0D1323"
@@ -39,7 +39,7 @@ A deck built in Signal Rail is a fixed 1920×1080 stage, a flat canvas, and ten 
 Signal Rail ships neutrals, not a palette. Pick the accent from what the deck is about, and commit to it: it colours every eyebrow, every heading, the rail, the corner hairline, and nothing else competes with it.
 
 - One subject, one accent. Data and flow read blue; energy and throughput read amber; safety, risk, and failure read red; growth and generation read green; craft and design read violet.
-- A deck spanning two to five workstreams (products, teams, phases) gets one accent each, assigned in the same order everywhere. Each slide declares its own with `data-track="<slug>"`, which flips `--accent` and `--accent-shade` for the whole slide.
+- A deck spanning two to five topics (products, teams, phases) gets one accent each, assigned in the same order everywhere. Each slide declares its own with `data-topic="<slug>"`, which flips `--accent` and `--accent-shade` for the whole slide.
 - Saturate for a dark canvas: an accent needs to hold at 28px eyebrow weight 200 against `#0D1323`. Mid-tone and bright reads; anything darker than the raised background disappears.
 - `--accent-shade` is the same hue at 30%, and it is the only thing hairlines, inactive rail marks, and ambient chrome are ever painted in.
 
@@ -54,7 +54,7 @@ One variable sans carries display and body across a 100–1000 weight range; one
 - Stage: 1920×1080, scaled whole to the viewport, per the skill's fixed-stage rules.
 - `.slide` is `position: absolute; inset: 0`, background `--bg`, `overflow: hidden`.
 - `.slide-content` sits at `left: 240px; top: 82px; right: 120px; bottom: 96px`, a column with `gap: 56px`. Eyebrow to `h1` gap is 36px.
-- **Rail** — `left: 80px; top: 82px; bottom: 60px; width: 100px`. Marks stack in a 44px column with an 84px gap; a 1px `--accent-shade` hairline runs at `left: 72px` from the top of the stack to the bottom of the page number. The active mark is full `--accent` and `transform: scale(1.2)` from `left center`; the rest sit at `--accent-shade`. The two-digit page number closes the rail at the bottom.
+- **Rail** — `left: 80px; top: 82px; bottom: 60px; width: 100px`. Marks stack in a 44px column with an 84px gap; a 1px `--accent-shade` hairline runs at `left: 72px` from the top of the stack to the bottom of the page number, and the two-digit page number closes it. See *The rail* below — it is the deck's agenda, not decoration.
 - **Corner** — a single hairline SVG per chrome slide: `M {m} 96 H 1850 Q 1880 96 1895 122 L 2025 347`, stroked 2px in `--accent-shade` with `vector-effect="non-scaling-stroke"`, in a `viewBox="0 0 1920 1080"` with `preserveAspectRatio="none"`. `{m}` is the right edge of the slide's eyebrow plus 60px, computed on load:
 
 ```js
@@ -72,6 +72,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
 The title slide carries neither rail nor corner. Every other slide carries both.
 
+## The rail
+
+The rail is the deck's agenda, on screen the whole way through. One mark per topic, in the order the deck covers them, so the audience always sees which topic they are in, what has been covered, and what is still coming. It is why a thirty-slide deck stays navigable without a table-of-contents slide.
+
+**Choosing marks.** One icon per topic, each a concrete noun the audience can name — a turbine for throughput, a shield for governance, a graph for reporting. Abstract shapes read as decoration and teach nothing. Draw them as one family: identical optical size on a 24-unit grid, one stroke weight, `fill="currentColor"` and no colour of their own, so `--accent` and `--accent-shade` drive them. Two sources work — a hidden `<symbol>` sprite at the top of `<body>` for bespoke or product marks, or Material Symbols Outlined via its single stylesheet link when the topics are generic. Pick one source per deck; a mixed rail looks assembled.
+
+**States.** Three, and they are what makes the rail readable at a glance:
+
+```css
+.rail-mark           { color: var(--accent-shade); }  /* upcoming */
+.rail-mark.is-past   { color: var(--fg-4); }          /* covered */
+.rail-mark.is-active { color: var(--accent); transform: scale(1.2); transform-origin: left center; }
+```
+
+Covered topics recede to the neutral hairline colour, the current one is bright and 1.2×, upcoming ones hold the accent shade — so the eye reads direction down the rail. `data-rail-mode="all"` on a section lights every mark at once, for the slides that speak for the whole deck: the overview, the diagram, the roadmap.
+
+**Scale.** Three to six topics. Past six the marks shrink below recognition and the agenda stops being one glance — group topics until they fit. A single-topic deck drops the icons and runs two-digit numerals in the same column instead.
+
+**Handover.** A `slide--divider` sits between topics: it poses the question the next topic answers and carries the incoming topic's `data-topic`, so the accent turns over and the rail advances on the same slide. That pairing is what makes "what comes next" explicit rather than implied.
+
+**Accessibility.** Each `<symbol>` carries a `<title>` naming its topic, and the active mark gets `aria-current="step"`. The rail sits outside the slide's reveal animation — it never animates in; only the active mark cross-fades when the topic changes.
+
 ## Layouts
 
 Ten, and a slide that fits none of them is two slides. Every one lives inside `.slide-content` unless noted.
@@ -79,13 +101,13 @@ Ten, and a slide that fits none of them is two slides. Every one lives inside `.
 | Layout | Class | Use |
 | --- | --- | --- |
 | Title | `slide--title` | Deck opener: hero mark, deck name, rule, author and date |
-| Track title | `slide--track-title` | Opens a workstream: eyebrow, hero mark, name |
+| Topic title | `slide--topic-title` | Opens a topic: eyebrow, hero mark, name |
 | Comparison | `slide--comparison` | Two panels with a `vs` divider |
 | Stat | `slide--stat` | One large numeral with a unit and a line of context |
 | Cards | `slide--cards` | Three to five cards, each a mark, a name, one line |
 | Steps | `slide--steps` | Up to four numbered steps with arrows between |
 | Split | `slide--split` | Prose column beside a figure |
-| Divider | `slide--divider` | Bridge slide: a question that hands to the next track |
+| Divider | `slide--divider` | Bridge slide: a question that hands to the next topic |
 | Diagram | `slide--diagram` | A `/diagram-design` SVG in a framed well |
 | Roadmap | `slide--roadmap` | Dated rows with `data-status="done \| current \| future"` |
 
@@ -94,15 +116,14 @@ Ten, and a slide that fits none of them is two slides. Every one lives inside `.
 ```html
 <div class="slide-rail">
   <div class="rail-marks">
-    <svg class="rail-mark is-active"><use href="#mark-alpha"></use></svg>
+    <svg class="rail-mark is-past"><use href="#mark-intro"></use></svg>
+    <svg class="rail-mark is-active" aria-current="step"><use href="#mark-alpha"></use></svg>
     <svg class="rail-mark"><use href="#mark-beta"></use></svg>
   </div>
   <div class="rail-page">02</div>
 </div>
 <svg class="slide-corner" viewBox="0 0 1920 1080" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M 640 96 H 1850 Q 1880 96 1895 122 L 2025 347" stroke="var(--accent-shade)" stroke-width="2" vector-effect="non-scaling-stroke"></path></svg>
 ```
-
-Marks are `<symbol>` definitions in a hidden sprite at the top of `<body>` — one per track, drawn with `fill="currentColor"` so the rail colours them. A single-track deck uses numerals in place of marks. `data-rail-mode="all"` on a section lights every mark, for slides that speak for the whole deck.
 
 ### Layout bodies
 
@@ -115,10 +136,10 @@ Marks are `<symbol>` definitions in a hidden sprite at the top of `<body>` — o
   <div class="title-meta">Author · <span data-today></span></div>
 </div>
 
-<!-- slide--track-title -->
+<!-- slide--topic-title -->
 <div class="pt-eyebrow-top">One-line description</div>
 <svg class="pt-hero-mark"><use href="#mark-alpha"></use></svg>
-<div class="pt-content"><div class="pt-name">Track name</div></div>
+<div class="pt-content"><div class="pt-name">Topic name</div></div>
 
 <!-- slide--comparison -->
 <div class="s-label">Section</div>
@@ -141,7 +162,7 @@ Marks are `<symbol>` definitions in a hidden sprite at the top of `<body>` — o
 
 <!-- slide--cards -->
 <div class="card-grid card-grid--left-line">
-  <div class="t-card" data-track="alpha">
+  <div class="t-card" data-topic="alpha">
     <svg class="t-card-mark"><use href="#mark-alpha"></use></svg>
     <div class="t-card-name">Name</div>
     <p class="t-card-body">One line.</p>
@@ -162,7 +183,7 @@ Marks are `<symbol>` definitions in a hidden sprite at the top of `<body>` — o
 
 <!-- slide--divider (outside .slide-content) -->
 <div class="s-label dv-section-header">Next</div>
-<div class="dv-title">A question that hands off to the next track.</div>
+<div class="dv-title">A question that hands off to the next topic.</div>
 <div class="dv-rule"></div>
 
 <!-- slide--diagram -->
@@ -182,7 +203,7 @@ Marks are `<symbol>` definitions in a hidden sprite at the top of `<body>` — o
 
 ## Motion
 
-Restrained and technical: `cubic-bezier(0.2, 0.7, 0.1, 1)` at 120 / 220 / 360ms. Slide entry staggers the eyebrow, the heading, then the body block 60ms apart. Rail marks cross-fade when the active track changes. Nothing loops, nothing floats.
+Restrained and technical: `cubic-bezier(0.2, 0.7, 0.1, 1)` at 120 / 220 / 360ms. Slide entry staggers the eyebrow, the heading, then the body block 60ms apart. Rail marks cross-fade when the active topic changes. Nothing loops, nothing floats.
 
 ## Content shape
 
