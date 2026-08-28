@@ -6,12 +6,12 @@
     "cli/loom": {
       "release-type": "rust",
       "component": "loom",
-      "extra-files": ["/manifest/loom.toml"]
+      "extra-files": [{ "type": "generic", "path": "/manifest/loom.toml" }]
     },
     "cli/loom-teams": {
       "release-type": "rust",
       "component": "loom-teams",
-      "extra-files": ["/manifest/loom.toml"]
+      "extra-files": [{ "type": "generic", "path": "/manifest/loom.toml" }]
     },
     "plugins/openai-fast": {
       "release-type": "node",
