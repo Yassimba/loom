@@ -44,3 +44,30 @@ _Avoid_: installed tools, local manifest
 A user's own machine-local mise configuration, merged on top of the
 manifest and never published. The tools counterpart of `personal/` skills.
 _Avoid_: local config, custom tools
+
+**Code binding**:
+The pairing of one diagram element with one or more source ranges, carried
+on the element itself as `data-code`. What makes a drawn box openable into
+the code it stands for.
+_Avoid_: code link (reserve for PFM's inline `path:line` badge), software
+map (that is review's separate commit-addressed model)
+
+**Anchor line**:
+The verbatim source line a code binding quotes (`data-code-anchor`), used at
+view time to prove the range still points at the code it was drawn from. The
+same quoted line the evidence worker already reports per `file:line`.
+_Avoid_: fingerprint, checksum
+
+**Code panel**:
+The annotatable view of a binding's ranges, opened by clicking a bound
+element. In Guided Review it is the section's existing file card, reached
+through the host's reveal channel; on the annotate surface it is a docked
+panel the binding opens. Same role, two implementations.
+_Avoid_: code peek (that is review's inline component), popover (that is the
+hover preview)
+
+**Walkthrough**:
+The artifact a diagram-and-prose skill produces: a `.md` repo copy plus a
+built `.html` with SVGs inlined, opened for annotation. Explain-code-flow's
+walkthrough explains a feature; the guided review's walkthrough chapters a
+changeset.
