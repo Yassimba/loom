@@ -38,8 +38,6 @@
         "dd-symdb",
         "dd-docs",
         "dd-code-generation",
-        "dd-triage-flaky-test",
-        "dd-unblock-pr",
         "dd-file-issue",
         "github:DataDog/pup"
       ]

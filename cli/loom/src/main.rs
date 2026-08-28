@@ -45,6 +45,11 @@ enum Command {
         rust: bool,
         #[arg(long, hide = true)]
         no_rust: bool,
+        /// Keep ADHD-friendly output on for this project
+        #[arg(long, overrides_with = "no_adhd")]
+        adhd: bool,
+        #[arg(long, hide = true)]
+        no_adhd: bool,
         /// Accept detection defaults without prompting
         #[arg(long)]
         yes: bool,
@@ -165,6 +170,8 @@ fn main() -> Result<()> {
             no_python,
             rust,
             no_rust,
+            adhd,
+            no_adhd,
             yes,
             force,
         } => {
@@ -178,6 +185,7 @@ fn main() -> Result<()> {
                 &InitOptions {
                     python: flag(python, no_python),
                     rust: flag(rust, no_rust),
+                    adhd: flag(adhd, no_adhd),
                     yes,
                     force,
                 },
@@ -254,5 +262,17 @@ mod tests {
                 "a missing Herdr value parser hides valid plugins from shell completion"
             );
         }
+    }
+
+    #[test]
+    fn init_accepts_adhd_permanent_mode_flag() {
+        // Capability/seam: scripted permanent ADHD mode. This fails if the
+        // public flag stops reaching the init workflow. No expiry.
+        let cli = Cli::try_parse_from(["loom", "init", "--adhd"]).unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Init { adhd: true, .. })
+        ));
     }
 }

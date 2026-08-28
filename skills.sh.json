@@ -17,10 +17,7 @@
         "diagnosing-bugs",
         "e2e-test",
         "grill-with-docs",
-        "guided-review",
         "implement",
-        "loop-me",
-        "merge",
         "next",
         "prototype",
         "python-pro",
@@ -50,15 +47,31 @@
         "domain-modeling",
         "explain-code-flow",
         "improve-codebase-architecture",
-        "quick-lineage",
         "literate-programming",
         "show-me"
       ]
     },
     {
+      "title": "Ponytail",
+      "description": "Build less: choose YAGNI, stdlib, and native features before adding code, then audit what can still be removed.",
+      "skills": [
+        "ponytail",
+        "ponytail-review",
+        "ponytail-audit",
+        "ponytail-debt",
+        "ponytail-gain",
+        "ponytail-help"
+      ]
+    },
+    {
+      "title": "Design",
+      "description": "Shape, critique, and polish frontend interfaces with strong visual direction and production checks.",
+      "skills": ["impeccable"]
+    },
+    {
       "title": "Diagrams",
-      "description": "Turn systems and data into pictures \u2014 draw.io, Mermaid, and infographics.",
-      "skills": ["drawio-skill", "mermaid-skill"]
+      "description": "Turn systems and data into pictures \u2014 draw.io, Mermaid, archify, and diagram-design editorial diagrams.",
+      "skills": ["mermaid-skill", "archify", "diagram-design", "archify-editorial"]
     },
     {
       "title": "Presentations",
@@ -67,7 +80,7 @@
     },
     {
       "title": "Observability",
-      "description": "Datadog via the pup CLI — auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
+      "description": "Datadog via the pup CLI \u2014 auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
       "skills": [
         "dd-apm",
         "dd-code-generation",
@@ -77,9 +90,7 @@
         "dd-logs",
         "dd-monitors",
         "dd-pup",
-        "dd-symdb",
-        "dd-triage-flaky-test",
-        "dd-unblock-pr"
+        "dd-symdb"
       ]
     },
     {
@@ -91,19 +102,30 @@
         "grilling",
         "handoff",
         "herdr",
+        "i-have-adhd",
         "jira",
-        "no-ai-slop",
         "research",
-        "stop-slop",
+        "stop-the-slop",
         "loom",
         "teach",
-        "wizard",
         "write-documentation",
         "write-readme",
-        "write-simply",
         "writing-clearly-and-concisely",
         "writing-for-agents",
         "wtf"
+      ]
+    },
+    {
+      "title": "Plannotator",
+      "description": "Plan and code review in the browser with the plannotator CLI: review diffs, annotate files or URLs, revisit the last reply, mine the plan archive, build goal packages, and render visual explainers.",
+      "skills": [
+        "plannotator",
+        "plannotator-review",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-compound",
+        "plannotator-setup-goal",
+        "plannotator-visual-explainer"
       ]
     }
   ]

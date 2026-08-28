@@ -35,7 +35,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 - Add capabilities by name: `loom add --tool <name> --skill <name> --pi-package <name>`
 - Target skill agents: repeat `--agent claude|agents|codex|pi|opencode|cursor|grok`; omit it to use detected agents
 - Choose skill scope: `--scope global|project` (default: `global`; project resolves the current Git worktree)
-- Scaffold this project's `AGENTS.md` + `CLAUDE.md`: `loom init` (run inside the project; `--python` / `--rust` skip the prompts)
+- Scaffold this project's `AGENTS.md` + `CLAUDE.md`: `loom init` (run inside the project; `--python`, `--rust`, and `--adhd` skip their prompts)
 - Refresh every initialized project's `AGENTS.md` from the templates: `loom sync`
 - Update everything — tool pins, Pi package pins, skills, projects, the CLI itself: `loom update`
 - Check the installation: `loom status`

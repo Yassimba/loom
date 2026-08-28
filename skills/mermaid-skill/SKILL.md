@@ -24,15 +24,15 @@ npx puppeteer browsers install chrome-headless-shell   # mmdc has no bundled bro
 
 1. **Author** — pick the type from the shape of the content:
 
-   | The content is…                                     | Type                                     |
-   | ---------------------------------------------------- | ---------------------------------------- |
-   | steps, branches, dependencies                         | `flowchart`                              |
-   | who calls whom, in what order                         | `sequenceDiagram`                        |
-   | tables and relations / types and inheritance          | `erDiagram` / `classDiagram`             |
-   | statuses one thing moves through                      | `stateDiagram-v2`                        |
-   | deployed services and their wiring                    | `architecture-beta`                      |
-   | schedule / branch history / proportions / idea tree   | `gantt` / `gitGraph` / `pie` / `mindmap` |
-   | events over time / effort-impact grid / plotted data  | `timeline` / `quadrantChart` / `xychart-beta` |
+   | The content is…                                      | Type                                          |
+   | ---------------------------------------------------- | --------------------------------------------- |
+   | steps, branches, dependencies                        | `flowchart`                                   |
+   | who calls whom, in what order                        | `sequenceDiagram`                             |
+   | tables and relations / types and inheritance         | `erDiagram` / `classDiagram`                  |
+   | statuses one thing moves through                     | `stateDiagram-v2`                             |
+   | deployed services and their wiring                   | `architecture-beta`                           |
+   | schedule / branch history / proportions / idea tree  | `gantt` / `gitGraph` / `pie` / `mindmap`      |
+   | events over time / effort-impact grid / plotted data | `timeline` / `quadrantChart` / `xychart-beta` |
 
    One diagram answers one question — past ~20 nodes, split by concern into separate `.mmd`s instead of cramming.
    Syntax references, consult when unsure:
@@ -66,11 +66,11 @@ npx puppeteer browsers install chrome-headless-shell   # mmdc has no bundled bro
 
 ## Gotchas
 
-| Symptom                                              | Fix                                                                     |
-| ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| Parse error on a label with special chars            | Quote it: `A["Label: value"]`                                           |
-| Parse error on a subgraph name with spaces           | Quote it: `subgraph "My Layer"`                                         |
-| `Maximum text size in diagram exceeded`              | Split the diagram; last resort `-c config.json` `{"maxTextSize": 200000}` |
-| Chrome crashes in CI / as root                       | `-p puppeteer.json` with `{"args": ["--no-sandbox"]}`                   |
+| Symptom                                              | Fix                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Parse error on a label with special chars            | Quote it: `A["Label: value"]`                                                         |
+| Parse error on a subgraph name with spaces           | Quote it: `subgraph "My Layer"`                                                       |
+| `Maximum text size in diagram exceeded`              | Split the diagram; last resort `-c config.json` `{"maxTextSize": 200000}`             |
+| Chrome crashes in CI / as root                       | `-p puppeteer.json` with `{"args": ["--no-sandbox"]}`                                 |
 | Architecture icons missing / `logos:` name not found | Register the pack at compile time — [ARCHITECTURE § Icons](reference/ARCHITECTURE.md) |
-| Blank or tiny PNG                                    | Add `-w 2048`                                                           |
+| Blank or tiny PNG                                    | Add `-w 2048`                                                                         |

@@ -1,8 +1,6 @@
 ---
 name: literate-programming
 description: "Transform a codebase into a literate program — a .lit.md essay that weaves prose, diagrams, and named chunks and tangles back to source. Use when the user asks for a literate program, .lit.md, weave, tangle, or wants the system written as a narrative that can regenerate the files."
-metadata:
-  author: Tobi Lehman (https://github.com/tlehman/litprog-skill)
 ---
 
 # Literate Programming
@@ -18,7 +16,7 @@ A literate program is a single `.lit.md` markdown file that serves as both docum
 - **WEAVE** → A PDF (via Pandoc) with prose, diagrams, math, and syntax-highlighted code.
 - **TANGLE** → The original source files, extracted from named code chunks.
 
-The prose explains *why* the code exists and how it works. The code is embedded in named chunks that can reference each other. The reader follows a narrative, not a file listing.
+The prose explains _why_ the code exists and how it works. The code is embedded in named chunks that can reference each other. The reader follows a narrative, not a file listing.
 
 ## Chunk Syntax
 
@@ -68,6 +66,7 @@ Locate where execution begins. Check `package.json`, `main()` functions, `__main
 ### Step 2: Trace Data Flow
 
 Follow data from input to output through the codebase:
+
 - What does the program consume? (CLI args, files, network, env vars)
 - What transformations does it apply?
 - What does it produce?
@@ -81,6 +80,7 @@ Look for event loops, worker threads, scheduled tasks, signal handlers, and mess
 ### Step 4: Plan Diagrams
 
 Choose diagrams to illustrate the architecture before showing code:
+
 - Module dependencies → `graph TD`
 - Request lifecycle → `sequenceDiagram`
 - Data pipeline → `graph LR`
@@ -88,11 +88,12 @@ Choose diagrams to illustrate the architecture before showing code:
 
 Check `which mermaid-filter` first. If available, write these as ` ```mermaid ` blocks. If not, write them as TikZ `{=latex}` raw blocks (see TikZ section in Writing the .lit.md).
 
-Place each diagram *before* the code it describes.
+Place each diagram _before_ the code it describes.
 
 ### Step 5: Determine Psychological Order
 
 Present code in the order easiest to understand, not the order files appear on disk. Common strategies:
+
 - **Top-down**: Architecture first, then drill into components
 - **Data-centric**: Core types first, then operations
 - **Narrative**: Follow a request/event from start to finish
@@ -102,6 +103,7 @@ Each section should build on the previous one. Defer edge cases and error handli
 ### Step 6: Plan the Outline
 
 Write a section outline before writing any prose or code. Each section should:
+
 1. Motivate the problem it solves
 2. Show a diagram (if helpful)
 3. Present the code in named chunks
@@ -123,7 +125,7 @@ This compares tangled output against existing files without writing anything. If
 
 ### Document Structure
 
-```markdown
+````markdown
 ---
 title: "Project Name — A Literate Program"
 author: "Author"
@@ -132,9 +134,11 @@ toc: true
 ---
 
 # Introduction
+
 Motivate the project. What problem does it solve? What is the key insight?
 
 # Section Title
+
 Prose explaining this part of the system...
 
 \```lang {chunk="chunk-name" file="path/to/file.ext"}
@@ -143,13 +147,13 @@ code here
 \```
 
 More prose connecting ideas...
-```
+````
 
 ### Writing Principles
 
 1. **Byte-for-byte completeness**: Every file with a root chunk (`file="path"`) must have 100% of its content captured in chunks. Tangle will overwrite that file, so any missing content will be deleted. If you don't want to manage a file, don't give it a root chunk.
 
-2. **Prose first**: Every code block should be preceded by prose that explains *why* this code exists and what it accomplishes.
+2. **Prose first**: Every code block should be preceded by prose that explains _why_ this code exists and what it accomplishes.
 
 3. **Meaningful chunk names**: Names like `parse-config` or `validate-input` tell the reader what the chunk does. Avoid generic names like `code-1` or `part-a`.
 

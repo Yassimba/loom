@@ -138,6 +138,12 @@
       "bin": "pup",
       "description": "Datadog API CLI for agents and humans: 200+ commands over metrics, logs, monitors, traces.",
       "nextAction": "Run `pup auth login` once."
+    },
+    {
+      "key": "github:backnotprop/plannotator",
+      "label": "plannotator",
+      "description": "Browser-based plan and code review for coding agents — the plannotator skills drive it.",
+      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart."
     }
   ]
 }

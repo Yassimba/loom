@@ -1,0 +1,5 @@
+# Skills this skill invokes; installers pull them in transitively.
+skills:
+  - writing-clearly-and-concisely
+  - show-me
+  - eli5

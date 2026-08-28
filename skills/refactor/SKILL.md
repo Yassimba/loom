@@ -13,7 +13,7 @@ Start with context:
 
 ## Suggest First
 
-Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the change and its concrete benefit, followed by two fenced Markdown code blocks tagged with the code's source language:
+Propose before changing. Invoke the `writing-clearly-and-concisely` skill, then present a numbered list of suggestions; each item is one sentence naming the change and its concrete benefit, followed by two fenced Markdown code blocks tagged with the code's source language:
 
 This is what the code looks like before:
 

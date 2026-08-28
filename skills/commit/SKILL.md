@@ -81,7 +81,7 @@ Conventional Commits format:
 
 **Body (only when the subject can't carry it):** blank line after the subject, then one terse bullet per entry, imperative voice, grouped under short headings that match the kind of change — `Added`, `Changed`, `Fixed`, `Removed`, `Breaking`. Skip headings when there's only one bullet.
 
-**Register:** invoke the `write-simply` skill (via the Skill tool) — subject and body follow its register.
+**Register:** invoke the `writing-clearly-and-concisely` skill (via the Skill tool) — subject and body follow its register.
 
 ```
 feat(installer): add gateway runtime extraction

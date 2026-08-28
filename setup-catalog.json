@@ -38,8 +38,6 @@
         "dd-symdb",
         "dd-docs",
         "dd-code-generation",
-        "dd-triage-flaky-test",
-        "dd-unblock-pr",
         "dd-file-issue",
         "github:DataDog/pup"
       ]
@@ -103,7 +101,7 @@
       "description": "Behavior-Driven Development as a collaboration and specification practice, with pytest-bdd and behave as the bundled automation references. Use when defining behavior through concrete examples or acceptance criteria, writing or reviewing Gherkin .feature files, wiring pytest-bdd or behave step definitions, or checking that tests still express business behavior rather than implementation.",
       "installTarget": "bdd",
       "nextAction": "Ask your coding agent to use the bdd skill.",
-      "dependencies": ["write-simply"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:blueprint",
@@ -143,7 +141,7 @@
       "description": "First-read clarity for working code: rename opaque identifiers and align nearby prose while preserving behavior and architecture. Use when a newcomer cannot infer purpose from the local code.",
       "installTarget": "clarify-code",
       "nextAction": "Ask your coding agent to use the clarify-code skill.",
-      "dependencies": ["write-simply"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:code-review",
@@ -163,7 +161,7 @@
       "description": "Use when creating a git commit — the user asks to commit, or a unit of work is complete and ready to commit.",
       "installTarget": "commit",
       "nextAction": "Ask your coding agent to use the commit skill.",
-      "dependencies": ["diagnosing-bugs", "write-simply", "writing-clearly-and-concisely"]
+      "dependencies": ["diagnosing-bugs", "writing-clearly-and-concisely"]
     },
     {
       "id": "skill:database-pro",
@@ -206,16 +204,6 @@
       "dependencies": ["domain-modeling", "grilling"]
     },
     {
-      "id": "skill:guided-review",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "guided-review",
-      "description": "Guided code review that walks the human through a diff in small, semantically ordered chunks, each approved individually, until they can vouch for every line. Use when an agent produced more change than the user has followed, when the user must review a PR or branch they didn't write, or when they ask to be walked through a diff.",
-      "installTarget": "guided-review",
-      "nextAction": "Ask your coding agent to use the guided-review skill.",
-      "dependencies": ["write-simply"]
-    },
-    {
       "id": "skill:implement",
       "kind": "skill",
       "group": "Coding",
@@ -224,26 +212,6 @@
       "installTarget": "implement",
       "nextAction": "Ask your coding agent to use the implement skill.",
       "dependencies": ["blueprint", "code-review", "tdd"]
-    },
-    {
-      "id": "skill:loop-me",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "loop-me",
-      "description": "Grill me about specs for the workflows I want to build, within this workspace.",
-      "installTarget": "loop-me",
-      "nextAction": "Ask your coding agent to use the loop-me skill.",
-      "dependencies": ["grilling"]
-    },
-    {
-      "id": "skill:merge",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "merge",
-      "description": "Review-first git merge — preview incoming changes, merge --no-commit --no-ff, resolve conflicts with the user, commit only after review.",
-      "installTarget": "merge",
-      "nextAction": "Ask your coding agent to use the merge skill.",
-      "dependencies": []
     },
     {
       "id": "skill:next",
@@ -296,7 +264,7 @@
       "description": "Refactor with clear orchestration, strong interfaces, and happy-path-first design",
       "installTarget": "refactor",
       "nextAction": "Ask your coding agent to use the refactor skill.",
-      "dependencies": ["write-simply"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:refactor-nuclear",
@@ -306,7 +274,7 @@
       "description": "Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. Use for a thermo-nuclear code quality review, thermonuclear review, deep code quality audit, or especially harsh maintainability review.",
       "installTarget": "refactor-nuclear",
       "nextAction": "Ask your coding agent to use the refactor-nuclear skill.",
-      "dependencies": ["write-simply"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:refactor-tests",
@@ -316,7 +284,7 @@
       "description": "Refactor a test suite — prune tests that prove nothing, collapse case lists into properties, parametrize, and measure the shrink. Use after a refactor lands, when tests mirror the implementation, or when the suite's cost outgrows the faults it catches.",
       "installTarget": "refactor-tests",
       "nextAction": "Ask your coding agent to use the refactor-tests skill.",
-      "dependencies": ["write-simply"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:release",
@@ -376,7 +344,7 @@
       "description": "Beads/BV ticket map with ASCII dependencies and product context. Use when the user asks for: (1) the complete issue graph, (2) roadmap workstreams and execution leverage, or (3) what a set of tickets is building.",
       "installTarget": "ticket-overview",
       "nextAction": "Ask your coding agent to use the ticket-overview skill.",
-      "dependencies": ["write-simply"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:to-spec",
@@ -406,7 +374,7 @@
       "description": "Add or update docstrings, doc comments, and inline comments in source code — any language. Use when the user wants docstrings written or fixed, a conversion to a doc style (NumPy, TSDoc, rustdoc), or a comment cleanup. Source files only — README/ADR/prose docs belong to write-documentation / write-readme.",
       "installTarget": "update-docstrings",
       "nextAction": "Ask your coding agent to use the update-docstrings skill.",
-      "dependencies": ["write-simply", "writing-clearly-and-concisely"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:wayfinder",
@@ -479,16 +447,6 @@
       "dependencies": ["codebase-design", "domain-modeling", "grilling"]
     },
     {
-      "id": "skill:quick-lineage",
-      "kind": "skill",
-      "group": "Architecture",
-      "label": "quick-lineage",
-      "description": "Show an ASCII call graph with per-hop data in- and outflow in chat, fast — no files, no viewer, no gate. Use when the user wants to see the call graph or flow of a function, command, or object under discussion; after changes land, to show what they did to the flow; or before making changes, to show what you are about to do to it.",
-      "installTarget": "quick-lineage",
-      "nextAction": "Ask your coding agent to use the quick-lineage skill.",
-      "dependencies": ["show-me", "calldiff", "npm:calldiff"]
-    },
-    {
       "id": "skill:literate-programming",
       "kind": "skill",
       "group": "Architecture",
@@ -503,19 +461,79 @@
       "kind": "skill",
       "group": "Architecture",
       "label": "show-me",
-      "description": "Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.",
+      "description": "Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (Mermaid), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.",
       "installTarget": "show-me",
       "nextAction": "Ask your coding agent to use the show-me skill.",
-      "dependencies": ["write-simply"]
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
-      "id": "skill:drawio-skill",
+      "id": "skill:ponytail",
       "kind": "skill",
-      "group": "Diagrams",
-      "label": "drawio-skill",
-      "description": "Generate draw.io diagrams — .drawio XML exported to PNG/SVG/PDF/JPG via the desktop CLI. Use when the user asks for draw.io specifically, or a requested diagram needs what Mermaid's auto-layout can't give — custom styling, swimlanes, or a rich shape vocabulary (network topology, ML/DL model figures). Default and proactive diagramming belongs to mermaid-skill.",
-      "installTarget": "drawio-skill",
-      "nextAction": "Ask your coding agent to use the drawio-skill skill.",
+      "group": "Ponytail",
+      "label": "ponytail",
+      "description": "Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the task needs to exist at all (YAGNI), reach for the standard library before custom code, native platform features before dependencies, one line before fifty. Supports intensity levels: lite, full (default), ultra. Use on ANY coding task: writing, adding, refactoring, fixing, reviewing, or designing code, and choosing libraries or dependencies. Also use whenever the user says \"ponytail\", \"be lazy\", \"lazy mode\", \"simplest solution\", \"minimal solution\", \"yagni\", \"do less\", or \"shortest path\", or complains about over-engineering, bloat, boilerplate, or unnecessary dependencies. Do NOT use for non-coding requests (general knowledge, prose, translation, summaries, recipes).\n",
+      "installTarget": "ponytail",
+      "nextAction": "Ask your coding agent to use the ponytail skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-review",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail-review",
+      "description": "Code review focused exclusively on over-engineering. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility. One line per finding: location, what to cut, what replaces it. Use when the user says \"review for over-engineering\", \"what can we delete\", \"is this over-engineered\", \"simplify review\", or invokes /ponytail-review. Complements correctness-focused review, this one only hunts complexity.\n",
+      "installTarget": "ponytail-review",
+      "nextAction": "Ask your coding agent to use the ponytail-review skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-audit",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail-audit",
+      "description": "Whole-repo audit for over-engineering. Like ponytail-review, but scans the entire codebase instead of a diff: a ranked list of what to delete, simplify, or replace with stdlib/native equivalents. Use when the user says \"audit this codebase\", \"audit for over-engineering\", \"what can I delete from this repo\", \"find bloat\", \"ponytail-audit\", or \"/ponytail-audit\". One-shot report, does not apply fixes.\n",
+      "installTarget": "ponytail-audit",
+      "nextAction": "Ask your coding agent to use the ponytail-audit skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-debt",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail-debt",
+      "description": "Harvest every `ponytail:` comment in the codebase into a debt ledger, so the deliberate shortcuts and deferrals ponytail leaves behind get tracked instead of rotting into \"later means never\". Use when the user says \"ponytail debt\", \"/ponytail-debt\", \"what did ponytail defer\", \"list the shortcuts\", \"ponytail ledger\", or \"what did we mark to do later\". One-shot report, changes nothing.\n",
+      "installTarget": "ponytail-debt",
+      "nextAction": "Ask your coding agent to use the ponytail-debt skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-gain",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail-gain",
+      "description": "Show ponytail's measured impact as a compact scoreboard: less code, less cost, more speed, from the benchmark medians. One-shot display, not a persistent mode, and not a per-repo number. Trigger: /ponytail-gain, \"ponytail gain\", \"what does ponytail save\", \"show ponytail impact\", \"ponytail scoreboard\".\n",
+      "installTarget": "ponytail-gain",
+      "nextAction": "Ask your coding agent to use the ponytail-gain skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-help",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail-help",
+      "description": "Quick-reference card for all ponytail modes, skills, and commands. One-shot display, not a persistent mode. Trigger: /ponytail-help, \"ponytail help\", \"what ponytail commands\", \"how do I use ponytail\".\n",
+      "installTarget": "ponytail-help",
+      "nextAction": "Ask your coding agent to use the ponytail-help skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:impeccable",
+      "kind": "skill",
+      "group": "Design",
+      "label": "impeccable",
+      "description": "Use when the user wants to design, redesign, shape, critique, audit, polish, clarify, distill, harden, optimize, adapt, animate, colorize, extract, or otherwise improve a frontend interface. Covers websites, landing pages, dashboards, product UI, app shells, components, forms, settings, onboarding, and empty states. Handles UX review, visual hierarchy, information architecture, cognitive load, accessibility, performance, responsive behavior, theming, anti-patterns, typography, fonts, spacing, layout, alignment, color, motion, micro-interactions, UX copy, error states, edge cases, i18n, and reusable design systems or tokens. Also use for bland designs that need to become bolder or more delightful, loud designs that should become quieter, live browser iteration on UI elements, or ambitious visual effects that should feel technically extraordinary. Not for backend-only or non-UI tasks.",
+      "installTarget": "impeccable",
+      "nextAction": "Ask your coding agent to use the impeccable skill.",
       "dependencies": []
     },
     {
@@ -527,6 +545,36 @@
       "installTarget": "mermaid-skill",
       "nextAction": "Ask your coding agent to use the mermaid-skill skill.",
       "dependencies": ["npm:@mermaid-js/mermaid-cli"]
+    },
+    {
+      "id": "skill:archify",
+      "kind": "skill",
+      "group": "Diagrams",
+      "label": "archify",
+      "description": "Create polished, validated architecture, workflow, sequence, data-flow, and lifecycle/state diagrams as explorable standalone HTML with inline SVG, dark/light themes, optional trace motion, and PNG/JPEG/WebP/SVG/WebM export. Accept plain-language requirements or pasted Mermaid flowchart, sequenceDiagram, and stateDiagram input; inspect repository evidence when the diagram must reflect real code. Use when the user asks to visualize system architecture, infrastructure, cloud/security/network topology, technical workflows, API call sequences, request lifecycles, data pipelines, ETL/ELT, data lineage, state machines, or to convert/beautify Mermaid.",
+      "installTarget": "archify",
+      "nextAction": "Ask your coding agent to use the archify skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:diagram-design",
+      "kind": "skill",
+      "group": "Diagrams",
+      "label": "diagram-design",
+      "description": "Create branded architecture, IT current-state, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar/spider, polar chart (polar/radial lollipop), loop/flywheel, nested, tree, org chart, layer stack, Venn, pyramid/funnel, treemap, bar, line, Gantt and scatter charts, high-level, process, medallion, data flow, DP integration, DP security matrix, Sankey, fishbone, Wardley map, kanban, user journey, deployment, dependency graph, UML class, story map, or database schema diagrams as standalone HTML/SVG/PNG. Redraw .drawio/.drawio.png/.drawio.svg or Mermaid .mmd sources at a chosen size/detail; onboard brand tokens from a website; add semantic patterns, callouts, accessible motion, or sketchy/hand-drawn styling.",
+      "installTarget": "diagram-design",
+      "nextAction": "Ask your coding agent to use the diagram-design skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:archify-editorial",
+      "kind": "skill",
+      "group": "Diagrams",
+      "label": "archify-editorial",
+      "description": "Render any archify spec (architecture, workflow, sequence, dataflow, lifecycle; typed JSON, validated routing) in the diagram-design editorial skin (paper/ink/accent tokens, Geist + Instrument Serif, rounded elbows, zones, legend strip). Use when the user wants archify's diagram types and validation but diagram-design's look, or asks to \"render this archify spec editorially\".",
+      "installTarget": "archify-editorial",
+      "nextAction": "Ask your coding agent to use the archify-editorial skill.",
+      "dependencies": ["archify", "diagram-design"]
     },
     {
       "id": "skill:marp-slide",
@@ -639,26 +687,6 @@
       "dependencies": ["dd-pup", "github:DataDog/pup"]
     },
     {
-      "id": "skill:dd-triage-flaky-test",
-      "kind": "skill",
-      "group": "Observability",
-      "label": "dd-triage-flaky-test",
-      "description": "Load when investigating a specific flaky test. Gets history, failure pattern, and category, then recommends fix, quarantine, or escalate.",
-      "installTarget": "dd-triage-flaky-test",
-      "nextAction": "Ask your coding agent to use the dd-triage-flaky-test skill.",
-      "dependencies": ["dd-pup", "github:DataDog/pup"]
-    },
-    {
-      "id": "skill:dd-unblock-pr",
-      "kind": "skill",
-      "group": "Observability",
-      "label": "dd-unblock-pr",
-      "description": "Load when investigating a failing PR CI pipeline or checking PR health. Attributes each CI failure as flaky, infra, or regression, proposes a targeted action, and reports code coverage.",
-      "installTarget": "dd-unblock-pr",
-      "nextAction": "Ask your coding agent to use the dd-unblock-pr skill.",
-      "dependencies": ["dd-pup", "dd-triage-flaky-test", "github:DataDog/pup"]
-    },
-    {
       "id": "skill:eli5",
       "kind": "skill",
       "group": "General",
@@ -709,6 +737,16 @@
       "dependencies": []
     },
     {
+      "id": "skill:i-have-adhd",
+      "kind": "skill",
+      "group": "General",
+      "label": "i-have-adhd",
+      "description": "Shape output for a reader with ADHD: lead with the next action, number multi-step work, restate state across turns, suppress tangents, give specific time estimates, make wins visible. Invoke with /i-have-adhd; Loom users can keep it on per project with loom init --adhd.",
+      "installTarget": "i-have-adhd",
+      "nextAction": "Ask your coding agent to use the i-have-adhd skill.",
+      "dependencies": []
+    },
+    {
       "id": "skill:jira",
       "kind": "skill",
       "group": "General",
@@ -716,16 +754,6 @@
       "description": "Use when the user mentions Jira issues (e.g., \"PROJ-123\"), asks about tickets, wants to create/view/update issues, check sprint status, or manage their Jira workflow. Triggers on keywords like \"jira\", \"issue\", \"ticket\", \"sprint\", or issue key patterns.",
       "installTarget": "jira",
       "nextAction": "Ask your coding agent to use the jira skill.",
-      "dependencies": []
-    },
-    {
-      "id": "skill:no-ai-slop",
-      "kind": "skill",
-      "group": "General",
-      "label": "no-ai-slop",
-      "description": "Edit drafts into sharper, more human writing while preserving the writer's personal voice, or detect AI-slop patterns without rewriting. Use when the user wants a draft clearer, more direct, more opinionated, or less AI-sounding, or asks whether writing reads as AI.",
-      "installTarget": "no-ai-slop",
-      "nextAction": "Ask your coding agent to use the no-ai-slop skill.",
       "dependencies": []
     },
     {
@@ -739,14 +767,14 @@
       "dependencies": []
     },
     {
-      "id": "skill:stop-slop",
+      "id": "skill:stop-the-slop",
       "kind": "skill",
       "group": "General",
-      "label": "stop-slop",
-      "description": "Remove AI writing patterns from prose. Use when drafting, editing, or reviewing text to eliminate predictable AI tells.",
-      "installTarget": "stop-slop",
-      "nextAction": "Ask your coding agent to use the stop-slop skill.",
-      "dependencies": []
+      "label": "stop-the-slop",
+      "description": "Remove AI writing patterns from a draft, in Preserve stance (keep the writer's voice) or Improve stance (rewrite toward the best document, facts sourced from the repo). Detects patterns without rewriting, or scores, on request. Use when text should read less AI-written, or when asked whether it does.",
+      "installTarget": "stop-the-slop",
+      "nextAction": "Ask your coding agent to use the stop-the-slop skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
     },
     {
       "id": "skill:loom",
@@ -766,16 +794,6 @@
       "description": "Teach the user a new skill or concept, within this workspace.",
       "installTarget": "teach",
       "nextAction": "Ask your coding agent to use the teach skill.",
-      "dependencies": []
-    },
-    {
-      "id": "skill:wizard",
-      "kind": "skill",
-      "group": "General",
-      "label": "wizard",
-      "description": "Generate an interactive bash wizard that walks a human through a manual procedure — third-party setup, a one-off migration, an A→B state transition — opening URLs, capturing values, confirming each step, and writing .env files and GitHub Actions secrets.",
-      "installTarget": "wizard",
-      "nextAction": "Ask your coding agent to use the wizard skill.",
       "dependencies": []
     },
     {
@@ -799,21 +817,11 @@
       "dependencies": ["writing-clearly-and-concisely"]
     },
     {
-      "id": "skill:write-simply",
-      "kind": "skill",
-      "group": "General",
-      "label": "write-simply",
-      "description": "Prose register for short technical prose — ASD-STE100 Simplified Technical English plus Zinsser's four principles. Use when writing docstrings, comments, commit messages, or similar compact prose, or when another skill calls for the register.",
-      "installTarget": "write-simply",
-      "nextAction": "Ask your coding agent to use the write-simply skill.",
-      "dependencies": []
-    },
-    {
       "id": "skill:writing-clearly-and-concisely",
       "kind": "skill",
       "group": "General",
       "label": "writing-clearly-and-concisely",
-      "description": "Use when writing prose humans will read—documentation, commit messages, error messages, reports, UI text—or when the user wants existing text to sound human rather than AI-written (\"humanize this\", \"reads like ChatGPT\").",
+      "description": "Writing or editing prose humans read - docs, commit messages, error messages, reports, UI text. Also the register other skills invoke for compact technical prose (docstrings, comments, captions, proposals), and the pass that makes text sound human instead of AI-written (\"humanize\", \"reads like ChatGPT\").",
       "installTarget": "writing-clearly-and-concisely",
       "nextAction": "Ask your coding agent to use the writing-clearly-and-concisely skill.",
       "dependencies": []
@@ -833,10 +841,80 @@
       "kind": "skill",
       "group": "General",
       "label": "wtf",
-      "description": "Make the agent restate its last message in plain language.",
+      "description": "Restate the last message so it lands - plain language, a picture when the it helps and a from-scratch explanation when the concept is new.",
       "installTarget": "wtf",
       "nextAction": "Ask your coding agent to use the wtf skill.",
-      "dependencies": []
+      "dependencies": ["writing-clearly-and-concisely", "show-me", "eli5"]
+    },
+    {
+      "id": "skill:plannotator",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator",
+      "description": "Reference for using the Plannotator CLI: plan review, code review, annotating files, URLs, folders, and running local apps, annotating the last assistant message, browsing archived plan decisions, and exporting or sharing Guided Reviews. Invoke when asked to use Plannotator for anything not covered by a more specific plannotator-* skill.",
+      "installTarget": "plannotator",
+      "nextAction": "Ask your coding agent to use the plannotator skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-review",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-review",
+      "description": "Open Plannotator's browser-based code review UI for the current worktree or a pull request URL, then act on the feedback that comes back.",
+      "installTarget": "plannotator-review",
+      "nextAction": "Ask your coding agent to use the plannotator-review skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-annotate",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-annotate",
+      "description": "Open Plannotator's annotation UI for a markdown file, plain-text config file (.yaml, .json, .toml, .ini, .csv, .log, …), HTML file, URL, or folder and then respond to the returned annotations.",
+      "installTarget": "plannotator-annotate",
+      "nextAction": "Ask your coding agent to use the plannotator-annotate skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-last",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-last",
+      "description": "Open Plannotator on the latest rendered assistant message and use the returned annotations to revise that message or continue.",
+      "installTarget": "plannotator-last",
+      "nextAction": "Ask your coding agent to use the plannotator-last skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-compound",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-compound",
+      "description": "Analyze a user's Plannotator plan archive to extract denial patterns, feedback taxonomy, evolution over time, and actionable prompt improvements — then produce a polished HTML dashboard report. Falls back to Claude Code ExitPlanMode denial reasons when Plannotator data is unavailable.\n",
+      "installTarget": "plannotator-compound",
+      "nextAction": "Ask your coding agent to use the plannotator-compound skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-setup-goal",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-setup-goal",
+      "description": "Turn an idea or objective into a goal package for /goal. Interviews the user, builds a reviewed fact sheet via Plannotator, then explores the codebase to produce an execution plan.",
+      "installTarget": "plannotator-setup-goal",
+      "nextAction": "Ask your coding agent to use the plannotator-setup-goal skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-visual-explainer",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-visual-explainer",
+      "description": "Generate self-contained HTML visualizations with Plannotator theming. Use for implementation plans, PR explainers, architecture diagrams, data tables, slide decks, and any visual explanation of technical concepts. Plans and PR explainers follow Plannotator's prescriptive approach; all other visual content delegates to nicobailon/visual-explainer.\n",
+      "installTarget": "plannotator-visual-explainer",
+      "nextAction": "Ask your coding agent to use the plannotator-visual-explainer skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
     },
     {
       "id": "tool:loom-teams",
@@ -1056,6 +1134,17 @@
       "installTarget": "github:DataDog/pup",
       "nextAction": "Run `pup auth login` once.",
       "bin": "pup",
+      "companions": []
+    },
+    {
+      "id": "tool:plannotator",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "plannotator",
+      "description": "Browser-based plan and code review for coding agents — the plannotator skills drive it.",
+      "installTarget": "github:backnotprop/plannotator",
+      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart.",
+      "bin": "plannotator",
       "companions": []
     }
   ]

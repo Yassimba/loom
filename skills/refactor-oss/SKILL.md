@@ -26,7 +26,7 @@ Done when you can say, for the scope, which packages are available and which cat
 
 For each piece of hand-rolled machinery in scope, apply the catalog's standing orders ([LIBRARIES.md](LIBRARIES.md)).
 
-Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the hand-roll, its replacement, and the code it deletes, followed by two fenced Markdown code blocks tagged with the code's source language:
+Invoke the `writing-clearly-and-concisely` skill, then present a numbered list of suggestions; each item is one sentence naming the hand-roll, its replacement, and the code it deletes, followed by two fenced Markdown code blocks tagged with the code's source language:
 
 This is what the code looks like before:
 

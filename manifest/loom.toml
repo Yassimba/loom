@@ -35,6 +35,9 @@ herdr = { version = "0.8.0", os = ["macos", "linux"] }
 # code review TUI (annotate diffs, export to GitHub or clipboard)
 "github:agavra/tuicr" = "v0.22.0"
 
+# browser-based plan and code review for coding agents
+"github:backnotprop/plannotator" = "v0.27.9"
+
 # forges
 gh = "2.97.0"
 glab = "1.112.0"

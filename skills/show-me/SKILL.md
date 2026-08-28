@@ -1,15 +1,30 @@
 ---
 name: show-me
-description: Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.
+description: Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (Mermaid), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.
 ---
 
 # Show Me
 
-Help the user understand the current topic of conversation visually. Skip the preamble and keep prose brief. Pick the smallest view that makes the key point clear.
+1. Name the point the reader needs in one line.
+2. Pick the smallest view that makes it clear, from the table. Place the view next to that line; captions follow the `writing-clearly-and-concisely` register (invoke it via the Skill tool).
 
-Invoke the `write-simply` skill (via the Skill tool) — captions follow its register.
+| The point is…                                            | View                                      |
+| -------------------------------------------------------- | ----------------------------------------- |
+| Logic or an algorithm                                    | pseudocode                                |
+| Runtime control flow                                     | call tree                                 |
+| UI structure, with the state and module boundaries       | component tree                            |
+| File responsibility or a broad refactor                  | shallow file tree                         |
+| What changes, when the surrounding shape exists          | the same shape in a `diff` fence          |
+| Component interaction or data flow                       | Mermaid sequence or flowchart             |
+| A call graph with the data on every hop                  | lineage — read `references/lineage.md`    |
+| A visual UI, layout, or state comparison                 | one HTML file — read `references/html.md` |
+| Most of it is new, or the reader needs a copyable target | the whole block                           |
 
-- Show logic or an algorithm as pseudocode:
+Keep only the calls, files, props, states, and boundaries that answer the current question.
+
+## Shapes
+
+Pseudocode:
 
 ```text
 on(save)
@@ -19,7 +34,7 @@ on(save)
   return fresh result
 ```
 
-- Show runtime control flow as a call tree:
+Call tree:
 
 ```text
 submit_form
@@ -29,7 +44,7 @@ submit_form
   navigate_to_session
 ```
 
-- Show UI structure as a component tree, including state and module boundaries that matter:
+Component tree, with the boundaries that matter:
 
 ```python
 SessionPage  # apps/example/routes/session.py
@@ -38,7 +53,7 @@ SessionPage  # apps/example/routes/session.py
     RunSkillButton  # packages/ui
 ```
 
-- Show file responsibility or a broad refactor as a shallow file tree:
+File tree:
 
 ```text
 src/
@@ -47,7 +62,19 @@ src/
 └── transport/      # sends API requests
 ```
 
-- Show component interaction, control flow, or data flow with Mermaid:
+Diff — any shape above, `+`/`-` on the lines that change, unchanged lines as context:
+
+```diff
+ submit_form
+   create_session
+     persist_prompt
++    expand_skill_mention
+     launch_agent
+   navigate_to_session
++    subscribe_to_events
+```
+
+Mermaid:
 
 ```mermaid
 sequenceDiagram
@@ -59,72 +86,6 @@ sequenceDiagram
     Daemon-->>UI: stream result
 ```
 
-- Use `diff` when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.
+## Done means
 
-For a component change:
-
-```diff
- SessionPage
-   get_session_events()
-   SessionToolbar
-+    RunSkillButton
-   SessionTimeline
-+    SkillResultCard
-```
-
-For a file-layout change:
-
-```diff
- src/
- ├── commands/
-+│   └── show_me.py       # expands the slash command
- ├── sessions/
--└── transport.py
-+└── transport/
-+    ├── client.py
-+    └── stream.py
-```
-
-For a call-tree or call-stack change:
-
-```diff
- submit_form
-   create_session
-     persist_prompt
-+    expand_skill_mention
-     launch_agent
--  navigate_to_session
-+  navigate_to_session
-+    subscribe_to_events
-```
-
-For a state or control-flow change:
-
-```diff
- on(save)
--  write content
-+  if content is unchanged
-+    return cached result
-+  write new content
-+  invalidate cache
-```
-
-- Show the whole block when most of it is new, when omitted context would hide ownership or order, or when the user needs a copyable target shape:
-
-```python
-def expand_skill(command: str) -> str:
-    skill_name = command[1:]
-    return f"use the {skill_name} skill"
-```
-
-- For a visual UI, layout, state comparison, or concept too dense for Mermaid, write one focused HTML file — a diagram, an infographic, or a short slide deck, whichever fits the point. Match the product's colors, type, spacing, and components; use real labels and data; support desktop and mobile. Then open it for the user:
-
-```
-Bash(open path/to/show-me-{description}.html)
-```
-
-### guidance
-
-Place each visual next to the short text it supports. Keep only the calls, files, props, states, and boundaries needed to answer the user's current question or the options to resolve the current discussion point.
-
-You may use one of these, you may use several, it is unlikely you will use all of them. Use your judgement and don't overwhelm the user.
+The reader can answer their question from the view and its one-line caption, without the surrounding prose.
