@@ -634,3 +634,20 @@ fn render_gallery() {
     wizard.handle_install_event(InstallEvent::Status(1, ExecStatus::Running));
     show(&mut wizard, &mut terminal);
 }
+
+#[test]
+fn narrow_terminals_render_one_column_without_panicking() {
+    let mut wizard = wizard();
+    for (w, h) in [(72u16, 20u16), (60, 20), (40, 12), (24, 8)] {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
+        terminal.draw(|frame| wizard.draw(frame)).unwrap();
+        press(&mut wizard, &[KeyCode::Left]);
+        terminal.draw(|frame| wizard.draw(frame)).unwrap();
+        press(&mut wizard, &[KeyCode::Right]);
+    }
+    // Under 70 columns only the focused column is on screen and clickable.
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    assert!(wizard.hits.groups.is_none());
+    assert!(wizard.hits.list.is_some());
+}

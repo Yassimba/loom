@@ -14,6 +14,7 @@ use ratatui::widgets::{
     Block, BorderType, Clear, Gauge, List, ListItem, ListState, Padding, Paragraph, Wrap,
 };
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 pub(crate) const ACCENT: Color = Color::Cyan;
 const OK: Color = Color::Green;
@@ -85,7 +86,30 @@ impl Wizard {
                 Style::new().fg(OK),
             ));
         }
-        for (position, &index) in self.visible_stages().iter().enumerate() {
+        let visible = self.visible_stages();
+        if area.width < 80 {
+            // No room for the breadcrumb: "step 2/4 · Where".
+            let step = visible
+                .iter()
+                .position(|&index| index == self.stage_index)
+                .unwrap_or(0)
+                + 1;
+            spans.push(Span::styled(
+                format!("step {step}/{} · ", visible.len()),
+                Style::new().dim(),
+            ));
+            spans.push(Span::styled(
+                self.stages[self.stage_index].title(),
+                Style::new().fg(ACCENT).bold(),
+            ));
+            spans.push(Span::raw(" "));
+            frame.render_widget(
+                Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
+                area,
+            );
+            return;
+        }
+        for (position, &index) in visible.iter().enumerate() {
             if position > 0 {
                 spans.push(Span::styled(" › ", Style::new().dim()));
             }
@@ -152,7 +176,10 @@ impl Wizard {
             back_area,
         );
         let next_style = if next_enabled {
-            Style::new().fg(Color::Black).bg(ACCENT).bold()
+            Style::new()
+                .fg(ACCENT)
+                .add_modifier(Modifier::REVERSED)
+                .bold()
         } else {
             Style::new().dim()
         };
@@ -261,21 +288,36 @@ impl Wizard {
         area: Rect,
         stage: &ChooseStage,
     ) -> (ListHit, ListHit) {
-        // Column one is as wide as its longest title plus marks and a count.
+        let searching = self.search.is_some();
+        // Column one is as wide as its longest title plus marks and a count,
+        // never more than a third of the screen. Under 70 columns there is
+        // no room for three columns: show the focused one alone.
         let widest = stage
             .groups
             .iter()
-            .map(|group| group.title.chars().count())
+            .map(|group| group.title.width())
             .max()
             .unwrap_or(0) as u16;
-        let groups_width = (widest + 14).clamp(24, area.width / 3);
-        let [groups_area, items_area, details_area] = Layout::horizontal([
-            Constraint::Length(groups_width),
-            Constraint::Min(30),
-            Constraint::Percentage(34),
-        ])
-        .areas(area);
-        let searching = self.search.is_some();
+        let max_groups = (area.width / 3).max(1);
+        let groups_width = (widest + 14).clamp(24.min(max_groups), max_groups);
+        let narrow = area.width < 70;
+        let [groups_area, items_area, details_area] = if narrow {
+            let show_groups = stage.focus == Pane::Groups && !searching;
+            let [only] = Layout::horizontal([Constraint::Min(1)]).areas(area);
+            let empty = Rect::new(area.x, area.y, 0, 0);
+            if show_groups {
+                [only, empty, empty]
+            } else {
+                [empty, only, empty]
+            }
+        } else {
+            Layout::horizontal([
+                Constraint::Length(groups_width),
+                Constraint::Min(30),
+                Constraint::Percentage(34),
+            ])
+            .areas(area)
+        };
 
         // Column one: every group with its state.
         let group_width = groups_area.width.saturating_sub(2) as usize;
@@ -290,15 +332,22 @@ impl Wizard {
             stage.group_cursor,
         );
         let groups_focused = stage.focus == Pane::Groups && !searching;
-        frame.render_stateful_widget(
-            List::new(groups)
-                .block(bordered(" Groups ", groups_focused))
-                .highlight_style(highlight(groups_focused)),
-            groups_area,
-            &mut ListState::default()
-                .with_selected(Some(stage.group_cursor))
-                .with_offset(group_offset),
-        );
+        if groups_area.width > 0 {
+            let title = if narrow {
+                " Groups · → items "
+            } else {
+                " Groups "
+            };
+            frame.render_stateful_widget(
+                List::new(groups)
+                    .block(bordered(title, groups_focused))
+                    .highlight_style(highlight(groups_focused)),
+                groups_area,
+                &mut ListState::default()
+                    .with_selected(Some(stage.group_cursor))
+                    .with_offset(group_offset),
+            );
+        }
 
         // Column two: the focused group's rows, or the search hits.
         let (rows, cursor, title): (Vec<Row>, usize, String) = match &self.search {
@@ -325,6 +374,15 @@ impl Wizard {
                 (group.rows.clone(), stage.item_cursor, title)
             }
         };
+        // Label column from the widest label on screen; the description
+        // takes what is left and is cut with an ellipsis.
+        let label_width = rows
+            .iter()
+            .map(|row| self.row_label(row).width())
+            .max()
+            .unwrap_or(0)
+            .min(32);
+        let description_width = (items_area.width as usize).saturating_sub(2 + 5 + label_width + 1);
         let items = if !searching && stage.group().everything {
             vec![ListItem::new(Line::styled(
                 "  space picks or clears the whole catalog; ↓ for the groups.",
@@ -332,20 +390,27 @@ impl Wizard {
             ))]
         } else {
             rows.iter()
-                .map(|row| self.choose_row_item(row))
+                .map(|row| self.choose_row_item(row, label_width, description_width))
                 .collect::<Vec<_>>()
         };
         let offset = list_offset(rows.len(), items_area.height.saturating_sub(2), cursor);
         let items_focused = stage.focus == Pane::Items || searching;
-        frame.render_stateful_widget(
-            List::new(items)
-                .block(bordered(&title, items_focused))
-                .highlight_style(highlight(items_focused)),
-            items_area,
-            &mut ListState::default()
-                .with_selected((!rows.is_empty()).then_some(cursor))
-                .with_offset(offset),
-        );
+        let title = if narrow && !searching {
+            format!("{title}· ← groups ")
+        } else {
+            title
+        };
+        if items_area.width > 0 {
+            frame.render_stateful_widget(
+                List::new(items)
+                    .block(bordered(&title, items_focused))
+                    .highlight_style(highlight(items_focused)),
+                items_area,
+                &mut ListState::default()
+                    .with_selected((!rows.is_empty()).then_some(cursor))
+                    .with_offset(offset),
+            );
+        }
 
         // Column three: what the cursor is on.
         let details = match (stage.focus, rows.get(cursor)) {
@@ -359,15 +424,17 @@ impl Wizard {
             (_, Some(row)) => self.row_details(row),
             (_, None) => Vec::new(),
         };
-        frame.render_widget(
-            Paragraph::new(details)
-                .wrap(Wrap { trim: true })
-                .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
-            details_area,
-        );
+        if details_area.width > 0 {
+            frame.render_widget(
+                Paragraph::new(details)
+                    .wrap(Wrap { trim: true })
+                    .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
+                details_area,
+            );
+        }
         (
-            Some((groups_area, group_offset)),
-            Some((items_area, offset)),
+            (groups_area.width > 0).then_some((groups_area, group_offset)),
+            (items_area.width > 0).then_some((items_area, offset)),
         )
     }
 
@@ -402,22 +469,13 @@ impl Wizard {
         };
         // Title, then at least one space, then the count flush right;
         // a title that cannot fit is cut with an ellipsis.
-        let room = width.saturating_sub(5 + count.chars().count() + 2);
-        let title = if group.title.chars().count() > room {
-            let cut = group
-                .title
-                .chars()
-                .take(room.saturating_sub(1))
-                .collect::<String>();
-            format!("{cut}…")
-        } else {
-            group.title.clone()
-        };
-        let pad = room - title.chars().count() + 1;
+        let room = width.saturating_sub(5 + count.width() + 2);
+        let title = cut(&group.title, room);
+        let fill = room.saturating_sub(title.width()) + 1;
         ListItem::new(Line::from(vec![
             Span::styled(format!(" {mark} "), mark_style),
             Span::styled(title, title_style),
-            Span::raw(" ".repeat(pad)),
+            Span::raw(" ".repeat(fill)),
             Span::styled(
                 count,
                 if mark == ON || mark == PART {
@@ -429,48 +487,64 @@ impl Wizard {
         ]))
     }
 
-    fn choose_row_item(&self, row: &Row) -> ListItem<'_> {
+    fn row_label(&self, row: &Row) -> &str {
         match row {
+            Row::Resource(index) => &self.model.resources[*index].label,
+            Row::Setting(index) => &self.model.settings[*index].label,
+        }
+    }
+
+    fn choose_row_item(&self, row: &Row, label_width: usize, room: usize) -> ListItem<'_> {
+        let label = pad(self.row_label(row), label_width);
+        let (mark, mark_style, dim_label, note) = match row {
             Row::Resource(index) => {
                 let resource = &self.model.resources[*index];
                 if self.resource_installed(*index) {
-                    return ListItem::new(Line::from(vec![
-                        Span::styled("  ✓  ", Style::new().fg(OK).dim()),
-                        Span::styled(column(&resource.label), Style::new().dim()),
-                        Span::styled(resource.description.clone(), Style::new().dim()),
-                    ]));
+                    (
+                        " ✓ ",
+                        Style::new().fg(OK).dim(),
+                        true,
+                        resource.description.clone(),
+                    )
+                } else if let Some(parent) = self.required_note(*index) {
+                    (
+                        ON,
+                        Style::new().fg(OK).dim(),
+                        true,
+                        format!("needed by {parent}"),
+                    )
+                } else {
+                    let (mark, style) = mark_for(self.selected[*index]);
+                    (mark, style, false, resource.description.clone())
                 }
-                if let Some(parent) = self.required_note(*index) {
-                    return ListItem::new(Line::from(vec![
-                        Span::styled(format!(" {ON} "), Style::new().fg(OK).dim()),
-                        Span::styled(column(&resource.label), Style::new().dim()),
-                        Span::styled(format!("needed by {parent}"), Style::new().dim()),
-                    ]));
-                }
-                let (mark, style) = mark_for(self.selected[*index]);
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!(" {mark} "), style),
-                    Span::raw(column(&resource.label)),
-                    Span::styled(resource.description.clone(), Style::new().dim()),
-                ]))
             }
             Row::Setting(index) => {
                 let spec = &self.model.settings[*index];
                 if self.setting_applied(*index) {
-                    return ListItem::new(Line::from(vec![
-                        Span::styled("  ✓  ", Style::new().fg(OK).dim()),
-                        Span::styled(column(&spec.label), Style::new().dim()),
-                        Span::styled(spec.description.clone(), Style::new().dim()),
-                    ]));
+                    (
+                        " ✓ ",
+                        Style::new().fg(OK).dim(),
+                        true,
+                        spec.description.clone(),
+                    )
+                } else {
+                    let (mark, style) = mark_for(self.setting_on[*index]);
+                    (mark, style, false, spec.description.clone())
                 }
-                let (mark, style) = mark_for(self.setting_on[*index]);
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!(" {mark} "), style),
-                    Span::raw(column(&spec.label)),
-                    Span::styled(spec.description.clone(), Style::new().dim()),
-                ]))
             }
-        }
+        };
+        ListItem::new(Line::from(vec![
+            Span::styled(format!(" {mark} "), mark_style),
+            Span::styled(
+                format!("{label} "),
+                if dim_label {
+                    Style::new().dim()
+                } else {
+                    Style::new()
+                },
+            ),
+            Span::styled(cut(&note, room), Style::new().dim()),
+        ]))
     }
 
     fn group_details(&self, group: &Group) -> Vec<Line<'_>> {
@@ -631,6 +705,11 @@ impl Wizard {
             Span::raw("Project"),
             Span::styled(format!("  only {project_name}/"), Style::new().dim()),
         ]))];
+        let agent_width = SkillAgent::ALL
+            .iter()
+            .map(|agent| agent.label().width())
+            .max()
+            .unwrap_or(0);
         for (agent, on) in SkillAgent::ALL.iter().zip(&self.agent_on) {
             let (mark, style) = mark_for(*on);
             let tree = match self.skill_scope {
@@ -639,7 +718,7 @@ impl Wizard {
             };
             items.push(ListItem::new(Line::from(vec![
                 Span::styled(format!(" {mark} "), style),
-                Span::raw(column(agent.label())),
+                Span::raw(format!("{} ", pad(agent.label(), agent_width))),
                 Span::styled(tidy(&tree, &destination.home), Style::new().dim()),
             ])));
         }
@@ -714,13 +793,28 @@ impl Wizard {
                     .map(|parent| parent.label.clone())
             };
             let plan = self.plan();
+            let label_width = expanded
+                .iter()
+                .map(|resource| resource.label.width())
+                .chain(
+                    self.selected_settings()
+                        .iter()
+                        .map(|spec| spec.label.width()),
+                )
+                .chain(
+                    plan.iter()
+                        .flat_map(|plan| plan.prerequisites.iter())
+                        .map(|step| step.target.width()),
+                )
+                .max()
+                .unwrap_or(0);
             if let Ok(plan) = &plan {
                 if !plan.prerequisites.is_empty() {
                     lines.push(heading("Installs first", plan.prerequisites.len()));
                     for step in &plan.prerequisites {
                         lines.push(Line::from(vec![
                             Span::styled("  ! ", Style::new().fg(WARN).bold()),
-                            Span::raw(column(&step.target)),
+                            Span::raw(format!("{} ", pad(&step.target, label_width))),
                             Span::styled(step.action.display(), Style::new().dim()),
                         ]));
                     }
@@ -757,7 +851,7 @@ impl Wizard {
                 for resource in of_kind {
                     let mut spans = vec![
                         Span::styled("  + ", Style::new().fg(OK).bold()),
-                        Span::raw(column(&resource.label)),
+                        Span::raw(format!("{} ", pad(&resource.label, label_width))),
                     ];
                     if !direct_ids.contains(&resource.id) {
                         spans.push(Span::styled(
@@ -779,7 +873,7 @@ impl Wizard {
                 for spec in &settings {
                     lines.push(Line::from(vec![
                         Span::styled("  ~ ", Style::new().fg(WARN).bold()),
-                        Span::raw(column(&spec.label)),
+                        Span::raw(format!("{} ", pad(&spec.label, label_width))),
                         Span::styled(
                             spec.target_path(&self.model.settings_paths)
                                 .display()
@@ -843,6 +937,12 @@ impl Wizard {
         );
 
         let spinner = SPINNER[stage.tick % SPINNER.len()];
+        let label_width = stage
+            .items
+            .iter()
+            .map(|item| item.label.width())
+            .max()
+            .unwrap_or(0);
         let items = stage
             .items
             .iter()
@@ -864,7 +964,7 @@ impl Wizard {
                 };
                 let mut spans = vec![
                     Span::styled(format!(" {mark} "), style),
-                    Span::raw(format!("{:<36} ", item.label)),
+                    Span::raw(format!("{} ", pad(&item.label, label_width))),
                 ];
                 if !note.is_empty() {
                     spans.push(Span::styled(
@@ -947,9 +1047,26 @@ fn plural(count: usize, noun: &str) -> String {
     }
 }
 
-/// A fixed-width label column so descriptions line up.
-fn column(label: &str) -> String {
-    format!("{label:<22} ")
+/// Pad to a display width (wide glyphs count double).
+fn pad(text: &str, width: usize) -> String {
+    let fill = width.saturating_sub(text.width());
+    format!("{text}{}", " ".repeat(fill))
+}
+
+/// Cut to a display width with an ellipsis.
+fn cut(text: &str, width: usize) -> String {
+    if text.width() <= width {
+        return text.to_owned();
+    }
+    let mut out = String::new();
+    for ch in text.chars() {
+        let next = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if out.width() + next + 1 > width {
+            break;
+        }
+        out.push(ch);
+    }
+    format!("{}…", out.trim_end())
 }
 
 /// A path with the home directory folded to `~`.
@@ -995,11 +1112,13 @@ fn bordered(title: &str, focused: bool) -> Block<'_> {
         .title(title.to_owned())
 }
 
+/// The cursor row: the terminal's own colors inverted, tinted with the
+/// accent when the column has focus, so contrast holds on any palette.
 fn highlight(focused: bool) -> Style {
     if focused {
-        Style::new().bg(ACCENT).fg(Color::Black)
+        Style::new().fg(ACCENT).add_modifier(Modifier::REVERSED)
     } else {
-        Style::new().bg(Color::DarkGray)
+        Style::new().add_modifier(Modifier::REVERSED | Modifier::DIM)
     }
 }
 
