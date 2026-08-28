@@ -64,8 +64,9 @@ Note: the global `merge` skill is not a rename of `resolving-merge-conflicts`
 Use Conventional Commits. [release-please](https://github.com/googleapis/release-please)
 (`release.yml`, config in `release-please-config.json`) keeps one release PR
 per changed component — `cli/loom`, `cli/loom-teams`, `plugins/openai-fast` —
-with the version bump, changelog, and the manifest pin. Merging it tags
-`<component>-vX.Y.Z`, uploads the binaries, and publishes to npm. A skill
+with the version bump and changelog. Merging it tags `<component>-vX.Y.Z`,
+uploads the binaries, then moves the `manifest/loom.toml` pin to the new tag
+and publishes to npm. A skill
 change regenerates `cli/loom/setup-catalog.json`, which is what makes it a
 loom release. Do not create component tags by hand.
 
