@@ -46,13 +46,8 @@ if [[ ! -x "$mise_bin" ]]; then
   mise_bin=$(PATH="$base_path" command -v mise)
 fi
 "$mise_bin" -C "$HOME" exec -- loom --version >"$evidence_dir/loom-version.txt" 2>&1
-loom_version=$(awk '{print $2}' "$evidence_dir/loom-version.txt")
-if [[ $loom_version == 0.10.0 ]]; then
-  echo "deferred until Loom 0.10.1 is published" >"$evidence_dir/tokei-version.txt"
-else
-  "$mise_bin" -C "$HOME" exec -- loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1
-  "$mise_bin" -C "$HOME" exec -- tokei --version >"$evidence_dir/tokei-version.txt" 2>&1
-fi
+"$mise_bin" -C "$HOME" exec -- loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1
+"$mise_bin" -C "$HOME" exec -- tokei --version >"$evidence_dir/tokei-version.txt" 2>&1
 "$mise_bin" -C "$HOME" exec -- loom status >"$evidence_dir/loom-status.txt" 2>&1
 "$mise_bin" -C "$HOME" exec -- br --version >"$evidence_dir/br-version.txt" 2>&1
 "$mise_bin" -C "$HOME" exec -- bv --version >"$evidence_dir/bv-version.txt" 2>&1
@@ -64,12 +59,10 @@ test "$(grep -c '^# core:begin' "$selection")" -eq 1
 test "$(grep -c '^# core:end' "$selection")" -eq 1
 grep -Fq 'beads_rust' "$selection"
 grep -Fq 'beads_viewer' "$selection"
-if [[ $loom_version != 0.10.0 ]]; then
-  if [[ $(uname -s) == Darwin ]]; then
-    grep -Fq '"cargo:tokei"' "$selection"
-  else
-    grep -Fq '"aqua:XAMPPRocky/tokei"' "$selection"
-  fi
+if [[ $(uname -s) == Darwin ]]; then
+  grep -Fq '"cargo:tokei"' "$selection"
+else
+  grep -Fq '"aqua:XAMPPRocky/tokei"' "$selection"
 fi
 
 for skill_root in \

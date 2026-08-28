@@ -71,7 +71,7 @@ pub struct Catalog {
 
 impl Catalog {
     pub fn embedded() -> Result<Self> {
-        let catalog: Self = serde_json::from_str(include_str!("../../../setup-catalog.json"))
+        let catalog: Self = serde_json::from_str(include_str!("../setup-catalog.json"))
             .context("embedded setup catalog is invalid")?;
         anyhow::ensure!(
             catalog.schema_version == 1,

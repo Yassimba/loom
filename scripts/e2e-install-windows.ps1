@@ -52,10 +52,7 @@ foreach ($Candidate in @(
 $Mise = (Get-Command mise -ErrorAction Stop).Source
 & $Mise -C $HOME exec -- loom --version *> (Join-Path $EvidenceDir "loom-version.txt")
 if ($LASTEXITCODE -ne 0) { throw "installed Loom did not run" }
-$LoomVersion = ((Get-Content (Join-Path $EvidenceDir "loom-version.txt") -Raw) -split '\s+')[1]
-if ($LoomVersion -eq "0.10.0") {
-  "deferred until Loom 0.10.1 is published" | Set-Content (Join-Path $EvidenceDir "tokei-version.txt")
-} elseif ($env:LOOM_E2E_TOKEI -eq "skip") {
+if ($env:LOOM_E2E_TOKEI -eq "skip") {
   "unsupported: upstream Tokei publishes no Windows ARM64 asset" | Set-Content (Join-Path $EvidenceDir "tokei-version.txt")
 } else {
   & $Mise -C $HOME exec -- loom add --tool tokei --yes *> (Join-Path $EvidenceDir "tokei-install.txt")
@@ -87,7 +84,7 @@ if ($ExpectBeads) {
     if (-not $SelectionText.Contains($Expected)) { throw "selection is missing $Expected" }
   }
 }
-if ($LoomVersion -ne "0.10.0" -and $env:LOOM_E2E_TOKEI -ne "skip" -and -not $SelectionText.Contains('"aqua:XAMPPRocky/tokei"')) {
+if ($env:LOOM_E2E_TOKEI -ne "skip" -and -not $SelectionText.Contains('"aqua:XAMPPRocky/tokei"')) {
   throw "selection is missing the native Tokei backend"
 }
 

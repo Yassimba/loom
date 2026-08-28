@@ -9,22 +9,19 @@ on:
       - manifest/**
       - scripts/e2e-install-*.ps1
       - scripts/e2e-install-*.sh
-      - setup-catalog.json
+      - cli/loom/setup-catalog.json
   schedule:
     - cron: "17 6 * * 1"
   workflow_dispatch:
-  workflow_run:
-    workflows: [Publish semantic release plan]
-    types: [completed]
+  # Called by release.yml once a release's binaries are uploaded.
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   unix:
-    if: >-
-      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.ref != 'release/auto')
+    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'release-please--')
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -55,9 +52,7 @@ jobs:
           if-no-files-found: warn
 
   windows:
-    if: >-
-      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.ref != 'release/auto')
+    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'release-please--')
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30

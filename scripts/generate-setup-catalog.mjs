@@ -6,7 +6,7 @@ import { buildSetupCatalog, readSetupPresets } from "./catalog-lib.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "..");
-const outputPath = join(repoRoot, "setup-catalog.json");
+const outputPath = join(repoRoot, "cli", "loom", "setup-catalog.json");
 
 export function renderSetupCatalog(resources, presets) {
   const expanded = `${JSON.stringify({ schemaVersion: 1, presets, resources }, null, 2)}\n`;
