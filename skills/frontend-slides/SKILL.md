@@ -13,7 +13,7 @@ Create zero-dependency, animation-rich HTML presentations that run entirely in t
 2. **Show, Don't Tell** — Generate visual previews, not abstract choices. People discover what they want by seeing it.
 3. **Distinctive Design** — No generic "AI slop." Every presentation must feel custom-crafted.
 4. **Progressive Disclosure** — Read lightweight style indexes first. For bold templates, use small preview cards for style previews and load the full `design.md` only after the user picks that template.
-5. **Fixed 16:9 Stage (NON-NEGOTIABLE)** — Every deck uses a 1920×1080 slide canvas scaled as a whole to the viewport. Slides must stay 16:9 on every screen, including phones. Do not reflow slide content to fit the device.
+5. **Fixed 16:9 Stage (NON-NEGOTIABLE)** — Every deck uses a 1920×1080 slide canvas scaled as a whole to the viewport, unless a project house style (Phase 2) sets its own stage size. Slides must stay 16:9 on every screen, including phones. Do not reflow slide content to fit the device.
 
 ## Design Aesthetics
 
@@ -129,9 +129,15 @@ If user provides an image folder:
 
 ## Phase 2: Style Discovery
 
-**This is the "show, don't tell" phase.** Most people can't articulate design preferences in words.
+### Step 2.0-pre: House style
+
+First check whether the project already has a house style: a `house-style` skill under `.claude/skills/`, or a `HOUSE-STYLE.md` at the repo root. When one exists, read it, tell the user the deck is being built in that style, and go straight to Phase 3 — the deck's look is already decided, so style previews only offer choices the project has ruled out.
+
+A house style outranks everything this skill says about design, including the fixed 1920×1080 stage and the aesthetic guidance above: its stage size, stylesheets, fonts, and slide-layout contracts are the design system, copied verbatim rather than re-derived. Every other phase runs unchanged.
 
 ### Step 2.0: Generate 3 Style Previews Directly
+
+**This is the "show, don't tell" phase.** Most people can't articulate design preferences in words.
 
 Based on purpose, audience, mood, and content density, generate 3 distinct single-slide HTML previews showing typography, colors, animation, and overall aesthetic.
 
