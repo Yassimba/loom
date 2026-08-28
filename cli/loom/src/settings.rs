@@ -6,7 +6,8 @@
 use crate::jsonc;
 use anyhow::{Context, Result};
 use serde_json::{json, Value as Json};
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table};
 
@@ -30,7 +31,10 @@ pub enum SettingChange {
     /// for the same command already exists.
     HerdrKeyCommands(Vec<KeyCommand>),
     /// Set (or subset-merge into) a top-level key in Zed's settings.json.
-    ZedValue { key: String, value: Json },
+    ZedValue {
+        key: String,
+        value: Json,
+    },
     /// Bind keys in one `context` block of Zed's keymap.json by appending a
     /// block at the end (a later block wins in Zed). A key the user already
     /// bound anywhere in that context is left alone.
@@ -38,6 +42,10 @@ pub enum SettingChange {
         context: String,
         bindings: Vec<ZedKeybinding>,
     },
+    /// Create a JSON config with curated defaults, but never replace an
+    /// existing file.
+    PiFffDefaults(Json),
+    PiSandboxDefaults(Json),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +70,8 @@ pub struct SettingsPaths {
     pub herdr_config: PathBuf,
     pub zed_settings: PathBuf,
     pub zed_keymap: PathBuf,
+    pub pi_fff_config: PathBuf,
+    pub pi_sandbox_config: PathBuf,
 }
 
 impl SettingsPaths {
@@ -90,10 +100,20 @@ impl SettingsPaths {
                 None => home_config_dir()?.join("zed"),
             }
         };
+        let pi_agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or(
+                dirs::home_dir()
+                    .context("home directory is unavailable")?
+                    .join(".pi/agent"),
+            );
         Ok(Self {
             herdr_config: herdr_base.join("herdr").join("config.toml"),
             zed_settings: zed_dir.join("settings.json"),
             zed_keymap: zed_dir.join("keymap.json"),
+            pi_fff_config: pi_agent_dir.join("pi-fff.json"),
+            pi_sandbox_config: pi_agent_dir.join("sandbox.json"),
         })
     }
 }
@@ -138,6 +158,38 @@ pub fn curated_settings() -> Vec<SettingSpec> {
                 value: json!({"left_padding": 0, "right_padding": 0}),
             },
         },
+        SettingSpec {
+            id: "pi:fff-override".into(),
+            group: "Pi".into(),
+            label: "FFF native-tool override".into(),
+            description: "Replace Pi's native find and grep tools with FFF and use its frecency-ranked @ autocomplete. Existing FFF settings are never replaced.".into(),
+            related_resource: Some("pi-package:@ff-labs/pi-fff".into()),
+            change: SettingChange::PiFffDefaults(json!({
+                "$schema": "https://raw.githubusercontent.com/dmtrKovalenko/fff/main/packages/pi-fff/pi-fff.schema.json",
+                "mode": "override"
+            })),
+        },
+        SettingSpec {
+            id: "pi:sandbox-defaults".into(),
+            group: "Pi".into(),
+            label: "Repo-only sandbox defaults".into(),
+            description: "Create a macOS/Linux Pi sandbox policy: repo-only file access, protected secrets, and GitHub-only shell networking. Existing sandbox settings are never replaced.".into(),
+            related_resource: Some("pi-package:pi-sandbox".into()),
+            change: SettingChange::PiSandboxDefaults(json!({
+                "enabled": true,
+                "permissionPromptTimeoutSeconds": 600,
+                "network": {
+                    "allowedDomains": ["github.com", "*.github.com"],
+                    "deniedDomains": []
+                },
+                "filesystem": {
+                    "denyRead": ["/Users", "/home"],
+                    "allowRead": ["."],
+                    "allowWrite": [".", "/tmp"],
+                    "denyWrite": [".pi/sandbox.json", ".env", ".env.*", "*.pem", "*.key"]
+                }
+            })),
+        },
     ]
 }
 
@@ -147,6 +199,8 @@ impl SettingSpec {
             SettingChange::HerdrKeyCommands(_) => &paths.herdr_config,
             SettingChange::ZedValue { .. } => &paths.zed_settings,
             SettingChange::ZedKeymap { .. } => &paths.zed_keymap,
+            SettingChange::PiFffDefaults(_) => &paths.pi_fff_config,
+            SettingChange::PiSandboxDefaults(_) => &paths.pi_sandbox_config,
         }
     }
 
@@ -171,6 +225,12 @@ impl SettingSpec {
                 .iter()
                 .map(|binding| format!("{context}: \"{}\" → {}", binding.key, binding.action))
                 .collect(),
+            SettingChange::PiFffDefaults(_) => {
+                vec!["create override config if missing".into()]
+            }
+            SettingChange::PiSandboxDefaults(_) => {
+                vec!["create recommended policy if missing".into()]
+            }
         }
     }
 }
@@ -199,6 +259,7 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
                     .all(|binding| zed_keymap_binds(&document, context, &binding.key))
             })
             .unwrap_or(false),
+        SettingChange::PiFffDefaults(_) | SettingChange::PiSandboxDefaults(_) => true,
     };
     if applied {
         SettingState::Applied
@@ -210,12 +271,36 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
 /// Apply the setting; returns false when the file already had it.
 pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> {
     let path = spec.target_path(paths);
+    let defaults = match &spec.change {
+        SettingChange::PiFffDefaults(defaults) | SettingChange::PiSandboxDefaults(defaults) => {
+            Some(defaults)
+        }
+        _ => None,
+    };
+    if let Some(defaults) = defaults {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("could not create {}", parent.display()))?;
+        }
+        let mut file = match OpenOptions::new().write(true).create_new(true).open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
+            Err(error) => {
+                return Err(error).with_context(|| format!("could not create {}", path.display()))
+            }
+        };
+        let content = format!("{}\n", serde_json::to_string_pretty(defaults)?);
+        file.write_all(content.as_bytes())
+            .with_context(|| format!("could not write {}", path.display()))?;
+        return Ok(true);
+    }
     let existing = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => match &spec.change {
             SettingChange::HerdrKeyCommands(_) => String::new(),
             SettingChange::ZedValue { .. } => "{}\n".into(),
             SettingChange::ZedKeymap { .. } => "[]\n".into(),
+            SettingChange::PiFffDefaults(_) | SettingChange::PiSandboxDefaults(_) => unreachable!(),
         },
         Err(error) => {
             return Err(error).with_context(|| format!("could not read {}", path.display()))
@@ -227,6 +312,7 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
         SettingChange::ZedKeymap { context, bindings } => {
             apply_zed_keymap(&existing, context, bindings)?
         }
+        SettingChange::PiFffDefaults(_) | SettingChange::PiSandboxDefaults(_) => unreachable!(),
     };
     let Some(updated) = updated else {
         return Ok(false);
@@ -532,5 +618,57 @@ mod tests {
             .expect("apply changes the file");
         let document = jsonc::parse_document(&updated).unwrap();
         assert!(zed_keymap_binds(&document, "Terminal", "cmd-left"));
+    }
+
+    #[test]
+    fn pi_defaults_create_once_and_preserve_existing_files() {
+        let root = std::env::temp_dir().join(format!(
+            "loom-pi-sandbox-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let sandbox = root.join("agent/sandbox.json");
+        let paths = SettingsPaths {
+            herdr_config: root.join("herdr.toml"),
+            zed_settings: root.join("zed-settings.json"),
+            zed_keymap: root.join("zed-keymap.json"),
+            pi_fff_config: root.join("agent/pi-fff.json"),
+            pi_sandbox_config: sandbox.clone(),
+        };
+        let spec = curated_settings()
+            .into_iter()
+            .find(|setting| setting.id == "pi:sandbox-defaults")
+            .unwrap();
+
+        assert!(apply_setting(&spec, &paths).unwrap());
+        let created: Json = serde_json::from_str(&fs::read_to_string(&sandbox).unwrap()).unwrap();
+        assert_eq!(created["filesystem"]["allowRead"], json!(["."]));
+        assert_eq!(
+            created["network"]["allowedDomains"],
+            json!(["github.com", "*.github.com"])
+        );
+
+        fs::write(&sandbox, "custom policy\n").unwrap();
+        assert!(!apply_setting(&spec, &paths).unwrap());
+        assert_eq!(fs::read_to_string(&sandbox).unwrap(), "custom policy\n");
+
+        let fff = curated_settings()
+            .into_iter()
+            .find(|setting| setting.id == "pi:fff-override")
+            .unwrap();
+        assert!(apply_setting(&fff, &paths).unwrap());
+        let created: Json =
+            serde_json::from_str(&fs::read_to_string(&paths.pi_fff_config).unwrap()).unwrap();
+        assert_eq!(created["mode"], "override");
+        fs::write(&paths.pi_fff_config, "custom FFF config\n").unwrap();
+        assert!(!apply_setting(&fff, &paths).unwrap());
+        assert_eq!(
+            fs::read_to_string(&paths.pi_fff_config).unwrap(),
+            "custom FFF config\n"
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 }

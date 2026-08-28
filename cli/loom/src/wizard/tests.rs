@@ -106,6 +106,8 @@ fn model(status: PrerequisiteStatus) -> Model {
             herdr_config: "/tmp/herdr-config.toml".into(),
             zed_settings: "/tmp/zed-settings.json".into(),
             zed_keymap: "/tmp/zed-keymap.json".into(),
+            pi_fff_config: "/tmp/pi-fff.json".into(),
+            pi_sandbox_config: "/tmp/pi-sandbox.json".into(),
         },
         status,
         platform: Platform::Unix,
@@ -343,6 +345,12 @@ fn dependencies_lock_as_needed_and_cannot_be_deselected() {
 #[test]
 fn settings_precheck_follows_the_related_plugin_and_respects_touches() {
     let mut wizard = wizard();
+    go_to(&mut wizard, Row::Setting(0));
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(
+        !wizard.setting_on[0],
+        "a related setting cannot be selected before its package"
+    );
     go_to(&mut wizard, Row::Resource(2));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert_eq!(

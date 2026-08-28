@@ -1,3 +1,0 @@
-# Skills/tools this skill invokes; installers pull them in transitively.
-tools:
-  - gh

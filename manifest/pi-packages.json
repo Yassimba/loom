@@ -2,6 +2,34 @@
   "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: `pi install npm:<name>@<version>`. Users get new versions only when a pin change lands on main; the mise-bump workflow proposes bumps. First-party packages still live in plugins/ workspaces.",
   "packages": [
     {
+      "name": "@companion-ai/feynman",
+      "version": "0.3.47",
+      "label": "feynman",
+      "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
+      "nextAction": "Ask Pi to run /deepresearch on a scientific topic."
+    },
+    {
+      "name": "@ff-labs/pi-fff",
+      "version": "0.10.5",
+      "label": "fff",
+      "description": "FFF-powered fuzzy file and content search with frecency ranking, git-aware results, and fast @-mention autocomplete. By dmtrKovalenko.",
+      "nextAction": "Run /reload in Pi, then /fff-health to inspect the index."
+    },
+    {
+      "name": "pi-autoresearch",
+      "version": "1.6.2",
+      "label": "autoresearch",
+      "description": "Run autonomous optimization loops: change code, benchmark it, keep improvements, and revert regressions. By davebcn87.",
+      "nextAction": "Run /autoresearch with an optimization target in Pi."
+    },
+    {
+      "name": "pi-sandbox",
+      "version": "0.6.5",
+      "label": "sandbox",
+      "description": "Prompt before Pi reads or writes outside approved paths, and sandbox shell filesystem and network access on macOS/Linux. By carderne.",
+      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path."
+    },
+    {
       "name": "pi-subagents",
       "version": "0.58.0",
       "label": "subagents",

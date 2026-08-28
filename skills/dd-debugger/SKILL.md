@@ -83,9 +83,9 @@ pup debugger context my-service --fields service,language,envs
 pup debugger context my-service --env production --fields service,envs,repo
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--env` | Filter to a specific environment | All environments |
+| Flag       | Description                                                   | Default            |
+| ---------- | ------------------------------------------------------------- | ------------------ |
+| `--env`    | Filter to a specific environment                              | All environments   |
 | `--fields` | Comma-separated fields: `service`, `language`, `envs`, `repo` | Full JSON response |
 
 ## Probe Management
@@ -129,20 +129,20 @@ pup debugger probes create \
 
 **Options:**
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--service` | Service name (required) | — |
-| `--env` | Environment (required) | — |
-| `--probe-location` | `TYPE:METHOD` or `TYPE:METHOD(args)` (required). The signature form disambiguates overloaded methods. | — |
-| `--language` | `java`, `python`, `dotnet`, `go` | Auto-detected from symdb |
-| `--capture EXPR` | Capture expression (repeatable). Use dot notation for fields, brackets for indexing. | None |
-| `--capture` | Without value: enable full snapshot (capture everything). | No snapshot |
-| `--template` | Log message template with `{variable}` placeholders. Can combine with `--capture`. | Auto-generated |
-| `--condition` | DSL condition to filter captures | None |
-| `--depth` | How deep the tracer traverses the object graph when capturing (1–5). Start at 1 to see field names/types, increase to drill in. | `1` |
-| `--rate` | Snapshots per second | `1` |
-| `--budget` | Max probe hits. Only "total" window supported (hourly/daily not yet available). | `1000` |
-| `--ttl` | Probe time-to-live (e.g., `10m`, `1h`, `24h`). Probe auto-expires. | `1h` |
+| Flag               | Description                                                                                                                     | Default                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `--service`        | Service name (required)                                                                                                         | —                        |
+| `--env`            | Environment (required)                                                                                                          | —                        |
+| `--probe-location` | `TYPE:METHOD` or `TYPE:METHOD(args)` (required). The signature form disambiguates overloaded methods.                           | —                        |
+| `--language`       | `java`, `python`, `dotnet`, `go`                                                                                                | Auto-detected from symdb |
+| `--capture EXPR`   | Capture expression (repeatable). Use dot notation for fields, brackets for indexing.                                            | None                     |
+| `--capture`        | Without value: enable full snapshot (capture everything).                                                                       | No snapshot              |
+| `--template`       | Log message template with `{variable}` placeholders. Can combine with `--capture`.                                              | Auto-generated           |
+| `--condition`      | DSL condition to filter captures                                                                                                | None                     |
+| `--depth`          | How deep the tracer traverses the object graph when capturing (1–5). Start at 1 to see field names/types, increase to drill in. | `1`                      |
+| `--rate`           | Snapshots per second                                                                                                            | `1`                      |
+| `--budget`         | Max probe hits. Only "total" window supported (hourly/daily not yet available).                                                 | `1000`                   |
+| `--ttl`            | Probe time-to-live (e.g., `10m`, `1h`, `24h`). Probe auto-expires.                                                              | `1h`                     |
 
 ### Capture Expressions (Recommended)
 
@@ -237,15 +237,16 @@ pup debugger probes watch <PROBE_ID>
 
 **Options:**
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--timeout` | Exit after N seconds | `120` |
-| `--limit` | Exit after N log events | unlimited |
-| `--from` | Start time for log query | `now` |
-| `--wait` | Wait up to N seconds for the probe to become available | `0` |
-| `--fields` | Comma-separated fields to include: `message`, `captures`, `timestamp`. Compact JSON output. | Full debugger payload |
+| Flag        | Description                                                                                 | Default               |
+| ----------- | ------------------------------------------------------------------------------------------- | --------------------- |
+| `--timeout` | Exit after N seconds                                                                        | `120`                 |
+| `--limit`   | Exit after N log events                                                                     | unlimited             |
+| `--from`    | Start time for log query                                                                    | `now`                 |
+| `--wait`    | Wait up to N seconds for the probe to become available                                      | `0`                   |
+| `--fields`  | Comma-separated fields to include: `message`, `captures`, `timestamp`. Compact JSON output. | Full debugger payload |
 
 **Behavior:**
+
 - Without `--fields`: outputs the trimmed debugger payload (snapshot, probe info, stack) — not the full log envelope
 - With `--fields`: outputs only the requested fields as compact JSON per event
 - Polls for new log events and probe status errors every 1s
@@ -285,6 +286,7 @@ pup debugger probes watch <ID> --limit 1 \
 ```
 
 **Default output structure (trimmed to debugger payload):**
+
 ```
 .snapshot.captures.return.arguments          → method arguments
 .snapshot.captures.return.locals             → local variables
@@ -296,21 +298,21 @@ pup debugger probes watch <ID> --limit 1 \
 ## Supported Languages
 
 | Language | `--language` value |
-|----------|-------------------|
-| Java | `java` |
-| Python | `python` |
-| .NET | `dotnet` |
+| -------- | ------------------ |
+| Java     | `java`             |
+| Python   | `python`           |
+| .NET     | `dotnet`           |
 
 ## Failure Handling
 
-| Problem | Fix |
-|---------|-----|
-| Wrong env / no instances | Use `pup debugger context <service>` to list valid environments |
-| "probe not found" | Use `--wait <seconds>` to retry, e.g. `pup debugger probes watch <ID> --wait 10` |
-| No events appearing | Check `--from` (default is `now`); probe may need time to instrument |
-| Instrumentation errors | Check stderr output from watch for status errors |
-| Auth error | Run `pup auth login` or set `DD_API_KEY` + `DD_APP_KEY` + `DD_SITE` |
-| Wrong method signature | Run `pup symdb search` to find exact `TYPE:METHOD` or `TYPE:METHOD(args)` values |
+| Problem                  | Fix                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| Wrong env / no instances | Use `pup debugger context <service>` to list valid environments                  |
+| "probe not found"        | Use `--wait <seconds>` to retry, e.g. `pup debugger probes watch <ID> --wait 10` |
+| No events appearing      | Check `--from` (default is `now`); probe may need time to instrument             |
+| Instrumentation errors   | Check stderr output from watch for status errors                                 |
+| Auth error               | Run `pup auth login` or set `DD_API_KEY` + `DD_APP_KEY` + `DD_SITE`              |
+| Wrong method signature   | Run `pup symdb search` to find exact `TYPE:METHOD` or `TYPE:METHOD(args)` values |
 
 ## References
 

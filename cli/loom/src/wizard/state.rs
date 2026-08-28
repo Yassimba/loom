@@ -348,6 +348,20 @@ impl Wizard {
         self.model.setting_states[index] == SettingState::Applied
     }
 
+    fn setting_available(&self, index: usize) -> bool {
+        let Some(related) = &self.model.settings[index].related_resource else {
+            return true;
+        };
+        self.model
+            .resources
+            .iter()
+            .enumerate()
+            .any(|(resource_index, resource)| {
+                resource.id == *related
+                    && (self.selected[resource_index] || self.resource_installed(resource_index))
+            })
+    }
+
     pub(crate) fn nothing_chosen(&self) -> bool {
         self.selection().is_empty() && self.selected_settings().is_empty()
     }
@@ -395,7 +409,9 @@ impl Wizard {
                 Item::Resource(index) => {
                     !self.resource_installed(index) && self.required_note(index).is_none()
                 }
-                Item::Setting(index) => !self.setting_applied(index),
+                Item::Setting(index) => {
+                    !self.setting_applied(index) && self.setting_available(index)
+                }
             })
             .collect()
     }

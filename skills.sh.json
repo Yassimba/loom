@@ -21,13 +21,11 @@
         "implement",
         "next",
         "prototype",
-        "python-pro",
         "record-library",
         "refactor",
         "refactor-nuclear",
         "refactor-tests",
         "release",
-        "resolving-merge-conflicts",
         "setup-project",
         "tdd",
         "terraform-engineer",
@@ -70,16 +68,7 @@
     {
       "title": "Observability",
       "description": "Datadog via the pup CLI — auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
-      "skills": [
-        "dd-apm",
-        "dd-code-generation",
-        "dd-debugger",
-        "dd-docs",
-        "dd-file-issue",
-        "dd-logs",
-        "dd-monitors",
-        "dd-pup"
-      ]
+      "skills": ["dd-apm", "dd-debugger", "dd-docs", "dd-logs", "dd-monitors", "dd-pup"]
     },
     {
       "title": "General",
@@ -93,6 +82,7 @@
         "i-have-adhd",
         "jira",
         "research",
+        "skill-doctor",
         "stop-the-slop",
         "loom",
         "teach",

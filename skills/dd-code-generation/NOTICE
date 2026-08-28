@@ -1,8 +1,0 @@
-This skill is copied from DataDog/pup v1.10.5
-(https://github.com/DataDog/pup), Apache License 2.0.
-
-Copyright 2024-present Datadog, Inc.
-This product includes software developed at Datadog
-(https://www.datadoghq.com/).
-
-This copy adds a frontmatter `name: dd-code-generation` so the catalog can list it.
