@@ -12,7 +12,7 @@ pub mod ui;
 pub mod update;
 pub mod wizard;
 
-pub use catalog::{Catalog, PresetSpec, Resource, ResourceKind};
+pub use catalog::{Catalog, Resource, ResourceKind};
 pub use install::{
     build_install_plan, execute_install_plan, execute_install_plan_with, CommandSpec,
     InstallFailure, InstallPlan, InstallReport, InstallStep, NodeStatus, Platform,

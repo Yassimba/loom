@@ -3,8 +3,7 @@
 //! clickable Back/Next buttons.
 
 use super::state::{
-    ChooseStage, ExecStatus, Group, HitMap, InstallStage, Pane, Preset, Row, Stage, WhereStage,
-    Wizard,
+    ChooseStage, ExecStatus, Group, HitMap, InstallStage, Pane, Row, Stage, WhereStage, Wizard,
 };
 use crate::settings::SettingSpec;
 use crate::{ResourceKind, SkillAgent};
@@ -199,13 +198,9 @@ impl Wizard {
             Line::from(vec![
                 Span::raw("           "),
                 Span::styled(
-                    "in the groups column: picks the whole group",
+                    "in the groups column: picks the whole group (or Everything)",
                     Style::new().dim(),
                 ),
-            ]),
-            Line::from(vec![
-                Span::raw("           "),
-                Span::styled("on a bundle: adds the bundle", Style::new().dim()),
             ]),
             Line::from(""),
             Line::from(vec![
@@ -319,9 +314,9 @@ impl Wizard {
             }
             None => {
                 let group = stage.group();
-                let (on, actionable) = self.group_counts(&group.items());
-                let title = if group.items().is_empty() {
-                    format!(" {} ", group.title)
+                let (on, actionable) = self.group_counts(&self.group_items(group));
+                let title = if group.everything {
+                    format!(" {} · {on}/{actionable} picked ", group.title)
                 } else if actionable == 0 {
                     format!(" {} · all installed ", group.title)
                 } else {
@@ -330,10 +325,16 @@ impl Wizard {
                 (group.rows.clone(), stage.item_cursor, title)
             }
         };
-        let items = rows
-            .iter()
-            .map(|row| self.choose_row_item(row))
-            .collect::<Vec<_>>();
+        let items = if !searching && stage.group().everything {
+            vec![ListItem::new(Line::styled(
+                "  space picks or clears the whole catalog; ↓ for the groups.",
+                Style::new().dim(),
+            ))]
+        } else {
+            rows.iter()
+                .map(|row| self.choose_row_item(row))
+                .collect::<Vec<_>>()
+        };
         let offset = list_offset(rows.len(), items_area.height.saturating_sub(2), cursor);
         let items_focused = stage.focus == Pane::Items || searching;
         frame.render_stateful_widget(
@@ -352,7 +353,9 @@ impl Wizard {
                 "No matches. Backspace widens, esc cancels.",
                 Style::new().dim(),
             )],
-            (Pane::Groups, _) if !searching => self.group_details(stage.group()),
+            (_, _) if !searching && (stage.focus == Pane::Groups || stage.group().everything) => {
+                self.group_details(stage.group())
+            }
             (_, Some(row)) => self.row_details(row),
             (_, None) => Vec::new(),
         };
@@ -369,9 +372,9 @@ impl Wizard {
     }
 
     fn group_item(&self, group: &Group, width: usize) -> ListItem<'_> {
-        let items = group.items();
+        let items = self.group_items(group);
         let (mark, mark_style, count) = if items.is_empty() {
-            (" ▸ ", Style::new().fg(ACCENT), String::new())
+            ("   ", Style::new(), String::new())
         } else {
             let (on, actionable) = self.group_counts(&items);
             let (mark, style) = if actionable == 0 {
@@ -428,11 +431,6 @@ impl Wizard {
 
     fn choose_row_item(&self, row: &Row) -> ListItem<'_> {
         match row {
-            Row::Preset(preset) => ListItem::new(Line::from(vec![
-                Span::styled("  ▸  ", Style::new().fg(ACCENT)),
-                Span::styled(column(self.preset_label(*preset)), Style::new().bold()),
-                Span::styled(self.preset_blurb(*preset).to_owned(), Style::new().dim()),
-            ])),
             Row::Resource(index) => {
                 let resource = &self.model.resources[*index];
                 if self.resource_installed(*index) {
@@ -476,19 +474,20 @@ impl Wizard {
     }
 
     fn group_details(&self, group: &Group) -> Vec<Line<'_>> {
-        let items = group.items();
+        let items = self.group_items(group);
         let mut lines = vec![
             Line::styled(group.title.clone(), Style::new().bold().fg(ACCENT)),
             Line::from(""),
         ];
-        if items.is_empty() {
-            lines.push(Line::from(
-                "A bundle picks a set at once. Fine-tune in the other groups, or clear and \
-                 start by hand.",
-            ));
+        if group.everything {
+            let (on, actionable) = self.group_counts(&items);
+            lines.push(Line::from(format!(
+                "{on} of {actionable} picked across the whole catalog · {} already installed.",
+                items.len() - actionable
+            )));
             lines.push(Line::from(""));
             lines.push(Line::styled(
-                "→ then space adds a bundle · enter adds it and continues",
+                "space picks everything not yet installed, or clears it all; then trim by group.",
                 Style::new().dim(),
             ));
         } else {
@@ -516,34 +515,6 @@ impl Wizard {
 
     fn row_details(&self, row: &Row) -> Vec<Line<'_>> {
         match row {
-            Row::Preset(preset) => {
-                let adds = self.preset_adds(*preset);
-                let mut lines = vec![
-                    Line::styled(
-                        self.preset_label(*preset).to_owned(),
-                        Style::new().bold().fg(ACCENT),
-                    ),
-                    Line::styled("Bundle", Style::new().dim()),
-                    Line::from(""),
-                    Line::from(self.preset_blurb(*preset).to_owned()),
-                    Line::from(""),
-                ];
-                lines.push(match preset {
-                    Preset::Clear => Line::styled(
-                        format!("clears {} picked", plural(self.total_selected(), "item")),
-                        Style::new().fg(WARN),
-                    ),
-                    _ if adds == 0 => Line::styled(
-                        "nothing to add — everything in it is installed or picked",
-                        Style::new().dim(),
-                    ),
-                    _ => Line::styled(
-                        format!("adds {}", plural(adds, "item")),
-                        Style::new().fg(OK),
-                    ),
-                });
-                lines
-            }
             Row::Resource(index) => self.resource_details(*index),
             Row::Setting(index) => self.setting_details(&self.model.settings[*index], *index),
         }

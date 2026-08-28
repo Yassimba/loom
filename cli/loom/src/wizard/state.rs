@@ -16,8 +16,6 @@ use ratatui::layout::Rect;
 /// construct it without touching the file system.
 pub struct Model {
     pub resources: Vec<Resource>,
-    /// Curated selection bundles from the catalog (manifest/presets.json).
-    pub presets: Vec<crate::PresetSpec>,
     /// Per-resource flag: already present on this machine (plugin listed by
     /// `herdr plugin list`, package listed by `pi list`, skill in an agent
     /// tree).
@@ -48,18 +46,6 @@ pub enum Action {
     StartInstall,
 }
 
-/// Selection bundles at the top of the Choose list. Catalog bundles add to
-/// the selection; Everything and Clear replace it.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Preset {
-    /// Everything in the catalog that is not already installed.
-    Everything,
-    /// A curated bundle: index into the catalog's presets.
-    Catalog(usize),
-    /// Clear the selection and pick by hand.
-    Clear,
-}
-
 /// One selectable thing under a group header.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Item {
@@ -70,31 +56,31 @@ pub(crate) enum Item {
 /// One pickable row in a group.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Row {
-    Preset(Preset),
     Resource(usize),
     Setting(usize),
 }
 
 impl Row {
-    fn item(&self) -> Option<Item> {
+    fn item(&self) -> Item {
         match self {
-            Self::Preset(_) => None,
-            Self::Resource(index) => Some(Item::Resource(*index)),
-            Self::Setting(index) => Some(Item::Setting(*index)),
+            Self::Resource(index) => Item::Resource(*index),
+            Self::Setting(index) => Item::Setting(*index),
         }
     }
 }
 
-/// A column-one entry: a titled set of rows.
+/// A column-one entry: a titled set of rows. The first group, "Everything",
+/// has no rows of its own; it stands for every resource at once.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Group {
     pub title: String,
     pub rows: Vec<Row>,
+    pub everything: bool,
 }
 
 impl Group {
     pub fn items(&self) -> Vec<Item> {
-        self.rows.iter().filter_map(Row::item).collect()
+        self.rows.iter().map(Row::item).collect()
     }
 }
 
@@ -115,10 +101,10 @@ pub(crate) struct ChooseStage {
 
 impl ChooseStage {
     fn new(groups: Vec<Group>) -> Self {
-        // Land on the first real group, past the bundles, in the item pane.
+        // Start on the first real group, in the item column.
         let group_cursor = groups
             .iter()
-            .position(|group| !group.items().is_empty())
+            .position(|group| !group.rows.is_empty())
             .unwrap_or(0);
         Self {
             groups,
@@ -380,6 +366,18 @@ impl Wizard {
         self.selection().len() + self.setting_on.iter().filter(|on| **on).count()
     }
 
+    /// The items a group stands for: its rows, or every resource for the
+    /// "Everything" group.
+    pub(crate) fn group_items(&self, group: &Group) -> Vec<Item> {
+        if group.everything {
+            (0..self.model.resources.len())
+                .map(Item::Resource)
+                .collect()
+        } else {
+            group.items()
+        }
+    }
+
     /// Whether an item is on: selected, or required by a selection.
     pub(crate) fn item_on(&self, item: Item) -> bool {
         match item {
@@ -461,78 +459,6 @@ impl Wizard {
             self.set_item(item, !all_on);
         }
         self.precheck_settings();
-    }
-
-    /// Apply a bundle: catalog bundles add, Everything and Clear replace.
-    fn apply_preset(&mut self, preset: Preset) {
-        match preset {
-            Preset::Clear => {
-                self.selected.fill(false);
-                self.setting_on.fill(false);
-                self.setting_touched.fill(false);
-            }
-            Preset::Everything => {
-                let available = (0..self.selected.len())
-                    .map(|index| !self.resource_installed(index))
-                    .collect::<Vec<_>>();
-                for (on, available) in self.selected.iter_mut().zip(available) {
-                    *on = available;
-                }
-            }
-            Preset::Catalog(preset_index) => {
-                for target in &self.model.presets[preset_index].targets {
-                    if let Some(index) = self
-                        .model
-                        .resources
-                        .iter()
-                        .position(|resource| resource.install_target == *target)
-                    {
-                        if !self.resource_installed(index) {
-                            self.selected[index] = true;
-                        }
-                    }
-                }
-            }
-        }
-        self.precheck_settings();
-    }
-
-    pub(crate) fn preset_label(&self, preset: Preset) -> &str {
-        match preset {
-            Preset::Everything => "Everything",
-            Preset::Clear => "Clear selection",
-            Preset::Catalog(index) => &self.model.presets[index].label,
-        }
-    }
-
-    pub(crate) fn preset_blurb(&self, preset: Preset) -> &str {
-        match preset {
-            Preset::Everything => "select the whole catalog, then deselect what you don't want",
-            Preset::Clear => "start from nothing and pick by hand",
-            Preset::Catalog(index) => &self.model.presets[index].description,
-        }
-    }
-
-    /// Resource indices a catalog bundle would add (not installed, not yet
-    /// selected).
-    pub(crate) fn preset_adds(&self, preset: Preset) -> usize {
-        match preset {
-            Preset::Clear => 0,
-            Preset::Everything => (0..self.selected.len())
-                .filter(|&index| !self.resource_installed(index) && !self.selected[index])
-                .count(),
-            Preset::Catalog(preset_index) => self.model.presets[preset_index]
-                .targets
-                .iter()
-                .filter_map(|target| {
-                    self.model
-                        .resources
-                        .iter()
-                        .position(|resource| resource.install_target == *target)
-                })
-                .filter(|&index| !self.resource_installed(index) && !self.selected[index])
-                .count(),
-        }
     }
 
     /// The background probe finished: adopt the real installed marks and
@@ -802,7 +728,8 @@ impl Wizard {
                 }
                 KeyCode::Char(' ') => match stage.focus {
                     Pane::Groups => {
-                        let items = stage.group().items();
+                        let group = stage.group().clone();
+                        let items = self.group_items(&group);
                         self.toggle_group(&items);
                     }
                     Pane::Items => {
@@ -811,9 +738,7 @@ impl Wizard {
                             // Space picks and steps down, so a run of picks
                             // is a run of spaces.
                             if let Stage::Choose(stage) = &mut self.stages[CHOOSE] {
-                                if !matches!(row, Row::Preset(_)) {
-                                    stage.step(1);
-                                }
+                                stage.step(1);
                             }
                         }
                     }
@@ -888,11 +813,7 @@ impl Wizard {
                 .report
                 .as_ref()
                 .map(|report| Action::Exit(WizardOutcome::Installed(report.clone()))),
-            // Enter on a bundle means "start with this": apply, then go on.
-            Stage::Choose(stage) => {
-                if let (Pane::Items, Some(Row::Preset(preset))) = (stage.focus, stage.row()) {
-                    self.apply_preset(*preset);
-                }
+            Stage::Choose(_) => {
                 self.go_forward();
                 None
             }
@@ -905,7 +826,6 @@ impl Wizard {
 
     fn activate_row(&mut self, row: &Row) {
         match row {
-            Row::Preset(preset) => self.apply_preset(*preset),
             Row::Resource(index) => self.toggle_item(Item::Resource(*index)),
             Row::Setting(index) => self.toggle_item(Item::Setting(*index)),
         }
@@ -954,7 +874,6 @@ impl Wizard {
                         let spec = &self.model.settings[*index];
                         (&spec.label, &spec.description)
                     }
-                    Row::Preset(_) => continue,
                 };
                 let best = score_of(label)
                     .map(|score| score * 2)
@@ -1102,18 +1021,15 @@ impl Wizard {
     }
 }
 
-/// The Choose columns: bundles first, then skills by category, tools, Pi
+/// The Choose columns: Everything first, then skills by category, tools, Pi
 /// packages, Herdr plugins, and settings by group.
 fn choose_groups(model: &Model) -> Vec<Group> {
     let mut groups = Vec::new();
     if !model.resources.is_empty() {
         groups.push(Group {
-            title: "Bundles".into(),
-            rows: std::iter::once(Preset::Everything)
-                .chain((0..model.presets.len()).map(Preset::Catalog))
-                .chain(std::iter::once(Preset::Clear))
-                .map(Row::Preset)
-                .collect(),
+            title: "Everything".into(),
+            rows: Vec::new(),
+            everything: true,
         });
     }
     let mut push_group = |title: String, items: Vec<usize>| {
@@ -1121,6 +1037,7 @@ fn choose_groups(model: &Model) -> Vec<Group> {
             groups.push(Group {
                 title,
                 rows: items.into_iter().map(Row::Resource).collect(),
+                everything: false,
             });
         }
     };
@@ -1148,6 +1065,7 @@ fn choose_groups(model: &Model) -> Vec<Group> {
         seen.push(&spec.group);
         groups.push(Group {
             title: format!("Settings · {}", spec.group),
+            everything: false,
             rows: model
                 .settings
                 .iter()

@@ -115,7 +115,6 @@ fn run_interactive(
     let installed = vec![false; catalog.resources.len()];
     let model = Model {
         resources: catalog.resources.clone(),
-        presets: catalog.presets.clone(),
         installed,
         settings,
         setting_states,

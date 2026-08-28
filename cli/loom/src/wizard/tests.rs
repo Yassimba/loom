@@ -3,8 +3,7 @@ use crate::settings::{
     KeyCommand, SettingChange, SettingSpec, SettingState, SettingsPaths, ZedKeybinding,
 };
 use crate::{
-    Platform, PrerequisiteStatus, PresetSpec, Resource, ResourceKind, SkillAgent, SkillDestination,
-    SkillScope,
+    Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
 };
 use pretty_assertions::assert_eq;
 use ratatui::backend::TestBackend;
@@ -99,12 +98,6 @@ fn model(status: PrerequisiteStatus) -> Model {
     let settings = test_settings();
     Model {
         resources: catalog(),
-        presets: vec![PresetSpec {
-            id: "coding".into(),
-            label: "Coding flow".into(),
-            description: "tdd and refactor".into(),
-            targets: vec!["tdd".into(), "refactor".into()],
-        }],
         installed: vec![false; catalog().len()],
         setting_states: vec![SettingState::NotApplied; settings.len()],
         settings,
@@ -211,7 +204,7 @@ fn choose_lists_bundles_then_groups_in_catalog_order() {
     assert_eq!(
         group_titles(&wizard),
         [
-            "Bundles",
+            "Everything",
             "Skills · Coding",
             "Skills · Diagrams",
             "Tools",
@@ -221,14 +214,7 @@ fn choose_lists_bundles_then_groups_in_catalog_order() {
             "Settings · Zed",
         ]
     );
-    assert_eq!(
-        choose(&wizard).groups[0].rows,
-        [
-            Row::Preset(Preset::Everything),
-            Row::Preset(Preset::Catalog(0)),
-            Row::Preset(Preset::Clear)
-        ]
-    );
+    assert!(choose(&wizard).groups[0].everything);
     // The cursor starts in the items column of the first real group.
     assert_eq!(choose(&wizard).focus, Pane::Items);
     assert_eq!(current_row(&wizard), Row::Resource(3));
@@ -297,32 +283,19 @@ fn arrows_move_between_columns_and_down_changes_the_group() {
 }
 
 #[test]
-fn bundles_add_everything_replaces_and_clear_empties() {
-    let mut wizard = wizard();
-    go_to(&mut wizard, Row::Resource(6));
+fn everything_picks_the_whole_catalog_and_clears_it_again() {
+    let mut model = model(ready());
+    model.installed[0] = true;
+    let mut wizard = Wizard::new(model);
+    go_to_group(&mut wizard, "Everything");
     press(&mut wizard, &[KeyCode::Char(' ')]);
-    go_to(&mut wizard, Row::Preset(Preset::Catalog(0)));
-    press(&mut wizard, &[KeyCode::Char(' ')]);
-    // Additive: gh stays, tdd and refactor join.
     assert_eq!(
         wizard.selected,
-        [false, false, false, true, true, false, true]
+        [false, true, true, true, true, true, true],
+        "everything but the installed one"
     );
-    go_to(&mut wizard, Row::Preset(Preset::Everything));
-    press(&mut wizard, &[KeyCode::Char(' ')]);
-    assert!(wizard.selected.iter().all(|on| *on));
-    go_to(&mut wizard, Row::Preset(Preset::Clear));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(wizard.selected.iter().all(|on| !*on));
-}
-
-#[test]
-fn enter_on_a_bundle_applies_it_and_continues() {
-    let mut wizard = wizard();
-    go_to(&mut wizard, Row::Preset(Preset::Catalog(0)));
-    press(&mut wizard, &[KeyCode::Enter]);
-    assert!(wizard.selected[3] && wizard.selected[4]);
-    assert_eq!(title(&wizard), "Where");
 }
 
 #[test]
@@ -548,7 +521,6 @@ fn search_filters_picks_and_lands_the_cursor() {
         .map(|&hit| match wizard.search_row(hit) {
             Row::Resource(index) => wizard.model.resources[index].label.clone(),
             Row::Setting(index) => wizard.model.settings[index].label.clone(),
-            Row::Preset(_) => unreachable!(),
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -649,6 +621,8 @@ fn render_gallery() {
     press(&mut wizard, &[KeyCode::Char(' ')]);
     go_to(&mut wizard, Row::Resource(3));
     press(&mut wizard, &[KeyCode::Char(' ')]);
+    show(&mut wizard, &mut terminal);
+    go_to_group(&mut wizard, "Everything");
     show(&mut wizard, &mut terminal);
     press(&mut wizard, &[KeyCode::Enter]);
     show(&mut wizard, &mut terminal);
