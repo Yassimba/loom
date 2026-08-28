@@ -96,20 +96,23 @@ fi
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 echo ""
-if [ -t 0 ]; then
-  exec mise -C "$HOME" exec -- loom setup "$@"
-fi
 # The README pipes this script into sh, so stdin is the download pipe rather
 # than the user's terminal. Reconnect it to the terminal device itself: the
 # pty behind stderr first (kqueue on macOS cannot poll the /dev/tty alias),
-# then /dev/tty. With no terminal at all, stop here and say what to run.
-terminal="$(tty 0<&2 2>/dev/null)" || terminal=""
-case "$terminal" in
-  /dev/*) ;;
-  *) if ( : </dev/tty ) 2>/dev/null; then terminal=/dev/tty; else terminal=""; fi ;;
-esac
-if [ -z "$terminal" ] || [ ! -t 1 ]; then
-  echo "$NAME: installed. Open a new shell and run: loom"
-  exit 0
+# then /dev/tty. A scripted install (flags, no terminal) hands off as is;
+# a guided install with no terminal at all is told what to run instead.
+if [ ! -t 0 ]; then
+  terminal="$(tty 0<&2 2>/dev/null)" || terminal=""
+  case "$terminal" in
+    /dev/*) ;;
+    *) if ( : </dev/tty ) 2>/dev/null; then terminal=/dev/tty; else terminal=""; fi ;;
+  esac
+  if [ -n "$terminal" ] && [ -t 1 ]; then
+    exec mise -C "$HOME" exec -- loom setup "$@" <"$terminal"
+  fi
+  if [ "$#" -eq 0 ]; then
+    echo "$NAME: installed, but there is no terminal here for the guided setup. Open a shell and run: loom" >&2
+    exit 1
+  fi
 fi
-exec mise -C "$HOME" exec -- loom setup "$@" <"$terminal"
+exec mise -C "$HOME" exec -- loom setup "$@"
