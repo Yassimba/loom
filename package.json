@@ -22,8 +22,6 @@
     "audit": "fallow audit",
     "audit:brief": "fallow review --brief",
     "pack:check": "npm pack --dry-run --workspaces",
-    "release:plan": "node scripts/plan-releases.mjs",
-    "release:resolve": "node scripts/resolve-release.mjs",
     "check:js": "npm test && npm run typecheck && npm run lint && npm run catalog:check && npm run pack:check",
     "check": "npm run check:js && npm run check:rust"
   },

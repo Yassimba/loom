@@ -13,7 +13,7 @@ plus auto-discovered `skills/`, listed by `.claude-plugin/marketplace.json`
 `plugins/<name>/` — one flat directory per plugin package: npm workspaces
 (Pi extensions, discovered by their `package.json`).
 `cli/loom/` — the Rust onboarding CLI installed by the root bootstrap
-scripts. `setup-catalog.json` is generated from reviewed skills and opted-in
+scripts. `cli/loom/setup-catalog.json` is generated from reviewed skills and opted-in
 plugin metadata; the CLI embeds it, copies skills into user-selected agent
 trees at global or current-project scope, and delegates Pi package installs
 to Pi.
@@ -61,12 +61,13 @@ Note: the global `merge` skill is not a rename of `resolving-merge-conflicts`
 
 ## Releases
 
-Use Conventional Commits. After a main-branch change, `release-pr.yml` discovers
-which npm, Cargo, and Herdr components changed and opens or updates
-`release/auto`. Breaking changes bump major, features bump minor, and fixes or
-other product changes bump patch; README, changelog, tests, and CI-only changes
-do not release. Merging that PR publishes the recorded `.release-plan.json` only
-after consolidated CI passes. Do not create component tags by hand.
+Use Conventional Commits. [release-please](https://github.com/googleapis/release-please)
+(`release.yml`, config in `release-please-config.json`) keeps one release PR
+per changed component — `cli/loom`, `cli/loom-teams`, `plugins/openai-fast` —
+with the version bump, changelog, and the manifest pin. Merging it tags
+`<component>-vX.Y.Z`, uploads the binaries, and publishes to npm. A skill
+change regenerates `cli/loom/setup-catalog.json`, which is what makes it a
+loom release. Do not create component tags by hand.
 
 ## Quality checks
 
@@ -90,7 +91,7 @@ unreviewed and personal skills hardcode local paths. Promote a draft into
 A skill whose flow invokes another skill (`Run a /grilling session`, `route
 through /diagnosing-bugs`) declares it in a per-skill `deps.yml` next to its
 SKILL.md, as a bare skill name, so installers pull deps in transitively (the
-catalog generator bakes the graph into `setup-catalog.json` for the CLI).
+catalog generator bakes the graph into `cli/loom/setup-catalog.json` for the CLI).
 Declare invocations only — not soft "if installed" mentions or pointers.
 `sync-skills.sh deps` validates the sidecars: every dep must be a shared skill
 at its stated path and the graph must stay acyclic. On this machine the agent

@@ -1,0 +1,5 @@
+{
+  "cli/loom": "0.11.0",
+  "cli/loom-teams": "0.1.0",
+  "plugins/openai-fast": "1.0.0"
+}

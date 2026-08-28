@@ -59,38 +59,15 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             ],
         });
     }
-    // With mise present, the manifest lane owns tool updates — including this
-    // CLI's own pin — so the curl self-update would only install a shadowing
-    // copy. It remains the fallback for pre-mise machines.
+    // The manifest lane owns tool updates, including this CLI's own pin.
+    // Loom is only ever installed through mise, so a missing mise means the
+    // bootstrap was undone; point back at it instead of self-updating.
     let mise = crate::manifest::mise_available(system);
     if !mise {
-        let self_update = if cfg!(windows) {
-            CommandSpec::new(
-                "powershell",
-                [
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-Command",
-                    "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex",
-                ],
-            )
-        } else {
-            CommandSpec::new(
-                "sh",
-                [
-                    "-c",
-                    "curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh",
-                ],
-            )
-        };
-        tasks.push(UpdateTask {
-            label: "Loom CLI",
-            commands: vec![self_update],
-        });
+        eprintln!("  ! mise is not on PATH; rerun the installer from the README to restore it");
     }
 
-    // Skills, Pi, Herdr, the tool manifest, and the self-update touch
+    // Skills, Pi, Herdr, and the tool manifest touch
     // disjoint state, so all lanes run concurrently; each lane prints once,
     // when it finishes.
     let lanes = ["Shared skills", "Project AGENTS.md files"]
