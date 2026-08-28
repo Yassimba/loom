@@ -1086,9 +1086,7 @@ impl Wizard {
     /// Replace the resource selection with a bundle. Undoable with `u`.
     fn apply_preset(&mut self, preset: Preset) {
         self.push_undo();
-        for on in &mut self.selected {
-            *on = false;
-        }
+        self.selected.fill(false);
         match preset {
             Preset::Empty => {}
             Preset::Everything => {

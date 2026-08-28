@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "include-component-in-tag": true,
+  "bootstrap-sha": "af9b5bcdfea0fad58bb8439cb7708f6b156b9dbb",
+  "packages": {
+    "cli/loom": {
+      "release-type": "rust",
+      "component": "loom",
+      "extra-files": [{ "type": "generic", "path": "/manifest/loom.toml" }]
+    },
+    "cli/loom-teams": {
+      "release-type": "rust",
+      "component": "loom-teams",
+      "extra-files": [{ "type": "generic", "path": "/manifest/loom.toml" }]
+    },
+    "plugins/openai-fast": {
+      "release-type": "node",
+      "component": "openai-fast"
+    }
+  }
+}

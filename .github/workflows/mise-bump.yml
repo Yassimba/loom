@@ -1,9 +1,9 @@
 name: mise-bump
 
 # Weekly pin bumps for the published tool manifest and the contributor dev
-# env. Merging the PR is publishing: `loom update` reads main. The
-# repo's own binary (loom) is excluded — its pin moves
-# with its releases via plan-releases.mjs.
+# env. Merging the PR is publishing: `loom update` reads main. The repo's
+# own binaries only ever bump to their latest tag, which release-please
+# already wrote when it released them.
 
 on:
   schedule:
@@ -49,22 +49,6 @@ jobs:
               json.dump(data, handle, indent=2, ensure_ascii=False)
               handle.write("\n")
           EOF
-      - name: Restore release-owned pins
-        run: |
-          python3 - <<'EOF'
-          import re, subprocess
-          path = "manifest/loom.toml"
-          current = open(path).read()
-          published = subprocess.run(
-              ["git", "show", f"HEAD:{path}"], capture_output=True, text=True
-          ).stdout
-          for exe in ("loom",):
-              pattern = rf'^"github:Yassimba/loom\[exe={exe}\]" = .*$'
-              keep = re.search(pattern, published, re.M)
-              if keep:
-                  current = re.sub(pattern, lambda _: keep.group(0), current, flags=re.M)
-          open(path, "w").write(current)
-          EOF
       - name: Open bump PR
         uses: peter-evans/create-pull-request@67df31e08a133c6a77008b89689677067fef169e # v6.1.0
         with:
@@ -74,7 +58,5 @@ jobs:
           body: |
             Weekly `mise upgrade --bump` across `mise.toml` and
             `manifest/loom.toml`. Merging publishes the new pins —
-            `loom update` syncs the manifest from main. Release-owned
-            pins (loom) are restored to their released
-            versions before the PR is opened.
+            `loom update` syncs the manifest from main.
           delete-branch: true

@@ -14,13 +14,12 @@ Two automation layers are bundled: [pytest-bdd](references/pytest-bdd.md) and [b
 Gate every "add a BDD test" impulse:
 
 - The behavior is stable and business-meaningful — not scaffolding, framework glue, or an implementation still finding its shape.
-- The scenario states a user intent or observable outcome, not internal mechanics.
 - The sentence helps someone imagine a real use of this project. A scenario that reads as a natural-language translation of a technical test gets rewritten, or dropped in favor of a plain pytest test.
 
 ## Workflow
 
 1. **Discover.** Write down Who / What / Why, the business rules, examples, and open questions — before touching a test framework. Done when every rule carries at least one positive and one negative example and every unknown is a recorded question rather than a guess. Working solo, simulate the Three Amigos using subagents (business, development, quality) and mark which points are inference needing user confirmation. Detail and templates: [practice.md](references/practice.md).
-2. **Formulate.** Invoke the `write-simply` skill (via the Skill tool) — the Gherkin and the prose presenting it follow its register. Draft the scenarios — `Given` context, `When` event, `Then` observable outcome — in domain language. Ask the user for approval, then run every scenario through the quality gate below before writing any glue code. Syntax and style: [gherkin.md](references/gherkin.md).
+2. **Formulate.** Invoke the `writing-clearly-and-concisely` skill (via the Skill tool) — the Gherkin and the prose presenting it follow its register. Draft the scenarios — `Given` context, `When` event, `Then` observable outcome — in domain language. Ask the user for approval, then run every scenario through the quality gate below before writing any glue code. Syntax and style: [gherkin.md](references/gherkin.md).
 3. **Automate** — only when the user asks for implementation. The framework is a project fact — check the declared dependencies for `behave` or `pytest-bdd` (a `features/steps/` tree with `environment.py` means behave) and join what is there. Only greenfield picks, and Gherkin authorship decides: developers write it and domain experts review → pytest-bdd inside the existing pytest suite; the business writes the feature files themselves → behave, where they run standalone. Mechanics: [pytest-bdd.md](references/pytest-bdd.md) / [behave.md](references/behave.md). Bind scenarios, watch the run fail first, write the smallest code that passes.
 4. **Refactor.** Keep scenario language stable while extracting helpers and fixtures; add boundary examples and counterexamples; report the red→green evidence and unresolved questions.
 

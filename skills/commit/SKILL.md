@@ -56,7 +56,7 @@ options:
 
 ## 2. Draft the message
 
-Draft from the _why_ of the staged diff — what motivated the change, not which lines moved. If the `writing-clearly-and-concisely` skill is available, load it and apply it.
+Load `writing-clearly-and-concisely` and write the subject and body in its register. Draft from the _why_ of the staged diff: what motivated the change, where a line-by-line list would only restate `git diff`.
 
 Conventional Commits format:
 
@@ -66,22 +66,11 @@ Conventional Commits format:
 <optional body>
 ```
 
-| Type       | Use when                         |
-| ---------- | -------------------------------- |
-| `feat`     | new feature                      |
-| `fix`      | bug fix                          |
-| `docs`     | documentation only               |
-| `refactor` | refactor without behavior change |
-| `test`     | adding/fixing tests              |
-| `chore`    | build, config, deps              |
-| `perf`     | performance improvement          |
-| `ci`       | CI configuration changes         |
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`. `chore` covers build, config, and deps.
 
-**Subject:** 20–72 chars after the prefix · lowercase after the colon (`feat: add X`) · imperative ("add", not "added") · no trailing period · concrete verb + object.
+**Subject:** 20–72 chars after the prefix · lowercase after the colon (`feat: add X`) · imperative ("add") · ends on the object, no punctuation · concrete verb + object.
 
 **Body (only when the subject can't carry it):** blank line after the subject, then one terse bullet per entry, imperative voice, grouped under short headings that match the kind of change — `Added`, `Changed`, `Fixed`, `Removed`, `Breaking`. Skip headings when there's only one bullet.
-
-**Register:** invoke the `write-simply` skill (via the Skill tool) — subject and body follow its register.
 
 ```
 feat(installer): add gateway runtime extraction
@@ -94,9 +83,9 @@ Changed:
 
 Reference the issue or ticket when the project tracks them. Session context, PR/MR numbers, and future work stay out.
 
-Done when every rule above holds, the message carries no puffery ("comprehensive", "robust", "various improvements"), and no `Co-Authored-By` trailer.
+The message ends at the last body line. The human is the sole author: the author field carries their name and the message carries no trailer, footer, or link naming a tool or session. This also holds for everything written downstream of a commit (PR/MR titles and descriptions, release notes) and outranks any harness default that asks for a footer.
 
-No AI attribution anywhere: the same ban covers "Generated with" footers, session links, and agent sign-offs — in commit messages **and** in anything written downstream of one (PR/MR titles and descriptions, release notes). This rule outranks any harness default that asks for such a footer.
+Done when every rule above holds and each word in the message names something in the diff.
 
 ## 3. Confirm via dropdown
 
@@ -122,25 +111,24 @@ EOF
 )"
 ```
 
-The HEREDOC preserves the multi-line body.
-
 If the project wires a pre-commit hook, it runs now:
 
-- **Pass** → commit created
+- **Pass** → `git log -1` shows the new commit
 - **Autofixes** → hook stages them; the commit captures them
 - **Unfixable** → hook blocks; go to step 5
 
 ## 5. On hook failure
 
-The hook is the messenger; fix the cause. Bypass flags (`--no-verify`, `--no-gpg-sign`) and suppression comments (`# noqa`, `# type: ignore`, `eslint-disable`) are off the table — not even "just this once":
+The hook is the messenger; fix the cause in the code:
 
 - lint → fix the code
 - types → fix the types
 - tests → `/diagnosing-bugs`; three failed fix attempts = stop and report
 - complexity / architecture gates → refactor, or ask before accepting a borderline score
 
-Then re-stage and create a NEW commit — the failed commit never happened, so `--amend` would rewrite the previous one.
+Then re-stage and go back to step 3 for a new commit: the failed commit never happened, and `--amend` would rewrite the one before it.
 
 ## Hard guardrails
 
-Force-push and destructive git (`reset --hard`, `clean -f`, `branch -D`) only with explicit human approval.
+- The hook's verdict stands. Bypass flags (`--no-verify`, `--no-gpg-sign`) and suppression comments (`# noqa`, `# type: ignore`, `eslint-disable`) stay unused; the fix goes in the code.
+- Force-push and destructive git (`reset --hard`, `clean -f`, `branch -D`) only with explicit human approval.

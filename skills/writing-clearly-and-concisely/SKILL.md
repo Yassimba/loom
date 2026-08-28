@@ -1,68 +1,60 @@
 ---
 name: writing-clearly-and-concisely
-description: Use when writing prose humans will read—documentation, commit messages, error messages, reports, UI text—or when the user wants existing text to sound human rather than AI-written ("humanize this", "reads like ChatGPT").
+description: Writing or editing prose humans read - docs, commit messages, error messages, reports, UI text. Also the register other skills invoke for compact technical prose (docstrings, comments, captions, proposals), and the pass that makes text sound human instead of AI-written ("humanize", "reads like ChatGPT").
 ---
 
 # Writing Clearly and Concisely
 
-## Overview
-
-Write vigorous prose. Vigorous writing is concise: every word tells, sentences are active and concrete, needless words are gone. This skill pairs Strunk's _The Elements of Style_ with a field guide to AI writing patterns.
+Always use ASD-STE100 Simplified Technical English plus Zinsser's four principles
+Write vigorous prose: every word tells, sentences are active and concrete, needless words are gone. Say what the thing does, in the words a knowledgeable human would pick.
 
 ## Principles
 
-Strunk's Elementary Principles of Composition — apply these to everything you write:
+Strunk's principles of composition, applied to everything you write:
 
-- One paragraph per topic; begin it with a topic sentence
-- **Use active voice**
-- **Put statements in positive form**
-- **Use definite, specific, concrete language**
-- **Omit needless words**
-- Express co-ordinate ideas in similar form; keep related words together
-- **Place emphatic words at the end of the sentence**
+- One paragraph per topic; open it with a topic sentence.
+- Use the active voice.
+- Put statements in positive form.
+- Use definite, specific, concrete language.
+- Omit needless words.
+- Express co-ordinate ideas in similar form; keep related words together.
+- Place emphatic words at the end of the sentence.
+
+## Register for compact prose
+
+Docstrings, comments, commit messages, captions, a numbered list of proposals: ASD-STE100 Simplified Technical English plus Zinsser's four principles — clarity, simplicity, brevity, humanity. On top of the principles above:
+
+- One idea per sentence; about 20 words or fewer.
+- One meaning per word; the same word for the same thing every time.
+- Simple present tense; instructions as imperatives.
+- Plain words; name the specific thing.
+- One person talking to another.
+
+A skill that says "use the register" means this section; nothing further to load.
 
 ## What to load
 
-Pick the row that matches the task and load exactly one file — the full pass below is the only exception:
+Match the task to one row and load exactly that file:
 
-| Task                                                        | Load                                                                         |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Writing or editing paragraphs, docs, explanations           | `references/elements-of-style/03-elementary-principles-of-composition.md`    |
-| Fixing grammar, commas, punctuation in existing text        | `references/elements-of-style/02-elementary-rules-of-usage.md`               |
-| Choosing the right word, fixing common misuses              | `references/elements-of-style/05-words-and-expressions-commonly-misused.md`  |
-| Headings, quotations, formatting                            | `references/elements-of-style/04-a-few-matters-of-form.md`                   |
-| Making text sound human ("humanize", "reads like ChatGPT")  | `references/humanizer.md`                                                     |
-| Auditing whether text is AI-written (deep pattern catalogue) | `references/signs-of-ai-writing.md`                                          |
+| Task                                                 | Load                                                                        |
+| ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| Writing or editing paragraphs, docs, explanations    | `references/elements-of-style/03-elementary-principles-of-composition.md`   |
+| Fixing grammar, commas, punctuation in existing text | `references/elements-of-style/02-elementary-rules-of-usage.md`              |
+| Choosing the right word, fixing common misuses       | `references/elements-of-style/05-words-and-expressions-commonly-misused.md` |
+| Headings, quotations, formatting                     | `references/elements-of-style/04-a-few-matters-of-form.md`                  |
+| load this always                                     | `references/humanizer.md`                                                   |
+| Spotting AI patterns while writing (words to watch)  | `references/ai-patterns.md`                                                 |
+| Auditing whether text is AI-written (full catalogue) | `references/signs-of-ai-writing.md`                                         |
 
-### Full pass
-
-Load the bundle — `02`, `03`, `04`, `05`, `references/humanizer.md`, and `references/ai-patterns.md` — when, and only when, the user explicitly signals a comprehensive job:
-
-- "write the documentation" / "write docs for X" / "draft the README" (a substantial new piece of prose, not a one-paragraph edit)
-- "do a full pass" / "thorough edit" / "deep edit" / "go through all the rules"
-- "load everything" / "use the full skill" / "no shortcuts"
-
-"Fix this paragraph" or "tighten this sentence" stays with the single-file default.
-
-## AI Writing Patterns to Avoid
-
-LLMs regress to statistical means, producing generic, puffy prose. Say what the thing actually does, in the words a knowledgeable human would pick. Guardrails:
-
-- **Puffery:** pivotal, crucial, vital, testament, enduring legacy
-- **Empty "-ing" phrases:** ensuring reliability, showcasing features, highlighting capabilities
-- **Promotional adjectives:** groundbreaking, seamless, robust, cutting-edge
-- **Overused AI vocabulary:** delve, leverage, multifaceted, foster, realm, tapestry
-- **Formatting overuse:** excessive bullets, emoji decorations, bold on every other word
-
-When these bullets aren't enough, load `references/ai-patterns.md` — the distilled field guide with words-to-watch per pattern. Reserve `references/signs-of-ai-writing.md` (the full Wikipedia catalogue with examples) for explicit "is this AI-written?" audits.
+**Full pass** — load `02`, `03`, `04`, `05`, `humanizer.md`, and `ai-patterns.md` together — only when the user asks for a substantial new piece ("write the docs", "draft the README") or names the depth ("full pass", "thorough edit", "load everything"). "Fix this paragraph" stays with one file.
 
 ## Done means
 
-A writing or editing pass is finished when a re-read of the full output finds:
+Re-read the full output. It is done when every sentence passes:
 
-- no needless word left — each word either informs or goes
-- no passive where the active would work
-- nothing generic where a specific would do
-- none of the AI patterns above
+- each word informs;
+- the active voice wherever it works;
+- a specific where a generic stood;
+- the human's word where an AI pattern stood (puffery, promotional adjectives, "delve"/"leverage", decorative formatting).
 
-If the re-read finds a violation, fix it and re-read again.
+A failed sentence is fixed, then the whole output is re-read again.

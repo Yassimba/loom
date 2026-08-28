@@ -7,14 +7,17 @@
 //! land wrapped in `<!-- loom:section:<name> -->` markers so a re-run
 //! appends missing sections and never touches anything else.
 
-use crate::{skills, System};
+use crate::{skills, CommandSpec, System};
 use anyhow::{Context, Result};
+use inquire::Select;
 use std::fs;
 use std::path::Path;
 
 pub struct InitOptions {
     pub python: Option<bool>,
     pub rust: Option<bool>,
+    pub adhd: Option<bool>,
+    pub codegraph: Option<bool>,
     pub yes: bool,
     pub force: bool,
 }
@@ -24,7 +27,7 @@ struct Section {
     template: &'static str,
 }
 
-const SECTIONS: [Section; 2] = [
+const SECTIONS: [Section; 3] = [
     Section {
         name: "python",
         template: "manifest/init/sections/python.md",
@@ -32,6 +35,10 @@ const SECTIONS: [Section; 2] = [
     Section {
         name: "rust",
         template: "manifest/init/sections/rust.md",
+    },
+    Section {
+        name: "i-have-adhd",
+        template: "manifest/init/sections/i-have-adhd.md",
     },
 ];
 
@@ -102,35 +109,123 @@ fn detect(project: &Path) -> (bool, bool) {
     (python, rust)
 }
 
-fn confirm(prompt: &str, default: bool, assume_yes: bool) -> Result<bool> {
+fn select_yes_no(prompt: &str, help: &str, default: bool, assume_yes: bool) -> Result<bool> {
     if assume_yes || !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
         return Ok(default);
     }
-    Ok(inquire::Confirm::new(prompt)
-        .with_default(default)
-        .prompt()?)
+    Ok(Select::new(prompt, vec!["Yes", "No"])
+        .with_help_message(help)
+        .with_starting_cursor(usize::from(!default))
+        .without_filtering()
+        .prompt()?
+        == "Yes")
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct InitFeatures {
+    project_instructions: bool,
+    python: bool,
+    rust: bool,
+    adhd: bool,
+    codegraph: bool,
+}
+
+fn choose_features(
+    project: &Path,
+    codegraph_installed: bool,
+    options: &InitOptions,
+    mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
+) -> Result<InitFeatures> {
+    let (python_default, rust_default) = detect(project);
+    let project_instructions = ask(
+        "Set up project agent instructions?",
+        "Creates or updates AGENTS.md and CLAUDE.md for this project.",
+        true,
+    )?;
+    let (python, rust, adhd) = if project_instructions {
+        (
+            match options.python {
+                Some(explicit) => explicit,
+                None => ask(
+                    "Add Python instructions?",
+                    "Adds typing, uv, and Python quality commands to AGENTS.md.",
+                    python_default,
+                )?,
+            },
+            match options.rust {
+                Some(explicit) => explicit,
+                None => ask(
+                    "Add Rust instructions?",
+                    "Adds Rust conventions, Clippy, and test commands to AGENTS.md.",
+                    rust_default,
+                )?,
+            },
+            match options.adhd {
+                Some(explicit) => explicit,
+                None => ask(
+                    "Use ADHD-friendly agent output?",
+                    "Requests short, scannable progress updates for this project.",
+                    false,
+                )?,
+            },
+        )
+    } else {
+        (false, false, false)
+    };
+    let codegraph = match options.codegraph {
+        Some(true) if !codegraph_installed => {
+            anyhow::bail!("CodeGraph is not installed; run `loom add --tool codegraph`");
+        }
+        Some(explicit) => explicit,
+        None if codegraph_installed => ask(
+            "Set up CodeGraph?",
+            "Wires installed agents and indexes this project.",
+            true,
+        )?,
+        None => false,
+    };
+    Ok(InitFeatures {
+        project_instructions,
+        python,
+        rust,
+        adhd,
+        codegraph,
+    })
+}
+
+fn setup_codegraph(system: &dyn System) -> Result<()> {
+    let result = system
+        .run(&CommandSpec::new(
+            "codegraph",
+            ["install", "--yes", "--init"],
+        ))
+        .context("could not start CodeGraph setup")?;
+    if !result.success {
+        anyhow::bail!(
+            "CodeGraph setup failed: {}",
+            crate::install::command_failure_message(&result)
+        );
+    }
+    println!("  ✓ CodeGraph wired and project indexed");
+    Ok(())
 }
 
 pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     let project = std::env::current_dir().context("no current directory")?;
-    let (python_default, rust_default) = detect(&project);
-
-    let python = match options.python {
-        Some(explicit) => explicit,
-        None => confirm(
-            "Include the Python section? (project is / will be Python)",
-            python_default,
-            options.yes,
-        )?,
-    };
-    let rust = match options.rust {
-        Some(explicit) => explicit,
-        None => confirm(
-            "Include the Rust section? (project is / will be Rust)",
-            rust_default,
-            options.yes,
-        )?,
-    };
+    let features = choose_features(
+        &project,
+        system.command_exists("codegraph"),
+        options,
+        |prompt, help, default| select_yes_no(prompt, help, default, options.yes),
+    )?;
+    if !features.project_instructions {
+        if features.codegraph {
+            setup_codegraph(system)?;
+        } else {
+            println!("Nothing selected; no changes made.");
+        }
+        return Ok(true);
+    }
     // Templates come from the published repo, so init output is publish-gated.
     let home = system.home_dir().context("home directory is unavailable")?;
     let staging = home.join(".cache").join("loom").join("init-staging");
@@ -142,8 +237,9 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     let mut chosen: Vec<(&'static str, String)> = Vec::new();
     for section in &SECTIONS {
         let wanted = match section.name {
-            "python" => python,
-            "rust" => rust,
+            "python" => features.python,
+            "rust" => features.rust,
+            "i-have-adhd" => features.adhd,
             _ => false,
         };
         if wanted {
@@ -209,6 +305,10 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
                 "  ! CLAUDE.md exists with its own content — leaving it; consider moving it into AGENTS.md and keeping just `@AGENTS.md` (or rerun with --force)"
             );
         }
+    }
+
+    if features.codegraph {
+        setup_codegraph(system)?;
     }
 
     if let Err(error) = register_project(&home, &project) {
@@ -433,6 +533,8 @@ pub fn sync_projects(system: &dyn System) -> (bool, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{CommandResult, CommandSpec};
+    use std::sync::Mutex;
 
     const BASE: &str = "# AGENTS.md\n\n## Style\n- be kind\n";
 
@@ -513,5 +615,119 @@ mod tests {
         let (second, outcome) = render_agents(Some(&customized), BASE, &new, false);
         assert!(second.is_none(), "the hand-edited fence is left untouched");
         assert_eq!(outcome.kept_edited, vec!["python"]);
+    }
+
+    struct RecordingSystem {
+        commands: Mutex<Vec<CommandSpec>>,
+    }
+
+    impl System for RecordingSystem {
+        fn command_exists(&self, name: &str) -> bool {
+            name == "codegraph"
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
+            self.commands.lock().unwrap().push(command.clone());
+            Ok(CommandResult {
+                success: true,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        }
+    }
+
+    #[test]
+    fn codegraph_setup_delegates_to_upstreams_one_shot_command() {
+        let system = RecordingSystem {
+            commands: Mutex::new(Vec::new()),
+        };
+
+        setup_codegraph(&system).unwrap();
+
+        assert_eq!(
+            *system.commands.lock().unwrap(),
+            [CommandSpec::new(
+                "codegraph",
+                ["install", "--yes", "--init"]
+            )]
+        );
+    }
+
+    #[test]
+    fn init_questions_show_context_defaults_and_skip_irrelevant_sections() {
+        // Capability/seam: interactive `loom init` questions. This fails if
+        // defaults, context, or the project-instructions dependency drift.
+        let options = InitOptions {
+            python: None,
+            rust: None,
+            adhd: None,
+            codegraph: None,
+            yes: false,
+            force: false,
+        };
+        let project = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut asked = Vec::new();
+        let selected = choose_features(project, true, &options, |prompt, help, default| {
+            asked.push((prompt.to_string(), help.to_string(), default));
+            Ok(default)
+        })
+        .unwrap();
+
+        assert_eq!(
+            selected,
+            InitFeatures {
+                project_instructions: true,
+                python: false,
+                rust: true,
+                adhd: false,
+                codegraph: true,
+            }
+        );
+        assert_eq!(
+            asked,
+            [
+                (
+                    "Set up project agent instructions?".into(),
+                    "Creates or updates AGENTS.md and CLAUDE.md for this project.".into(),
+                    true,
+                ),
+                (
+                    "Add Python instructions?".into(),
+                    "Adds typing, uv, and Python quality commands to AGENTS.md.".into(),
+                    false,
+                ),
+                (
+                    "Add Rust instructions?".into(),
+                    "Adds Rust conventions, Clippy, and test commands to AGENTS.md.".into(),
+                    true,
+                ),
+                (
+                    "Use ADHD-friendly agent output?".into(),
+                    "Requests short, scannable progress updates for this project.".into(),
+                    false,
+                ),
+                (
+                    "Set up CodeGraph?".into(),
+                    "Wires installed agents and indexes this project.".into(),
+                    true,
+                ),
+            ]
+        );
+
+        let mut asked = Vec::new();
+        let selected = choose_features(project, true, &options, |prompt, _, _| {
+            asked.push(prompt.to_string());
+            Ok(prompt != "Set up project agent instructions?")
+        })
+        .unwrap();
+
+        assert_eq!(
+            asked,
+            ["Set up project agent instructions?", "Set up CodeGraph?"]
+        );
+        assert!(!selected.project_instructions);
+        assert!(selected.codegraph);
     }
 }

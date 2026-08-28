@@ -1,0 +1,12 @@
+{
+  "comment": "Herdr plugins hosted outside this repo. In-repo ones are discovered from plugins/*/herdr-plugin.toml; these are installed by `herdr plugin install <installTarget>`.",
+  "plugins": [
+    {
+      "id": "annotate",
+      "label": "Annotate",
+      "description": "Comment on terminal selections and copy annotations as agent context (plannotator/herdr-annotate). Needs Bun on PATH.",
+      "installTarget": "plannotator/herdr-annotate",
+      "nextAction": "Add the `annotate.*` key bindings from github.com/plannotator/herdr-annotate to ~/.config/herdr/config.toml, then `herdr config check`."
+    }
+  ]
+}
