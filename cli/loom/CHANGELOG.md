@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.13.0](https://github.com/Yassimba/loom/compare/loom-v0.12.0...loom-v0.13.0) (2026-08-28)
+
+
+### Features
+
+* **changeset-walkthrough:** add the figure-led git-change walkthrough skill ([4c65506](https://github.com/Yassimba/loom/commit/4c655060e3d91b707427eb8ec08848ad37460fe6))
+* **loom:** rank wizard search with nucleo-matcher ([5076a26](https://github.com/Yassimba/loom/commit/5076a2662f7ebeb02178f7afa2c46bf98501b9a2))
+* **loom:** redesign the setup wizard and unify report output ([511475b](https://github.com/Yassimba/loom/commit/511475b3541a1ad4c700269575c8e86c1fd6a986))
+* **loom:** redesign the setup wizard and unify report output ([6741dcf](https://github.com/Yassimba/loom/commit/6741dcfd0ca3a9e42b4817e4cc25d3a751a20117))
+* **loom:** replace bundles with an Everything group ([de92c94](https://github.com/Yassimba/loom/commit/de92c94c0482c262d0379f17b43f4f9e04922447))
+* **loom:** three-column Choose step and a polish pass ([c1274d2](https://github.com/Yassimba/loom/commit/c1274d259e79265ed4eef1138697d29bbee99504))
+* **manifest:** replace claude-bridge with anthropic-auth ([dfe253b](https://github.com/Yassimba/loom/commit/dfe253b690f2132118a675f248ff66808bc9de3b))
+* **manifest:** replace claude-bridge with anthropic-auth ([23320b7](https://github.com/Yassimba/loom/commit/23320b72e7fea53563ec6b2874a73e201b1617a6))
+* **setup:** refresh curated packages and skills ([47a134e](https://github.com/Yassimba/loom/commit/47a134e01b0578fea91eea9398be7be264386464))
+* **skills:** add frontend-slides ([e65edf0](https://github.com/Yassimba/loom/commit/e65edf0390b102b25c49803270aa4a0621f2d68d))
+
+
+### Bug Fixes
+
+* **catalog:** regenerate curated setup catalog ([d61ee8f](https://github.com/Yassimba/loom/commit/d61ee8f0513833f851abbb5d65ab5b88a8c38335))
+* **loom:** survive narrow terminals and size columns from content ([488e61a](https://github.com/Yassimba/loom/commit/488e61a7137b1525e6a1cfcdeb40cebd6efcfa10))
+
 ## [0.12.0](https://github.com/Yassimba/loom/compare/loom-v0.11.0...loom-v0.12.0) (2026-08-28)
 
 
