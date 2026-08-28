@@ -10,8 +10,6 @@ Before writing any code, use the blueprint skill to show what you intend to buil
 
 Use /tdd where possible, at pre-agreed seams. A ticket's "Rules & examples" map is the scenario list — one test per example.
 
-Run typechecking regularly, single test files regularly, and the full test suite once at the end.
-
 Once done, use /code-review to review the work.
 
 Commit your work to the current branch.
