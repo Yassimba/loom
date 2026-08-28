@@ -242,7 +242,6 @@ mod tests {
     fn selection_completion_includes_herdr_plugin_catalog_values() {
         let catalog = Catalog {
             schema_version: 1,
-            presets: vec![],
             resources: vec![Resource {
                 id: "herdr-plugin:reviewr".to_string(),
                 kind: ResourceKind::HerdrPlugin,
