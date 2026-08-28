@@ -41,6 +41,10 @@ test("default config matches the PRD config contract", () => {
       "openai-codex/gpt-5.6-sol",
       "openai-codex/gpt-5.6-terra",
       "openai-codex/gpt-5.6-luna",
+      "xai/grok-4.3",
+      "xai/grok-4.5",
+      "xai/grok-4.6",
+      "xai/grok-build-0.1",
     ],
     footer: { mode: "replace", vars: {} },
   });

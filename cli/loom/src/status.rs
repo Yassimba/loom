@@ -1,5 +1,4 @@
-use std::io::IsTerminal;
-
+use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, CommandSpec, System};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -9,81 +8,13 @@ enum Health {
     Bad,
 }
 
-struct StatusStyle {
-    terminal: bool,
-    color: bool,
-}
-
-impl StatusStyle {
-    fn detect() -> Self {
-        let term_is_dumb = std::env::var("TERM").is_ok_and(|term| term == "dumb");
-        let terminal = std::io::stdout().is_terminal();
-        Self {
-            terminal,
-            color: terminal && std::env::var_os("NO_COLOR").is_none() && !term_is_dumb,
+impl Health {
+    fn mark(self) -> Mark {
+        match self {
+            Self::Good => Mark::Ok,
+            Self::Optional => Mark::Off,
+            Self::Bad => Mark::Bad,
         }
-    }
-
-    fn line_ending(&self) -> &'static str {
-        if self.terminal {
-            "\r\n"
-        } else {
-            "\n"
-        }
-    }
-
-    fn line(&self, value: impl AsRef<str>) {
-        print!("{}{}", value.as_ref(), self.line_ending());
-    }
-
-    fn blank(&self) {
-        self.line("");
-    }
-
-    fn paint(&self, code: &str, value: impl AsRef<str>) -> String {
-        if self.color {
-            format!("\x1b[{code}m{}\x1b[0m", value.as_ref())
-        } else {
-            value.as_ref().to_owned()
-        }
-    }
-
-    fn accent(&self, value: impl AsRef<str>) -> String {
-        self.paint("1;36", value)
-    }
-
-    fn good(&self, value: impl AsRef<str>) -> String {
-        self.paint("32", value)
-    }
-
-    fn optional(&self, value: impl AsRef<str>) -> String {
-        self.paint("33", value)
-    }
-
-    fn muted(&self, value: impl AsRef<str>) -> String {
-        self.paint("2", value)
-    }
-
-    fn status(&self, health: Health) -> String {
-        match health {
-            Health::Good => self.paint("1;32", "✓"),
-            Health::Optional => self.paint("33", "○"),
-            Health::Bad => self.paint("1;31", "!"),
-        }
-    }
-
-    fn section(&self, title: &str) {
-        self.line(self.accent(title));
-    }
-
-    fn row(&self, health: Health, label: &str, detail: impl AsRef<str>) {
-        let label = format!("{label:<12}");
-        self.line(format!(
-            "  {} {} {}",
-            self.status(health),
-            label,
-            detail.as_ref()
-        ));
     }
 }
 
@@ -94,18 +25,13 @@ struct RuntimeCheck {
 }
 
 pub fn run_status(system: &(dyn System + Sync)) -> bool {
-    let style = StatusStyle::detect();
-    style.line(format!(
-        "{}  {}",
-        style.accent("◆ loom status"),
-        style.muted(format!("v{}", env!("CARGO_PKG_VERSION")))
-    ));
-    style.blank();
+    let style = Out::detect();
+    style.title("status", concat!("v", env!("CARGO_PKG_VERSION")));
     style.section("Core");
     style.row(
-        Health::Good,
+        Mark::Ok,
         "CLI",
-        style.muted(format!("loom {}", env!("CARGO_PKG_VERSION"))),
+        style.muted(concat!("loom ", env!("CARGO_PKG_VERSION"))),
     );
     print_manifest(system, &style);
     style.blank();
@@ -140,35 +66,20 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
         }
     }
     for check in &checks {
-        style.row(check.health, check.name, style.muted(&check.detail));
+        style.row(check.health.mark(), check.name, style.muted(&check.detail));
     }
     let healthy = checks.iter().all(|check| check.health != Health::Bad);
-    style.blank();
     if healthy {
-        style.line(format!(
-            "{} {}",
-            style.status(Health::Good),
-            style.paint("1", "All checks passed")
-        ));
-        style.line(format!(
-            "  {}",
-            style.muted("Missing optional managers are installed on demand by `loom setup`.")
-        ));
+        style.verdict(true, "All checks passed");
+        style.hint("optional managers are installed on demand by `loom setup`");
     } else {
-        style.line(format!(
-            "{} {}",
-            style.status(Health::Bad),
-            style.paint("1", "Some checks need attention")
-        ));
-        style.line(format!(
-            "  {}",
-            style.muted("Repair the failed managers, then run `loom status` again.")
-        ));
+        style.verdict(false, "Some checks need attention");
+        style.next("repair the failed managers, then run `loom status` again");
     }
     healthy
 }
 
-fn print_opencode_adapter(system: &dyn System, style: &StatusStyle) {
+fn print_opencode_adapter(system: &dyn System, style: &Out) {
     let Some(home) = system.home_dir() else {
         return;
     };
@@ -190,38 +101,38 @@ fn print_opencode_adapter(system: &dyn System, style: &StatusStyle) {
         }
         found = true;
         if adapter.is_file() {
-            style.row(Health::Good, "OpenCode", display_path(&adapter, &home));
+            style.row(Mark::Ok, "OpenCode", tidy_path(&adapter, &home));
         } else {
             style.row(
-                Health::Optional,
+                Mark::Off,
                 "OpenCode",
                 style.muted(format!(
                     "{}  session adapter not installed",
-                    display_path(&adapter, &home)
+                    tidy_path(&adapter, &home)
                 )),
             );
         }
     }
     if !found {
-        style.row(Health::Optional, "OpenCode", style.muted("not configured"));
+        style.row(Mark::Off, "OpenCode", style.muted("not configured"));
     }
 }
 
 /// Whether the published tool manifest has been synced into mise's conf.d.
-fn print_manifest(system: &dyn System, style: &StatusStyle) {
+fn print_manifest(system: &dyn System, style: &Out) {
     let Some(home) = system.home_dir() else {
         return;
     };
     let target = crate::manifest::conf_d_target(&home);
     if target.is_file() {
         style.row(
-            Health::Good,
+            Mark::Ok,
             "manifest",
-            style.muted(format!("synced  {}", display_path(&target, &home))),
+            style.muted(format!("synced  {}", tidy_path(&target, &home))),
         );
     } else {
         style.row(
-            Health::Optional,
+            Mark::Off,
             "manifest",
             style.muted("not synced yet — run `loom setup` or `loom update`"),
         );
@@ -230,9 +141,9 @@ fn print_manifest(system: &dyn System, style: &StatusStyle) {
 
 /// The agent skill trees the native installer would write into, with how
 /// many catalog skills each already holds.
-fn print_skill_trees(system: &dyn System, style: &StatusStyle) {
+fn print_skill_trees(system: &dyn System, style: &Out) {
     let Some(home) = system.home_dir() else {
-        style.row(Health::Bad, "skills", "home directory is unavailable");
+        style.row(Mark::Bad, "skills", "home directory is unavailable");
         return;
     };
     let mut trees = crate::SkillAgent::ALL
@@ -253,7 +164,7 @@ fn print_skill_trees(system: &dyn System, style: &StatusStyle) {
     trees.dedup_by(|left, right| left.1 == right.1);
     if trees.is_empty() {
         style.row(
-            Health::Optional,
+            Mark::Off,
             "skills",
             style.muted(format!(
                 "no agent directory found — {}",
@@ -282,25 +193,18 @@ fn print_skill_trees(system: &dyn System, style: &StatusStyle) {
         } else {
             Health::Optional
         };
-        let coverage = format!("{installed}/{}", catalog_skills.len());
+        let coverage = format!("{:<6}", format!("{installed}/{}", catalog_skills.len()));
         let coverage = match health {
             Health::Good => style.good(coverage),
-            Health::Optional => style.optional(coverage),
+            Health::Optional => style.warn(coverage),
             Health::Bad => unreachable!(),
         };
         style.row(
-            health,
+            health.mark(),
             agent.status_label(),
-            format!("{}  {}", coverage, style.muted(display_path(&tree, &home))),
+            format!("{}  {}", coverage, style.muted(tidy_path(&tree, &home))),
         );
     }
-}
-
-fn display_path(path: &std::path::Path, home: &std::path::Path) -> String {
-    path.strip_prefix(home).map_or_else(
-        |_| path.display().to_string(),
-        |relative| format!("~/{}", relative.display()),
-    )
 }
 
 fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> RuntimeCheck {
@@ -334,25 +238,5 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
             health: Health::Bad,
             detail: error.to_string(),
         },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::StatusStyle;
-
-    #[test]
-    fn interactive_status_lines_are_hard_terminal_rows() {
-        let interactive = StatusStyle {
-            terminal: true,
-            color: true,
-        };
-        let redirected = StatusStyle {
-            terminal: false,
-            color: false,
-        };
-
-        assert_eq!(interactive.line_ending(), "\r\n");
-        assert_eq!(redirected.line_ending(), "\n");
     }
 }

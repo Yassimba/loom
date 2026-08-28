@@ -481,11 +481,13 @@ dependencies = [
  "clap_complete",
  "dirs",
  "inquire",
+ "nucleo-matcher",
  "pretty_assertions",
  "ratatui",
  "serde",
  "serde_json",
  "toml_edit",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]
@@ -533,6 +535,16 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b6b097ecb1cbfed438542d16e84fd7ad9b0c76c8a65b7f9039212a3d14dc7f"
 dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "nucleo-matcher"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf33f538733d1a5a3494b836ba913207f14d9d4a1d3cd67030c5061bdd2cac85"
+dependencies = [
+ "memchr",
  "unicode-segmentation",
 ]
 

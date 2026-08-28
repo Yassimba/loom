@@ -4,6 +4,7 @@ use inquire::Confirm;
 use loom::app::{install_selected, load_catalog, Selectors};
 use loom::init::{run_init, sync_projects, InitOptions};
 use loom::status::run_status;
+use loom::ui::{Mark, Out};
 use loom::update::run_updates;
 use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope};
 
@@ -162,13 +163,23 @@ fn main() -> Result<()> {
         }
         Command::Status => run_status(&system),
         Command::Sync => {
-            let (ok, report) = sync_projects(&system);
-            if ok {
-                println!("{report}");
-            } else {
-                eprintln!("{report}");
+            let out = Out::detect();
+            out.title("sync", "project AGENTS.md files");
+            let sync = sync_projects(&system);
+            let mark = if sync.ok { Mark::Ok } else { Mark::Bad };
+            out.row(mark, "Projects", &sync.summary);
+            for note in &sync.notes {
+                out.note(note);
             }
-            ok
+            out.verdict(
+                sync.ok,
+                if sync.ok {
+                    "Up to date"
+                } else {
+                    "Some projects failed"
+                },
+            );
+            sync.ok
         }
         Command::Init {
             python,
@@ -205,8 +216,8 @@ fn main() -> Result<()> {
         }
         Command::Update { yes } => {
             if !yes
-                && !Confirm::new("Update installed Yassimba tooling and resources?")
-                    .with_default(false)
+                && !Confirm::new("Update skills, tools, Pi packages, Herdr, and project AGENTS.md?")
+                    .with_default(true)
                     .prompt()?
             {
                 println!("Cancelled; no changes made.");
@@ -231,7 +242,6 @@ mod tests {
     fn selection_completion_includes_herdr_plugin_catalog_values() {
         let catalog = Catalog {
             schema_version: 1,
-            presets: vec![],
             resources: vec![Resource {
                 id: "herdr-plugin:reviewr".to_string(),
                 kind: ResourceKind::HerdrPlugin,
