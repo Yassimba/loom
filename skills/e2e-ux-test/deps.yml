@@ -1,6 +1,0 @@
-# Skills this skill invokes; installers pull them in transitively.
-skills:
-  - browser-usage
-  - jira
-tools:
-  - agent-browser

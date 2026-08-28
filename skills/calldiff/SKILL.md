@@ -11,22 +11,22 @@ Diff call stacks between two git trees
 
 ## Arguments
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `from` | `string` | no | Before ref (default: HEAD) |
-| `to` | `string` | no | After ref (default: working tree) |
-| `paths` | `array` | no | Limit to these path prefixes |
+| Name    | Type     | Required | Description                       |
+| ------- | -------- | -------- | --------------------------------- |
+| `from`  | `string` | no       | Before ref (default: HEAD)        |
+| `to`    | `string` | no       | After ref (default: working tree) |
+| `paths` | `array`  | no       | Limit to these path prefixes      |
 
 ## Options
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--entry` | `unknown` |  | Entrypoint symbol(s): functionName or ClassName.method |
-| `--file` | `unknown` |  | Entrypoint file(s): indexed source path; expands to that file's exports |
-| `--maxDepth` | `number` | `12` | Max call-tree depth |
-| `--locs` | `boolean` | `false` | Show call-site source locations (file:line) |
-| `--from` | `string` |  | Left / "before" tree |
-| `--to` | `string` |  | Right / "after" tree |
+| Flag         | Type      | Default | Description                                                             |
+| ------------ | --------- | ------- | ----------------------------------------------------------------------- |
+| `--entry`    | `unknown` |         | Entrypoint symbol(s): functionName or ClassName.method                  |
+| `--file`     | `unknown` |         | Entrypoint file(s): indexed source path; expands to that file's exports |
+| `--maxDepth` | `number`  | `12`    | Max call-tree depth                                                     |
+| `--locs`     | `boolean` | `false` | Show call-site source locations (file:line)                             |
+| `--from`     | `string`  |         | Left / "before" tree                                                    |
+| `--to`       | `string`  |         | Right / "after" tree                                                    |
 
 ## Examples
 
@@ -57,20 +57,20 @@ Find all call paths from an entrypoint to a target symbol
 
 ## Arguments
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ref` | `string` | no | Git ref (default: working tree) |
-| `paths` | `array` | no | Limit to these path prefixes |
+| Name    | Type     | Required | Description                     |
+| ------- | -------- | -------- | ------------------------------- |
+| `ref`   | `string` | no       | Git ref (default: working tree) |
+| `paths` | `array`  | no       | Limit to these path prefixes    |
 
 ## Options
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--entry` | `unknown` |  | Entrypoint symbol(s): functionName or ClassName.method |
-| `--file` | `unknown` |  | Entrypoint file(s): indexed source path; expands to that file's exports |
-| `--to` | `string` |  | Target symbol to reach (functionName or ClassName.method) |
-| `--maxDepth` | `number` | `12` | Max call-tree depth |
-| `--locs` | `boolean` | `false` | Show call-site source locations (file:line) |
+| Flag         | Type      | Default | Description                                                             |
+| ------------ | --------- | ------- | ----------------------------------------------------------------------- |
+| `--entry`    | `unknown` |         | Entrypoint symbol(s): functionName or ClassName.method                  |
+| `--file`     | `unknown` |         | Entrypoint file(s): indexed source path; expands to that file's exports |
+| `--to`       | `string`  |         | Target symbol to reach (functionName or ClassName.method)               |
+| `--maxDepth` | `number`  | `12`    | Max call-tree depth                                                     |
+| `--locs`     | `boolean` | `false` | Show call-site source locations (file:line)                             |
 
 ## Examples
 
@@ -93,19 +93,19 @@ View a call tree (no diff) for one or more entrypoints
 
 ## Arguments
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ref` | `string` | no | Git ref (default: working tree) |
-| `paths` | `array` | no | Limit to these path prefixes |
+| Name    | Type     | Required | Description                     |
+| ------- | -------- | -------- | ------------------------------- |
+| `ref`   | `string` | no       | Git ref (default: working tree) |
+| `paths` | `array`  | no       | Limit to these path prefixes    |
 
 ## Options
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--entry` | `unknown` |  | Entrypoint symbol(s): functionName or ClassName.method |
-| `--file` | `unknown` |  | Entrypoint file(s): indexed source path; expands to that file's exports |
-| `--maxDepth` | `number` | `12` | Max call-tree depth |
-| `--locs` | `boolean` | `false` | Show call-site source locations (file:line) |
+| Flag         | Type      | Default | Description                                                             |
+| ------------ | --------- | ------- | ----------------------------------------------------------------------- |
+| `--entry`    | `unknown` |         | Entrypoint symbol(s): functionName or ClassName.method                  |
+| `--file`     | `unknown` |         | Entrypoint file(s): indexed source path; expands to that file's exports |
+| `--maxDepth` | `number`  | `12`    | Max call-tree depth                                                     |
+| `--locs`     | `boolean` | `false` | Show call-site source locations (file:line)                             |
 
 ## Examples
 

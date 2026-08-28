@@ -1,7 +1,6 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
 skills:
-  - lineage
-  - lineage-diff
-  - mermaid-skill
+  - show-me
+  - calldiff
 tools:
   - calldiff

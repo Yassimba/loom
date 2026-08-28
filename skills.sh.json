@@ -4,22 +4,20 @@
   "groupings": [
     {
       "title": "Coding",
-      "description": "The development loop \u2014 planning, TDD, debugging, review, release \u2014 plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
+      "description": "The development loop — planning, TDD, debugging, review, release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
         "bdd",
         "blueprint",
         "brainstorming",
         "browser-usage",
+        "clarify-code",
         "code-review",
         "commit",
         "database-pro",
         "diagnosing-bugs",
         "e2e-test",
         "grill-with-docs",
-        "guided-review",
         "implement",
-        "loop-me",
-        "merge",
         "next",
         "prototype",
         "python-pro",
@@ -49,16 +47,19 @@
         "domain-modeling",
         "explain-code-flow",
         "improve-codebase-architecture",
-        "quick-lineage",
-        "lineage",
-        "lineage-diff",
-        "zoom-out"
+        "literate-programming",
+        "show-me"
       ]
     },
     {
+      "title": "Design",
+      "description": "Shape, critique, and polish frontend interfaces with strong visual direction and production checks.",
+      "skills": ["impeccable"]
+    },
+    {
       "title": "Diagrams",
-      "description": "Turn systems and data into pictures \u2014 draw.io, Mermaid, and infographics.",
-      "skills": ["drawio-skill", "mermaid-skill"]
+      "description": "Turn systems and data into pictures — draw.io, Mermaid, and diagram-design editorial diagrams.",
+      "skills": ["mermaid-skill", "diagram-design"]
     },
     {
       "title": "Presentations",
@@ -66,26 +67,58 @@
       "skills": ["marp-slide", "pptx"]
     },
     {
-      "title": "General",
-      "description": "Interviewing, teaching, writing, and note-taking \u2014 skills for the work around the code.",
+      "title": "Observability",
+      "description": "Datadog via the pup CLI — auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
       "skills": [
+        "dd-apm",
+        "dd-code-generation",
+        "dd-debugger",
+        "dd-docs",
+        "dd-file-issue",
+        "dd-logs",
+        "dd-monitors",
+        "dd-pup"
+      ]
+    },
+    {
+      "title": "General",
+      "description": "Interviewing, teaching, writing, and note-taking — skills for the work around the code.",
+      "skills": [
+        "eli5",
         "grill-me",
         "grilling",
         "handoff",
         "herdr",
+        "i-have-adhd",
         "jira",
-        "no-ai-slop",
         "research",
+        "stop-the-slop",
         "loom",
         "teach",
-        "wizard",
         "write-documentation",
         "write-readme",
-        "write-simply",
         "writing-clearly-and-concisely",
         "writing-for-agents",
         "wtf"
       ]
+    },
+    {
+      "title": "Plannotator",
+      "description": "Plan and code review in the browser with the plannotator CLI: review diffs, annotate files or URLs, revisit the last reply, mine the plan archive, build goal packages, and render visual explainers.",
+      "skills": [
+        "plannotator",
+        "plannotator-review",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-compound",
+        "plannotator-setup-goal",
+        "plannotator-visual-explainer"
+      ]
+    },
+    {
+      "title": "Ponytail",
+      "description": "Build less: choose YAGNI, stdlib, and native features before adding code, then audit what can still be removed.",
+      "skills": ["ponytail", "ponytail-review", "ponytail-audit"]
     }
   ]
 }

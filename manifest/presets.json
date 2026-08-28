@@ -24,6 +24,22 @@
         "gh",
         "aqua:XAMPPRocky/tokei"
       ]
+    },
+    {
+      "id": "observability",
+      "label": "Datadog / pup",
+      "description": "the pup CLI plus Datadog skills — logs, APM, monitors, debugger, CI flakes",
+      "targets": [
+        "dd-pup",
+        "dd-apm",
+        "dd-logs",
+        "dd-monitors",
+        "dd-debugger",
+        "dd-docs",
+        "dd-code-generation",
+        "dd-file-issue",
+        "github:DataDog/pup"
+      ]
     }
   ]
 }

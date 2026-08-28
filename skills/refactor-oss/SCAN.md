@@ -29,7 +29,7 @@ Done when every slice is covered by exactly one explorer report and the clone su
 
 ## 3. Synthesize
 
-Invoke the `write-simply` skill, then merge everything into one report, tiered:
+Invoke the `writing-clearly-and-concisely` skill, then merge everything into one report, tiered:
 
 1. **Existing deps underused** — swaps with no new install; name the dependency and the custom code it absorbs
 2. **Small new dependencies** — each paired with the specific lines it deletes

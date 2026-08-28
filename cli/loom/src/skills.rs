@@ -24,15 +24,19 @@ pub enum SkillAgent {
     Pi,
     #[value(name = "opencode")]
     OpenCode,
+    Cursor,
+    Grok,
 }
 
 impl SkillAgent {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 7] = [
         Self::Claude,
         Self::AgentsStandard,
         Self::Codex,
         Self::Pi,
         Self::OpenCode,
+        Self::Cursor,
+        Self::Grok,
     ];
 
     pub fn label(self) -> &'static str {
@@ -42,6 +46,8 @@ impl SkillAgent {
             Self::Codex => "Codex",
             Self::Pi => "Pi",
             Self::OpenCode => "OpenCode",
+            Self::Cursor => "Cursor",
+            Self::Grok => "Grok",
         }
     }
 
@@ -59,6 +65,8 @@ impl SkillAgent {
             Self::Codex => home.join(".codex"),
             Self::Pi => home.join(".pi").join("agent"),
             Self::OpenCode => home.join(".config").join("opencode"),
+            Self::Cursor => home.join(".cursor"),
+            Self::Grok => home.join(".grok"),
         }
     }
 
@@ -72,6 +80,8 @@ impl SkillAgent {
             Self::AgentsStandard | Self::Codex => root.join(".agents").join("skills"),
             Self::Pi => root.join(".pi").join("skills"),
             Self::OpenCode => root.join(".opencode").join("skills"),
+            Self::Cursor => root.join(".cursor").join("skills"),
+            Self::Grok => root.join(".grok").join("skills"),
         }
     }
 }
@@ -162,7 +172,7 @@ pub fn detect_skill_agents(home: &Path) -> Vec<SkillAgent> {
 }
 
 /// The supported agent directories, for user-facing messages:
-/// `~/.claude, ~/.agents, ~/.codex, ~/.pi/agent, ~/.config/opencode`.
+/// `~/.claude, ~/.agents, ~/.codex, ~/.pi/agent, ~/.config/opencode, ~/.cursor, ~/.grok`.
 pub(crate) fn agent_dirs_display() -> String {
     SkillAgent::ALL
         .map(|agent| format!("~/{}", agent.global_agent_dir(Path::new("")).display()))
@@ -620,9 +630,33 @@ mod tests {
                 project.join(".agents/skills"),
                 project.join(".pi/skills"),
                 project.join(".opencode/skills"),
+                project.join(".cursor/skills"),
+                project.join(".grok/skills"),
             ]
         );
         fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn cursor_and_grok_use_native_trees() {
+        let home = Path::new("/tmp/loom-home");
+        let project = Path::new("/tmp/loom-project");
+        assert_eq!(
+            SkillAgent::Cursor.global_skill_tree(home),
+            home.join(".cursor").join("skills")
+        );
+        assert_eq!(
+            SkillAgent::Grok.global_skill_tree(home),
+            home.join(".grok").join("skills")
+        );
+        assert_eq!(
+            SkillAgent::Cursor.project_skill_tree(project),
+            project.join(".cursor").join("skills")
+        );
+        assert_eq!(
+            SkillAgent::Grok.project_skill_tree(project),
+            project.join(".grok").join("skills")
+        );
     }
 
     #[test]

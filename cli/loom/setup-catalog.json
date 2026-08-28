@@ -1,0 +1,1110 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "engineering",
+      "label": "Engineering flow",
+      "description": "the idea-to-commit skill loop, plus gh and tokei",
+      "targets": [
+        "brainstorming",
+        "wayfinder",
+        "grill-with-docs",
+        "bdd",
+        "grilling",
+        "to-spec",
+        "to-tickets",
+        "implement",
+        "tdd",
+        "code-review",
+        "refactor",
+        "e2e-test",
+        "commit",
+        "diagnosing-bugs",
+        "writing-clearly-and-concisely",
+        "gh",
+        "aqua:XAMPPRocky/tokei"
+      ]
+    },
+    {
+      "id": "observability",
+      "label": "Datadog / pup",
+      "description": "the pup CLI plus Datadog skills — logs, APM, monitors, debugger, CI flakes",
+      "targets": [
+        "dd-pup",
+        "dd-apm",
+        "dd-logs",
+        "dd-monitors",
+        "dd-debugger",
+        "dd-docs",
+        "dd-code-generation",
+        "dd-file-issue",
+        "github:DataDog/pup"
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "id": "pi-package:pi-claude-bridge",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "claude-bridge",
+      "description": "Use Claude models inside Pi through your Claude subscription. By elidickinson.",
+      "installTarget": "pi-claude-bridge",
+      "version": "0.7.0",
+      "nextAction": "Run /model in Pi and pick a Claude model."
+    },
+    {
+      "id": "pi-package:@yassimba/pi-openai-fast",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "OpenAI Fast Mode",
+      "description": "Request OpenAI priority service tier from supported models",
+      "installTarget": "@yassimba/pi-openai-fast",
+      "nextAction": "Start Pi and use the installed package."
+    },
+    {
+      "id": "pi-package:pi-rewind-hook",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "rewind",
+      "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
+      "installTarget": "pi-rewind-hook",
+      "version": "1.8.6",
+      "nextAction": "Branch to an earlier Pi message to see files rewind."
+    },
+    {
+      "id": "pi-package:pi-subagents",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "subagents",
+      "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
+      "installTarget": "pi-subagents",
+      "version": "0.58.0",
+      "nextAction": "Ask Pi to delegate a task to a subagent."
+    },
+    {
+      "id": "pi-package:pi-web-access",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "web-access",
+      "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
+      "installTarget": "pi-web-access",
+      "version": "0.26.0",
+      "nextAction": "Ask Pi to search the web."
+    },
+    {
+      "id": "skill:bdd",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "bdd",
+      "description": "Behavior-Driven Development as a collaboration and specification practice, with pytest-bdd and behave as the bundled automation references. Use when defining behavior through concrete examples or acceptance criteria, writing or reviewing Gherkin .feature files, wiring pytest-bdd or behave step definitions, or checking that tests still express business behavior rather than implementation.",
+      "installTarget": "bdd",
+      "nextAction": "Ask your coding agent to use the bdd skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:blueprint",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "blueprint",
+      "description": "Blueprint a change before building it — three ASCII views of the design, held for approval before any code. Use before implementing non-trivial work — proactively or when the user asks to see the design first — or when another skill needs a design-approval gate.",
+      "installTarget": "blueprint",
+      "nextAction": "Ask your coding agent to use the blueprint skill.",
+      "dependencies": ["show-me", "calldiff", "npm:calldiff"]
+    },
+    {
+      "id": "skill:brainstorming",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "brainstorming",
+      "description": "Use when the user wants to brainstorm or explore an idea — a feature, product direction, or \"what if\" — before deciding whether it deserves a plan. Ideation only — ends in an idea brief, not a design.",
+      "installTarget": "brainstorming",
+      "nextAction": "Ask your coding agent to use the brainstorming skill.",
+      "dependencies": ["to-spec", "to-tickets"]
+    },
+    {
+      "id": "skill:browser-usage",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "browser-usage",
+      "description": "Core agent-browser usage guide — read before running any agent-browser command. Use when the user asks to interact with, test, or automate a website — clicking, filling forms, extracting data, taking screenshots, logging in, staying logged in.",
+      "installTarget": "browser-usage",
+      "nextAction": "Ask your coding agent to use the browser-usage skill.",
+      "dependencies": ["npm:agent-browser"]
+    },
+    {
+      "id": "skill:clarify-code",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "clarify-code",
+      "description": "First-read clarity for working code: rename opaque identifiers and align nearby prose while preserving behavior and architecture. Use when a newcomer cannot infer purpose from the local code.",
+      "installTarget": "clarify-code",
+      "nextAction": "Ask your coding agent to use the clarify-code skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:code-review",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "code-review",
+      "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
+      "installTarget": "code-review",
+      "nextAction": "Ask your coding agent to use the code-review skill.",
+      "dependencies": ["setup-project"]
+    },
+    {
+      "id": "skill:commit",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "commit",
+      "description": "Use when creating a git commit — the user asks to commit, or a unit of work is complete and ready to commit.",
+      "installTarget": "commit",
+      "nextAction": "Ask your coding agent to use the commit skill.",
+      "dependencies": ["diagnosing-bugs", "writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:database-pro",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "database-pro",
+      "description": "Use when writing or optimizing SQL queries, designing database schemas, tuning database performance, or administering PostgreSQL/MySQL. Invoke for EXPLAIN analysis, indexing, JSONB, replication, VACUUM, window functions, CTEs, monitoring, partitioning.",
+      "installTarget": "database-pro",
+      "nextAction": "Ask your coding agent to use the database-pro skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:diagnosing-bugs",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "diagnosing-bugs",
+      "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow.",
+      "installTarget": "diagnosing-bugs",
+      "nextAction": "Ask your coding agent to use the diagnosing-bugs skill.",
+      "dependencies": ["improve-codebase-architecture"]
+    },
+    {
+      "id": "skill:e2e-test",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "e2e-test",
+      "description": "Manual end-to-end walkthrough — drive the live app first-hand (CLI, API, web UI) and query the datastore directly. Trigger on \"e2e\", \"smoke test\", \"manually test\".",
+      "installTarget": "e2e-test",
+      "nextAction": "Ask your coding agent to use the e2e-test skill.",
+      "dependencies": ["tdd"]
+    },
+    {
+      "id": "skill:grill-with-docs",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "grill-with-docs",
+      "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.",
+      "installTarget": "grill-with-docs",
+      "nextAction": "Ask your coding agent to use the grill-with-docs skill.",
+      "dependencies": ["domain-modeling", "grilling"]
+    },
+    {
+      "id": "skill:implement",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "implement",
+      "description": "Implement a piece of work based on a spec or set of tickets.",
+      "installTarget": "implement",
+      "nextAction": "Ask your coding agent to use the implement skill.",
+      "dependencies": ["blueprint", "code-review", "tdd"]
+    },
+    {
+      "id": "skill:next",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "next",
+      "description": "Claim the next actionable Beads task using bv and br. Use when the user asks to pick, grab, claim, or start the next task; a preview without claiming belongs to whats-next.",
+      "installTarget": "next",
+      "nextAction": "Ask your coding agent to use the next skill.",
+      "dependencies": [
+        "github:Dicklesworthstone/beads_rust",
+        "github:Dicklesworthstone/beads_viewer"
+      ]
+    },
+    {
+      "id": "skill:prototype",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "prototype",
+      "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.",
+      "installTarget": "prototype",
+      "nextAction": "Ask your coding agent to use the prototype skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:python-pro",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "python-pro",
+      "description": "Use when writing Python 3.12+ — typed application code, async programming, CLI tools (cyclopts, rich), or pandas data manipulation.",
+      "installTarget": "python-pro",
+      "nextAction": "Ask your coding agent to use the python-pro skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:record-library",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "record-library",
+      "description": "Record a library in the refactor-oss catalog — the package plus the hand-roll it retires — so future scans hunt with it.",
+      "installTarget": "record-library",
+      "nextAction": "Ask your coding agent to use the record-library skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:refactor",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "refactor",
+      "description": "Refactor with clear orchestration, strong interfaces, and happy-path-first design",
+      "installTarget": "refactor",
+      "nextAction": "Ask your coding agent to use the refactor skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:refactor-nuclear",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "refactor-nuclear",
+      "description": "Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. Use for a thermo-nuclear code quality review, thermonuclear review, deep code quality audit, or especially harsh maintainability review.",
+      "installTarget": "refactor-nuclear",
+      "nextAction": "Ask your coding agent to use the refactor-nuclear skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:refactor-tests",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "refactor-tests",
+      "description": "Refactor a test suite — prune tests that prove nothing, collapse case lists into properties, parametrize, and measure the shrink. Use after a refactor lands, when tests mirror the implementation, or when the suite's cost outgrows the faults it catches.",
+      "installTarget": "refactor-tests",
+      "nextAction": "Ask your coding agent to use the refactor-tests skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:release",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "release",
+      "description": "Pre-push quality gate + pull/merge request creation. Use when the user wants to ship, release, push a branch, or open a PR/MR — runs the project's own lint, type-check, and test gates first, then commits, pushes, and opens the request on the project's forge (gh or glab).",
+      "installTarget": "release",
+      "nextAction": "Ask your coding agent to use the release skill.",
+      "dependencies": ["commit", "diagnosing-bugs", "setup-project"]
+    },
+    {
+      "id": "skill:resolving-merge-conflicts",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "resolving-merge-conflicts",
+      "description": "Use when you need to resolve an in-progress git merge/rebase conflict.",
+      "installTarget": "resolving-merge-conflicts",
+      "nextAction": "Ask your coding agent to use the resolving-merge-conflicts skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:setup-project",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "setup-project",
+      "description": "Configure this repo for the engineering skills — issue tracker (Beads, GitHub, GitLab, or local markdown), domain-doc layout, editor deep links, ai-docs gitignore. Use when the user wants a repo set up for the engineering skills, after a fresh `loom init`, or when another skill finds `ai-docs/agents/` missing.",
+      "installTarget": "setup-project",
+      "nextAction": "Ask your coding agent to use the setup-project skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:tdd",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "tdd",
+      "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests.",
+      "installTarget": "tdd",
+      "nextAction": "Ask your coding agent to use the tdd skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:terraform-engineer",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "terraform-engineer",
+      "description": "Terraform infrastructure as code across AWS, Azure, or GCP. Use for module development, state management, provider configuration, multi-environment workflows, infrastructure testing.",
+      "installTarget": "terraform-engineer",
+      "nextAction": "Ask your coding agent to use the terraform-engineer skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ticket-overview",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ticket-overview",
+      "description": "Beads/BV ticket map with ASCII dependencies and product context. Use when the user asks for: (1) the complete issue graph, (2) roadmap workstreams and execution leverage, or (3) what a set of tickets is building.",
+      "installTarget": "ticket-overview",
+      "nextAction": "Ask your coding agent to use the ticket-overview skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:to-spec",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "to-spec",
+      "description": "Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.",
+      "installTarget": "to-spec",
+      "nextAction": "Ask your coding agent to use the to-spec skill.",
+      "dependencies": ["setup-project"]
+    },
+    {
+      "id": "skill:to-tickets",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "to-tickets",
+      "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker — edges as text in a local file, or native blocking links on a real tracker.",
+      "installTarget": "to-tickets",
+      "nextAction": "Ask your coding agent to use the to-tickets skill.",
+      "dependencies": ["implement", "setup-project"]
+    },
+    {
+      "id": "skill:update-docstrings",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "update-docstrings",
+      "description": "Add or update docstrings, doc comments, and inline comments in source code — any language. Use when the user wants docstrings written or fixed, a conversion to a doc style (NumPy, TSDoc, rustdoc), or a comment cleanup. Source files only — README/ADR/prose docs belong to write-documentation / write-readme.",
+      "installTarget": "update-docstrings",
+      "nextAction": "Ask your coding agent to use the update-docstrings skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:wayfinder",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "wayfinder",
+      "description": "Plan a huge chunk of work — more than one agent session can hold — as a shared map of investigation tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.",
+      "installTarget": "wayfinder",
+      "nextAction": "Ask your coding agent to use the wayfinder skill.",
+      "dependencies": ["domain-modeling", "grilling", "prototype", "setup-project"]
+    },
+    {
+      "id": "skill:whats-next",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "whats-next",
+      "description": "Preview the next actionable Beads task — its context and a sketch of the approach, claiming nothing. Use when the user asks what's next or what to work on next, or wants to size up the coming task before committing to it.",
+      "installTarget": "whats-next",
+      "nextAction": "Ask your coding agent to use the whats-next skill.",
+      "dependencies": ["next"]
+    },
+    {
+      "id": "skill:calldiff",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "calldiff",
+      "description": "Diff call stacks across git commits — like git diff, but for who-calls-whom. Shows which callees appeared, disappeared, or moved under an entrypoint across 22 languages (diff, tree, and reach). Use for agentic code review when call flow changed and line diffs bury the shape of the change.",
+      "installTarget": "calldiff",
+      "nextAction": "Ask your coding agent to use the calldiff skill.",
+      "dependencies": ["npm:calldiff"]
+    },
+    {
+      "id": "skill:codebase-design",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "codebase-design",
+      "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
+      "installTarget": "codebase-design",
+      "nextAction": "Ask your coding agent to use the codebase-design skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:domain-modeling",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "domain-modeling",
+      "description": "Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.",
+      "installTarget": "domain-modeling",
+      "nextAction": "Ask your coding agent to use the domain-modeling skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:explain-code-flow",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "explain-code-flow",
+      "description": "Architecture walkthrough: explain how a feature works in the current codebase with brief context, ASCII diagrams, runtime dataflow, and file:line anchors. Use when the user asks for a big-picture explanation, architecture map, or end-to-end feature flow.",
+      "installTarget": "explain-code-flow",
+      "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:improve-codebase-architecture",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "improve-codebase-architecture",
+      "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
+      "installTarget": "improve-codebase-architecture",
+      "nextAction": "Ask your coding agent to use the improve-codebase-architecture skill.",
+      "dependencies": ["codebase-design", "domain-modeling", "grilling"]
+    },
+    {
+      "id": "skill:literate-programming",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "literate-programming",
+      "description": "Transform a codebase into a literate program — a .lit.md essay that weaves prose, diagrams, and named chunks and tangles back to source. Use when the user asks for a literate program, .lit.md, weave, tangle, or wants the system written as a narrative that can regenerate the files.",
+      "installTarget": "literate-programming",
+      "nextAction": "Ask your coding agent to use the literate-programming skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:show-me",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "show-me",
+      "description": "Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (Mermaid), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.",
+      "installTarget": "show-me",
+      "nextAction": "Ask your coding agent to use the show-me skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:impeccable",
+      "kind": "skill",
+      "group": "Design",
+      "label": "impeccable",
+      "description": "Use when the user wants to design, redesign, shape, critique, audit, polish, clarify, distill, harden, optimize, adapt, animate, colorize, extract, or otherwise improve a frontend interface. Covers websites, landing pages, dashboards, product UI, app shells, components, forms, settings, onboarding, and empty states. Handles UX review, visual hierarchy, information architecture, cognitive load, accessibility, performance, responsive behavior, theming, anti-patterns, typography, fonts, spacing, layout, alignment, color, motion, micro-interactions, UX copy, error states, edge cases, i18n, and reusable design systems or tokens. Also use for bland designs that need to become bolder or more delightful, loud designs that should become quieter, live browser iteration on UI elements, or ambitious visual effects that should feel technically extraordinary. Not for backend-only or non-UI tasks.",
+      "installTarget": "impeccable",
+      "nextAction": "Ask your coding agent to use the impeccable skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:mermaid-skill",
+      "kind": "skill",
+      "group": "Diagrams",
+      "label": "mermaid-skill",
+      "description": "Generate Mermaid diagrams as code (.mmd) and export to PNG/SVG/PDF with mmdc. Use when the user wants a diagram — flowchart, sequence, class, ER, state, gantt, git graph, architecture, timeline, mindmap — proactively when explaining a system with 3+ components, a runtime flow, a schema, or a lifecycle, and when another skill (e.g. show-me) needs a diagram authored or exported to an image.",
+      "installTarget": "mermaid-skill",
+      "nextAction": "Ask your coding agent to use the mermaid-skill skill.",
+      "dependencies": ["npm:@mermaid-js/mermaid-cli"]
+    },
+    {
+      "id": "skill:diagram-design",
+      "kind": "skill",
+      "group": "Diagrams",
+      "label": "diagram-design",
+      "description": "Create branded architecture, IT current-state, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar/spider, polar chart (polar/radial lollipop), loop/flywheel, nested, tree, org chart, layer stack, Venn, pyramid/funnel, treemap, bar, line, Gantt and scatter charts, high-level, process, medallion, data flow, DP integration, DP security matrix, Sankey, fishbone, Wardley map, kanban, user journey, deployment, dependency graph, UML class, story map, or database schema diagrams as standalone HTML/SVG/PNG. Redraw .drawio/.drawio.png/.drawio.svg or Mermaid .mmd sources at a chosen size/detail; onboard brand tokens from a website; add semantic patterns, callouts, accessible motion, or sketchy/hand-drawn styling.",
+      "installTarget": "diagram-design",
+      "nextAction": "Ask your coding agent to use the diagram-design skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:marp-slide",
+      "kind": "skill",
+      "group": "Presentations",
+      "label": "marp-slide",
+      "description": "Create Marp presentation slides — themed decks authored in Markdown. Use when the user asks for a Marp document or wants slides written in Markdown rather than .pptx.",
+      "installTarget": "marp-slide",
+      "nextAction": "Ask your coding agent to use the marp-slide skill.",
+      "dependencies": ["npm:@marp-team/marp-cli"]
+    },
+    {
+      "id": "skill:pptx",
+      "kind": "skill",
+      "group": "Presentations",
+      "label": "pptx",
+      "description": "Create, edit, or read .pptx files — decks, templates, layouts, speaker notes, comments, including extracting a file's text for use elsewhere. Use whenever a .pptx file is the input or output, and when the user asks for a deck, slides, or a presentation without naming another format (Marp/Markdown slides belong to marp-slide).",
+      "installTarget": "pptx",
+      "nextAction": "Ask your coding agent to use the pptx skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:dd-apm",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-apm",
+      "description": "APM - traces, services, dependencies, performance analysis.",
+      "installTarget": "dd-apm",
+      "nextAction": "Ask your coding agent to use the dd-apm skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-code-generation",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-code-generation",
+      "description": "Use pup CLI for immediate Datadog operations or generate code for integration into applications",
+      "installTarget": "dd-code-generation",
+      "nextAction": "Ask your coding agent to use the dd-code-generation skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-debugger",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-debugger",
+      "description": "Live Debugger - inspect runtime argument/variable values in production by placing log probes on methods. Use when asked what values a function receives, what parameters look like at runtime, or to capture live data from running services without redeploying.",
+      "installTarget": "dd-debugger",
+      "nextAction": "Ask your coding agent to use the dd-debugger skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-docs",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-docs",
+      "description": "Datadog docs lookup using docs.datadoghq.com/llms.txt and linked Markdown pages.",
+      "installTarget": "dd-docs",
+      "nextAction": "Ask your coding agent to use the dd-docs skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:dd-file-issue",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-file-issue",
+      "description": "File GitHub issues to the right repository (pup CLI or plugin)",
+      "installTarget": "dd-file-issue",
+      "nextAction": "Ask your coding agent to use the dd-file-issue skill.",
+      "dependencies": ["gh"]
+    },
+    {
+      "id": "skill:dd-logs",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-logs",
+      "description": "Log management - search, pipelines, archives, and cost control.",
+      "installTarget": "dd-logs",
+      "nextAction": "Ask your coding agent to use the dd-logs skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-monitors",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-monitors",
+      "description": "Monitor management - create, update, mute, and alerting best practices.",
+      "installTarget": "dd-monitors",
+      "nextAction": "Ask your coding agent to use the dd-monitors skill.",
+      "dependencies": ["dd-pup", "github:DataDog/pup"]
+    },
+    {
+      "id": "skill:dd-pup",
+      "kind": "skill",
+      "group": "Observability",
+      "label": "dd-pup",
+      "description": "Datadog CLI (pup). OAuth2 auth with token refresh.",
+      "installTarget": "dd-pup",
+      "nextAction": "Ask your coding agent to use the dd-pup skill.",
+      "dependencies": ["github:DataDog/pup"]
+    },
+    {
+      "id": "skill:eli5",
+      "kind": "skill",
+      "group": "General",
+      "label": "eli5",
+      "description": "Explain something new fast for a smart adult who has never used the topic. Use for \"/eli5 [topic]\", \"eli5 this\", \"break this down for me\", \"I know nothing about X, catch me up\", or another request for a quick plain-language explanation of how something works.",
+      "installTarget": "eli5",
+      "nextAction": "Ask your coding agent to use the eli5 skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:grill-me",
+      "kind": "skill",
+      "group": "General",
+      "label": "grill-me",
+      "description": "A relentless interview to sharpen a plan or design.",
+      "installTarget": "grill-me",
+      "nextAction": "Ask your coding agent to use the grill-me skill.",
+      "dependencies": ["grilling"]
+    },
+    {
+      "id": "skill:grilling",
+      "kind": "skill",
+      "group": "General",
+      "label": "grilling",
+      "description": "Grill the user relentlessly about a plan or design. Use when the user wants to stress-test a plan before building, or uses any 'grill' trigger phrases.",
+      "installTarget": "grilling",
+      "nextAction": "Ask your coding agent to use the grilling skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:handoff",
+      "kind": "skill",
+      "group": "General",
+      "label": "handoff",
+      "description": "Compact the current conversation into a handoff document for another agent to pick up.",
+      "installTarget": "handoff",
+      "nextAction": "Ask your coding agent to use the handoff skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:herdr",
+      "kind": "skill",
+      "group": "General",
+      "label": "herdr",
+      "description": "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, terminals, commands, or communication with another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1.",
+      "installTarget": "herdr",
+      "nextAction": "Ask your coding agent to use the herdr skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:i-have-adhd",
+      "kind": "skill",
+      "group": "General",
+      "label": "i-have-adhd",
+      "description": "Shape output for a reader with ADHD: lead with the next action, number multi-step work, restate state across turns, suppress tangents, give specific time estimates, make wins visible. Invoke with /i-have-adhd; Loom users can keep it on per project with loom init --adhd.",
+      "installTarget": "i-have-adhd",
+      "nextAction": "Ask your coding agent to use the i-have-adhd skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:jira",
+      "kind": "skill",
+      "group": "General",
+      "label": "jira",
+      "description": "Use when the user mentions Jira issues (e.g., \"PROJ-123\"), asks about tickets, wants to create/view/update issues, check sprint status, or manage their Jira workflow. Triggers on keywords like \"jira\", \"issue\", \"ticket\", \"sprint\", or issue key patterns.",
+      "installTarget": "jira",
+      "nextAction": "Ask your coding agent to use the jira skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:research",
+      "kind": "skill",
+      "group": "General",
+      "label": "research",
+      "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
+      "installTarget": "research",
+      "nextAction": "Ask your coding agent to use the research skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:stop-the-slop",
+      "kind": "skill",
+      "group": "General",
+      "label": "stop-the-slop",
+      "description": "Remove AI writing patterns from a draft, in Preserve stance (keep the writer's voice) or Improve stance (rewrite toward the best document, facts sourced from the repo). Detects patterns without rewriting, or scores, on request. Use when text should read less AI-written, or when asked whether it does.",
+      "installTarget": "stop-the-slop",
+      "nextAction": "Ask your coding agent to use the stop-the-slop skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:loom",
+      "kind": "skill",
+      "group": "General",
+      "label": "loom",
+      "description": "Set up or troubleshoot Yassimba's curated setup through the loom CLI — exact-pinned tools via mise, agent-scoped global or project skills, Pi packages. Use when the user asks to install this collection, add a capability for one or more agents, install a skill globally or in the current project, scaffold AGENTS.md, update or sync the setup, or diagnose installation problems.",
+      "installTarget": "loom",
+      "nextAction": "Ask your coding agent to use the loom skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:teach",
+      "kind": "skill",
+      "group": "General",
+      "label": "teach",
+      "description": "Teach the user a new skill or concept, within this workspace.",
+      "installTarget": "teach",
+      "nextAction": "Ask your coding agent to use the teach skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:write-documentation",
+      "kind": "skill",
+      "group": "General",
+      "label": "write-documentation",
+      "description": "Write software documentation structured by Diátaxis. Use when the user wants a tutorial, how-to guide, reference page, explanation doc, or user guide — \"write docs\", \"document this\", \"we need a guide for X\". Not for READMEs (write-readme) or docstrings (update-docstrings).",
+      "installTarget": "write-documentation",
+      "nextAction": "Ask your coding agent to use the write-documentation skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:write-readme",
+      "kind": "skill",
+      "group": "General",
+      "label": "write-readme",
+      "description": "Use when writing or improving README files. Not all READMEs are the same — provides templates and guidance matched to your audience and project type.",
+      "installTarget": "write-readme",
+      "nextAction": "Ask your coding agent to use the write-readme skill.",
+      "dependencies": ["writing-clearly-and-concisely"]
+    },
+    {
+      "id": "skill:writing-clearly-and-concisely",
+      "kind": "skill",
+      "group": "General",
+      "label": "writing-clearly-and-concisely",
+      "description": "Writing or editing prose humans read - docs, commit messages, error messages, reports, UI text. Also the register other skills invoke for compact technical prose (docstrings, comments, captions, proposals), and the pass that makes text sound human instead of AI-written (\"humanize\", \"reads like ChatGPT\").",
+      "installTarget": "writing-clearly-and-concisely",
+      "nextAction": "Ask your coding agent to use the writing-clearly-and-concisely skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:writing-for-agents",
+      "kind": "skill",
+      "group": "General",
+      "label": "writing-for-agents",
+      "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.",
+      "installTarget": "writing-for-agents",
+      "nextAction": "Ask your coding agent to use the writing-for-agents skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:wtf",
+      "kind": "skill",
+      "group": "General",
+      "label": "wtf",
+      "description": "Restate the last message so it lands - plain language, a picture when the it helps and a from-scratch explanation when the concept is new.",
+      "installTarget": "wtf",
+      "nextAction": "Ask your coding agent to use the wtf skill.",
+      "dependencies": ["writing-clearly-and-concisely", "show-me", "eli5"]
+    },
+    {
+      "id": "skill:plannotator",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator",
+      "description": "Reference for using the Plannotator CLI: plan review, code review, annotating files, URLs, folders, and running local apps, annotating the last assistant message, browsing archived plan decisions, and exporting or sharing Guided Reviews. Invoke when asked to use Plannotator for anything not covered by a more specific plannotator-* skill.",
+      "installTarget": "plannotator",
+      "nextAction": "Ask your coding agent to use the plannotator skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-review",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-review",
+      "description": "Open Plannotator's browser-based code review UI for the current worktree or a pull request URL, then act on the feedback that comes back.",
+      "installTarget": "plannotator-review",
+      "nextAction": "Ask your coding agent to use the plannotator-review skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-annotate",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-annotate",
+      "description": "Open Plannotator's annotation UI for a markdown file, plain-text config file (.yaml, .json, .toml, .ini, .csv, .log, …), HTML file, URL, or folder and then respond to the returned annotations.",
+      "installTarget": "plannotator-annotate",
+      "nextAction": "Ask your coding agent to use the plannotator-annotate skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-last",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-last",
+      "description": "Open Plannotator on the latest rendered assistant message and use the returned annotations to revise that message or continue.",
+      "installTarget": "plannotator-last",
+      "nextAction": "Ask your coding agent to use the plannotator-last skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-compound",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-compound",
+      "description": "Analyze a user's Plannotator plan archive to extract denial patterns, feedback taxonomy, evolution over time, and actionable prompt improvements — then produce a polished HTML dashboard report. Falls back to Claude Code ExitPlanMode denial reasons when Plannotator data is unavailable.\n",
+      "installTarget": "plannotator-compound",
+      "nextAction": "Ask your coding agent to use the plannotator-compound skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-setup-goal",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-setup-goal",
+      "description": "Turn an idea or objective into a goal package for /goal. Interviews the user, builds a reviewed fact sheet via Plannotator, then explores the codebase to produce an execution plan.",
+      "installTarget": "plannotator-setup-goal",
+      "nextAction": "Ask your coding agent to use the plannotator-setup-goal skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:plannotator-visual-explainer",
+      "kind": "skill",
+      "group": "Plannotator",
+      "label": "plannotator-visual-explainer",
+      "description": "Generate self-contained HTML visualizations with Plannotator theming. Use for implementation plans, PR explainers, architecture diagrams, data tables, slide decks, and any visual explanation of technical concepts. Plans and PR explainers follow Plannotator's prescriptive approach; all other visual content delegates to nicobailon/visual-explainer.\n",
+      "installTarget": "plannotator-visual-explainer",
+      "nextAction": "Ask your coding agent to use the plannotator-visual-explainer skill.",
+      "dependencies": ["github:backnotprop/plannotator"]
+    },
+    {
+      "id": "skill:ponytail",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail",
+      "description": "Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the task needs to exist at all (YAGNI), reach for the standard library before custom code, native platform features before dependencies, one line before fifty. Supports intensity levels: lite, full (default), ultra. Use on ANY coding task: writing, adding, refactoring, fixing, reviewing, or designing code, and choosing libraries or dependencies. Also use whenever the user says \"ponytail\", \"be lazy\", \"lazy mode\", \"simplest solution\", \"minimal solution\", \"yagni\", \"do less\", or \"shortest path\", or complains about over-engineering, bloat, boilerplate, or unnecessary dependencies. Do NOT use for non-coding requests (general knowledge, prose, translation, summaries, recipes).\n",
+      "installTarget": "ponytail",
+      "nextAction": "Ask your coding agent to use the ponytail skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-review",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail-review",
+      "description": "Code review focused exclusively on over-engineering. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility. One line per finding: location, what to cut, what replaces it. Use when the user says \"review for over-engineering\", \"what can we delete\", \"is this over-engineered\", \"simplify review\", or invokes /ponytail-review. Complements correctness-focused review, this one only hunts complexity.\n",
+      "installTarget": "ponytail-review",
+      "nextAction": "Ask your coding agent to use the ponytail-review skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-audit",
+      "kind": "skill",
+      "group": "Ponytail",
+      "label": "ponytail-audit",
+      "description": "Whole-repo audit for over-engineering. Like ponytail-review, but scans the entire codebase instead of a diff: a ranked list of what to delete, simplify, or replace with stdlib/native equivalents. Use when the user says \"audit this codebase\", \"audit for over-engineering\", \"what can I delete from this repo\", \"find bloat\", \"ponytail-audit\", or \"/ponytail-audit\". One-shot report, does not apply fixes.\n",
+      "installTarget": "ponytail-audit",
+      "nextAction": "Ask your coding agent to use the ponytail-audit skill.",
+      "dependencies": []
+    },
+    {
+      "id": "herdr-plugin:annotate",
+      "kind": "herdr-plugin",
+      "group": "Herdr plugins",
+      "label": "Annotate",
+      "description": "Comment on terminal selections and copy annotations as agent context (plannotator/herdr-annotate). Needs Bun on PATH.",
+      "installTarget": "plannotator/herdr-annotate",
+      "nextAction": "Add the `annotate.*` key bindings from github.com/plannotator/herdr-annotate to ~/.config/herdr/config.toml, then `herdr config check`."
+    },
+    {
+      "id": "tool:loom-teams",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "loom-teams",
+      "description": "Teams/Outlook calendar as data over Microsoft Graph — export meetings as JSON, find scored meeting slots.",
+      "installTarget": "github:Yassimba/loom[exe=loom-teams]",
+      "nextAction": "Run `loom-teams setup` once and sign in, then `loom-teams find <name>`.",
+      "bin": "loom-teams",
+      "companions": []
+    },
+    {
+      "id": "tool:pi",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "pi",
+      "description": "The Pi coding agent. Required by Pi packages — selecting any of them pulls Pi in automatically.",
+      "installTarget": "npm:@mariozechner/pi-coding-agent",
+      "nextAction": "Run `pi` in a project to start the agent.",
+      "bin": "pi",
+      "companions": []
+    },
+    {
+      "id": "tool:herdr",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "herdr",
+      "description": "Terminal multiplexer for coding agents (macOS/Linux; on Windows install from herdr.dev).",
+      "installTarget": "herdr",
+      "nextAction": "Run `herdr` to start the multiplexer.",
+      "bin": "herdr",
+      "companions": []
+    },
+    {
+      "id": "tool:calldiff",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "calldiff",
+      "description": "Diff call stacks across git commits — who-calls-whom across 22 languages (diff, tree, reach).",
+      "installTarget": "npm:calldiff",
+      "nextAction": "Run `calldiff diff` in a git repository.",
+      "bin": "calldiff",
+      "companions": []
+    },
+    {
+      "id": "tool:codegraph",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "codegraph",
+      "description": "Local semantic code index for coding agents — source, call paths, and change impact without file-by-file discovery.",
+      "installTarget": "npm:@colbymchenry/codegraph",
+      "nextAction": "Run `loom init` in a project to wire agents and build its index.",
+      "bin": "codegraph",
+      "companions": []
+    },
+    {
+      "id": "tool:tuicr",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "tuicr",
+      "description": "Code review TUI with vim keybindings — annotate diffs, PRs, or MRs and export to GitHub or clipboard.",
+      "installTarget": "github:agavra/tuicr",
+      "nextAction": "Run `tuicr` in a repo with changes.",
+      "bin": "tuicr",
+      "companions": []
+    },
+    {
+      "id": "tool:gh",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "gh",
+      "description": "GitHub CLI — the release, code-review, and jira skills use it for PRs and issues.",
+      "installTarget": "gh",
+      "nextAction": "Run `gh auth login` once.",
+      "bin": "gh",
+      "companions": []
+    },
+    {
+      "id": "tool:glab",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "glab",
+      "description": "GitLab CLI — the release and code-review skills use it for MRs on GitLab projects.",
+      "installTarget": "glab",
+      "nextAction": "Run `glab auth login` once.",
+      "bin": "glab",
+      "companions": []
+    },
+    {
+      "id": "tool:tokei",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "tokei",
+      "description": "Fast code-statistics tool several skills shell out to for codebase orientation.",
+      "installTarget": "aqua:XAMPPRocky/tokei",
+      "nextAction": "Run `tokei` in a repo.",
+      "bin": "tokei",
+      "companions": ["cargo:tokei", "rust"]
+    },
+    {
+      "id": "tool:tokui",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "tokui",
+      "description": "Interactive TUI over tokei's statistics.",
+      "installTarget": "github:zdyxry/tokui",
+      "nextAction": "Run `tokei -o json | tokui` in a repo.",
+      "bin": "tokui",
+      "companions": []
+    },
+    {
+      "id": "tool:uv",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "uv",
+      "description": "Python package and project manager — the python skills assume it.",
+      "installTarget": "uv",
+      "nextAction": "Run `uv init` in a Python project.",
+      "bin": "uv",
+      "companions": []
+    },
+    {
+      "id": "tool:agent-browser",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "agent-browser",
+      "description": "Browser automation CLI the browser-usage and e2e test skills drive.",
+      "installTarget": "npm:agent-browser",
+      "nextAction": "Ask your agent to test a website.",
+      "bin": "agent-browser",
+      "companions": []
+    },
+    {
+      "id": "tool:mermaid-cli",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "mermaid-cli",
+      "description": "Renders Mermaid diagrams to images (mmdc) — used by the diagram skills.",
+      "installTarget": "npm:@mermaid-js/mermaid-cli",
+      "nextAction": "Ask your agent for a diagram.",
+      "bin": "mmdc",
+      "companions": []
+    },
+    {
+      "id": "tool:marp-cli",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "marp-cli",
+      "description": "Renders Markdown slide decks — used by the marp-slide skill.",
+      "installTarget": "npm:@marp-team/marp-cli",
+      "nextAction": "Ask your agent for a slide deck.",
+      "bin": "marp",
+      "companions": []
+    },
+    {
+      "id": "tool:beads",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "beads",
+      "description": "Beads (br): local-first issue tracker for coding agents — tasks in SQLite with JSONL export for git. Rust port of Steve Yegge's beads.",
+      "installTarget": "github:Dicklesworthstone/beads_rust",
+      "nextAction": "Run `br quickstart` in a repo.",
+      "bin": "br",
+      "companions": []
+    },
+    {
+      "id": "tool:beads-viewer",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "beads-viewer",
+      "description": "Beads viewer (bv): graph-aware TUI over the Beads tracker — kanban, dependency DAG, critical path.",
+      "installTarget": "github:Dicklesworthstone/beads_viewer",
+      "nextAction": "Run `bv` in a repo with Beads issues.",
+      "bin": "bv",
+      "companions": []
+    },
+    {
+      "id": "tool:glab-tui",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "glab-tui",
+      "description": "Terminal UI for GitLab and GitHub on top of glab/gh: issues, MRs, pipelines, runners, releases.",
+      "installTarget": "github:rcieri/glab-tui",
+      "nextAction": "Run `glab-tui` in a repo with a GitLab or GitHub remote.",
+      "bin": "glab-tui",
+      "companions": []
+    },
+    {
+      "id": "tool:gitleaks",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "gitleaks",
+      "description": "Secret scanner for git repos - catches committed credentials before they ship.",
+      "installTarget": "gitleaks",
+      "nextAction": "Run `gitleaks git` in a repo.",
+      "bin": "gitleaks",
+      "companions": []
+    },
+    {
+      "id": "tool:zoxide",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "zoxide",
+      "description": "Smarter cd that learns your habits: `z` jumps to frecent directories, `zi` picks interactively.",
+      "installTarget": "zoxide",
+      "nextAction": "Add `eval \"$(zoxide init zsh)\"` to your shell profile, then `z <dir>`.",
+      "bin": "zoxide",
+      "companions": []
+    },
+    {
+      "id": "tool:envx",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "envx",
+      "description": "Environment variable manager with a TUI and CLI. Native binaries on Linux/Windows; builds via cargo on macOS (crates.io `envex`).",
+      "installTarget": "github:mikeleppane/envx",
+      "nextAction": "Run `envx` to browse your environment.",
+      "bin": "envx",
+      "companions": ["cargo:envex", "rust"]
+    },
+    {
+      "id": "tool:pup",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "pup",
+      "description": "Datadog API CLI for agents and humans: 200+ commands over metrics, logs, monitors, traces.",
+      "installTarget": "github:DataDog/pup",
+      "nextAction": "Run `pup auth login` once.",
+      "bin": "pup",
+      "companions": []
+    },
+    {
+      "id": "tool:plannotator",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "plannotator",
+      "description": "Browser-based plan and code review for coding agents — the plannotator skills drive it.",
+      "installTarget": "github:backnotprop/plannotator",
+      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart.",
+      "bin": "plannotator",
+      "companions": []
+    }
+  ]
+}

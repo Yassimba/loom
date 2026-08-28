@@ -1,0 +1,29 @@
+---
+title: "Project Name — Literate Program"
+author: "Author Name"
+date: \today
+documentclass: article
+geometry:
+  - margin=1.5cm
+fontsize: 11pt
+mainfont: "Linux Libertine O"
+monofont: "Fira Code"
+monofontoptions:
+  - Scale=0.85
+toc: true
+toc-depth: 3
+numbersections: true
+colorlinks: true
+linkcolor: blue
+urlcolor: blue
+header-includes:
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhead[L]{\leftmark}
+  - \fancyhead[R]{\thepage}
+  - \fancyfoot{}
+  - \usepackage{tikz}
+  - \usetikzlibrary{shapes,arrows,automata,positioning}
+---

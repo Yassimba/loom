@@ -56,6 +56,20 @@ async function createCatalogFixture() {
   );
   await mkdir(join(repoRoot, "manifest"), { recursive: true });
   await writeFile(
+    join(repoRoot, "manifest", "herdr-plugins.json"),
+    JSON.stringify({
+      plugins: [
+        {
+          id: "remote",
+          label: "Remote plugin",
+          description: "Hosted elsewhere",
+          installTarget: "example/herdr-remote",
+          nextAction: "Bind a key.",
+        },
+      ],
+    }),
+  );
+  await writeFile(
     join(repoRoot, "manifest", "loom.toml"),
     '[tools]\n# core:begin\nnode = "24.19.0"\n# core:end\n\ngh = "2.97.0"\n',
   );
@@ -109,6 +123,15 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       installTarget: "helper",
       nextAction: "Ask your coding agent to use the helper skill.",
       dependencies: [],
+    },
+    {
+      id: "herdr-plugin:remote",
+      kind: "herdr-plugin",
+      group: "Herdr plugins",
+      label: "Remote plugin",
+      description: "Hosted elsewhere",
+      installTarget: "example/herdr-remote",
+      nextAction: "Bind a key.",
     },
     {
       id: "herdr-plugin:example.sample",

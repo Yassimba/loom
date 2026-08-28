@@ -27,6 +27,12 @@
       "nextAction": "Run `calldiff diff` in a git repository."
     },
     {
+      "key": "npm:@colbymchenry/codegraph",
+      "label": "codegraph",
+      "description": "Local semantic code index for coding agents — source, call paths, and change impact without file-by-file discovery.",
+      "nextAction": "Run `loom init` in a project to wire agents and build its index."
+    },
+    {
       "key": "github:agavra/tuicr",
       "label": "tuicr",
       "bin": "tuicr",
@@ -138,6 +144,12 @@
       "bin": "pup",
       "description": "Datadog API CLI for agents and humans: 200+ commands over metrics, logs, monitors, traces.",
       "nextAction": "Run `pup auth login` once."
+    },
+    {
+      "key": "github:backnotprop/plannotator",
+      "label": "plannotator",
+      "description": "Browser-based plan and code review for coding agents — the plannotator skills drive it.",
+      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart."
     }
   ]
 }
