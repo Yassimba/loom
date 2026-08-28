@@ -2,7 +2,7 @@
   "schema_version": 1,
   "pack_name": "Beautiful HTML Templates - Bold Design Pack",
   "source_repo": "zarazhangrui/beautiful-html-templates",
-  "template_count": 34,
+  "template_count": 35,
   "usage": {
     "selection": "Read this compact index first to shortlist bold templates from metadata.",
     "previews": "For title-slide previews, read only the preview_md files for the shortlisted bold candidates.",
@@ -17,6 +17,31 @@
     "mobile_behavior": "preserve 16:9 stage; letterbox or pillarbox instead of reflowing slide content"
   },
   "templates": [
+    {
+      "slug": "signal-rail",
+      "name": "Signal Rail",
+      "tagline": "Flat near-black canvas, one subject-derived accent, a workstream rail, and a hairline from eyebrow to corner.",
+      "mood": [
+        "technical",
+        "systematic",
+        "platform",
+        "engineering",
+        "briefing"
+      ],
+      "tone": [
+        "precise",
+        "informative",
+        "quietly-confident",
+        "unsold"
+      ],
+      "formality": "high",
+      "density": "medium",
+      "scheme": "dark",
+      "best_for": "Platform and product-suite decks, architecture and engineering briefings, roadmaps, internal strategy reviews, and any deck covering several workstreams that must read as one system. The skill's default template for technical subject matter.",
+      "avoid_for": "Decks that want warmth, playfulness, or photographic drama - the system is hairlines and type on a flat dark canvas with a single accent.",
+      "preview_md": "bold-template-pack/templates/signal-rail/preview.md",
+      "design_md": "bold-template-pack/templates/signal-rail/design.md"
+    },
     {
       "slug": "8-bit-orbit",
       "name": "8-Bit Orbit",
