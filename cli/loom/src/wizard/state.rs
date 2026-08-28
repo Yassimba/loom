@@ -924,33 +924,54 @@ impl Wizard {
 
     // ---- search ------------------------------------------------------------
 
-    /// (group, row) pairs whose resource or setting matches the live query,
-    /// in list order. Empty query matches everything.
+    /// (group, row) pairs matching the live query, best match first. A
+    /// hit on the label outranks the same hit in the description; an empty
+    /// query lists everything in catalog order.
     pub(crate) fn search_matches(&self) -> Vec<(usize, usize)> {
         let (Some(query), Stage::Choose(stage)) = (&self.search, &self.stages[CHOOSE]) else {
             return Vec::new();
         };
-        let mut matches = Vec::new();
+        let mut matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let pattern = nucleo_matcher::pattern::Pattern::parse(
+            query,
+            nucleo_matcher::pattern::CaseMatching::Ignore,
+            nucleo_matcher::pattern::Normalization::Smart,
+        );
+        let mut buffer = Vec::new();
+        let mut score_of = |text: &str| {
+            let haystack = nucleo_matcher::Utf32Str::new(text, &mut buffer);
+            pattern.score(haystack, &mut matcher)
+        };
+        let mut scored = Vec::new();
         for (group_index, group) in stage.groups.iter().enumerate() {
             for (row_index, row) in group.rows.iter().enumerate() {
-                let hit = match row {
+                let (label, description) = match row {
                     Row::Resource(index) => {
                         let resource = &self.model.resources[*index];
-                        fuzzy_match(&resource.label, query)
-                            || fuzzy_match(&resource.description, query)
+                        (&resource.label, &resource.description)
                     }
                     Row::Setting(index) => {
                         let spec = &self.model.settings[*index];
-                        fuzzy_match(&spec.label, query) || fuzzy_match(&spec.description, query)
+                        (&spec.label, &spec.description)
                     }
-                    Row::Preset(_) => false,
+                    Row::Preset(_) => continue,
                 };
-                if hit {
-                    matches.push((group_index, row_index));
+                let best = score_of(label)
+                    .map(|score| score * 2)
+                    .into_iter()
+                    .chain(score_of(description))
+                    .max();
+                if let Some(score) = best {
+                    scored.push((score, group_index, row_index));
                 }
             }
         }
-        matches
+        // Stable sort: equal scores keep catalog order.
+        scored.sort_by_key(|entry| std::cmp::Reverse(entry.0));
+        scored
+            .into_iter()
+            .map(|(_, group, row)| (group, row))
+            .collect()
     }
 
     pub(crate) fn search_row(&self, hit: (usize, usize)) -> Row {
@@ -1156,16 +1177,6 @@ fn indices(resources: &[Resource], keep: impl Fn(&Resource) -> bool) -> Vec<usiz
         .filter(|(_, resource)| keep(resource))
         .map(|(index, _)| index)
         .collect()
-}
-
-/// Case-insensitive subsequence match: every query char appears in order.
-fn fuzzy_match(haystack: &str, query: &str) -> bool {
-    let haystack = haystack.to_lowercase();
-    let mut chars = haystack.chars();
-    query
-        .to_lowercase()
-        .chars()
-        .all(|needle| chars.by_ref().any(|hay| hay == needle))
 }
 
 fn contains(area: Rect, column: u16, row: u16) -> bool {

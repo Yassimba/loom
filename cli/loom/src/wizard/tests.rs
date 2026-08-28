@@ -554,7 +554,7 @@ fn search_filters_picks_and_lands_the_cursor() {
     assert_eq!(
         labels,
         ["mermaid", "themes", "Zoomed panes edge-to-edge"],
-        "list order: skills, packages, settings"
+        "best label match first, ties in catalog order"
     );
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(wizard.selected[5]);
@@ -562,6 +562,21 @@ fn search_filters_picks_and_lands_the_cursor() {
     assert!(wizard.search.is_none());
     assert_eq!(current_row(&wizard), Row::Resource(5));
     assert_eq!(choose(&wizard).group().title, "Skills · Diagrams");
+}
+
+#[test]
+fn search_ranks_the_closest_label_first() {
+    let mut wizard = wizard();
+    press(&mut wizard, &[KeyCode::Char('/')]);
+    for c in "refac".chars() {
+        press(&mut wizard, &[KeyCode::Char(c)]);
+    }
+    let first = wizard.search_matches()[0];
+    assert_eq!(
+        wizard.search_row(first),
+        Row::Resource(4),
+        "refactor outranks fuzzy hits"
+    );
 }
 
 #[test]
