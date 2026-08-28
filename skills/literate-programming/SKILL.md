@@ -7,7 +7,7 @@ description: "Transform a codebase into a literate program — a .lit.md essay t
 
 Transform a codebase into a literate program: a document written for human comprehension that also generates the original source code.
 
-Run `tangle.ts` / `untangle.ts` from this skill directory (the folder that contains this `SKILL.md`). Walkthroughs that stay in chat belong to **explain-code-flow**.
+Run `tangle.ts` / `untangle.ts` from this skill directory (the folder that contains this `SKILL.md`). Walkthroughs of one feature (diagrams plus prose, not a tangling essay) belong to **explain-code-flow**.
 
 ## Overview
 

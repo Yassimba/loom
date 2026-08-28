@@ -37,6 +37,6 @@ above, and say why the deleted label was redundant. Never delete a meaningful la
 
 - architecture — one left-to-right spine with short vertical branches.
 - workflow — lanes express responsibility or phase, columns express progression; retries and exception returns go outside the main lane corridor.
-- sequence — participants ordered by conversation role; messages own their vertical order; return/async/security variants carry meaning, not decoration.
+- sequence — participants ordered by conversation role; messages own their vertical order; return/async/security variants carry meaning, not decoration. The first message inside a fragment starts at least 40px below the fragment's top edge so its label clears the `LOOP`/`OPT` guard text; two-line labels need 48px.
 - dataflow — stages express transformation or custody; rows separate parallel streams; label only data contracts, classifications, or cross-boundary movement that is not obvious.
 - lifecycle — main phases on the main rail; event and terminal bands beneath later phases.
