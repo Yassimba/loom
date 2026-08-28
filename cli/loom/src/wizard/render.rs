@@ -1,14 +1,12 @@
-//! All drawing for the wizard. The layout is a GUI-style installer: a
-//! persistent stage sidebar on the left, the active stage's panel on the
-//! right, a header with overall progress, and a footer with key hints and
+//! All drawing for the wizard: a one-line header with the step breadcrumb,
+//! the active stage's panel, and a one-line footer with key hints and
 //! clickable Back/Next buttons.
 
 use super::state::{
-    AgentsStage, ExecStatus, Focus, HitMap, InstallStage, PickRow, PickStage, SettingRow,
-    SettingsStage, SkillsStage, Stage, WelcomeStage, Wizard,
+    ChooseStage, ExecStatus, HitMap, InstallStage, Preset, Row, Stage, WhereStage, Wizard,
 };
 use crate::settings::SettingSpec;
-use crate::{Resource, Runtime};
+use crate::{ResourceKind, SkillAgent};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -21,8 +19,9 @@ pub(crate) const ACCENT: Color = Color::Cyan;
 const OK: Color = Color::Green;
 const WARN: Color = Color::Yellow;
 const ERR: Color = Color::Red;
-const SELECTED_MARK: &str = "◉";
-const UNSELECTED_MARK: &str = "○";
+const ON: &str = "[x]";
+const OFF: &str = "[ ]";
+const PART: &str = "[-]";
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 type ListHit = Option<(Rect, usize)>;
@@ -35,33 +34,21 @@ impl Wizard {
             Constraint::Length(1),
         ])
         .areas(frame.area());
-        let [sidebar, content] =
-            Layout::horizontal([Constraint::Length(20), Constraint::Min(1)]).areas(body);
-
-        self.hits = HitMap {
-            sidebar,
-            sidebar_rows: self.visible_stages().len(),
-            ..HitMap::default()
-        };
+        self.hits = HitMap::default();
         self.render_header(frame, header);
-        self.render_sidebar(frame, sidebar);
-        let (primary, secondary) = match &self.stages[self.stage_index] {
-            Stage::Welcome(stage) => self.render_welcome(frame, content, stage),
-            Stage::Pick(stage) => self.render_pick(frame, content, stage),
-            Stage::Agents(stage) => self.render_agents(frame, content, stage),
-            Stage::Skills(stage) => self.render_skills(frame, content, stage),
-            Stage::Settings(stage) => self.render_settings(frame, content, stage),
+        let list = match &self.stages[self.stage_index] {
+            Stage::Choose(stage) => self.render_choose(frame, body, stage),
+            Stage::Where(stage) => self.render_where(frame, body, stage),
             Stage::Review { scroll } => {
-                self.render_review(frame, content, *scroll);
-                (None, None)
+                self.render_review(frame, body, *scroll);
+                None
             }
             Stage::Install(stage) => {
-                self.render_install(frame, content, stage);
-                (None, None)
+                self.render_install(frame, body, stage);
+                None
             }
         };
-        self.hits.primary_list = primary;
-        self.hits.secondary_list = secondary;
+        self.hits.list = list;
         self.render_footer(frame, footer);
         if self.show_help {
             self.render_help(frame);
@@ -71,157 +58,59 @@ impl Wizard {
         }
     }
 
-    fn render_confirm_quit(&self, frame: &mut Frame) {
-        let count = self.total_selected();
-        let lines = vec![
-            Line::from(format!("Discard {count} selected item(s) and quit?")),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("enter/y", Style::new().fg(ERR).bold()),
-                Span::raw(" quit · "),
-                Span::styled("any other key", Style::new().fg(ACCENT).bold()),
-                Span::raw(" keep going"),
-            ]),
-        ];
-        let width = 46.min(frame.area().width.saturating_sub(4));
-        let height = 5;
-        let area = Rect {
-            x: (frame.area().width.saturating_sub(width)) / 2,
-            y: (frame.area().height.saturating_sub(height)) / 2,
-            width,
-            height,
-        };
-        frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .alignment(Alignment::Center)
-                .block(bordered(" Quit? ", true)),
-            area,
-        );
-    }
-
-    fn render_help(&self, frame: &mut Frame) {
-        let lines = vec![
-            Line::styled("Navigation", Style::new().bold().fg(ACCENT)),
-            Line::from("  j/k ↑↓     move · flows across skill categories"),
-            Line::from("  h/l ←→     one rail: prev stage ← panes → next stage"),
-            Line::from("  g/G        top / bottom of the list"),
-            Line::from("  enter      next stage (Review: install)"),
-            Line::from("  1-9        jump to a visited step"),
-            Line::from(""),
-            Line::styled("Selecting", Style::new().bold().fg(ACCENT)),
-            Line::from("  space      toggle and step down"),
-            Line::from("  a / A      toggle category / everything"),
-            Line::from("  u          undo the last selection change"),
-            Line::from("  presets    on the Welcome screen, one keypress bundles"),
-            Line::from(""),
-            Line::styled("Search", Style::new().bold().fg(ACCENT)),
-            Line::from("  /          filter the list (skills: all categories)"),
-            Line::from("  space      toggle the highlighted match"),
-            Line::from("  enter/esc  keep place and leave / cancel"),
-            Line::from(""),
-            Line::styled("press any key to close", Style::new().dim()),
-        ];
-        let width = 62.min(frame.area().width.saturating_sub(4));
-        let height = (lines.len() as u16 + 2).min(frame.area().height.saturating_sub(2));
-        let area = Rect {
-            x: (frame.area().width.saturating_sub(width)) / 2,
-            y: (frame.area().height.saturating_sub(height)) / 2,
-            width,
-            height,
-        };
-        frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(lines).block(bordered(" Keys ", true).padding(Padding::horizontal(1))),
-            area,
-        );
-    }
-
     // ---- chrome ------------------------------------------------------------
 
     fn render_header(&self, frame: &mut Frame, area: Rect) {
         let title = Line::from(vec![
-            Span::styled(" ⚙ loom ", Style::new().fg(ACCENT).bold()),
-            Span::styled(concat!("v", env!("CARGO_PKG_VERSION")), Style::new().dim()),
+            Span::styled(" loom", Style::new().fg(ACCENT).bold()),
+            Span::styled(
+                concat!("  v", env!("CARGO_PKG_VERSION")),
+                Style::new().dim(),
+            ),
         ]);
         frame.render_widget(Paragraph::new(title), area);
-        let visible = self.visible_stages();
-        let step = visible
-            .iter()
-            .position(|&index| index == self.stage_index)
-            .unwrap_or(0)
-            + 1;
+
         let mut spans = Vec::new();
         if self.probing {
-            spans.push(Span::styled("scanning installed…  ·  ", Style::new().dim()));
+            spans.push(Span::styled("scanning installed…   ", Style::new().dim()));
         }
-        spans.push(Span::styled(
-            format!("{} selected", self.total_selected()),
-            Style::new().fg(OK),
-        ));
-        spans.push(Span::styled(
-            format!("  ·  step {step}/{} ", visible.len()),
-            Style::new().dim(),
-        ));
-        let status = Line::from(spans);
-        frame.render_widget(Paragraph::new(status).alignment(Alignment::Right), area);
-    }
-
-    fn render_sidebar(&self, frame: &mut Frame, area: Rect) {
-        let items = self
-            .visible_stages()
-            .into_iter()
-            .enumerate()
-            .map(|(position, index)| {
-                let (mark, style) = match index.cmp(&self.stage_index) {
-                    std::cmp::Ordering::Less => ("✓", Style::new().fg(OK)),
-                    std::cmp::Ordering::Equal => ("▶", Style::new().fg(ACCENT).bold()),
-                    std::cmp::Ordering::Greater if index <= self.max_visited => ("·", Style::new()),
-                    std::cmp::Ordering::Greater => ("·", Style::new().dim()),
-                };
-                let count = match &self.stages[index] {
-                    Stage::Pick(stage) => self.selected_count(&stage.items),
-                    Stage::Agents(_) => self.agent_on.iter().filter(|on| **on).count(),
-                    Stage::Skills(stage) => stage
-                        .categories
-                        .iter()
-                        .map(|category| self.selected_count(&category.items))
-                        .sum(),
-                    Stage::Settings(_) => self.setting_on.iter().filter(|on| **on).count(),
-                    _ => 0,
-                };
-                let mut spans = vec![
-                    Span::styled(format!(" {mark} "), style),
-                    Span::styled(
-                        format!("{} {}", position + 1, self.stages[index].title()),
-                        style,
-                    ),
-                ];
-                if count > 0 {
-                    spans.push(Span::styled(format!(" ({count})"), Style::new().fg(OK)));
-                }
-                ListItem::new(Line::from(spans))
-            })
-            .collect::<Vec<_>>();
-        let list = List::new(items).block(bordered(" Steps ", false));
-        frame.render_widget(list, area);
+        let count = self.total_selected();
+        if count > 0 {
+            spans.push(Span::styled(
+                format!("{count} selected   "),
+                Style::new().fg(OK),
+            ));
+        }
+        for (position, &index) in self.visible_stages().iter().enumerate() {
+            if position > 0 {
+                spans.push(Span::styled(" › ", Style::new().dim()));
+            }
+            let title = self.stages[index].title();
+            spans.push(match index.cmp(&self.stage_index) {
+                std::cmp::Ordering::Less => Span::styled(format!("✓ {title}"), Style::new().dim()),
+                std::cmp::Ordering::Equal => Span::styled(title, Style::new().fg(ACCENT).bold()),
+                std::cmp::Ordering::Greater => Span::styled(title, Style::new().dim()),
+            });
+        }
+        spans.push(Span::raw(" "));
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
+            area,
+        );
     }
 
     fn render_footer(&mut self, frame: &mut Frame, area: Rect) {
         let hint = if self.search.is_some() {
-            " type to filter · ↑↓ move · space toggle · enter keep place · esc cancel"
+            " type to filter · ↑↓ move · space pick · enter keep place · esc cancel"
         } else {
             match &self.stages[self.stage_index] {
-                Stage::Welcome(_) => " space toggle/apply · j/k move · l/enter start · ? help",
-                Stage::Pick(_) => " space toggle · / search · a all · h/l steps · u undo · ? help",
-                Stage::Agents(_) => " space toggle · a all agents · h/l steps · u undo · ? help",
-                Stage::Skills(_) => {
-                    " space toggle · / search · a category · A all · h/l panes+steps · ? help"
+                Stage::Choose(_) => {
+                    " ↑↓ move · space pick · / search · tab next group · enter continue · ? keys"
                 }
-                Stage::Settings(_) => " space toggle · a all · h/l steps · u undo · ? help",
-                Stage::Review { .. } => " enter install · j/k scroll · h back · q quit",
-                Stage::Install(stage) if stage.running => " installing… please wait",
-                Stage::Install(_) => " enter finish · j/k scroll",
+                Stage::Where(_) => " ↑↓ move · space toggle · enter continue · esc back",
+                Stage::Review { .. } => " enter install · ↑↓ scroll · esc back",
+                Stage::Install(stage) if stage.running => " installing…",
+                Stage::Install(_) => " enter finish · ↑↓ scroll",
             }
         };
         let [hint_area, back_area, _, next_area, _] = Layout::horizontal([
@@ -254,7 +143,7 @@ impl Wizard {
         };
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                format!("[ {next_label} ▸ ]"),
+                format!("[ {next_label:^7} ▸ ]"),
                 next_style,
             ))),
             next_area,
@@ -269,10 +158,8 @@ impl Wizard {
 
     fn button_states(&self) -> (bool, &'static str, bool) {
         match &self.stages[self.stage_index] {
-            Stage::Welcome(_) => (false, "Start", true),
-            Stage::Pick(_) | Stage::Agents(_) | Stage::Skills(_) | Stage::Settings(_) => {
-                (true, "Next", true)
-            }
+            Stage::Choose(_) => (false, "Next", true),
+            Stage::Where(_) => (true, "Next", true),
             Stage::Review { .. } => (
                 true,
                 "Install",
@@ -282,199 +169,114 @@ impl Wizard {
         }
     }
 
-    // ---- stages ------------------------------------------------------------
-
-    fn render_welcome(
-        &self,
-        frame: &mut Frame,
-        area: Rect,
-        stage: &WelcomeStage,
-    ) -> (ListHit, ListHit) {
-        let block = bordered(" Welcome ", true);
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-        let column = centered(inner, 66);
-        let list_height = stage.rows.len() as u16 + 2;
-        let [header_area, runtimes_area, footer_area] = Layout::vertical([
-            Constraint::Length(8),
-            Constraint::Length(list_height),
-            Constraint::Min(1),
-        ])
-        .areas(column);
-
-        let counts = [
-            (
-                "tools",
-                count_kind(&self.model.resources, crate::ResourceKind::Tool),
-            ),
-            (
-                "Herdr plugins",
-                count_kind(&self.model.resources, crate::ResourceKind::HerdrPlugin),
-            ),
-            (
-                "Pi packages",
-                count_kind(&self.model.resources, crate::ResourceKind::PiPackage),
-            ),
-            (
-                "skills",
-                count_kind(&self.model.resources, crate::ResourceKind::Skill),
-            ),
-            ("settings", self.model.settings.len()),
+    fn render_help(&self, frame: &mut Frame) {
+        let key = |text: &'static str| Span::styled(text, Style::new().fg(ACCENT).bold());
+        let lines = vec![
+            Line::from(vec![key("↑ ↓        "), Span::raw("move (j/k work too)")]),
+            Line::from(vec![key("tab ⇧tab   "), Span::raw("next / previous group")]),
+            Line::from(vec![key("home end   "), Span::raw("top / bottom")]),
+            Line::from(""),
+            Line::from(vec![key("space      "), Span::raw("pick, then step down")]),
+            Line::from(vec![
+                Span::raw("           "),
+                Span::styled(
+                    "on a group header: picks the whole group",
+                    Style::new().dim(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::raw("           "),
+                Span::styled("on a bundle: adds the bundle", Style::new().dim()),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                key("/          "),
+                Span::raw("search · esc cancel · enter keep place"),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                key("enter      "),
+                Span::raw("continue (Review: install)"),
+            ]),
+            Line::from(vec![key("esc        "), Span::raw("back a step")]),
+            Line::from(vec![key("q          "), Span::raw("quit")]),
+            Line::from(""),
+            Line::styled("any key closes this", Style::new().dim()),
         ];
-        let header = vec![
-            Line::from(""),
-            Line::styled("▄▀█ █   █▀ █▀▀ ▀█▀ █░█ █▀█", Style::new().fg(ACCENT).bold()),
-            Line::styled("█▀█ █   ▄█ ██▄ ░█░ █▄█ █▀▀", Style::new().fg(ACCENT).bold()),
-            Line::from(""),
-            Line::styled(
-                "Yassimba's curated agent setup",
-                Style::new().add_modifier(Modifier::ITALIC),
-            ),
-            Line::from(""),
-            Line::from(Span::raw(
-                counts
-                    .iter()
-                    .filter(|(_, count)| *count > 0)
-                    .map(|(label, count)| format!("{count} {label}"))
-                    .collect::<Vec<_>>()
-                    .join("  ·  "),
-            )),
-        ];
+        let width = 58.min(frame.area().width.saturating_sub(4));
+        let height = (lines.len() as u16 + 2).min(frame.area().height.saturating_sub(2));
+        let area = centered_rect(frame.area(), width, height);
+        frame.render_widget(Clear, area);
         frame.render_widget(
-            Paragraph::new(header).alignment(Alignment::Center),
-            header_area,
+            Paragraph::new(lines).block(bordered(" Keys ", true).padding(Padding::horizontal(1))),
+            area,
         );
+    }
 
-        let missing = stage
-            .rows
-            .iter()
-            .filter(|row| matches!(row, PickRow::Runtime(_)))
-            .count();
-        let title = if missing == 0 {
-            " Start ".to_owned()
-        } else {
-            format!(" Start · {missing} runtimes to install ")
-        };
-        let items = stage
-            .rows
-            .iter()
-            .map(|row| self.pick_row_item(row))
-            .collect::<Vec<_>>();
-        let list = List::new(items)
-            .block(bordered(&title, true))
-            .highlight_style(Style::new().bg(Color::DarkGray));
-        let mut state = ListState::default().with_selected(Some(stage.cursor));
-        frame.render_stateful_widget(list, runtimes_area, &mut state);
+    fn render_confirm_quit(&self, frame: &mut Frame) {
+        let count = self.total_selected();
+        let lines = vec![
+            Line::from(format!("Quit and drop {count} picked item(s)?")),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("enter", Style::new().fg(ERR).bold()),
+                Span::raw(" quit   "),
+                Span::styled("any other key", Style::new().fg(ACCENT).bold()),
+                Span::raw(" stay"),
+            ]),
+        ];
+        let area = centered_rect(
+            frame.area(),
+            46.min(frame.area().width.saturating_sub(4)),
+            5,
+        );
+        frame.render_widget(Clear, area);
+        frame.render_widget(
+            Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(bordered(" Quit? ", true)),
+            area,
+        );
+    }
 
-        let highlighted = match stage.rows[stage.cursor] {
-            PickRow::Runtime(runtime) | PickRow::InstalledRuntime(runtime) => {
-                runtime_blurb(runtime).to_owned()
+    // ---- choose ------------------------------------------------------------
+
+    fn render_choose(&self, frame: &mut Frame, area: Rect, stage: &ChooseStage) -> ListHit {
+        let [list_area, details_area] =
+            Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)])
+                .areas(area);
+        let inner_width = list_area.width.saturating_sub(2) as usize;
+
+        let (rows, cursor, title) = match &self.search {
+            Some(query) => {
+                let matches = self.search_matches();
+                let cursor = self.search_cursor.min(matches.len().saturating_sub(1));
+                let title = format!(" /{query}▏  {} matches ", matches.len());
+                (matches, cursor, title)
             }
-            PickRow::Preset(preset) => self.preset_blurb(preset).to_owned(),
+            None => (
+                (0..stage.rows.len()).collect(),
+                stage.cursor,
+                " Choose ".to_owned(),
+            ),
         };
-        let mut footer = vec![
-            Line::styled(highlighted, Style::new().dim()),
-            Line::from(""),
-        ];
-        if !self.model.status.npm {
-            footer.push(Line::styled(
-                "○ npm is missing — install Node.js before picking Pi.",
-                Style::new().fg(WARN),
-            ));
-            footer.push(Line::from(""));
-        }
-        footer.push(Line::styled(
-            "Pick what you want, review the plan, watch it install.",
-            Style::new().dim(),
-        ));
-        footer.push(Line::from(""));
-        footer.push(if matches!(stage.rows[stage.cursor], PickRow::Preset(_)) {
-            Line::from(vec![
-                Span::styled("Enter", Style::new().fg(ACCENT).bold()),
-                Span::raw(" to start with this preset · Space to apply and stay."),
-            ])
-        } else {
-            Line::from(vec![
-                Span::raw("Space or click to toggle · "),
-                Span::styled("Enter", Style::new().fg(ACCENT).bold()),
-                Span::raw(" to start."),
-            ])
-        });
-        frame.render_widget(
-            Paragraph::new(footer).alignment(Alignment::Center),
-            footer_area,
-        );
-        (Some((runtimes_area, 0)), None)
-    }
-
-    fn render_pick(&self, frame: &mut Frame, area: Rect, stage: &PickStage) -> (ListHit, ListHit) {
-        if let Some(query) = self.search.clone() {
-            return self.render_search(frame, area, stage.title, &query);
-        }
-        let [list_area, details_area] =
-            Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)])
-                .areas(area);
-
-        let items = stage
-            .items
+        let items = rows
             .iter()
-            .map(|&index| self.resource_item(index))
+            .map(|&row_index| self.choose_row_item(&stage.rows[row_index], inner_width))
             .collect::<Vec<_>>();
-        let title = list_title(
-            stage.title,
-            self.selected_count(&stage.items),
-            self.installed_count(&stage.items),
-            stage.items.len(),
-        );
-        let offset = list_offset(
-            stage.items.len(),
-            list_area.height.saturating_sub(2),
-            stage.cursor,
-        );
+        let offset = list_offset(rows.len(), list_area.height.saturating_sub(2), cursor);
         let list = List::new(items)
             .block(bordered(&title, true))
-            .highlight_style(Style::new().bg(Color::DarkGray));
+            .highlight_style(highlight());
         let mut state = ListState::default()
-            .with_selected(Some(stage.cursor))
+            .with_selected((!rows.is_empty()).then_some(cursor))
             .with_offset(offset);
         frame.render_stateful_widget(list, list_area, &mut state);
 
-        self.render_pick_details(frame, details_area, stage);
-        (Some((list_area, offset)), None)
-    }
-
-    /// The `/` filter view shared by the pick and skills stages: one flat
-    /// list of matches (skills: across every category) plus details.
-    fn render_search(
-        &self,
-        frame: &mut Frame,
-        area: Rect,
-        title: &str,
-        query: &str,
-    ) -> (ListHit, ListHit) {
-        let [list_area, details_area] =
-            Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)])
-                .areas(area);
-        let matches = self.search_matches();
-        let cursor = self.search_cursor.min(matches.len().saturating_sub(1));
-        let items = matches
-            .iter()
-            .map(|&index| self.resource_item(index))
-            .collect::<Vec<_>>();
-        let list_title = format!(" {title} · /{query}▏· {} matches ", matches.len());
-        let offset = list_offset(matches.len(), list_area.height.saturating_sub(2), cursor);
-        let list = List::new(items)
-            .block(bordered(&list_title, true))
-            .highlight_style(Style::new().bg(Color::DarkGray));
-        let mut state = ListState::default()
-            .with_selected((!matches.is_empty()).then_some(cursor))
-            .with_offset(offset);
-        frame.render_stateful_widget(list, list_area, &mut state);
-
-        let details = match matches.get(cursor) {
-            Some(&index) => self.preview_lines(index),
+        let details = match rows.get(cursor) {
+            Some(&row_index) => self.row_details(&stage.rows[row_index]),
             None => vec![Line::styled(
-                "No matches — backspace to widen, esc to cancel.",
+                "No matches. Backspace widens, esc cancels.",
                 Style::new().dim(),
             )],
         };
@@ -484,79 +286,142 @@ impl Wizard {
                 .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
             details_area,
         );
-        (Some((list_area, offset)), None)
+        Some((list_area, offset))
     }
 
-    /// Details plus what a pick actually pulls in — the preview pane's body.
-    fn preview_lines(&self, index: usize) -> Vec<Line<'_>> {
-        let mut lines = self.resource_details(index);
-        let resource = &self.model.resources[index];
-        if !resource.dependencies.is_empty() {
-            lines.push(Line::from(""));
-            lines.push(Line::styled(
-                format!("pulls in  {}", resource.dependencies.join(", ")),
-                Style::new().fg(WARN),
-            ));
-        }
-        lines
-    }
-
-    fn pick_row_item(&self, row: &PickRow) -> ListItem<'_> {
+    fn choose_row_item(&self, row: &Row, width: usize) -> ListItem<'_> {
         match row {
-            PickRow::InstalledRuntime(runtime) => ListItem::new(Line::from(vec![
-                Span::styled(" ✓ ", Style::new().fg(OK)),
-                Span::styled(runtime_name(*runtime), Style::new().dim()),
-                Span::styled(" — installed", Style::new().dim()),
-            ])),
-            PickRow::Preset(preset) => ListItem::new(Line::from(vec![
-                Span::styled(" ▶ ", Style::new().fg(ACCENT)),
-                Span::styled(self.preset_label(*preset).to_owned(), Style::new().bold()),
-                Span::styled(
-                    format!(" — {}", self.preset_blurb(*preset)),
-                    Style::new().dim(),
-                ),
-            ])),
-            PickRow::Runtime(runtime) => {
-                let on = self.runtime_selected(*runtime);
-                let (mark, style) = mark_for(on);
-                let needs_it = match runtime {
-                    Runtime::Pi => "packages need Pi to be installed",
-                    Runtime::Herdr => "plugins need Herdr to be installed",
-                    Runtime::Mise => "tools need mise to be installed",
-                };
-                let note = if on {
-                    Span::styled(" — will be installed", Style::new().fg(OK))
+            Row::Header { title, items } => {
+                let (mark, mark_style, count) = if items.is_empty() {
+                    ("   ", Style::new(), String::new())
                 } else {
-                    Span::styled(format!(" — skipped ({needs_it})"), Style::new().fg(WARN))
+                    let (on, actionable) = self.group_counts(items);
+                    let (mark, style) = if actionable == 0 {
+                        (" ✓ ", Style::new().fg(OK))
+                    } else if on == 0 {
+                        (OFF, Style::new().dim())
+                    } else if on == actionable {
+                        (ON, Style::new().fg(OK))
+                    } else {
+                        (PART, Style::new().fg(OK))
+                    };
+                    let count = if actionable == 0 {
+                        "all installed".to_owned()
+                    } else {
+                        format!("{on}/{actionable}")
+                    };
+                    (mark, style, count)
                 };
+                let left = format!(" {mark} {title}");
+                let pad = width.saturating_sub(left.chars().count() + count.len() + 1);
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!(" {mark} "), mark_style),
+                    Span::styled(title.clone(), Style::new().bold()),
+                    Span::raw(" ".repeat(pad)),
+                    Span::styled(count, Style::new().dim()),
+                ]))
+            }
+            Row::Preset(preset) => ListItem::new(Line::from(vec![
+                Span::styled("  ▸  ", Style::new().fg(ACCENT)),
+                Span::styled(column(self.preset_label(*preset)), Style::new().bold()),
+                Span::styled(self.preset_blurb(*preset).to_owned(), Style::new().dim()),
+            ])),
+            Row::Resource(index) => {
+                let resource = &self.model.resources[*index];
+                if self.resource_installed(*index) {
+                    return ListItem::new(Line::from(vec![
+                        Span::styled("  ✓  ", Style::new().fg(OK)),
+                        Span::styled(column(&resource.label), Style::new().dim()),
+                        Span::styled("installed", Style::new().dim()),
+                    ]));
+                }
+                if let Some(parent) = self.required_note(*index) {
+                    return ListItem::new(Line::from(vec![
+                        Span::styled(format!(" {ON} "), Style::new().fg(OK).dim()),
+                        Span::styled(column(&resource.label), Style::new().dim()),
+                        Span::styled(format!("needed by {parent}"), Style::new().dim()),
+                    ]));
+                }
+                let (mark, style) = mark_for(self.selected[*index]);
                 ListItem::new(Line::from(vec![
                     Span::styled(format!(" {mark} "), style),
-                    Span::styled(runtime_name(*runtime), Style::new().bold()),
-                    note,
+                    Span::raw(column(&resource.label)),
+                    Span::styled(resource.description.clone(), Style::new().dim()),
+                ]))
+            }
+            Row::Setting(index) => {
+                let spec = &self.model.settings[*index];
+                if self.setting_applied(*index) {
+                    return ListItem::new(Line::from(vec![
+                        Span::styled("  ✓  ", Style::new().fg(OK)),
+                        Span::styled(column(&spec.label), Style::new().dim()),
+                        Span::styled("already set", Style::new().dim()),
+                    ]));
+                }
+                let (mark, style) = mark_for(self.setting_on[*index]);
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!(" {mark} "), style),
+                    Span::raw(column(&spec.label)),
+                    Span::styled(spec.description.clone(), Style::new().dim()),
                 ]))
             }
         }
     }
 
-    fn render_pick_details(&self, frame: &mut Frame, area: Rect, stage: &PickStage) {
-        let mut lines = vec![Line::styled(stage.blurb, Style::new().dim())];
-        if !stage.runtime.installed(self.model.status) {
-            lines.push(Line::styled(
-                format!(
-                    "⚙ {} isn't installed yet — it goes in first.",
-                    runtime_name(stage.runtime)
-                ),
-                Style::new().fg(WARN),
-            ));
+    fn row_details(&self, row: &Row) -> Vec<Line<'_>> {
+        match row {
+            Row::Header { title, items } => {
+                let mut lines = vec![
+                    Line::styled(title.clone(), Style::new().bold().fg(ACCENT)),
+                    Line::from(""),
+                ];
+                if items.is_empty() {
+                    lines.push(Line::from(
+                        "A bundle picks a set at once. Fine-tune below, or start empty.",
+                    ));
+                    lines.push(Line::from(""));
+                    lines.push(Line::styled(
+                        "space adds the bundle · enter adds it and continues",
+                        Style::new().dim(),
+                    ));
+                } else {
+                    let (on, actionable) = self.group_counts(items);
+                    lines.push(Line::from(format!(
+                        "{on} of {actionable} picked · {} already installed",
+                        items.len() - actionable
+                    )));
+                    lines.push(Line::from(""));
+                    lines.push(Line::styled(
+                        "space picks or clears the whole group",
+                        Style::new().dim(),
+                    ));
+                }
+                lines
+            }
+            Row::Preset(preset) => {
+                let adds = self.preset_adds(*preset);
+                let mut lines = vec![
+                    Line::styled(
+                        self.preset_label(*preset).to_owned(),
+                        Style::new().bold().fg(ACCENT),
+                    ),
+                    Line::styled("Bundle", Style::new().dim()),
+                    Line::from(""),
+                    Line::from(self.preset_blurb(*preset).to_owned()),
+                    Line::from(""),
+                ];
+                lines.push(match preset {
+                    Preset::Clear => Line::styled(
+                        format!("clears {} picked item(s)", self.total_selected()),
+                        Style::new().fg(WARN),
+                    ),
+                    _ => Line::styled(format!("adds {adds} item(s)"), Style::new().fg(OK)),
+                });
+                lines
+            }
+            Row::Resource(index) => self.resource_details(*index),
+            Row::Setting(index) => self.setting_details(&self.model.settings[*index], *index),
         }
-        lines.push(Line::from(""));
-        lines.extend(self.resource_details(stage.items[stage.cursor]));
-        frame.render_widget(
-            Paragraph::new(lines)
-                .wrap(Wrap { trim: true })
-                .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
-            area,
-        );
     }
 
     fn resource_details(&self, index: usize) -> Vec<Line<'_>> {
@@ -570,304 +435,178 @@ impl Wizard {
             Line::from(""),
             Line::from(resource.description.clone()),
             Line::from(""),
-            Line::styled(
-                format!("target  {}", resource.install_target),
-                Style::new().dim(),
-            ),
-            Line::from(""),
-            Line::styled(
-                format!("next  {}", resource.next_action),
-                Style::new().dim(),
-            ),
         ];
+        if !resource.dependencies.is_empty() {
+            lines.push(field("pulls in", resource.dependencies.join(", "), WARN));
+        }
+        match resource.kind {
+            ResourceKind::Skill => {
+                let destination = self.skill_destination();
+                let trees = destination.trees();
+                if trees.is_empty() {
+                    lines.push(field("goes to", "no agent chosen yet".into(), WARN));
+                } else {
+                    lines.push(field("goes to", String::new(), ACCENT));
+                    for tree in trees {
+                        lines.push(Line::styled(
+                            format!("  {}", tidy(&tree, &destination.home)),
+                            Style::new().dim(),
+                        ));
+                    }
+                }
+            }
+            ResourceKind::Tool => lines.push(field(
+                "via",
+                format!("mise · {}", resource.install_target),
+                ACCENT,
+            )),
+            ResourceKind::PiPackage => lines.push(field(
+                "via",
+                format!("pi install {}", resource.install_target),
+                ACCENT,
+            )),
+            ResourceKind::HerdrPlugin => lines.push(field(
+                "via",
+                format!("herdr plugin install {}", resource.install_target),
+                ACCENT,
+            )),
+        }
+        lines.push(Line::from(""));
+        lines.push(field("then", resource.next_action.clone(), ACCENT));
         if self.resource_installed(index) {
             lines.push(Line::from(""));
             lines.push(Line::styled("Already installed.", Style::new().fg(OK)));
+        } else if let Some(parent) = self.required_note(index) {
+            lines.push(Line::from(""));
+            lines.push(Line::styled(
+                format!("Needed by {parent}; clear that to drop this."),
+                Style::new().fg(OK),
+            ));
         }
         lines
     }
 
-    fn render_agents(
-        &self,
-        frame: &mut Frame,
-        area: Rect,
-        stage: &AgentsStage,
-    ) -> (ListHit, ListHit) {
-        let [list_area, details_area] =
-            Layout::horizontal([Constraint::Percentage(48), Constraint::Percentage(52)])
-                .areas(area);
-        let mut items = vec![ListItem::new(Line::from(vec![
-            Span::styled(" ◉ ", Style::new().fg(OK)),
-            Span::styled(
-                format!("Scope: {}", self.skill_scope.label()),
-                Style::new().bold(),
-            ),
-        ]))];
-        items.extend(
-            crate::SkillAgent::ALL
-                .iter()
-                .zip(&self.agent_on)
-                .map(|(agent, on)| {
-                    let (mark, style) = mark_for(*on);
-                    ListItem::new(Line::from(vec![
-                        Span::styled(format!(" {mark} "), style),
-                        Span::raw(agent.label()),
-                    ]))
-                }),
-        );
-        let selected = self.agent_on.iter().filter(|on| **on).count();
-        let title = format!(
-            " Agents · {selected}/{} selected ",
-            crate::SkillAgent::ALL.len()
-        );
-        let list = List::new(items)
-            .block(bordered(&title, true))
-            .highlight_style(Style::new().bg(Color::DarkGray));
-        let mut state = ListState::default().with_selected(Some(stage.cursor));
-        frame.render_stateful_widget(list, list_area, &mut state);
-
-        let destination = self.skill_destination();
-        let mut details = vec![
-            Line::styled("Skill destination", Style::new().bold().fg(ACCENT)),
-            Line::from(""),
-            Line::from(format!("Scope  {}", destination.scope.label())),
-            Line::from(""),
-        ];
-        if destination.agents.is_empty() {
-            details.push(Line::styled(
-                "Select at least one agent before installing skills.",
-                Style::new().fg(WARN),
-            ));
-        } else {
-            details.push(Line::styled("Exact paths", Style::new().bold()));
-            for tree in destination.trees() {
-                details.push(Line::from(format!("  {}", tree.display())));
-            }
-        }
-        details.push(Line::from(""));
-        details.push(Line::styled(
-            "Space toggles scope or the highlighted agent.",
-            Style::new().dim(),
-        ));
-        frame.render_widget(
-            Paragraph::new(details)
-                .wrap(Wrap { trim: true })
-                .block(bordered(" Destination ", false).padding(Padding::horizontal(1))),
-            details_area,
-        );
-        (Some((list_area, 0)), None)
-    }
-
-    fn render_skills(
-        &self,
-        frame: &mut Frame,
-        area: Rect,
-        stage: &SkillsStage,
-    ) -> (ListHit, ListHit) {
-        if let Some(query) = self.search.clone() {
-            return self.render_search(frame, area, "Skills", &query);
-        }
-        let [left, middle, right] = Layout::horizontal([
-            Constraint::Percentage(24),
-            Constraint::Percentage(38),
-            Constraint::Percentage(38),
-        ])
-        .areas(area);
-
-        let categories = stage
-            .categories
-            .iter()
-            .map(|category| {
-                let count = self.selected_count(&category.items);
-                let actionable = self.actionable(&category.items).len();
-                let count_style = if count > 0 {
-                    Style::new().fg(OK)
-                } else {
-                    Style::new().dim()
-                };
-                let mut spans = vec![Span::raw(format!(" {} ", category.name))];
-                if actionable == 0 {
-                    spans.push(Span::styled("✓", Style::new().fg(OK)));
-                } else {
-                    spans.push(Span::styled(format!("{count}/{actionable}"), count_style));
-                }
-                ListItem::new(Line::from(spans))
-            })
-            .collect::<Vec<_>>();
-        let category_offset = list_offset(
-            stage.categories.len(),
-            left.height.saturating_sub(2),
-            stage.category_cursor,
-        );
-        let category_list = List::new(categories)
-            .block(bordered(" Categories ", stage.focus == Focus::Categories))
-            .highlight_style(highlight(stage.focus == Focus::Categories));
-        let mut category_state = ListState::default()
-            .with_selected(Some(stage.category_cursor))
-            .with_offset(category_offset);
-        frame.render_stateful_widget(category_list, left, &mut category_state);
-
-        let category = &stage.categories[stage.category_cursor];
-        let skills = category
-            .items
-            .iter()
-            .map(|&index| self.resource_item(index))
-            .collect::<Vec<_>>();
-        let title = list_title(
-            &category.name,
-            self.selected_count(&category.items),
-            self.installed_count(&category.items),
-            category.items.len(),
-        );
-        let skill_offset = list_offset(
-            category.items.len(),
-            middle.height.saturating_sub(2),
-            stage.skill_cursor,
-        );
-        let skill_list = List::new(skills)
-            .block(bordered(&title, stage.focus == Focus::Skills))
-            .highlight_style(highlight(stage.focus == Focus::Skills));
-        let mut skill_state = ListState::default()
-            .with_selected(Some(stage.skill_cursor))
-            .with_offset(skill_offset);
-        frame.render_stateful_widget(skill_list, middle, &mut skill_state);
-
-        let skill_index = category.items[stage.skill_cursor];
-        frame.render_widget(
-            Paragraph::new(self.preview_lines(skill_index))
-                .wrap(Wrap { trim: true })
-                .block(bordered(" Preview ", false).padding(Padding::horizontal(1))),
-            right,
-        );
-        (Some((left, category_offset)), Some((middle, skill_offset)))
-    }
-
-    fn render_settings(
-        &self,
-        frame: &mut Frame,
-        area: Rect,
-        stage: &SettingsStage,
-    ) -> (ListHit, ListHit) {
-        let [list_area, details_area] =
-            Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)])
-                .areas(area);
-
-        let items = stage
-            .rows
-            .iter()
-            .map(|row| match row {
-                SettingRow::Header(group) => ListItem::new(Line::from(Span::styled(
-                    format!(" {group}"),
-                    Style::new().bold().underlined(),
-                ))),
-                SettingRow::Setting(index) => {
-                    let spec = &self.model.settings[*index];
-                    if self.setting_applied(*index) {
-                        ListItem::new(Line::from(vec![
-                            Span::styled(" ✓ ", Style::new().fg(OK)),
-                            Span::styled(spec.label.clone(), Style::new().dim()),
-                            Span::styled(" — already set", Style::new().dim()),
-                        ]))
-                    } else {
-                        let (mark, style) = mark_for(self.setting_on[*index]);
-                        ListItem::new(Line::from(vec![
-                            Span::styled(format!(" {mark} "), style),
-                            Span::raw(spec.label.clone()),
-                        ]))
-                    }
-                }
-            })
-            .collect::<Vec<_>>();
-        let on_count = self.setting_on.iter().filter(|on| **on).count();
-        let title = format!(
-            " Settings · {on_count}/{} selected ",
-            self.model.settings.len()
-        );
-        let offset = list_offset(
-            stage.rows.len(),
-            list_area.height.saturating_sub(2),
-            stage.cursor,
-        );
-        let list = List::new(items)
-            .block(bordered(&title, true))
-            .highlight_style(Style::new().bg(Color::DarkGray));
-        let mut state = ListState::default()
-            .with_selected(Some(stage.cursor))
-            .with_offset(offset);
-        frame.render_stateful_widget(list, list_area, &mut state);
-
-        if let SettingRow::Setting(index) = stage.rows[stage.cursor] {
-            self.render_setting_details(frame, details_area, &self.model.settings[index], index);
-        }
-        (Some((list_area, offset)), None)
-    }
-
-    fn render_setting_details(
-        &self,
-        frame: &mut Frame,
-        area: Rect,
-        spec: &SettingSpec,
-        index: usize,
-    ) {
+    fn setting_details(&self, spec: &SettingSpec, index: usize) -> Vec<Line<'_>> {
         let mut lines = vec![
             Line::styled(spec.label.clone(), Style::new().bold().fg(ACCENT)),
-            Line::styled(spec.group.clone(), Style::new().dim()),
+            Line::styled(format!("Setting · {}", spec.group), Style::new().dim()),
             Line::from(""),
             Line::from(spec.description.clone()),
             Line::from(""),
-            Line::styled(
-                format!(
-                    "file  {}",
-                    spec.target_path(&self.model.settings_paths).display()
-                ),
-                Style::new().dim(),
+            field(
+                "file",
+                spec.target_path(&self.model.settings_paths)
+                    .display()
+                    .to_string(),
+                ACCENT,
             ),
-            Line::from(""),
         ];
         for change in spec.change_summary() {
-            lines.push(Line::styled(format!("+ {change}"), Style::new().fg(OK)));
+            lines.push(Line::styled(format!("  + {change}"), Style::new().fg(OK)));
         }
         if self.setting_applied(index) {
             lines.push(Line::from(""));
             lines.push(Line::styled("Already set.", Style::new().fg(OK)));
         }
+        lines
+    }
+
+    // ---- where -------------------------------------------------------------
+
+    fn render_where(&self, frame: &mut Frame, area: Rect, stage: &WhereStage) -> ListHit {
+        let [list_area, details_area] =
+            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .areas(area);
+        let destination = self.skill_destination();
+        let (global, project) = match self.skill_scope {
+            crate::SkillScope::Global => ("(•)", "( )"),
+            crate::SkillScope::Project => ("( )", "(•)"),
+        };
+        let project_name = destination
+            .project_root
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| destination.project_root.display().to_string());
+        let mut items = vec![ListItem::new(Line::from(vec![
+            Span::styled(format!(" {global} "), Style::new().fg(OK)),
+            Span::raw("Global"),
+            Span::styled("  every project     ", Style::new().dim()),
+            Span::styled(format!("{project} "), Style::new().fg(OK)),
+            Span::raw("Project"),
+            Span::styled(format!("  only {project_name}/"), Style::new().dim()),
+        ]))];
+        for (agent, on) in SkillAgent::ALL.iter().zip(&self.agent_on) {
+            let (mark, style) = mark_for(*on);
+            let tree = match self.skill_scope {
+                crate::SkillScope::Global => agent.global_skill_tree(&destination.home),
+                crate::SkillScope::Project => agent.project_skill_tree(&destination.project_root),
+            };
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(format!(" {mark} "), style),
+                Span::raw(column(agent.label())),
+                Span::styled(tidy(&tree, &destination.home), Style::new().dim()),
+            ])));
+        }
+        let skills = self
+            .expanded_selection()
+            .iter()
+            .filter(|resource| resource.kind == ResourceKind::Skill)
+            .count();
+        let title = format!(
+            " Where do {skills} skill(s) go? · {}/{} agents ",
+            self.selected_agents().len(),
+            SkillAgent::ALL.len()
+        );
+        let list = List::new(items)
+            .block(bordered(&title, true))
+            .highlight_style(highlight());
+        let mut state = ListState::default().with_selected(Some(stage.cursor));
+        frame.render_stateful_widget(list, list_area, &mut state);
+
+        let mut details = vec![
+            Line::styled("Skill destination", Style::new().bold().fg(ACCENT)),
+            Line::from(""),
+            Line::from(
+                "Skills are copied into each chosen agent's skill tree. Global trees serve every \
+                 project; a project tree serves this repository only.",
+            ),
+            Line::from(""),
+        ];
+        if destination.agents.is_empty() {
+            details.push(Line::styled(
+                "Pick at least one agent, or nothing can be installed.",
+                Style::new().fg(WARN),
+            ));
+        } else {
+            details.push(Line::styled("Will write to", Style::new().bold()));
+            for tree in destination.trees() {
+                details.push(Line::styled(
+                    format!("  {}", tidy(&tree, &destination.home)),
+                    Style::new().dim(),
+                ));
+            }
+        }
         frame.render_widget(
-            Paragraph::new(lines)
+            Paragraph::new(details)
                 .wrap(Wrap { trim: true })
                 .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
-            area,
+            details_area,
         );
+        Some((list_area, 0))
     }
+
+    // ---- review ------------------------------------------------------------
 
     fn render_review(&self, frame: &mut Frame, area: Rect, scroll: u16) {
         let mut lines = Vec::new();
         if self.nothing_chosen() {
             lines.push(Line::from(
-                "Nothing picked yet. Enter leaves without changes; ← goes back.",
+                "Nothing picked. Enter leaves without changes; esc goes back.",
             ));
         } else {
-            let added = |text: String, note: Option<String>| {
-                let mut spans = vec![
-                    Span::styled("  + ", Style::new().fg(OK).bold()),
-                    Span::styled(text, Style::new().fg(OK)),
-                ];
-                if let Some(note) = note {
-                    spans.push(Span::styled(format!("   {note}"), Style::new().dim()));
-                }
-                Line::from(spans)
-            };
-            let runtimes = self.selected_runtimes();
-            if !runtimes.is_empty() {
-                lines.push(Line::styled("Runtimes", Style::new().bold()));
-                for runtime in &runtimes {
-                    lines.push(added(runtime_name(*runtime).to_owned(), None));
-                }
-                lines.push(Line::from(""));
-            }
-            // The full delta, dependency pull-ins included, each with blame.
-            let direct = self.selection();
-            let expanded = crate::expand_skill_dependencies(&self.model.resources, direct.clone());
-            let direct_ids = direct
+            let expanded = self.expanded_selection();
+            let direct_ids = self
+                .selection()
                 .iter()
                 .map(|resource| resource.id.clone())
                 .collect::<std::collections::HashSet<_>>();
@@ -877,79 +616,79 @@ impl Wizard {
                     .find(|parent| parent.dependencies.iter().any(|dep| dep == target))
                     .map(|parent| parent.label.clone())
             };
-            let pi_rides_manifest = !self.model.status.pi
-                && self.model.status.mise
-                && expanded
-                    .iter()
-                    .any(|resource| resource.kind == crate::ResourceKind::PiPackage);
-            if expanded
-                .iter()
-                .any(|resource| resource.kind == crate::ResourceKind::Skill)
-            {
-                let destination = self.skill_destination();
-                lines.push(Line::styled(
-                    format!("Skill destination ({})", destination.scope.label()),
-                    Style::new().bold(),
-                ));
-                if destination.agents.is_empty() {
-                    lines.push(Line::styled("  ! no agents selected", Style::new().fg(ERR)));
-                } else {
-                    for tree in destination.trees() {
-                        lines.push(Line::from(format!("  → {}", tree.display())));
+            let plan = self.plan();
+            if let Ok(plan) = &plan {
+                if !plan.prerequisites.is_empty() {
+                    lines.push(heading("Installs first", plan.prerequisites.len()));
+                    for step in &plan.prerequisites {
+                        lines.push(Line::from(vec![
+                            Span::styled("  ! ", Style::new().fg(WARN).bold()),
+                            Span::raw(step.target.clone()),
+                            Span::styled(
+                                format!("   {}", step.action.display()),
+                                Style::new().dim(),
+                            ),
+                        ]));
                     }
+                    lines.push(Line::from(""));
                 }
-                lines.push(Line::from(""));
             }
             for (kind, title) in [
-                (crate::ResourceKind::Tool, "Tools"),
-                (crate::ResourceKind::HerdrPlugin, "Herdr plugins"),
-                (crate::ResourceKind::PiPackage, "Pi packages"),
-                (crate::ResourceKind::Skill, "Skills"),
+                (ResourceKind::Skill, "Skills"),
+                (ResourceKind::Tool, "Tools"),
+                (ResourceKind::PiPackage, "Pi packages"),
+                (ResourceKind::HerdrPlugin, "Herdr plugins"),
             ] {
                 let of_kind = expanded
                     .iter()
                     .filter(|resource| resource.kind == kind)
                     .collect::<Vec<_>>();
-                if of_kind.is_empty() && !(kind == crate::ResourceKind::Tool && pi_rides_manifest) {
+                if of_kind.is_empty() {
                     continue;
                 }
-                lines.push(Line::styled(
-                    format!("{title} ({})", of_kind.len()),
-                    Style::new().bold(),
-                ));
-                for resource in of_kind {
-                    let note = if direct_ids.contains(&resource.id) {
-                        None
+                lines.push(heading(title, of_kind.len()));
+                if kind == ResourceKind::Skill {
+                    let destination = self.skill_destination();
+                    if destination.agents.is_empty() {
+                        lines.push(Line::styled("  ! no agent chosen", Style::new().fg(ERR)));
                     } else {
-                        Some(format!(
-                            "(pulled in by {})",
-                            parent_of(&resource.install_target)
-                                .unwrap_or_else(|| "a selected skill".into())
-                        ))
-                    };
-                    lines.push(added(resource.label.clone(), note));
+                        for tree in destination.trees() {
+                            lines.push(Line::styled(
+                                format!("  → {}", tidy(&tree, &destination.home)),
+                                Style::new().dim(),
+                            ));
+                        }
+                    }
                 }
-                if kind == crate::ResourceKind::Tool && pi_rides_manifest {
-                    lines.push(added(
-                        "pi".into(),
-                        Some("(needed by your Pi packages)".into()),
-                    ));
+                for resource in of_kind {
+                    let mut spans = vec![
+                        Span::styled("  + ", Style::new().fg(OK).bold()),
+                        Span::raw(resource.label.clone()),
+                    ];
+                    if !direct_ids.contains(&resource.id) {
+                        spans.push(Span::styled(
+                            format!(
+                                "   needed by {}",
+                                parent_of(&resource.install_target)
+                                    .unwrap_or_else(|| "a picked skill".into())
+                            ),
+                            Style::new().dim(),
+                        ));
+                    }
+                    lines.push(Line::from(spans));
                 }
                 lines.push(Line::from(""));
             }
             let settings = self.selected_settings();
             if !settings.is_empty() {
-                lines.push(Line::styled(
-                    format!("Settings ({})", settings.len()),
-                    Style::new().bold(),
-                ));
+                lines.push(heading("Settings", settings.len()));
                 for spec in &settings {
                     lines.push(Line::from(vec![
                         Span::styled("  ~ ", Style::new().fg(WARN).bold()),
                         Span::raw(spec.label.clone()),
                         Span::styled(
                             format!(
-                                "  → {}",
+                                "   {}",
                                 spec.target_path(&self.model.settings_paths).display()
                             ),
                             Style::new().dim(),
@@ -958,44 +697,19 @@ impl Wizard {
                 }
                 lines.push(Line::from(""));
             }
-            match self.plan() {
-                Ok(plan) => {
-                    lines.push(Line::styled("What will run", Style::new().bold()));
-                    for step in &plan.prerequisites {
-                        lines.push(Line::styled(
-                            format!(
-                                "  ! {} goes in first: {}",
-                                step.target,
-                                step.action.display()
-                            ),
-                            Style::new().fg(WARN),
-                        ));
-                    }
-                    for step in &plan.resources {
-                        lines.push(Line::from(format!("  $ {}", step.action.display())));
-                    }
-                    for spec in &settings {
-                        lines.push(Line::from(format!(
-                            "  ~ updates {}",
-                            spec.target_path(&self.model.settings_paths).display()
-                        )));
-                    }
-                    lines.push(Line::from(""));
-                    lines.push(Line::styled(
-                        if self.model.dry_run {
-                            "Dry run: Enter prints this plan and exits."
-                        } else {
-                            "Enter runs it."
-                        },
-                        Style::new().fg(OK),
-                    ));
-                }
-                Err(error) => {
-                    lines.push(Line::styled(
-                        format!("Cannot install: {error}"),
-                        Style::new().fg(ERR),
-                    ));
-                }
+            match plan {
+                Ok(_) => lines.push(Line::styled(
+                    if self.model.dry_run {
+                        "Dry run: enter prints this plan and exits."
+                    } else {
+                        "Enter installs all of this. Esc goes back."
+                    },
+                    Style::new().fg(OK),
+                )),
+                Err(error) => lines.push(Line::styled(
+                    format!("Cannot install: {error}"),
+                    Style::new().fg(ERR),
+                )),
             }
         }
         let paragraph = Paragraph::new(lines)
@@ -1003,6 +717,8 @@ impl Wizard {
             .scroll((scroll, 0));
         frame.render_widget(paragraph, area);
     }
+
+    // ---- install -----------------------------------------------------------
 
     fn render_install(&self, frame: &mut Frame, area: Rect, stage: &InstallStage) {
         let summary_height = if stage.report.is_some() { 7 } else { 0 };
@@ -1026,10 +742,10 @@ impl Wizard {
         let gauge_color = if failed { ERR } else { OK };
         frame.render_widget(
             Gauge::default()
-                .block(bordered(" Progress ", true))
+                .block(bordered(" Installing ", true))
                 .gauge_style(Style::new().fg(gauge_color).bg(Color::DarkGray))
                 .ratio(done as f64 / total as f64)
-                .label(format!("{done}/{total}")),
+                .label(format!("{done} of {total}")),
             gauge_area,
         );
 
@@ -1059,7 +775,7 @@ impl Wizard {
                 ];
                 if !note.is_empty() {
                     spans.push(Span::styled(
-                        format!("  {}", first_line(&note)),
+                        format!("   {}", first_line(&note)),
                         style.add_modifier(Modifier::DIM),
                     ));
                 }
@@ -1077,14 +793,14 @@ impl Wizard {
         } else {
             (stage.scroll as usize).min(stage.items.len().saturating_sub(visible as usize))
         };
-        let list = List::new(items).block(bordered(" Tasks ", true));
+        let list = List::new(items).block(bordered(" Tasks ", false));
         let mut state = ListState::default().with_offset(offset);
         frame.render_stateful_widget(list, steps_area, &mut state);
 
         if let Some(report) = &stage.report {
             let mut lines = Vec::new();
             if report.failures.is_empty() {
-                lines.push(Line::styled("✓ All done", Style::new().fg(OK).bold()));
+                lines.push(Line::styled("✓ Done", Style::new().fg(OK).bold()));
                 lines.push(Line::from(format!(
                     "{} installed, nothing failed.",
                     report.installed.len()
@@ -1092,30 +808,25 @@ impl Wizard {
             } else {
                 let failed = report.failures.len();
                 lines.push(Line::styled(
-                    if failed == 1 {
-                        "✗ Done, but one task failed".to_owned()
-                    } else {
-                        format!("✗ Done, but {failed} tasks failed")
-                    },
+                    format!("✗ Done with {failed} failure(s)"),
                     Style::new().fg(ERR).bold(),
                 ));
                 lines.push(Line::from(format!(
-                    "{} installed · {failed} failed — details above.",
+                    "{} installed · {failed} failed — see the tasks above.",
                     report.installed.len()
                 )));
             }
             for action in self.next_actions(report).iter().take(2) {
-                lines.push(Line::styled(format!("next  {action}"), Style::new().dim()));
+                lines.push(field("next", action.clone(), ACCENT));
             }
             lines.push(Line::from(vec![
-                Span::raw("Press "),
-                Span::styled("Enter", Style::new().fg(ACCENT).bold()),
+                Span::styled("enter", Style::new().fg(ACCENT).bold()),
                 Span::raw(" to finish."),
             ]));
             frame.render_widget(
                 Paragraph::new(lines)
                     .wrap(Wrap { trim: true })
-                    .block(bordered(" Done ", true).padding(Padding::horizontal(1))),
+                    .block(bordered(" Result ", true).padding(Padding::horizontal(1))),
                 summary_area,
             );
         }
@@ -1125,7 +836,7 @@ impl Wizard {
         let mut actions = Vec::new();
         for resource in self.selection() {
             let installed = report.installed.contains(&resource.id)
-                || (resource.kind == crate::ResourceKind::Skill
+                || (resource.kind == ResourceKind::Skill
                     && report.installed.iter().any(|target| target == "skills"));
             if installed && !actions.contains(&resource.next_action) {
                 actions.push(resource.next_action.clone());
@@ -1133,58 +844,41 @@ impl Wizard {
         }
         actions
     }
+}
 
-    fn resource_item(&self, index: usize) -> ListItem<'_> {
-        let resource = &self.model.resources[index];
-        if self.resource_installed(index) {
-            return ListItem::new(Line::from(vec![
-                Span::styled(" ✓ ", Style::new().fg(OK)),
-                Span::styled(resource.label.as_str(), Style::new().dim()),
-                Span::styled(" — installed", Style::new().dim()),
-            ]));
-        }
-        if let Some(parent) = self.required_note(index) {
-            return ListItem::new(Line::from(vec![
-                Span::styled(" ◉ ", Style::new().fg(OK)),
-                Span::styled(resource.label.as_str(), Style::new().dim()),
-                Span::styled(
-                    format!(" — required by {parent}"),
-                    Style::new().fg(OK).dim(),
-                ),
-            ]));
-        }
-        let (mark, mark_style) = mark_for(self.selected[index]);
-        ListItem::new(Line::from(vec![
-            Span::styled(format!(" {mark} "), mark_style),
-            Span::raw(resource.label.as_str()),
-            Span::styled(format!(" — {}", resource.description), Style::new().dim()),
-        ]))
+/// A fixed-width label column so descriptions line up.
+fn column(label: &str) -> String {
+    format!("{label:<22} ")
+}
+
+/// A path with the home directory folded to `~`.
+fn tidy(path: &std::path::Path, home: &std::path::Path) -> String {
+    match path.strip_prefix(home) {
+        Ok(rest) => format!("~/{}", rest.display()),
+        Err(_) => path.display().to_string(),
     }
 }
 
-fn mark_for(selected: bool) -> (&'static str, Style) {
-    if selected {
-        (SELECTED_MARK, Style::new().fg(OK))
+/// `label  value` with a dim, fixed-width label column.
+fn field(label: &'static str, value: String, color: Color) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{label:<8}"), Style::new().fg(color).dim()),
+        Span::raw(value),
+    ])
+}
+
+fn heading(title: &'static str, count: usize) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(title, Style::new().bold()),
+        Span::styled(format!(" ({count})"), Style::new().dim()),
+    ])
+}
+
+fn mark_for(on: bool) -> (&'static str, Style) {
+    if on {
+        (ON, Style::new().fg(OK))
     } else {
-        (UNSELECTED_MARK, Style::new().dim())
-    }
-}
-
-fn runtime_name(runtime: Runtime) -> &'static str {
-    match runtime {
-        Runtime::Pi => "Pi",
-        Runtime::Herdr => "Herdr",
-        Runtime::Mise => "mise",
-    }
-}
-
-fn runtime_blurb(runtime: Runtime) -> &'static str {
-    match runtime {
-        Runtime::Pi => "Pi is the coding agent the packages plug into. Installed with npm.",
-        Runtime::Herdr => {
-            "Herdr is a terminal multiplexer for coding agents. The plugins run inside it."
-        }
-        Runtime::Mise => "mise installs the pinned tools from the published manifest.",
+        (OFF, Style::new().dim())
     }
 }
 
@@ -1200,25 +894,8 @@ fn bordered(title: &str, focused: bool) -> Block<'_> {
         .title(title.to_owned())
 }
 
-fn highlight(focused: bool) -> Style {
-    if focused {
-        Style::new().bg(Color::DarkGray)
-    } else {
-        Style::new()
-    }
-}
-
-fn list_title(name: &str, selected: usize, installed: usize, total: usize) -> String {
-    if installed == 0 {
-        format!(" {name} · {selected}/{total} selected ")
-    } else if installed == total {
-        format!(" {name} · all {total} installed ")
-    } else {
-        format!(
-            " {name} · {installed} installed · {selected}/{} selected ",
-            total - installed
-        )
-    }
+fn highlight() -> Style {
+    Style::new().bg(Color::DarkGray)
 }
 
 fn list_offset(len: usize, visible: u16, cursor: usize) -> usize {
@@ -1230,21 +907,13 @@ fn list_offset(len: usize, visible: u16, cursor: usize) -> usize {
     }
 }
 
-fn centered(area: Rect, width: u16) -> Rect {
-    let width = width.min(area.width);
+fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
     Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y,
-        width,
-        height: area.height,
+        x: area.x + area.width.saturating_sub(width) / 2,
+        y: area.y + area.height.saturating_sub(height) / 2,
+        width: width.min(area.width),
+        height: height.min(area.height),
     }
-}
-
-fn count_kind(resources: &[Resource], kind: crate::ResourceKind) -> usize {
-    resources
-        .iter()
-        .filter(|resource| resource.kind == kind)
-        .count()
 }
 
 fn first_line(text: &str) -> &str {

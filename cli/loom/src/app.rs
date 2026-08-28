@@ -1,5 +1,5 @@
 use crate::settings::{curated_settings, setting_state, SettingsPaths};
-use crate::ui::{confirm_plan, print_plan};
+use crate::ui::{confirm_plan, print_plan, Mark, Out};
 use crate::wizard::{run_wizard, Model, WizardOutcome};
 use crate::{
     build_install_plan, execute_install_plan, expand_skill_dependencies, Catalog, CommandSpec,
@@ -67,18 +67,20 @@ pub fn install_selected(
         return Ok(true);
     }
     let plan = build_install_plan(&resources, &[], status, platform, &destination)?;
-    print_plan(&plan);
+    let out = Out::detect();
+    out.title("add", format!("{} item(s)", resources.len()));
+    print_plan(&out, &plan);
     if dry_run {
-        println!("\nDry run; no changes made.");
+        out.verdict(true, "Dry run; no changes made");
         return Ok(true);
     }
     if !assume_yes && !confirm_plan()? {
-        println!("Cancelled; no changes made.");
+        out.verdict(true, "Cancelled; no changes made");
         return Ok(true);
     }
 
     let report = execute_install_plan(&plan, system);
-    print_report(&report);
+    print_report(&out, catalog, &report);
     if let Some(next) = resources
         .iter()
         .find(|resource| {
@@ -88,7 +90,7 @@ pub fn install_selected(
         })
         .map(|resource| resource.next_action.as_str())
     {
-        println!("\nNext: {next}");
+        out.next(next);
     }
     Ok(report.failures.is_empty())
 }
@@ -134,15 +136,19 @@ fn run_interactive(
             Ok(true)
         }
         WizardOutcome::DryRun(plan, setting_changes) => {
-            print_plan(&plan);
+            let out = Out::detect();
+            out.title("setup", "dry run");
+            print_plan(&out, &plan);
             for change in &setting_changes {
-                println!("  Configure {change}");
+                out.row(Mark::Off, "setting", change);
             }
-            println!("\nDry run; no changes made.");
+            out.verdict(true, "Dry run; no changes made");
             Ok(true)
         }
         WizardOutcome::Installed(report) => {
-            print_report(&report);
+            let out = Out::detect();
+            out.blank();
+            print_report(&out, catalog, &report);
             Ok(report.failures.is_empty())
         }
     }
@@ -223,18 +229,27 @@ pub(crate) fn detect_installed(
         .collect()
 }
 
-fn print_report(report: &InstallReport) {
-    if !report.installed.is_empty() {
-        println!("\nInstalled:");
-        for target in &report.installed {
-            println!("  ✓ {target}");
-        }
+fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
+    let label = |target: &str| {
+        catalog
+            .resources
+            .iter()
+            .find(|resource| resource.id == target)
+            .map(|resource| resource.label.clone())
+            .unwrap_or_else(|| target.to_owned())
+    };
+    for target in &report.installed {
+        out.row(Mark::Ok, &label(target), "installed");
     }
-    if !report.failures.is_empty() {
-        eprintln!("\nCould not install:");
-        for failure in &report.failures {
-            eprintln!("  ! {}: {}", failure.target, failure.message);
-        }
+    for failure in &report.failures {
+        out.row(Mark::Bad, &label(&failure.target), &failure.message);
+    }
+    let installed = report.installed.len();
+    let failed = report.failures.len();
+    if failed == 0 {
+        out.verdict(true, format!("{installed} installed"));
+    } else {
+        out.verdict(false, format!("{installed} installed · {failed} failed"));
     }
 }
 
