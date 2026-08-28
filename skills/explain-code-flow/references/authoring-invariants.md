@@ -8,6 +8,8 @@ The editorial rules archify applies when deciding what goes into a diagram. Rend
 - At most 12 primary nodes; prefer 6–12 for architecture.
 - Remove low-value edges before adding any routing control.
 - Supporting detail goes in cards, not in extra edges.
+- The focal element the brief names is its own node, drawn in coral; it is never merged into a neighbour.
+- Fan-in: several branches may share one target, but the target keeps a normal node height (≤ 96px) and each branch reaches it with its own elbow; no node is stretched to meet arrows.
 - No subtitle by default; never restate the title, nodes, or cards. No legend by default.
 
 ## Nodes

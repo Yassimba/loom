@@ -22,3 +22,20 @@ Copy-ready prompt archify emits for architecture:
 > Analyze this repository, then create a high-level architecture diagram. Show 8–12 core runtime
 > components, one primary request or data path, external dependencies, ownership or trust
 > boundaries, and put supporting detail in cards instead of adding more edges.
+
+## Complexity budget (per figure)
+
+From diagram-design §7; `draw.py` does not enforce these, the author does.
+
+| Limit | Rule |
+| --- | --- |
+| Nodes | 9 (zone containers, start dots, terminal rings, and callouts do not count) |
+| Arrows / transitions | 12 |
+| Coral (focal) elements | 2 |
+| Lifelines (sequence) | 5 |
+| Fragments (sequence) | 1; 2 only when each is a single-region `opt`/`loop`, never nested |
+| Classes (UML) | 7 |
+| Entities (ER) | 8 |
+| Callouts | 2 |
+
+Over budget: keep the main path, turn side branches into a callout or a sublabel, and say in the report what was cut. Never cut the focal element the brief names or a terminal outcome; above nine real nodes it is two figures.
