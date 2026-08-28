@@ -49,7 +49,14 @@ test("PowerShell accepts annotated core manifest markers", async () => {
 test("piped Unix bootstrap reconnects interactive setup to the terminal", async () => {
   const installer = await readFile(join(repoRoot, "install.sh"), "utf8");
 
-  assert.match(installer, /exec mise -C "\$HOME" exec -- loom setup "\$@" <\/dev\/tty/);
+  // The pty behind stderr first: macOS kqueue cannot poll the /dev/tty alias,
+  // so a wizard started on it dies with "Failed to initialize input reader".
+  assert.match(installer, /terminal="\$\(tty 0<&2 2>\/dev\/null\)"/);
+  assert.match(installer, /terminal=\/dev\/tty/);
+  assert.match(installer, /exec mise -C "\$HOME" exec -- loom setup "\$@" <"\$terminal"/);
+  // A guided install with no terminal at all says what to run instead of
+  // launching a UI that cannot read.
+  assert.match(installer, /Open a shell and run: loom/);
 });
 
 test("bootstraps forward explicit setup selectors", async () => {
