@@ -3,21 +3,21 @@
   "packages": [
     {
       "name": "pi-subagents",
-      "version": "0.53.0",
+      "version": "0.58.0",
       "label": "subagents",
       "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
       "nextAction": "Ask Pi to delegate a task to a subagent."
     },
     {
       "name": "pi-web-access",
-      "version": "0.24.0",
+      "version": "0.26.0",
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "nextAction": "Ask Pi to search the web."
     },
     {
       "name": "pi-rewind-hook",
-      "version": "1.8.5",
+      "version": "1.8.6",
       "label": "rewind",
       "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
       "nextAction": "Branch to an earlier Pi message to see files rewind."
