@@ -18,7 +18,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.19.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.12.0", tag_regex = "^loom-v" }
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.13.0", tag_regex = "^loom-v" }
 # core:end
 
 # teams calendar CLI (export meetings as JSON, find slots)
