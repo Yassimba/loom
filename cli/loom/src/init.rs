@@ -7,6 +7,7 @@
 //! land wrapped in `<!-- loom:section:<name> -->` markers so a re-run
 //! appends missing sections and never touches anything else.
 
+use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, CommandSpec, System};
 use anyhow::{Context, Result};
 use inquire::Select;
@@ -206,7 +207,6 @@ fn setup_codegraph(system: &dyn System) -> Result<()> {
             crate::install::command_failure_message(&result)
         );
     }
-    println!("  ✓ CodeGraph wired and project indexed");
     Ok(())
 }
 
@@ -218,16 +218,20 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         options,
         |prompt, help, default| select_yes_no(prompt, help, default, options.yes),
     )?;
+    let out = Out::detect();
+    let home = system.home_dir().context("home directory is unavailable")?;
+    out.title("init", tidy_path(&project, &home));
     if !features.project_instructions {
         if features.codegraph {
             setup_codegraph(system)?;
+            out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
+            out.verdict(true, "Done");
         } else {
-            println!("Nothing selected; no changes made.");
+            out.verdict(true, "Nothing selected; no changes made");
         }
         return Ok(true);
     }
     // Templates come from the published repo, so init output is publish-gated.
-    let home = system.home_dir().context("home directory is unavailable")?;
     let staging = home.join(".cache").join("loom").join("init-staging");
     let repo_root = skills::fetch_repo(system, &staging)
         .map_err(anyhow::Error::msg)
@@ -250,39 +254,47 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     }
     let _ = fs::remove_dir_all(&staging);
 
+    let mut ok = true;
     let agents_path = project.join("AGENTS.md");
     let existing = fs::read_to_string(&agents_path).ok();
     let (agents, outcome) = render_agents(existing.as_deref(), &base, &chosen, options.force);
+    let sections = chosen
+        .iter()
+        .map(|(name, _)| *name)
+        .collect::<Vec<_>>()
+        .join(", ");
     match agents {
         Some(content) => {
             fs::write(&agents_path, content)
                 .with_context(|| format!("could not write {}", agents_path.display()))?;
             if existing.is_none() {
-                println!("  ✓ AGENTS.md created");
+                let detail = if sections.is_empty() {
+                    "created".to_owned()
+                } else {
+                    format!("created with {sections}")
+                };
+                out.row(Mark::Ok, "AGENTS.md", detail);
             } else {
+                let mut notes = Vec::new();
                 if !outcome.appended.is_empty() {
-                    println!("  ✓ AGENTS.md: appended {}", outcome.appended.join(", "));
+                    notes.push(format!("added {}", outcome.appended.join(", ")));
                 }
                 if !outcome.refreshed.is_empty() {
-                    println!(
-                        "  ✓ AGENTS.md: refreshed {} from the published templates",
-                        outcome.refreshed.join(", ")
-                    );
+                    notes.push(format!("refreshed {}", outcome.refreshed.join(", ")));
                 }
+                if !outcome.removed.is_empty() {
+                    notes.push(format!("removed retired {}", outcome.removed.join(", ")));
+                }
+                out.row(Mark::Ok, "AGENTS.md", notes.join(" · "));
             }
         }
-        None => println!("  ✓ AGENTS.md is current"),
+        None => out.row(Mark::Ok, "AGENTS.md", "already current"),
     }
     for name in &outcome.kept_edited {
-        println!(
-            "  ! AGENTS.md: section {name} was edited inside its fence — kept your version \
-             (the published template has moved; --force rewrites everything)"
-        );
-    }
-    if !outcome.removed.is_empty() {
-        println!(
-            "  ✓ AGENTS.md: removed retired {} section",
-            outcome.removed.join(", ")
+        out.row(
+            Mark::Off,
+            "AGENTS.md",
+            format!("kept your edited {name} section (the template moved; --force rewrites)"),
         );
     }
 
@@ -291,33 +303,46 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         Err(_) => {
             fs::write(&claude_path, "@AGENTS.md\n")
                 .with_context(|| format!("could not write {}", claude_path.display()))?;
-            println!("  ✓ CLAUDE.md (points at AGENTS.md)");
+            out.row(Mark::Ok, "CLAUDE.md", "created, points at AGENTS.md");
         }
         Ok(content) if content.trim() == "@AGENTS.md" => {
-            println!("  ✓ CLAUDE.md already points at AGENTS.md");
+            out.row(Mark::Ok, "CLAUDE.md", "already points at AGENTS.md");
         }
         Ok(_) if options.force => {
             fs::write(&claude_path, "@AGENTS.md\n")?;
-            println!("  ✓ CLAUDE.md rewritten to point at AGENTS.md (--force)");
+            out.row(Mark::Ok, "CLAUDE.md", "rewritten to point at AGENTS.md");
         }
         Ok(_) => {
-            println!(
-                "  ! CLAUDE.md exists with its own content — leaving it; consider moving it into AGENTS.md and keeping just `@AGENTS.md` (or rerun with --force)"
-            );
+            out.row(Mark::Off, "CLAUDE.md", "has its own content; left alone");
+            out.note("move it into AGENTS.md and keep just `@AGENTS.md`, or rerun with --force");
         }
     }
 
     if features.codegraph {
         setup_codegraph(system)?;
+        out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
     }
 
-    if let Err(error) = register_project(&home, &project) {
-        eprintln!("  ! could not register the project for sync: {error}");
-    } else {
-        println!("  ✓ registered for `loom sync`");
+    match register_project(&home, &project) {
+        Ok(()) => out.row(
+            Mark::Ok,
+            "Sync",
+            "registered; `loom update` refreshes the templates",
+        ),
+        Err(error) => {
+            ok = false;
+            out.row(
+                Mark::Bad,
+                "Sync",
+                format!("could not register the project: {error}"),
+            );
+        }
     }
-
-    Ok(true)
+    out.verdict(ok, if ok { "Done" } else { "Done with problems" });
+    if existing.is_none() {
+        out.next("open AGENTS.md and fill in the project section");
+    }
+    Ok(ok)
 }
 
 /// What happened to each managed fence during a render.
@@ -451,20 +476,38 @@ fn register_project(home: &Path, project: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The outcome of a sync: one summary line plus one note per project.
+pub struct SyncReport {
+    pub ok: bool,
+    pub summary: String,
+    pub notes: Vec<String>,
+}
+
+impl SyncReport {
+    fn failed(summary: impl Into<String>) -> Self {
+        Self {
+            ok: false,
+            summary: summary.into(),
+            notes: Vec::new(),
+        }
+    }
+}
+
 /// Refresh every registered project's AGENTS.md from the published
 /// templates: pristine fences update, edited fences are kept and named,
 /// nothing outside a fence is touched, and no new sections are added —
-/// section choices stay with `init` in the project. Returns (ok, report).
-pub fn sync_projects(system: &dyn System) -> (bool, String) {
+/// section choices stay with `init` in the project.
+pub fn sync_projects(system: &dyn System) -> SyncReport {
     let Some(home) = system.home_dir() else {
-        return (
-            false,
-            "  ! Project AGENTS.md: home directory is unavailable".into(),
-        );
+        return SyncReport::failed("home directory is unavailable");
     };
     let projects = read_registry(&home);
     if projects.is_empty() {
-        return (true, "  ✓ Project AGENTS.md (none registered)".into());
+        return SyncReport {
+            ok: true,
+            summary: "no projects registered; `loom init` adds one".into(),
+            notes: Vec::new(),
+        };
     }
 
     let staging = home.join(".cache").join("loom").join("sync-staging");
@@ -482,16 +525,17 @@ pub fn sync_projects(system: &dyn System) -> (bool, String) {
     let _ = fs::remove_dir_all(&staging);
     let (base, sections) = match templates {
         Ok(templates) => templates,
-        Err(message) => return (false, format!("  ! Project AGENTS.md: {message}")),
+        Err(message) => return SyncReport::failed(message),
     };
 
-    let mut report = String::from("  ✓ Project AGENTS.md files");
+    let mut notes = Vec::new();
     let mut ok = true;
     let mut surviving = Vec::new();
     for project in &projects {
         let agents_path = Path::new(project).join("AGENTS.md");
+        let shown = tidy_path(Path::new(project), &home);
         let Ok(existing) = fs::read_to_string(&agents_path) else {
-            report.push_str(&format!("\n      {project}: gone, unregistered"));
+            notes.push(format!("{shown}  gone, unregistered"));
             continue;
         };
         surviving.push(project.clone());
@@ -504,30 +548,34 @@ pub fn sync_projects(system: &dyn System) -> (bool, String) {
         let (updated, outcome) = render_agents(Some(&existing), &base, &chosen, false);
         if let Some(content) = updated {
             if let Err(error) = fs::write(&agents_path, content) {
-                report.push_str(&format!("\n      {project}: write failed: {error}"));
+                notes.push(format!("{shown}  write failed: {error}"));
                 ok = false;
                 continue;
             }
         }
-        let mut notes = Vec::new();
+        let mut changes = Vec::new();
         if !outcome.refreshed.is_empty() {
-            notes.push(format!("refreshed {}", outcome.refreshed.join(", ")));
+            changes.push(format!("refreshed {}", outcome.refreshed.join(", ")));
         }
         if !outcome.kept_edited.is_empty() {
-            notes.push(format!("kept edited {}", outcome.kept_edited.join(", ")));
+            changes.push(format!("kept edited {}", outcome.kept_edited.join(", ")));
         }
         if !outcome.removed.is_empty() {
-            notes.push(format!("removed retired {}", outcome.removed.join(", ")));
+            changes.push(format!("removed retired {}", outcome.removed.join(", ")));
         }
-        if notes.is_empty() {
-            notes.push("current".into());
+        if changes.is_empty() {
+            changes.push("current".into());
         }
-        report.push_str(&format!("\n      {project}: {}", notes.join(" · ")));
+        notes.push(format!("{shown}  {}", changes.join(" · ")));
     }
     if surviving.len() != projects.len() {
         let _ = write_registry(&home, &surviving);
     }
-    (ok, report)
+    SyncReport {
+        ok,
+        summary: format!("{} project AGENTS.md files", surviving.len()),
+        notes,
+    }
 }
 
 #[cfg(test)]

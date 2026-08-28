@@ -8,7 +8,7 @@ pub mod settings;
 mod skills;
 pub mod status;
 mod system;
-mod ui;
+pub mod ui;
 pub mod update;
 pub mod wizard;
 

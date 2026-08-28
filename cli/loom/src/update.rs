@@ -1,20 +1,52 @@
+use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, Catalog, CommandSpec, NodeStatus, ResourceKind, System};
 
 /// One independent update lane; lanes run concurrently and report whole
-/// blocks of output so nothing interleaves.
-struct UpdateTask {
+/// blocks so nothing interleaves.
+pub struct Lane {
+    pub ok: bool,
+    pub label: &'static str,
+    pub detail: String,
+    pub notes: Vec<String>,
+}
+
+impl Lane {
+    fn ok(label: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            ok: true,
+            label,
+            detail: detail.into(),
+            notes: Vec::new(),
+        }
+    }
+
+    fn failed(label: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            ok: false,
+            label,
+            detail: detail.into(),
+            notes: Vec::new(),
+        }
+    }
+}
+
+struct CommandLane {
     label: &'static str,
+    detail: String,
     commands: Vec<CommandSpec>,
 }
 
 pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
+    let out = Out::detect();
+    out.title("update", concat!("v", env!("CARGO_PKG_VERSION")));
+
     // Warn-only: loom never installs or updates Node itself, but a Node
     // below Pi's floor is worth flagging before Pi's own update runs. A
     // missing Node stays silent here — there is nothing installed to age.
     let node = NodeStatus::detect(system);
     if matches!(node, NodeStatus::TooOld(..)) {
         if let Some(warning) = node.warning() {
-            eprintln!("  ! {warning}");
+            out.row(Mark::Bad, "Node", warning);
         }
     }
 
@@ -44,15 +76,17 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             })
             .collect::<Vec<_>>();
         if !commands.is_empty() {
-            tasks.push(UpdateTask {
-                label: "Pi packages (pinned)",
+            tasks.push(CommandLane {
+                label: "Pi packages",
+                detail: format!("{} pinned", commands.len()),
                 commands,
             });
         }
     }
     if system.command_exists("herdr") {
-        tasks.push(UpdateTask {
-            label: "Herdr and Herdr plugins",
+        tasks.push(CommandLane {
+            label: "Herdr",
+            detail: "herdr and its plugins".into(),
             commands: vec![
                 CommandSpec::new("herdr", ["update"]),
                 CommandSpec::new("herdr", ["plugin", "update", "--all"]),
@@ -63,115 +97,129 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     // Loom is only ever installed through mise, so a missing mise means the
     // bootstrap was undone; point back at it instead of self-updating.
     let mise = crate::manifest::mise_available(system);
-    if !mise {
-        eprintln!("  ! mise is not on PATH; rerun the installer from the README to restore it");
-    }
 
-    // Skills, Pi, Herdr, and the tool manifest touch
-    // disjoint state, so all lanes run concurrently; each lane prints once,
-    // when it finishes.
-    let lanes = ["Shared skills", "Project AGENTS.md files"]
-        .into_iter()
-        .chain(mise.then_some("Tool manifest (mise)"))
-        .chain(tasks.iter().map(|task| task.label))
-        .collect::<Vec<_>>()
-        .join(", ");
-    println!("Updating in parallel: {lanes}...");
-    let mut ready = true;
-    let (line_sender, lines) = std::sync::mpsc::channel::<(bool, String)>();
+    // Skills, projects, tools, Pi, and Herdr touch disjoint state, so every
+    // lane runs at once; rows print in a fixed order once all are done.
+    let mut jobs: Vec<Box<dyn FnOnce() -> Lane + Send + '_>> = vec![
+        Box::new(move || update_installed_skills(system, catalog)),
+        Box::new(move || sync_projects_lane(system)),
+    ];
+    if mise {
+        jobs.push(Box::new(move || sync_tool_manifest(system)));
+    } else {
+        jobs.push(Box::new(|| {
+            Lane::failed(
+                "Tools",
+                "mise is not on PATH; rerun the installer from the README",
+            )
+        }));
+    }
+    for task in tasks {
+        jobs.push(Box::new(move || run_command_lane(system, task)));
+    }
+    let (sender, results) = std::sync::mpsc::channel::<(usize, Lane)>();
     std::thread::scope(|scope| {
-        {
-            let line_sender = line_sender.clone();
+        for (index, job) in jobs.into_iter().enumerate() {
+            let sender = sender.clone();
             scope.spawn(move || {
-                let _ = line_sender.send(update_installed_skills(system, catalog));
+                let _ = sender.send((index, job()));
             });
-        }
-        {
-            let line_sender = line_sender.clone();
-            scope.spawn(move || {
-                let _ = line_sender.send(crate::init::sync_projects(system));
-            });
-        }
-        if mise {
-            let line_sender = line_sender.clone();
-            scope.spawn(move || {
-                let _ = line_sender.send(sync_tool_manifest(system));
-            });
-        }
-        for task in &tasks {
-            let line_sender = line_sender.clone();
-            scope.spawn(move || {
-                let _ = line_sender.send(run_update_task(system, task));
-            });
-        }
-        drop(line_sender);
-        for (ok, block) in lines {
-            ready &= ok;
-            if ok {
-                println!("{block}");
-            } else {
-                eprintln!("{block}");
-            }
         }
     });
-    ready
+    drop(sender);
+    let mut lanes = results.iter().collect::<Vec<_>>();
+    lanes.sort_by_key(|(index, _)| *index);
+
+    let mut failed = 0;
+    for (_, lane) in &lanes {
+        let mark = if lane.ok { Mark::Ok } else { Mark::Bad };
+        out.row(mark, lane.label, &lane.detail);
+        for note in &lane.notes {
+            out.note(note);
+        }
+        if !lane.ok {
+            failed += 1;
+        }
+    }
+    let updated = lanes.len() - failed;
+    if failed == 0 {
+        out.verdict(true, format!("Up to date · {updated} lanes refreshed"));
+    } else {
+        out.verdict(false, format!("{updated} refreshed · {failed} failed"));
+    }
+    failed == 0
 }
 
 /// Refresh mise's conf.d copy of the published manifest and install its pins.
 /// Tools move only when a new manifest landed on main since the last sync.
-fn sync_tool_manifest(system: &dyn System) -> (bool, String) {
+fn sync_tool_manifest(system: &dyn System) -> Lane {
     match crate::manifest::sync_and_install(system) {
-        Ok(target) => (
-            true,
-            format!("  ✓ Tool manifest (mise)\n      {}", target.display()),
-        ),
-        Err(message) => (false, format!("  ! Tool manifest (mise): {message}")),
+        Ok(target) => {
+            let home = system.home_dir().unwrap_or_default();
+            Lane::ok("Tools", tidy_path(&target, &home))
+        }
+        Err(message) => Lane::failed("Tools", message),
     }
 }
 
-fn run_update_task(system: &dyn System, task: &UpdateTask) -> (bool, String) {
+fn run_command_lane(system: &dyn System, task: CommandLane) -> Lane {
     for command in &task.commands {
         match system.run(command) {
             Ok(result) if result.success => {}
             Ok(result) => {
-                return (
-                    false,
+                return Lane::failed(
+                    task.label,
                     format!(
-                        "  ! {}: {}",
-                        task.label,
+                        "{} — {}",
+                        command.display(),
                         crate::install::command_failure_message(&result)
                     ),
                 );
             }
-            Err(error) => return (false, format!("  ! {}: {error}", task.label)),
+            Err(error) => {
+                return Lane::failed(task.label, format!("{}: {error}", command.display()))
+            }
         }
     }
-    (true, format!("  ✓ {}", task.label))
+    Lane::ok(task.label, task.detail)
 }
 
 /// Refresh catalog skills in the exact global and current-project trees where
 /// they already exist. Agent and scope choices remain stable across updates.
-fn update_installed_skills(system: &dyn System, catalog: &Catalog) -> (bool, String) {
+fn update_installed_skills(system: &dyn System, catalog: &Catalog) -> Lane {
     match skills::refresh_installed_skills(system, &catalog.resources) {
+        Ok(reports) if reports.is_empty() => Lane::ok("Skills", "none installed"),
         Ok(reports) => {
-            if reports.is_empty() {
-                return (true, "  ✓ Shared skills (none installed)".to_string());
-            }
-            let mut block = String::from("  ✓ Shared skills");
+            let home = system.home_dir().unwrap_or_default();
+            let total: usize = reports.iter().map(|report| report.installed).sum();
+            let mut lane = Lane::ok(
+                "Skills",
+                format!("{total} refreshed across {} trees", reports.len()),
+            );
             for report in reports {
                 let skipped = if report.skipped_symlinks.is_empty() {
                     String::new()
                 } else {
-                    format!(" ({} symlinked, left alone)", report.skipped_symlinks.len())
+                    format!(" · {} symlinked, left alone", report.skipped_symlinks.len())
                 };
-                block.push_str(&format!(
-                    "\n      {}: {} skills{skipped}",
-                    report.tree.display(),
+                lane.notes.push(format!(
+                    "{}  {}{skipped}",
+                    tidy_path(&report.tree, &home),
                     report.installed
                 ));
             }
-            (true, block)
+            lane
         }
-        Err(message) => (false, format!("  ! Shared skills: {message}")),
+        Err(message) => Lane::failed("Skills", message),
+    }
+}
+
+fn sync_projects_lane(system: &dyn System) -> Lane {
+    let sync = crate::init::sync_projects(system);
+    Lane {
+        ok: sync.ok,
+        label: "Projects",
+        detail: sync.summary,
+        notes: sync.notes,
     }
 }
