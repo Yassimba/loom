@@ -371,8 +371,11 @@ pub fn refresh_installed_skills(
             if installed.is_empty() {
                 return None;
             }
+            // Dependencies may name tools (a skill that drives a CLI); only
+            // skills are copied into a skill tree.
             let names = expand_skill_dependencies(resources, installed)
                 .into_iter()
+                .filter(|resource| resource.kind == ResourceKind::Skill)
                 .map(|resource| resource.install_target)
                 .collect::<Vec<_>>();
             Some((tree, names))

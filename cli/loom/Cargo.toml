@@ -10,6 +10,10 @@ repository = "https://github.com/Yassimba/loom"
 anyhow = "1"
 clap = { version = "4.5", features = ["derive", "string"] }
 clap_complete = "4.5"
+# ratatui's crossterm, with input read by polling /dev/tty instead of mio:
+# macOS kqueue cannot watch the /dev/tty device node, which is exactly what
+# stdin is after `curl … | sh` reattaches the terminal (`loom setup </dev/tty`).
+crossterm = { version = "0.28", features = ["use-dev-tty"] }
 dirs = "6"
 inquire = "0.7"
 nucleo-matcher = "0.3"

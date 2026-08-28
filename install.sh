@@ -96,9 +96,20 @@ fi
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 echo ""
-# The README pipes this script into sh, so stdin is the download pipe rather
-# than the user's terminal. Reconnect it before starting the interactive UI.
-if [ ! -t 0 ] && [ -t 1 ] && ( : </dev/tty ) 2>/dev/null; then
-  exec mise -C "$HOME" exec -- loom setup "$@" </dev/tty
+if [ -t 0 ]; then
+  exec mise -C "$HOME" exec -- loom setup "$@"
 fi
-exec mise -C "$HOME" exec -- loom setup "$@"
+# The README pipes this script into sh, so stdin is the download pipe rather
+# than the user's terminal. Reconnect it to the terminal device itself: the
+# pty behind stderr first (kqueue on macOS cannot poll the /dev/tty alias),
+# then /dev/tty. With no terminal at all, stop here and say what to run.
+terminal="$(tty 0<&2 2>/dev/null)" || terminal=""
+case "$terminal" in
+  /dev/*) ;;
+  *) if ( : </dev/tty ) 2>/dev/null; then terminal=/dev/tty; else terminal=""; fi ;;
+esac
+if [ -z "$terminal" ] || [ ! -t 1 ]; then
+  echo "$NAME: installed. Open a new shell and run: loom"
+  exit 0
+fi
+exec mise -C "$HOME" exec -- loom setup "$@" <"$terminal"

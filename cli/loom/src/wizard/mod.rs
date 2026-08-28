@@ -25,7 +25,7 @@ use std::time::Duration;
 pub fn run_wizard(model: Model, system: &(dyn System + Sync)) -> Result<WizardOutcome> {
     anyhow::ensure!(
         std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
-        "interactive setup needs a terminal; use --skill, --pi-package, or --herdr-plugin instead (skills also accept --agent and --scope)"
+        "interactive setup needs a terminal: open a new shell and run `loom setup`, or pass --skill, --pi-package, or --herdr-plugin (skills also accept --agent and --scope)"
     );
     let mut wizard = Wizard::new(model);
     wizard.probing = true;
@@ -34,7 +34,20 @@ pub fn run_wizard(model: Model, system: &(dyn System + Sync)) -> Result<WizardOu
     let outcome = run_loop(&mut terminal, &mut wizard, system);
     let _ = execute!(std::io::stdout(), DisableMouseCapture);
     ratatui::restore();
-    outcome
+    outcome.map_err(terminal_error)
+}
+
+/// crossterm's input-reader failure means the terminal could not be polled
+/// (a redirected stdin, a pane without a controlling terminal). Name the way
+/// out instead of echoing the library's internals.
+fn terminal_error(error: anyhow::Error) -> anyhow::Error {
+    if error.to_string().contains("input reader") {
+        anyhow::anyhow!(
+            "loom could not read your terminal. Open a new shell and run `loom setup` directly (not through a pipe)."
+        )
+    } else {
+        error
+    }
 }
 
 fn run_loop(
