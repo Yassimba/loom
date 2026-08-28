@@ -14,12 +14,11 @@ metadata:
 
 Create, manage, and maintain monitors for alerting.
 
-
 ## Prerequisites
+
 This requires the pup binary in your path.
 
 `pup` - `cargo install --git https://github.com/DataDog/pup`
-
 
 ## Quick Start
 
@@ -66,12 +65,12 @@ pup monitors update 12345 --file monitor-unmuted.json
 
 ### 1. Avoid Alert Fatigue
 
-| Rule | Why |
-|------|-----|
-| **No flapping alerts** | Use `last_Xm` not `last_1m` |
-| **Meaningful thresholds** | Based on SLOs, not guesses |
-| **Actionable alerts** | If no action needed, don't alert |
-| **Include runbook** | `@runbook-url` in message |
+| Rule                      | Why                              |
+| ------------------------- | -------------------------------- |
+| **No flapping alerts**    | Use `last_Xm` not `last_1m`      |
+| **Meaningful thresholds** | Based on SLOs, not guesses       |
+| **Actionable alerts**     | If no action needed, don't alert |
+| **Include runbook**       | `@runbook-url` in message        |
 
 ```python
 # WRONG - will flap constantly
@@ -135,11 +134,11 @@ def safe_mark_monitor_for_deletion(monitor_id: str, client) -> bool:
     """Mark monitor instead of deleting."""
     monitor = client.get_monitor(monitor_id)
     name = monitor.get("name", "")
-    
+
     if "[MARKED FOR DELETION]" in name:
         print(f"Already marked: {name}")
         return False
-    
+
     new_name = f"[MARKED FOR DELETION] {name}"
     client.update_monitor(monitor_id, {"name": new_name})
     print(f"✓ Marked: {new_name}")
@@ -148,15 +147,15 @@ def safe_mark_monitor_for_deletion(monitor_id: str, client) -> bool:
 
 ## Monitor Types
 
-| Type | Use Case |
-|------|----------|
-| `metric alert` | CPU, memory, custom metrics |
-| `query alert` | Complex metric queries |
-| `service check` | Agent check status |
-| `event alert` | Event stream patterns |
-| `log alert` | Log pattern matching |
-| `composite` | Combine multiple monitors |
-| `apm` | APM metrics |
+| Type            | Use Case                    |
+| --------------- | --------------------------- |
+| `metric alert`  | CPU, memory, custom metrics |
+| `query alert`   | Complex metric queries      |
+| `service check` | Agent check status          |
+| `event alert`   | Event stream patterns       |
+| `log alert`     | Log pattern matching        |
+| `composite`     | Combine multiple monitors   |
+| `apm`           | APM metrics                 |
 
 ## Audit Monitors
 
@@ -170,10 +169,10 @@ pup monitors list | jq 'sort_by(.overall_state_modified) | .[:10] | .[] | {id, n
 
 ## Downtime vs Muting
 
-| Use | When |
-|-----|------|
-| **Mute monitor** | Quick one-off, < 1 hour |
-| **Downtime** | Scheduled maintenance, recurring |
+| Use              | When                             |
+| ---------------- | -------------------------------- |
+| **Mute monitor** | Quick one-off, < 1 hour          |
+| **Downtime**     | Scheduled maintenance, recurring |
 
 ```bash
 # Downtime (preferred)
@@ -182,16 +181,15 @@ pup downtime create --file downtime.json
 
 ## Failure Handling
 
-| Problem | Fix |
-|---------|-----|
-| Alert not firing | Check query returns data, thresholds |
-| Too many alerts | Increase window, add recovery threshold |
-| No data alerts | Check agent connectivity, metric exists |
-| Auth error | `pup auth refresh` |
+| Problem          | Fix                                     |
+| ---------------- | --------------------------------------- |
+| Alert not firing | Check query returns data, thresholds    |
+| Too many alerts  | Increase window, add recovery threshold |
+| No data alerts   | Check agent connectivity, metric exists |
+| Auth error       | `pup auth refresh`                      |
 
 ## References
 
 - [Monitor Types](https://docs.datadoghq.com/monitors/types/)
 - [Alerting Best Practices](https://docs.datadoghq.com/monitors/guide/)
 - [SLO Monitors](https://docs.datadoghq.com/service_management/service_level_objectives/)
-

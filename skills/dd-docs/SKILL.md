@@ -22,6 +22,7 @@ https://docs.datadoghq.com/llms.txt
 ```
 
 This file contains:
+
 - Overview of all Datadog products organized by use case
 - Full list of documentation pages with URLs and descriptions
 - Direct links to Markdown sources (append `.md` to URLs)
@@ -29,6 +30,7 @@ This file contains:
 ### How to Use llms.txt
 
 1. **Fetch the index** to understand available documentation:
+
    ```bash
    curl -s https://docs.datadoghq.com/llms.txt | head -100
    ```
@@ -37,11 +39,11 @@ This file contains:
 
 Examples:
 
-   ```bash
-   curl -s https://docs.datadoghq.com/llms.txt | grep -i "monitors"
-   curl -s https://docs.datadoghq.com/llms.txt | grep -i "apm"
-   curl -s https://docs.datadoghq.com/llms.txt | grep -i "logs"
-   ```
+```bash
+curl -s https://docs.datadoghq.com/llms.txt | grep -i "monitors"
+curl -s https://docs.datadoghq.com/llms.txt | grep -i "apm"
+curl -s https://docs.datadoghq.com/llms.txt | grep -i "logs"
+```
 
 3. **Fetch specific doc pages** (add .md to most Datadog Docs URLs for raw content):
    ```bash
@@ -51,18 +53,18 @@ Examples:
 
 ### Key Documentation Sections
 
-| Topic | URL |
-|-------|-----|
-| APM/Tracing | https://docs.datadoghq.com/tracing/ |
-| Logs | https://docs.datadoghq.com/logs/ |
-| Metrics | https://docs.datadoghq.com/metrics/ |
-| Monitors | https://docs.datadoghq.com/monitors/ |
-| Dashboards | https://docs.datadoghq.com/dashboards/ |
-| Security | https://docs.datadoghq.com/security/ |
-| Synthetics | https://docs.datadoghq.com/synthetics/ |
-| RUM | https://docs.datadoghq.com/real_user_monitoring/ |
-| Incidents | https://docs.datadoghq.com/service_management/incident_management/ |
-| API Reference | https://docs.datadoghq.com/api/ |
+| Topic         | URL                                                                |
+| ------------- | ------------------------------------------------------------------ |
+| APM/Tracing   | https://docs.datadoghq.com/tracing/                                |
+| Logs          | https://docs.datadoghq.com/logs/                                   |
+| Metrics       | https://docs.datadoghq.com/metrics/                                |
+| Monitors      | https://docs.datadoghq.com/monitors/                               |
+| Dashboards    | https://docs.datadoghq.com/dashboards/                             |
+| Security      | https://docs.datadoghq.com/security/                               |
+| Synthetics    | https://docs.datadoghq.com/synthetics/                             |
+| RUM           | https://docs.datadoghq.com/real_user_monitoring/                   |
+| Incidents     | https://docs.datadoghq.com/service_management/incident_management/ |
+| API Reference | https://docs.datadoghq.com/api/                                    |
 
 ## Scope Guardrails
 

@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 Implement the work described by the user in the spec or tickets.
 
+Invoke /ponytail make sure to always try to reuse AS MUCH of the existing code as possible when designing the solution
+
 Before writing any code, use the blueprint skill to show what you intend to build and get approval. Skip only for trivial changes — a rename, a one-line fix.
 
 Use /tdd where possible, at pre-agreed seams. A ticket's "Rules & examples" map is the scenario list — one test per example.

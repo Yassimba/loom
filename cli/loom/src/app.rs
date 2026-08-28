@@ -1,4 +1,4 @@
-use crate::settings::{curated_settings, setting_state, SettingsPaths};
+use crate::settings::{apply_setting, curated_settings, setting_state, SettingSpec, SettingsPaths};
 use crate::ui::{confirm_plan, print_plan, Mark, Out};
 use crate::wizard::{run_wizard, Model, WizardOutcome};
 use crate::{
@@ -67,9 +67,12 @@ pub fn install_selected(
         return Ok(true);
     }
     let plan = build_install_plan(&resources, &[], status, platform, &destination)?;
+    let settings_paths = SettingsPaths::detect()?;
+    let related_settings = unapplied_related_settings(&resources, &settings_paths);
     let out = Out::detect();
     out.title("add", format!("{} item(s)", resources.len()));
     print_plan(&out, &plan);
+    print_settings_plan(&out, &related_settings, &settings_paths);
     if dry_run {
         out.verdict(true, "Dry run; no changes made");
         return Ok(true);
@@ -79,7 +82,8 @@ pub fn install_selected(
         return Ok(true);
     }
 
-    let report = execute_install_plan(&plan, system);
+    let mut report = execute_install_plan(&plan, system);
+    apply_related_settings(&related_settings, &settings_paths, &mut report);
     print_report(&out, catalog, &report);
     if let Some(next) = resources
         .iter()
@@ -228,13 +232,70 @@ pub(crate) fn detect_installed(
         .collect()
 }
 
+fn unapplied_related_settings(resources: &[Resource], paths: &SettingsPaths) -> Vec<SettingSpec> {
+    curated_settings()
+        .into_iter()
+        .filter(|setting| {
+            setting
+                .related_resource
+                .as_ref()
+                .is_some_and(|related| resources.iter().any(|resource| resource.id == *related))
+                && setting_state(setting, paths) == crate::settings::SettingState::NotApplied
+        })
+        .collect()
+}
+
+fn print_settings_plan(out: &Out, settings: &[SettingSpec], paths: &SettingsPaths) {
+    for setting in settings {
+        out.row(
+            Mark::Off,
+            "setting",
+            format!(
+                "{}: {}",
+                setting.target_path(paths).display(),
+                setting.change_summary().join(", ")
+            ),
+        );
+    }
+}
+
+fn apply_related_settings(
+    settings: &[SettingSpec],
+    paths: &SettingsPaths,
+    report: &mut InstallReport,
+) {
+    for setting in settings {
+        if !setting
+            .related_resource
+            .as_ref()
+            .is_some_and(|resource| report.installed.contains(resource))
+        {
+            continue;
+        }
+        match apply_setting(setting, paths) {
+            Ok(_) => report.installed.push(setting.id.clone()),
+            Err(error) => report.failures.push(crate::InstallFailure {
+                target: setting.id.clone(),
+                message: error.to_string(),
+            }),
+        }
+    }
+}
+
 fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
+    let settings = curated_settings();
     let label = |target: &str| {
         catalog
             .resources
             .iter()
             .find(|resource| resource.id == target)
             .map(|resource| resource.label.clone())
+            .or_else(|| {
+                settings
+                    .iter()
+                    .find(|setting| setting.id == target)
+                    .map(|setting| setting.label.clone())
+            })
             .unwrap_or_else(|| target.to_owned())
     };
     for target in &report.installed {
@@ -290,4 +351,48 @@ fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec<Res
 
 pub fn load_catalog() -> Result<Catalog> {
     Catalog::embedded().context("could not load the curated setup catalog")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sandbox_install_applies_its_defaults_after_package_success() {
+        let root = std::env::temp_dir().join(format!(
+            "loom-app-sandbox-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let paths = SettingsPaths {
+            herdr_config: root.join("herdr.toml"),
+            zed_settings: root.join("zed-settings.json"),
+            zed_keymap: root.join("zed-keymap.json"),
+            pi_fff_config: root.join("agent/pi-fff.json"),
+            pi_sandbox_config: root.join("agent/sandbox.json"),
+        };
+        let sandbox = Catalog::embedded()
+            .unwrap()
+            .resources
+            .into_iter()
+            .find(|resource| resource.id == "pi-package:pi-sandbox")
+            .unwrap();
+        let settings = unapplied_related_settings(&[sandbox], &paths);
+        let mut failed_report = InstallReport::default();
+        apply_related_settings(&settings, &paths, &mut failed_report);
+        assert!(!paths.pi_sandbox_config.exists());
+
+        let mut report = InstallReport {
+            installed: vec!["pi-package:pi-sandbox".into()],
+            failures: vec![],
+        };
+        apply_related_settings(&settings, &paths, &mut report);
+
+        assert!(paths.pi_sandbox_config.is_file());
+        assert!(report.installed.contains(&"pi:sandbox-defaults".into()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

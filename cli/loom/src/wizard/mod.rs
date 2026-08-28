@@ -121,6 +121,20 @@ fn run_install_job(
     });
     for (offset, spec) in job.settings.iter().enumerate() {
         let index = plan_steps + offset;
+        let related_install_failed = spec.related_resource.as_ref().is_some_and(|related| {
+            job.plan
+                .resources
+                .iter()
+                .any(|step| step.target == *related)
+                && !report.installed.contains(related)
+        });
+        if related_install_failed {
+            let _ = sender.send(InstallEvent::Status(
+                index,
+                ExecStatus::Skipped("related package failed".into()),
+            ));
+            continue;
+        }
         let _ = sender.send(InstallEvent::Status(index, ExecStatus::Running));
         let status = match apply_setting(spec, &job.paths) {
             Ok(true) => {

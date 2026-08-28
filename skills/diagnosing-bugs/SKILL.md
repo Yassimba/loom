@@ -113,6 +113,8 @@ A correct seam is one where the test exercises the **real bug pattern** as it oc
 
 **If no correct seam exists, that itself is the finding.** Note it. The codebase architecture is preventing the bug from being locked down. Flag this for the next phase.
 
+Important is to always try fix as close the the source of the problem as possible. Fixing it early inside the abstraction makes sure other features are also fixed by design.
+
 If a correct seam exists:
 
 1. Turn the minimised repro into a failing test at that seam.
