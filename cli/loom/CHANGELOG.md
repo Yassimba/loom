@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/Yassimba/loom/compare/loom-v0.11.0...loom-v0.12.0) (2026-08-28)
+
+
+### Features
+
+* loom-teams CLI, release-please pipeline, catalog reshape ([548af3c](https://github.com/Yassimba/loom/commit/548af3c61a7ddd01aeb8d8454179cc9abbaed22f))
+* next version of my skills slowly going to consolidate on a single approach for reviews ([ccf55dc](https://github.com/Yassimba/loom/commit/ccf55dc786c366888e71ab8bc6cc7733f9c0481e))
+* **skills:** reshape the catalog around research, codegraph, and annotate ([40a7502](https://github.com/Yassimba/loom/commit/40a7502fa521507d94b96be8d99080a313970807))
+* **skills:** reshape the skill catalog and fork plannotator ([687c820](https://github.com/Yassimba/loom/commit/687c820b9e1280b0e924de105d6197013fd5a6df))
+
+
+### Bug Fixes
+
+* **loom:** satisfy clippy manual_slice_fill in preset reset ([17a89e2](https://github.com/Yassimba/loom/commit/17a89e2473ea1a2161fdef709ccedaae335b114a))
+
 ## [0.11.0] - 2026-08-15
 
 ## [0.10.1] - 2026-08-08
