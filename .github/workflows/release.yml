@@ -1,8 +1,8 @@
 name: Release
 
-# release-please keeps one PR per changed component (version bump, changelog,
-# manifest pin). Merging it tags `<component>-vX.Y.Z`; the jobs below then
-# upload the Rust binaries and publish the npm package for that tag.
+# release-please keeps one PR per changed component (version bump, changelog).
+# Merging it tags `<component>-vX.Y.Z`; the jobs below upload the Rust
+# binaries, move the manifest pin to the new tag, and publish npm.
 
 on:
   push:
@@ -89,9 +89,29 @@ jobs:
       - run: npm ci
       - run: npm publish ./plugins/openai-fast --access public --provenance
 
-  # Smoke the real installers on every platform against the freshly
-  # published binaries; skipped when nothing was released.
-  full-install:
+  # Only after every asset is up: point the published manifest at the new
+  # tags, so `loom update` and fresh installs never see a release without
+  # binaries.
+  pin:
     needs: [release-please, binaries]
-    if: needs.release-please.outputs.released == 'true' && !cancelled() && needs.binaries.result != 'failure'
+    if: needs.binaries.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: main
+      - env:
+          MATRIX: ${{ needs.release-please.outputs.binaries }}
+        run: |
+          jq -r '.[] | "\(.crate) \(.tag)"' <<<"$MATRIX" | sort -u | while read -r crate tag; do
+            sed -i "s|^\(\"github:Yassimba/loom\[exe=$crate\]\" = { version = \"\)[^\"]*|\1$tag|" manifest/loom.toml
+          done
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -am "chore(manifest): pin released binaries" && git push
+
+  # Smoke the real installers on every platform against the freshly
+  # published binaries and pins.
+  full-install:
+    needs: pin
     uses: ./.github/workflows/full-install.yml
