@@ -142,31 +142,63 @@ fn press(wizard: &mut Wizard, codes: &[KeyCode]) -> Option<Action> {
     action
 }
 
-fn rows(wizard: &Wizard) -> Vec<Row> {
+fn choose(wizard: &Wizard) -> &ChooseStage {
     match &wizard.stages[0] {
-        Stage::Choose(stage) => stage.rows.clone(),
+        Stage::Choose(stage) => stage,
         _ => unreachable!(),
     }
 }
 
+fn group_titles(wizard: &Wizard) -> Vec<String> {
+    choose(wizard)
+        .groups
+        .iter()
+        .map(|group| group.title.clone())
+        .collect()
+}
+
+fn current_row(wizard: &Wizard) -> Row {
+    choose(wizard).row().cloned().unwrap()
+}
+
 fn cursor(wizard: &Wizard) -> usize {
     match &wizard.stages[wizard.stage_index] {
-        Stage::Choose(stage) => stage.cursor,
+        Stage::Choose(stage) => stage.item_cursor,
         Stage::Where(stage) => stage.cursor,
         _ => unreachable!(),
     }
 }
 
-fn row_of(wizard: &Wizard, row: Row) -> usize {
-    rows(wizard).iter().position(|r| *r == row).unwrap()
+/// Park the Choose cursor on a row, using only the keys a user has.
+fn go_to(wizard: &mut Wizard, row: Row) {
+    let (group, index) = choose(wizard)
+        .groups
+        .iter()
+        .enumerate()
+        .find_map(|(g, candidate)| {
+            candidate
+                .rows
+                .iter()
+                .position(|r| *r == row)
+                .map(|i| (g, i))
+        })
+        .unwrap();
+    press(wizard, &[KeyCode::Left, KeyCode::Home]);
+    press(wizard, &vec![KeyCode::Down; group]);
+    press(wizard, &[KeyCode::Right, KeyCode::Home]);
+    press(wizard, &vec![KeyCode::Down; index]);
+    assert_eq!(current_row(wizard), row);
 }
 
-/// Park the Choose cursor on a row.
-fn go_to(wizard: &mut Wizard, row: Row) {
-    let target = row_of(wizard, row);
-    press(wizard, &[KeyCode::Home]);
-    press(wizard, &vec![KeyCode::Down; target]);
-    assert_eq!(cursor(wizard), target);
+/// Park the groups-column cursor on a titled group.
+fn go_to_group(wizard: &mut Wizard, title: &str) {
+    let group = group_titles(wizard)
+        .iter()
+        .position(|candidate| candidate == title)
+        .unwrap();
+    press(wizard, &[KeyCode::Left, KeyCode::Home]);
+    press(wizard, &vec![KeyCode::Down; group]);
+    assert_eq!(choose(wizard).group().title, title);
 }
 
 fn title(wizard: &Wizard) -> &'static str {
@@ -176,17 +208,10 @@ fn title(wizard: &Wizard) -> &'static str {
 #[test]
 fn choose_lists_bundles_then_groups_in_catalog_order() {
     let wizard = wizard();
-    let headers = rows(&wizard)
-        .iter()
-        .filter_map(|row| match row {
-            Row::Header { title, .. } => Some(title.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
     assert_eq!(
-        headers,
+        group_titles(&wizard),
         [
-            "Start with a bundle",
+            "Bundles",
             "Skills · Coding",
             "Skills · Diagrams",
             "Tools",
@@ -197,15 +222,16 @@ fn choose_lists_bundles_then_groups_in_catalog_order() {
         ]
     );
     assert_eq!(
-        rows(&wizard)[1..4],
+        choose(&wizard).groups[0].rows,
         [
             Row::Preset(Preset::Everything),
             Row::Preset(Preset::Catalog(0)),
             Row::Preset(Preset::Clear)
         ]
     );
-    // The cursor starts on the first pickable thing, not on a header.
-    assert_eq!(rows(&wizard)[cursor(&wizard)], Row::Resource(3));
+    // The cursor starts in the items column of the first real group.
+    assert_eq!(choose(&wizard).focus, Pane::Items);
+    assert_eq!(current_row(&wizard), Row::Resource(3));
 }
 
 #[test]
@@ -244,36 +270,30 @@ fn space_picks_and_steps_down() {
 }
 
 #[test]
-fn space_on_a_group_header_toggles_the_group() {
+fn space_in_the_groups_column_toggles_the_whole_group() {
     let mut wizard = wizard();
-    let header = rows(&wizard)
-        .into_iter()
-        .find(|row| matches!(row, Row::Header { title, .. } if title == "Skills · Coding"))
-        .unwrap();
-    go_to(&mut wizard, header.clone());
+    go_to_group(&mut wizard, "Skills · Coding");
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert_eq!(&wizard.selected[3..6], [true, true, false]);
-    // The header stays put so a second space clears the group.
-    assert_eq!(rows(&wizard)[cursor(&wizard)], header);
+    // The cursor stays on the group so a second space clears it.
+    assert_eq!(choose(&wizard).focus, Pane::Groups);
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert_eq!(&wizard.selected[3..6], [false, false, false]);
 }
 
 #[test]
-fn tab_jumps_between_group_headers() {
+fn arrows_move_between_columns_and_down_changes_the_group() {
     let mut wizard = wizard();
-    press(&mut wizard, &[KeyCode::Home, KeyCode::Tab]);
-    assert!(
-        matches!(rows(&wizard)[cursor(&wizard)], Row::Header { ref title, .. } if title == "Skills · Coding")
-    );
+    press(&mut wizard, &[KeyCode::Left]);
+    assert_eq!(choose(&wizard).focus, Pane::Groups);
+    press(&mut wizard, &[KeyCode::Down]);
+    assert_eq!(choose(&wizard).group().title, "Skills · Diagrams");
+    assert_eq!(cursor(&wizard), 0, "a new group starts at its first row");
+    press(&mut wizard, &[KeyCode::Right]);
+    assert_eq!(choose(&wizard).focus, Pane::Items);
+    assert_eq!(current_row(&wizard), Row::Resource(5));
     press(&mut wizard, &[KeyCode::Tab]);
-    assert!(
-        matches!(rows(&wizard)[cursor(&wizard)], Row::Header { ref title, .. } if title == "Skills · Diagrams")
-    );
-    press(&mut wizard, &[KeyCode::BackTab]);
-    assert!(
-        matches!(rows(&wizard)[cursor(&wizard)], Row::Header { ref title, .. } if title == "Skills · Coding")
-    );
+    assert_eq!(choose(&wizard).focus, Pane::Groups);
 }
 
 #[test]
@@ -313,14 +333,11 @@ fn installed_resources_show_but_cannot_be_picked() {
     go_to(&mut wizard, Row::Resource(0));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(!wizard.selected[0]);
-    let header = rows(&wizard)
-        .into_iter()
-        .find(|row| matches!(row, Row::Header { title, .. } if title == "Pi packages"))
-        .unwrap();
-    let Row::Header { items, .. } = &header else {
-        unreachable!()
-    };
-    assert_eq!(wizard.group_counts(items), (0, 1));
+    go_to_group(&mut wizard, "Pi packages");
+    assert_eq!(
+        wizard.group_counts(&choose(&wizard).group().items()),
+        (0, 1)
+    );
 }
 
 #[test]
@@ -499,7 +516,7 @@ fn install_events_drive_the_install_screen_to_completion() {
 
 #[test]
 fn quitting_with_picks_asks_first_and_esc_on_choose_quits() {
-    let mut empty = wizard();
+    let mut empty = Wizard::new(model(ready()));
     assert!(matches!(
         press(&mut empty, &[KeyCode::Esc]),
         Some(Action::Exit(WizardOutcome::Cancelled))
@@ -528,10 +545,10 @@ fn search_filters_picks_and_lands_the_cursor() {
     let matches = wizard.search_matches();
     let labels = matches
         .iter()
-        .map(|&row| match rows(&wizard)[row] {
+        .map(|&hit| match wizard.search_row(hit) {
             Row::Resource(index) => wizard.model.resources[index].label.clone(),
             Row::Setting(index) => wizard.model.settings[index].label.clone(),
-            _ => unreachable!(),
+            Row::Preset(_) => unreachable!(),
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -543,7 +560,8 @@ fn search_filters_picks_and_lands_the_cursor() {
     assert!(wizard.selected[5]);
     press(&mut wizard, &[KeyCode::Up, KeyCode::Enter]);
     assert!(wizard.search.is_none());
-    assert_eq!(rows(&wizard)[cursor(&wizard)], Row::Resource(5));
+    assert_eq!(current_row(&wizard), Row::Resource(5));
+    assert_eq!(choose(&wizard).group().title, "Skills · Diagrams");
 }
 
 #[test]
@@ -551,9 +569,16 @@ fn clicking_a_row_toggles_it() {
     let mut wizard = wizard();
     let mut terminal = Terminal::new(TestBackend::new(110, 30)).unwrap();
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    // Click the Tools group, then its first row.
+    let (groups, _) = wizard.hits.groups.unwrap();
+    let tools = group_titles(&wizard)
+        .iter()
+        .position(|title| title == "Tools")
+        .unwrap() as u16;
+    wizard.handle_click(groups.x + 3, groups.y + 1 + tools);
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
     let (area, _) = wizard.hits.list.unwrap();
-    let target = row_of(&wizard, Row::Resource(6)) as u16;
-    wizard.handle_click(area.x + 3, area.y + 1 + target);
+    wizard.handle_click(area.x + 3, area.y + 1);
     assert!(wizard.selected[6]);
 }
 

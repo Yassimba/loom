@@ -100,8 +100,8 @@ impl System for OverlapSystem {
 fn independent_manager_lanes_start_before_either_finishes() {
     let plan = InstallPlan {
         prerequisites: vec![
-            step("MISE", "mise", "install-mise"),
-            step("HERDR", "herdr", "install-herdr"),
+            step("mise", "mise", "install-mise"),
+            step("Herdr", "herdr", "install-herdr"),
         ],
         resources: Vec::new(),
     };
@@ -229,7 +229,7 @@ fn pi_packages_wait_when_mise_is_installing_pi() {
 fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
     let plan = InstallPlan {
         prerequisites: vec![InstallStep {
-            target: "HERDR".into(),
+            target: "Herdr".into(),
             manager: "herdr".into(),
             action: StepAction::Command(CommandSpec::new(
                 "sh",
@@ -250,10 +250,10 @@ fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
 
     assert_eq!(report.installed, vec!["pi-package:sample"]);
     assert_eq!(report.failures.len(), 2);
-    assert_eq!(report.failures[0].target, "HERDR");
+    assert_eq!(report.failures[0].target, "Herdr");
     assert_eq!(report.failures[0].message, "network unavailable");
     assert_eq!(report.failures[1].target, "herdr-plugin:jumplist");
-    assert_eq!(report.failures[1].message, "HERDR is unavailable");
+    assert_eq!(report.failures[1].message, "Herdr is unavailable");
     let mut commands = system.commands.into_inner().unwrap();
     commands.sort();
     assert_eq!(
@@ -284,7 +284,7 @@ impl System for HiddenCommandSystem {
 fn successful_bootstrap_must_make_its_manager_available() {
     let plan = InstallPlan {
         prerequisites: vec![InstallStep {
-            target: "HERDR".into(),
+            target: "Herdr".into(),
             manager: "herdr".into(),
             action: StepAction::Command(CommandSpec::new("sh", ["-c", "install herdr"])),
             verification: None,
@@ -295,12 +295,12 @@ fn successful_bootstrap_must_make_its_manager_available() {
     let report = execute_install_plan(&plan, &HiddenCommandSystem);
 
     assert!(report.installed.is_empty());
-    assert_eq!(report.failures[0].target, "HERDR");
+    assert_eq!(report.failures[0].target, "Herdr");
     assert_eq!(
         report.failures[0].message,
         "installer completed, but herdr is still unavailable on PATH"
     );
-    assert_eq!(report.failures[1].message, "HERDR is unavailable");
+    assert_eq!(report.failures[1].message, "Herdr is unavailable");
 }
 
 /// Fakes curl and tar with filesystem side effects, so the native skill
