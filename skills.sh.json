@@ -64,7 +64,7 @@
     {
       "title": "Presentations",
       "description": "Build slide decks in Marp markdown or PowerPoint.",
-      "skills": ["marp-slide", "pptx"]
+      "skills": ["frontend-slides", "marp-slide", "pptx"]
     },
     {
       "title": "Observability",

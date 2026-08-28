@@ -388,10 +388,10 @@
       "kind": "skill",
       "group": "Architecture",
       "label": "explain-code-flow",
-      "description": "Architecture walkthrough: explain how a feature works in the current codebase with brief context, ASCII diagrams, runtime dataflow, and file:line anchors. Use when the user asks for a big-picture explanation, architecture map, or end-to-end feature flow.",
+      "description": "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose, opened in Plannotator for annotation. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions.",
       "installTarget": "explain-code-flow",
       "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
-      "dependencies": ["writing-clearly-and-concisely"]
+      "dependencies": ["writing-clearly-and-concisely", "diagram-design", "plannotator"]
     },
     {
       "id": "skill:improve-codebase-architecture",
@@ -418,7 +418,7 @@
       "kind": "skill",
       "group": "Architecture",
       "label": "show-me",
-      "description": "Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (Mermaid), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.",
+      "description": "Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (ASCII box diagram), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.",
       "installTarget": "show-me",
       "nextAction": "Ask your coding agent to use the show-me skill.",
       "dependencies": ["writing-clearly-and-concisely"]
@@ -452,6 +452,16 @@
       "installTarget": "diagram-design",
       "nextAction": "Ask your coding agent to use the diagram-design skill.",
       "dependencies": []
+    },
+    {
+      "id": "skill:frontend-slides",
+      "kind": "skill",
+      "group": "Presentations",
+      "label": "frontend-slides",
+      "description": "Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch. Helps non-designers discover their aesthetic through visual exploration rather than abstract choices.",
+      "installTarget": "frontend-slides",
+      "nextAction": "Ask your coding agent to use the frontend-slides skill.",
+      "dependencies": ["diagram-design", "stop-the-slop"]
     },
     {
       "id": "skill:marp-slide",
