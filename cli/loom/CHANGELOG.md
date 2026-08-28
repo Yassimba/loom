@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/Yassimba/loom/compare/loom-v0.13.0...loom-v0.13.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **loom:** survive a piped install and stop copying tool pins into skill trees ([946ce05](https://github.com/Yassimba/loom/commit/946ce05aeebb5c15dcbd774495d47112c303c2e7))
+
 ## [0.13.0](https://github.com/Yassimba/loom/compare/loom-v0.12.0...loom-v0.13.0) (2026-08-28)
 
 
