@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "resources": [
     {
-      "id": "pi-package:pi-claude-bridge",
+      "id": "pi-package:@gotgenes/pi-anthropic-auth",
       "kind": "pi-package",
       "group": "Pi packages",
-      "label": "claude-bridge",
-      "description": "Use Claude models inside Pi through your Claude subscription. By elidickinson.",
-      "installTarget": "pi-claude-bridge",
-      "version": "0.7.0",
+      "label": "anthropic-auth",
+      "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
+      "installTarget": "@gotgenes/pi-anthropic-auth",
+      "version": "2.0.6",
       "nextAction": "Run /model in Pi and pick a Claude model."
     },
     {

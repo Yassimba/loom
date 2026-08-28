@@ -9,7 +9,7 @@ Loom weaves a coding-agent setup into one installable collection: 50+ skills, Pi
 **Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
 - [**openai-fast**](plugins/openai-fast/) — turn on OpenAI fast mode (the priority service tier) from inside Pi.
-- **subagents**, **web-access**, **rewind**, **claude-bridge** — installed straight from their upstream npm packages, [exact-pinned](manifest/pi-packages.json) so they update only when this repo bumps the pin.
+- **subagents**, **web-access**, **rewind**, **anthropic-auth** — installed straight from their upstream npm packages, [exact-pinned](manifest/pi-packages.json) so they update only when this repo bumps the pin.
 
 ## The engineering flow
 
@@ -102,7 +102,7 @@ pi install npm:@yassimba/pi-openai-fast
 pi install npm:pi-subagents
 pi install npm:pi-web-access
 pi install npm:pi-rewind-hook
-pi install npm:pi-claude-bridge
+pi install npm:@gotgenes/pi-anthropic-auth
 ```
 
 See the package README under [`plugins/`](plugins/) for its commands and configuration.
@@ -153,7 +153,7 @@ This repo builds on other people's work:
 - The [i-have-adhd](skills/i-have-adhd/SKILL.md) skill is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` (MIT).
 - The three [Ponytail](skills/ponytail/SKILL.md) skills (ponytail, ponytail-review, ponytail-audit) are from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 (MIT).
 - The [Diagram Design](skills/diagram-design/SKILL.md) skill is from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.7 at `ac490fd` (MIT; bundled icon notices included).
-- subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); claude-bridge is [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge). All install pinned from upstream npm.
+- subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); anthropic-auth is [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth). All install pinned from upstream npm.
 
 Each package's README and `THIRD_PARTY_NOTICES.md` record the exact upstream version. Thanks, all.
 
