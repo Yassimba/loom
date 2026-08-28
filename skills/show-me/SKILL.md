@@ -1,6 +1,6 @@
 ---
 name: show-me
-description: Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (Mermaid), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.
+description: Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (ASCII box diagram), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.
 ---
 
 # Show Me
@@ -15,7 +15,7 @@ description: Draw the current topic — the shape of code (pseudocode, call tree
 | UI structure, with the state and module boundaries       | component tree                            |
 | File responsibility or a broad refactor                  | shallow file tree                         |
 | What changes, when the surrounding shape exists          | the same shape in a `diff` fence          |
-| Component interaction or data flow                       | Mermaid sequence or flowchart             |
+| Component interaction or data flow                       | ASCII box diagram or sequence             |
 | A call graph with the data on every hop                  | lineage — read `references/lineage.md`    |
 | A visual UI, layout, or state comparison                 | one HTML file — read `references/html.md` |
 | Most of it is new, or the reader needs a copyable target | the whole block                           |
@@ -74,16 +74,25 @@ Diff — any shape above, `+`/`-` on the lines that change, unchanged lines as c
 +    subscribe_to_events
 ```
 
-Mermaid:
+ASCII box diagram — components as boxes, labeled arrows for the flow:
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI
-    participant Daemon
-    User->>UI: choose command
-    UI->>Daemon: send expanded prompt
-    Daemon-->>UI: stream result
+```text
+┌──────┐  choose command   ┌────┐  send expanded prompt  ┌────────┐
+│ User │ ────────────────▶ │ UI │ ─────────────────────▶ │ Daemon │
+└──────┘                   └────┘ ◀╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ └────────┘
+                                       stream result
+```
+
+ASCII sequence — vertical lifelines when ordering over time is the point:
+
+```text
+User          UI            Daemon
+ │ choose cmd  │               │
+ │────────────▶│ expanded      │
+ │             │ prompt        │
+ │             │──────────────▶│
+ │             │◀╌╌╌╌╌╌╌╌╌╌╌╌╌╌│
+ │             │ stream result │
 ```
 
 ## Done means
