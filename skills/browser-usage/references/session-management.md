@@ -8,6 +8,7 @@ Multiple isolated browser sessions with state persistence and concurrent browsin
 
 - [Named Sessions](#named-sessions)
 - [Session Isolation Properties](#session-isolation-properties)
+- [Tab Pinning in a Shared Browser](#tab-pinning-in-a-shared-browser)
 - [Session State Persistence](#session-state-persistence)
 - [Common Patterns](#common-patterns)
 - [Default Session](#default-session)
@@ -16,7 +17,14 @@ Multiple isolated browser sessions with state persistence and concurrent browsin
 
 ## Named Sessions
 
-Use `--session` flag to isolate browser contexts:
+Use `--session` to isolate browser contexts. Agent skills should derive one stable id and reuse it on every command:
+
+```bash
+SESSION="$(agent-browser session id --scope worktree --prefix my-skill)"
+agent-browser --session "$SESSION" --restore open https://app.example.com/login
+```
+
+`--scope worktree` uses the Git worktree root when available, then the Git root, then the canonical current directory. This is the recommended default for agents because worktrees are commonly used for parallel agent runs.
 
 ```bash
 # Session 1: Authentication flow
@@ -40,35 +48,55 @@ Each session has independent:
 - Browsing history
 - Open tabs
 
+## Tab Pinning in a Shared Browser
+
+Full isolation applies when each session launches its own browser. When sessions instead share one Chrome over `--cdp <port>`, cookies and storage are shared, and only the tab selection separates the sessions. Add `--pin-tab` so each session sticks to its own tab:
+
+```bash
+agent-browser --session agent1 --cdp 9222 --pin-tab open https://site-a.com
+agent-browser --session agent2 --cdp 9222 --pin-tab open https://site-b.com
+```
+
+Every session remembers which tab it is bound to (by CDP target id, persisted in the session's state directory), so a restarted daemon reattaches to the session's own tab instead of adopting the most recently active one. `--pin-tab` (env `AGENT_BROWSER_PIN_TAB=1`) additionally makes the binding strict:
+
+- Attaching with no binding opens a fresh tab instead of adopting an existing one
+- If the bound tab is closed, commands fail with a `tab_gone` error instead of silently acting on another tab. JSON output includes `"code": "tab_gone"`, `data.targetId`, and optional `data.lastUrl`
+- Recovery commands still work in that state: run `tab new <url>` to bind a fresh tab, or `tab list` and switch to an existing one
+- Tabs opened by other sessions or the user never steal the pinned session's active tab
+
+The flag is sticky per session: pass it once at session creation and later commands and daemon restarts keep the strict semantics. Pass `--no-pin-tab` to explicitly turn the pin off again. Use each tab's `targetId` from `tab list --json` when one session needs to reference another session's tab; target ids stay stable across daemon restarts.
+
+The structured `lastUrl` is limited to sanitized HTTP(S) URLs and `about:blank`. Credentials, query strings, and fragments are removed from HTTP(S) URLs. Opaque URLs such as `data:` are omitted. In batch JSON, the recovery object appears under `result` instead of `data`.
+
+When re-running a shared-tab script such as the repro from #1530, add `--pin-tab` to the first command for every session. Without it, `open` intentionally preserves the legacy behavior and navigates the shared active tab, so the original script still collides. The same rule applies when sessions attach with `--auto-connect` instead of `--cdp`.
+
 ## Session State Persistence
 
-### Save Session State
+### Automatic Restore
 
 ```bash
-# Save cookies, storage, and auth state
-agent-browser state save /path/to/auth-state.json
+# Bare --restore uses the current --session as the persistence key
+SESSION="$(agent-browser session id --scope worktree --prefix next-dev-loop)"
+agent-browser --session "$SESSION" --restore open https://app.example.com/dashboard
 ```
 
-### Load Session State
+When `--restore` or another restore key is configured, state is loaded before navigation and saved on close, daemon shutdown, idle timeout, and compatible relaunch. It is also saved periodically while the browser is open (after commands settle, at most once per `AGENT_BROWSER_AUTOSAVE_INTERVAL_MS`, default 30000; set to `0` to save only on close), so a browser window the user closes by hand still leaves a recent save behind. A session ID by itself only isolates the daemon and does not enable persistence; without a restore key, shutdown discards transient browser state and open tabs. Idle sessions with configured persistence keep saving on the same interval, capturing changes the page makes on its own such as token refreshes. The daemon exits after one hour without commands or dashboard input by default; `--idle-timeout <time>` or `AGENT_BROWSER_IDLE_TIMEOUT_MS` tunes this, and `0` disables it. Headed, Safari/iOS WebDriver, and user-attached browsers are exempt from the default timeout; provider-owned cloud browsers are not. The default save policy is `--restore-save auto`, which skips auto-save if restore failed or validation failed; `never` disables periodic autosave too.
 
 ```bash
-# Restore saved state
-agent-browser state load /path/to/auth-state.json
-
-# Continue with authenticated session
-agent-browser open https://app.example.com/dashboard
+agent-browser --session "$SESSION" --restore --restore-check-url "**/dashboard" open https://app.example.com/dashboard
+agent-browser --session "$SESSION" --restore --restore-check-text Dashboard open https://app.example.com/dashboard
+agent-browser --session "$SESSION" --restore --restore-check-fn "!!localStorage.getItem('session')" open https://app.example.com/dashboard
 ```
 
-### State File Contents
+Use `agent-browser session info --json` for diagnostics:
 
-```json
-{
-  "cookies": [...],
-  "localStorage": {...},
-  "sessionStorage": {...},
-  "origins": [...]
-}
+```bash
+agent-browser --session "$SESSION" session info --json
 ```
+
+### Manual State Files
+
+Use `state save`, `state load`, and `--state <path>` when you need an explicit portable JSON file. Do not make agents construct paths under `~/.agent-browser/sessions/`; prefer `--restore` for reusable agent sessions.
 
 ## Common Patterns
 
@@ -76,26 +104,8 @@ agent-browser open https://app.example.com/dashboard
 
 ```bash
 #!/bin/bash
-# Save login state once, reuse many times
-
-STATE_FILE="/tmp/auth-state.json"
-
-# Check if we have saved state
-if [[ -f "$STATE_FILE" ]]; then
-    agent-browser state load "$STATE_FILE"
-    agent-browser open https://app.example.com/dashboard
-else
-    # Perform login
-    agent-browser open https://app.example.com/login
-    agent-browser snapshot -i
-    agent-browser fill @e1 "$USERNAME"
-    agent-browser fill @e2 "$PASSWORD"
-    agent-browser click @e3
-    agent-browser wait --load networkidle
-
-    # Save for future use
-    agent-browser state save "$STATE_FILE"
-fi
+SESSION="$(agent-browser session id --scope worktree --prefix app)"
+agent-browser --session "$SESSION" --restore open https://app.example.com/dashboard
 ```
 
 ### Concurrent Scraping

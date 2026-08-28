@@ -50,6 +50,11 @@ enum Command {
         adhd: bool,
         #[arg(long, hide = true)]
         no_adhd: bool,
+        /// Wire CodeGraph into installed agents and index this project
+        #[arg(long, overrides_with = "no_codegraph")]
+        codegraph: bool,
+        #[arg(long, hide = true)]
+        no_codegraph: bool,
         /// Accept detection defaults without prompting
         #[arg(long)]
         yes: bool,
@@ -172,6 +177,8 @@ fn main() -> Result<()> {
             no_rust,
             adhd,
             no_adhd,
+            codegraph,
+            no_codegraph,
             yes,
             force,
         } => {
@@ -186,6 +193,7 @@ fn main() -> Result<()> {
                     python: flag(python, no_python),
                     rust: flag(rust, no_rust),
                     adhd: flag(adhd, no_adhd),
+                    codegraph: flag(codegraph, no_codegraph),
                     yes,
                     force,
                 },
@@ -273,6 +281,19 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(Command::Init { adhd: true, .. })
+        ));
+    }
+
+    #[test]
+    fn init_accepts_codegraph_flag() {
+        let cli = Cli::try_parse_from(["loom", "init", "--codegraph"]).unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Init {
+                codegraph: true,
+                ..
+            })
         ));
     }
 }

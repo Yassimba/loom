@@ -1,4 +1,0 @@
-# Skills this skill invokes; installers pull them in transitively.
-skills:
-  - archify
-  - diagram-design

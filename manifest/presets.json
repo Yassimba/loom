@@ -35,7 +35,6 @@
         "dd-logs",
         "dd-monitors",
         "dd-debugger",
-        "dd-symdb",
         "dd-docs",
         "dd-code-generation",
         "dd-file-issue",

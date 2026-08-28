@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "Coding",
-      "description": "The development loop \u2014 planning, TDD, debugging, review, release \u2014 plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
+      "description": "The development loop — planning, TDD, debugging, review, release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
         "bdd",
         "blueprint",
@@ -52,26 +52,14 @@
       ]
     },
     {
-      "title": "Ponytail",
-      "description": "Build less: choose YAGNI, stdlib, and native features before adding code, then audit what can still be removed.",
-      "skills": [
-        "ponytail",
-        "ponytail-review",
-        "ponytail-audit",
-        "ponytail-debt",
-        "ponytail-gain",
-        "ponytail-help"
-      ]
-    },
-    {
       "title": "Design",
       "description": "Shape, critique, and polish frontend interfaces with strong visual direction and production checks.",
       "skills": ["impeccable"]
     },
     {
       "title": "Diagrams",
-      "description": "Turn systems and data into pictures \u2014 draw.io, Mermaid, archify, and diagram-design editorial diagrams.",
-      "skills": ["mermaid-skill", "archify", "diagram-design", "archify-editorial"]
+      "description": "Turn systems and data into pictures — draw.io, Mermaid, and diagram-design editorial diagrams.",
+      "skills": ["mermaid-skill", "diagram-design"]
     },
     {
       "title": "Presentations",
@@ -80,7 +68,7 @@
     },
     {
       "title": "Observability",
-      "description": "Datadog via the pup CLI \u2014 auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
+      "description": "Datadog via the pup CLI — auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
       "skills": [
         "dd-apm",
         "dd-code-generation",
@@ -89,13 +77,12 @@
         "dd-file-issue",
         "dd-logs",
         "dd-monitors",
-        "dd-pup",
-        "dd-symdb"
+        "dd-pup"
       ]
     },
     {
       "title": "General",
-      "description": "Interviewing, teaching, writing, and note-taking \u2014 skills for the work around the code.",
+      "description": "Interviewing, teaching, writing, and note-taking — skills for the work around the code.",
       "skills": [
         "eli5",
         "grill-me",
@@ -127,6 +114,11 @@
         "plannotator-setup-goal",
         "plannotator-visual-explainer"
       ]
+    },
+    {
+      "title": "Ponytail",
+      "description": "Build less: choose YAGNI, stdlib, and native features before adding code, then audit what can still be removed.",
+      "skills": ["ponytail", "ponytail-review", "ponytail-audit"]
     }
   ]
 }
