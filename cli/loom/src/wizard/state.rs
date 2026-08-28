@@ -67,22 +67,93 @@ pub(crate) enum Item {
     Setting(usize),
 }
 
-/// A row of the Choose list.
+/// One pickable row in a group.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Row {
-    /// A group header; space toggles every actionable item below it.
-    Header {
-        title: String,
-        items: Vec<Item>,
-    },
     Preset(Preset),
     Resource(usize),
     Setting(usize),
 }
 
-pub(crate) struct ChooseStage {
+impl Row {
+    fn item(&self) -> Option<Item> {
+        match self {
+            Self::Preset(_) => None,
+            Self::Resource(index) => Some(Item::Resource(*index)),
+            Self::Setting(index) => Some(Item::Setting(*index)),
+        }
+    }
+}
+
+/// A column-one entry: a titled set of rows.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Group {
+    pub title: String,
     pub rows: Vec<Row>,
-    pub cursor: usize,
+}
+
+impl Group {
+    pub fn items(&self) -> Vec<Item> {
+        self.rows.iter().filter_map(Row::item).collect()
+    }
+}
+
+/// Which column has the cursor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Pane {
+    Groups,
+    Items,
+}
+
+/// Three columns: groups, the focused group's rows, details.
+pub(crate) struct ChooseStage {
+    pub groups: Vec<Group>,
+    pub group_cursor: usize,
+    pub item_cursor: usize,
+    pub focus: Pane,
+}
+
+impl ChooseStage {
+    fn new(groups: Vec<Group>) -> Self {
+        // Land on the first real group, past the bundles, in the item pane.
+        let group_cursor = groups
+            .iter()
+            .position(|group| !group.items().is_empty())
+            .unwrap_or(0);
+        Self {
+            groups,
+            group_cursor,
+            item_cursor: 0,
+            focus: Pane::Items,
+        }
+    }
+
+    pub fn group(&self) -> &Group {
+        &self.groups[self.group_cursor]
+    }
+
+    pub fn row(&self) -> Option<&Row> {
+        self.group().rows.get(self.item_cursor)
+    }
+
+    fn step(&mut self, delta: isize) {
+        match self.focus {
+            Pane::Groups => {
+                self.group_cursor = clamp_step(self.group_cursor, delta, self.groups.len());
+                self.item_cursor = 0;
+            }
+            Pane::Items => {
+                self.item_cursor = clamp_step(self.item_cursor, delta, self.group().rows.len());
+            }
+        }
+    }
+}
+
+fn clamp_step(cursor: usize, delta: isize, len: usize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    (cursor as isize + delta).clamp(0, len as isize - 1) as usize
 }
 
 /// Row zero is scope; remaining rows follow `SkillAgent::ALL`.
@@ -151,8 +222,10 @@ pub struct InstallJob {
 pub(crate) struct HitMap {
     pub back_button: Rect,
     pub next_button: Rect,
-    /// (area, first-visible-row) of the stage's list.
+    /// (area, first-visible-row) of the stage's main list.
     pub list: Option<(Rect, usize)>,
+    /// (area, first-visible-row) of the Choose groups column.
+    pub groups: Option<(Rect, usize)>,
 }
 
 pub struct Wizard {
@@ -184,13 +257,8 @@ const INSTALL: usize = 3;
 
 impl Wizard {
     pub fn new(model: Model) -> Self {
-        let rows = choose_rows(&model);
-        let cursor = rows
-            .iter()
-            .position(|row| matches!(row, Row::Resource(_) | Row::Setting(_)))
-            .unwrap_or(0);
         let stages = vec![
-            Stage::Choose(ChooseStage { rows, cursor }),
+            Stage::Choose(ChooseStage::new(choose_groups(&model))),
             Stage::Where(WhereStage { cursor: 1 }),
             Stage::Review { scroll: 0 },
             Stage::Install(InstallStage {
@@ -717,36 +785,41 @@ impl Wizard {
         }
 
         match &mut self.stages[self.stage_index] {
-            Stage::Choose(stage) => {
-                let last = stage.rows.len().saturating_sub(1);
-                match key.code {
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        stage.cursor = stage.cursor.saturating_sub(1);
+            Stage::Choose(stage) => match key.code {
+                KeyCode::Up | KeyCode::Char('k') => stage.step(-1),
+                KeyCode::Down | KeyCode::Char('j') => stage.step(1),
+                KeyCode::PageUp => stage.step(-10),
+                KeyCode::PageDown => stage.step(10),
+                KeyCode::Home => stage.step(isize::MIN / 2),
+                KeyCode::End => stage.step(isize::MAX / 2),
+                KeyCode::Left | KeyCode::Char('h') => stage.focus = Pane::Groups,
+                KeyCode::Right | KeyCode::Char('l') => stage.focus = Pane::Items,
+                KeyCode::Tab | KeyCode::BackTab => {
+                    stage.focus = match stage.focus {
+                        Pane::Groups => Pane::Items,
+                        Pane::Items => Pane::Groups,
                     }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        stage.cursor = (stage.cursor + 1).min(last)
+                }
+                KeyCode::Char(' ') => match stage.focus {
+                    Pane::Groups => {
+                        let items = stage.group().items();
+                        self.toggle_group(&items);
                     }
-                    KeyCode::PageUp => stage.cursor = stage.cursor.saturating_sub(10),
-                    KeyCode::PageDown => stage.cursor = (stage.cursor + 10).min(last),
-                    KeyCode::Home => stage.cursor = 0,
-                    KeyCode::End => stage.cursor = last,
-                    KeyCode::Tab => stage.cursor = next_header(&stage.rows, stage.cursor),
-                    KeyCode::BackTab => stage.cursor = previous_header(&stage.rows, stage.cursor),
-                    KeyCode::Char(' ') => {
-                        let row = stage.rows[stage.cursor].clone();
-                        let cursor = stage.cursor;
-                        self.activate_row(&row);
-                        // Space picks and steps down, so a run of picks is a
-                        // run of spaces.
-                        if let Stage::Choose(stage) = &mut self.stages[CHOOSE] {
-                            if matches!(row, Row::Resource(_) | Row::Setting(_)) {
-                                stage.cursor = (cursor + 1).min(last);
+                    Pane::Items => {
+                        if let Some(row) = stage.row().cloned() {
+                            self.activate_row(&row);
+                            // Space picks and steps down, so a run of picks
+                            // is a run of spaces.
+                            if let Stage::Choose(stage) = &mut self.stages[CHOOSE] {
+                                if !matches!(row, Row::Preset(_)) {
+                                    stage.step(1);
+                                }
                             }
                         }
                     }
-                    _ => {}
-                }
-            }
+                },
+                _ => {}
+            },
             Stage::Where(stage) => {
                 let last = SkillAgent::ALL.len();
                 match key.code {
@@ -817,8 +890,8 @@ impl Wizard {
                 .map(|report| Action::Exit(WizardOutcome::Installed(report.clone()))),
             // Enter on a bundle means "start with this": apply, then go on.
             Stage::Choose(stage) => {
-                if let Row::Preset(preset) = stage.rows[stage.cursor] {
-                    self.apply_preset(preset);
+                if let (Pane::Items, Some(Row::Preset(preset))) = (stage.focus, stage.row()) {
+                    self.apply_preset(*preset);
                 }
                 self.go_forward();
                 None
@@ -832,7 +905,6 @@ impl Wizard {
 
     fn activate_row(&mut self, row: &Row) {
         match row {
-            Row::Header { items, .. } => self.toggle_group(items),
             Row::Preset(preset) => self.apply_preset(*preset),
             Row::Resource(index) => self.toggle_item(Item::Resource(*index)),
             Row::Setting(index) => self.toggle_item(Item::Setting(*index)),
@@ -852,29 +924,40 @@ impl Wizard {
 
     // ---- search ------------------------------------------------------------
 
-    /// Choose rows (indices) whose resource or setting matches the live
-    /// query, in list order. Empty query matches everything.
-    pub(crate) fn search_matches(&self) -> Vec<usize> {
+    /// (group, row) pairs whose resource or setting matches the live query,
+    /// in list order. Empty query matches everything.
+    pub(crate) fn search_matches(&self) -> Vec<(usize, usize)> {
         let (Some(query), Stage::Choose(stage)) = (&self.search, &self.stages[CHOOSE]) else {
             return Vec::new();
         };
-        stage
-            .rows
-            .iter()
-            .enumerate()
-            .filter(|(_, row)| match row {
-                Row::Resource(index) => {
-                    let resource = &self.model.resources[*index];
-                    fuzzy_match(&resource.label, query) || fuzzy_match(&resource.description, query)
+        let mut matches = Vec::new();
+        for (group_index, group) in stage.groups.iter().enumerate() {
+            for (row_index, row) in group.rows.iter().enumerate() {
+                let hit = match row {
+                    Row::Resource(index) => {
+                        let resource = &self.model.resources[*index];
+                        fuzzy_match(&resource.label, query)
+                            || fuzzy_match(&resource.description, query)
+                    }
+                    Row::Setting(index) => {
+                        let spec = &self.model.settings[*index];
+                        fuzzy_match(&spec.label, query) || fuzzy_match(&spec.description, query)
+                    }
+                    Row::Preset(_) => false,
+                };
+                if hit {
+                    matches.push((group_index, row_index));
                 }
-                Row::Setting(index) => {
-                    let spec = &self.model.settings[*index];
-                    fuzzy_match(&spec.label, query) || fuzzy_match(&spec.description, query)
-                }
-                _ => false,
-            })
-            .map(|(row_index, _)| row_index)
-            .collect()
+            }
+        }
+        matches
+    }
+
+    pub(crate) fn search_row(&self, hit: (usize, usize)) -> Row {
+        let Stage::Choose(stage) = &self.stages[CHOOSE] else {
+            unreachable!("search only runs on Choose")
+        };
+        stage.groups[hit.0].rows[hit.1].clone()
     }
 
     fn handle_search_key(&mut self, code: KeyCode) -> Option<Action> {
@@ -904,11 +987,9 @@ impl Wizard {
             }
             KeyCode::Char(' ') => {
                 let matches = self.search_matches();
-                if let Some(&row_index) = matches.get(self.search_cursor) {
-                    if let Stage::Choose(stage) = &self.stages[CHOOSE] {
-                        let row = stage.rows[row_index].clone();
-                        self.activate_row(&row);
-                    }
+                if let Some(&hit) = matches.get(self.search_cursor) {
+                    let row = self.search_row(hit);
+                    self.activate_row(&row);
                     self.search_cursor = (self.search_cursor + 1).min(matches.len() - 1);
                 }
             }
@@ -927,8 +1008,10 @@ impl Wizard {
     fn accept_search(&mut self) {
         let hit = self.search_matches().get(self.search_cursor).copied();
         self.search = None;
-        if let (Some(hit), Stage::Choose(stage)) = (hit, &mut self.stages[CHOOSE]) {
-            stage.cursor = hit;
+        if let (Some((group, row)), Stage::Choose(stage)) = (hit, &mut self.stages[CHOOSE]) {
+            stage.group_cursor = group;
+            stage.item_cursor = row;
+            stage.focus = Pane::Items;
         }
     }
 
@@ -945,6 +1028,19 @@ impl Wizard {
         if contains(self.hits.next_button, column, row) {
             return self.handle_enter();
         }
+        if let Some((area, offset)) = self.hits.groups {
+            if contains(area, column, row) {
+                let index = offset + row.saturating_sub(area.y + 1) as usize;
+                if let Stage::Choose(stage) = &mut self.stages[self.stage_index] {
+                    if index < stage.groups.len() {
+                        stage.focus = Pane::Groups;
+                        stage.group_cursor = index;
+                        stage.item_cursor = 0;
+                    }
+                }
+                return None;
+            }
+        }
         if let Some((area, offset)) = self.hits.list {
             if contains(area, column, row) {
                 let index = offset + row.saturating_sub(area.y + 1) as usize;
@@ -956,20 +1052,18 @@ impl Wizard {
 
     fn click_row(&mut self, index: usize) {
         if self.search.is_some() {
-            let matches = self.search_matches();
-            if let Some(&row_index) = matches.get(index) {
+            if let Some(&hit) = self.search_matches().get(index) {
                 self.search_cursor = index;
-                if let Stage::Choose(stage) = &self.stages[CHOOSE] {
-                    let row = stage.rows[row_index].clone();
-                    self.activate_row(&row);
-                }
+                let row = self.search_row(hit);
+                self.activate_row(&row);
             }
             return;
         }
         match &mut self.stages[self.stage_index] {
             Stage::Choose(stage) => {
-                if let Some(row) = stage.rows.get(index).cloned() {
-                    stage.cursor = index;
+                if let Some(row) = stage.group().rows.get(index).cloned() {
+                    stage.focus = Pane::Items;
+                    stage.item_cursor = index;
                     self.activate_row(&row);
                 }
             }
@@ -987,30 +1081,27 @@ impl Wizard {
     }
 }
 
-/// The Choose list: bundles first, then skills by category, tools, Pi
+/// The Choose columns: bundles first, then skills by category, tools, Pi
 /// packages, Herdr plugins, and settings by group.
-fn choose_rows(model: &Model) -> Vec<Row> {
-    let mut rows = Vec::new();
-    let bundles = std::iter::once(Preset::Everything)
-        .chain((0..model.presets.len()).map(Preset::Catalog))
-        .chain(std::iter::once(Preset::Clear))
-        .collect::<Vec<_>>();
+fn choose_groups(model: &Model) -> Vec<Group> {
+    let mut groups = Vec::new();
     if !model.resources.is_empty() {
-        rows.push(Row::Header {
-            title: "Start with a bundle".into(),
-            items: Vec::new(),
+        groups.push(Group {
+            title: "Bundles".into(),
+            rows: std::iter::once(Preset::Everything)
+                .chain((0..model.presets.len()).map(Preset::Catalog))
+                .chain(std::iter::once(Preset::Clear))
+                .map(Row::Preset)
+                .collect(),
         });
-        rows.extend(bundles.into_iter().map(Row::Preset));
     }
     let mut push_group = |title: String, items: Vec<usize>| {
-        if items.is_empty() {
-            return;
+        if !items.is_empty() {
+            groups.push(Group {
+                title,
+                rows: items.into_iter().map(Row::Resource).collect(),
+            });
         }
-        rows.push(Row::Header {
-            title,
-            items: items.iter().map(|&index| Item::Resource(index)).collect(),
-        });
-        rows.extend(items.into_iter().map(Row::Resource));
     };
     for category in groups_of(&model.resources, ResourceKind::Skill) {
         let items = indices(&model.resources, |resource| {
@@ -1028,25 +1119,24 @@ fn choose_rows(model: &Model) -> Vec<Row> {
             indices(&model.resources, |resource| resource.kind == kind),
         );
     }
-    let mut group: Option<&str> = None;
-    for (index, spec) in model.settings.iter().enumerate() {
-        if group != Some(spec.group.as_str()) {
-            group = Some(spec.group.as_str());
-            let items = model
+    let mut seen: Vec<&str> = Vec::new();
+    for spec in &model.settings {
+        if seen.contains(&spec.group.as_str()) {
+            continue;
+        }
+        seen.push(&spec.group);
+        groups.push(Group {
+            title: format!("Settings · {}", spec.group),
+            rows: model
                 .settings
                 .iter()
                 .enumerate()
                 .filter(|(_, other)| other.group == spec.group)
-                .map(|(index, _)| Item::Setting(index))
-                .collect();
-            rows.push(Row::Header {
-                title: format!("Settings · {}", spec.group),
-                items,
-            });
-        }
-        rows.push(Row::Setting(index));
+                .map(|(index, _)| Row::Setting(index))
+                .collect(),
+        });
     }
-    rows
+    groups
 }
 
 fn groups_of(resources: &[Resource], kind: ResourceKind) -> Vec<String> {
@@ -1066,23 +1156,6 @@ fn indices(resources: &[Resource], keep: impl Fn(&Resource) -> bool) -> Vec<usiz
         .filter(|(_, resource)| keep(resource))
         .map(|(index, _)| index)
         .collect()
-}
-
-fn next_header(rows: &[Row], cursor: usize) -> usize {
-    rows.iter()
-        .enumerate()
-        .skip(cursor + 1)
-        .find(|(_, row)| matches!(row, Row::Header { .. }))
-        .map_or(cursor, |(index, _)| index)
-}
-
-fn previous_header(rows: &[Row], cursor: usize) -> usize {
-    rows.iter()
-        .enumerate()
-        .take(cursor)
-        .rev()
-        .find(|(_, row)| matches!(row, Row::Header { .. }))
-        .map_or(cursor, |(index, _)| index)
 }
 
 /// Case-insensitive subsequence match: every query char appears in order.

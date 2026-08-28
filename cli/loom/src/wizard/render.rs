@@ -3,7 +3,8 @@
 //! clickable Back/Next buttons.
 
 use super::state::{
-    ChooseStage, ExecStatus, HitMap, InstallStage, Preset, Row, Stage, WhereStage, Wizard,
+    ChooseStage, ExecStatus, Group, HitMap, InstallStage, Pane, Preset, Row, Stage, WhereStage,
+    Wizard,
 };
 use crate::settings::SettingSpec;
 use crate::{ResourceKind, SkillAgent};
@@ -37,7 +38,11 @@ impl Wizard {
         self.hits = HitMap::default();
         self.render_header(frame, header);
         let list = match &self.stages[self.stage_index] {
-            Stage::Choose(stage) => self.render_choose(frame, body, stage),
+            Stage::Choose(stage) => {
+                let (groups, items) = self.render_choose(frame, body, stage);
+                self.hits.groups = groups;
+                items
+            }
             Stage::Where(stage) => self.render_where(frame, body, stage),
             Stage::Review { scroll } => {
                 self.render_review(frame, body, *scroll);
@@ -105,13 +110,24 @@ impl Wizard {
         } else {
             match &self.stages[self.stage_index] {
                 Stage::Choose(_) => {
-                    " ↑↓ move · space pick · / search · tab next group · enter continue · ? keys"
+                    " ↑↓ move · ←→ column · space pick · / search · enter continue · ? keys"
                 }
                 Stage::Where(_) => " ↑↓ move · space toggle · enter continue · esc back",
                 Stage::Review { .. } => " enter install · ↑↓ scroll · esc back",
                 Stage::Install(stage) if stage.running => " installing…",
                 Stage::Install(_) => " enter finish · ↑↓ scroll",
             }
+        };
+        let short = match &self.stages[self.stage_index] {
+            Stage::Choose(_) => " ↑↓ ←→ space / enter ?",
+            Stage::Where(_) => " ↑↓ space enter esc",
+            Stage::Review { .. } => " enter ↑↓ esc",
+            Stage::Install(_) => " enter",
+        };
+        let hint = if area.width < hint.chars().count() as u16 + 26 {
+            short
+        } else {
+            hint
         };
         let [hint_area, back_area, _, next_area, _] = Layout::horizontal([
             Constraint::Min(0),
@@ -173,14 +189,17 @@ impl Wizard {
         let key = |text: &'static str| Span::styled(text, Style::new().fg(ACCENT).bold());
         let lines = vec![
             Line::from(vec![key("↑ ↓        "), Span::raw("move (j/k work too)")]),
-            Line::from(vec![key("tab ⇧tab   "), Span::raw("next / previous group")]),
+            Line::from(vec![
+                key("← →        "),
+                Span::raw("groups column ⇄ items column (tab too)"),
+            ]),
             Line::from(vec![key("home end   "), Span::raw("top / bottom")]),
             Line::from(""),
             Line::from(vec![key("space      "), Span::raw("pick, then step down")]),
             Line::from(vec![
                 Span::raw("           "),
                 Span::styled(
-                    "on a group header: picks the whole group",
+                    "in the groups column: picks the whole group",
                     Style::new().dim(),
                 ),
             ]),
@@ -216,7 +235,7 @@ impl Wizard {
     fn render_confirm_quit(&self, frame: &mut Frame) {
         let count = self.total_selected();
         let lines = vec![
-            Line::from(format!("Quit and drop {count} picked item(s)?")),
+            Line::from(format!("Quit and drop {} picked?", plural(count, "item"))),
             Line::from(""),
             Line::from(vec![
                 Span::styled("enter", Style::new().fg(ERR).bold()),
@@ -241,44 +260,101 @@ impl Wizard {
 
     // ---- choose ------------------------------------------------------------
 
-    fn render_choose(&self, frame: &mut Frame, area: Rect, stage: &ChooseStage) -> ListHit {
-        let [list_area, details_area] =
-            Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)])
-                .areas(area);
-        let inner_width = list_area.width.saturating_sub(2) as usize;
+    fn render_choose(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        stage: &ChooseStage,
+    ) -> (ListHit, ListHit) {
+        // Column one is as wide as its longest title plus marks and a count.
+        let widest = stage
+            .groups
+            .iter()
+            .map(|group| group.title.chars().count())
+            .max()
+            .unwrap_or(0) as u16;
+        let groups_width = (widest + 14).clamp(24, area.width / 3);
+        let [groups_area, items_area, details_area] = Layout::horizontal([
+            Constraint::Length(groups_width),
+            Constraint::Min(30),
+            Constraint::Percentage(34),
+        ])
+        .areas(area);
+        let searching = self.search.is_some();
 
-        let (rows, cursor, title) = match &self.search {
+        // Column one: every group with its state.
+        let group_width = groups_area.width.saturating_sub(2) as usize;
+        let groups = stage
+            .groups
+            .iter()
+            .map(|group| self.group_item(group, group_width))
+            .collect::<Vec<_>>();
+        let group_offset = list_offset(
+            stage.groups.len(),
+            groups_area.height.saturating_sub(2),
+            stage.group_cursor,
+        );
+        let groups_focused = stage.focus == Pane::Groups && !searching;
+        frame.render_stateful_widget(
+            List::new(groups)
+                .block(bordered(" Groups ", groups_focused))
+                .highlight_style(highlight(groups_focused)),
+            groups_area,
+            &mut ListState::default()
+                .with_selected(Some(stage.group_cursor))
+                .with_offset(group_offset),
+        );
+
+        // Column two: the focused group's rows, or the search hits.
+        let (rows, cursor, title): (Vec<Row>, usize, String) = match &self.search {
             Some(query) => {
                 let matches = self.search_matches();
                 let cursor = self.search_cursor.min(matches.len().saturating_sub(1));
-                let title = format!(" /{query}▏  {} matches ", matches.len());
-                (matches, cursor, title)
+                let rows = matches.iter().map(|&hit| self.search_row(hit)).collect();
+                (
+                    rows,
+                    cursor,
+                    format!(" /{query}▏  {} matches ", matches.len()),
+                )
             }
-            None => (
-                (0..stage.rows.len()).collect(),
-                stage.cursor,
-                " Choose ".to_owned(),
-            ),
+            None => {
+                let group = stage.group();
+                let (on, actionable) = self.group_counts(&group.items());
+                let title = if group.items().is_empty() {
+                    format!(" {} ", group.title)
+                } else if actionable == 0 {
+                    format!(" {} · all installed ", group.title)
+                } else {
+                    format!(" {} · {on}/{actionable} picked ", group.title)
+                };
+                (group.rows.clone(), stage.item_cursor, title)
+            }
         };
         let items = rows
             .iter()
-            .map(|&row_index| self.choose_row_item(&stage.rows[row_index], inner_width))
+            .map(|row| self.choose_row_item(row))
             .collect::<Vec<_>>();
-        let offset = list_offset(rows.len(), list_area.height.saturating_sub(2), cursor);
-        let list = List::new(items)
-            .block(bordered(&title, true))
-            .highlight_style(highlight());
-        let mut state = ListState::default()
-            .with_selected((!rows.is_empty()).then_some(cursor))
-            .with_offset(offset);
-        frame.render_stateful_widget(list, list_area, &mut state);
+        let offset = list_offset(rows.len(), items_area.height.saturating_sub(2), cursor);
+        let items_focused = stage.focus == Pane::Items || searching;
+        frame.render_stateful_widget(
+            List::new(items)
+                .block(bordered(&title, items_focused))
+                .highlight_style(highlight(items_focused)),
+            items_area,
+            &mut ListState::default()
+                .with_selected((!rows.is_empty()).then_some(cursor))
+                .with_offset(offset),
+        );
 
-        let details = match rows.get(cursor) {
-            Some(&row_index) => self.row_details(&stage.rows[row_index]),
-            None => vec![Line::styled(
+        // Column three: what the cursor is on.
+        let details = match (stage.focus, rows.get(cursor)) {
+            (_, None) if searching => vec![Line::styled(
                 "No matches. Backspace widens, esc cancels.",
                 Style::new().dim(),
             )],
+            (Pane::Groups, _) if !searching => self.group_details(stage.group()),
+            (_, Some(row)) => self.row_details(row),
+            (_, None) => Vec::new(),
         };
         frame.render_widget(
             Paragraph::new(details)
@@ -286,41 +362,72 @@ impl Wizard {
                 .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
             details_area,
         );
-        Some((list_area, offset))
+        (
+            Some((groups_area, group_offset)),
+            Some((items_area, offset)),
+        )
     }
 
-    fn choose_row_item(&self, row: &Row, width: usize) -> ListItem<'_> {
-        match row {
-            Row::Header { title, items } => {
-                let (mark, mark_style, count) = if items.is_empty() {
-                    ("   ", Style::new(), String::new())
+    fn group_item(&self, group: &Group, width: usize) -> ListItem<'_> {
+        let items = group.items();
+        let (mark, mark_style, count) = if items.is_empty() {
+            (" ▸ ", Style::new().fg(ACCENT), String::new())
+        } else {
+            let (on, actionable) = self.group_counts(&items);
+            let (mark, style) = if actionable == 0 {
+                (" ✓ ", Style::new().fg(OK).dim())
+            } else if on == 0 {
+                (OFF, Style::new().dim())
+            } else if on == actionable {
+                (ON, Style::new().fg(OK))
+            } else {
+                (PART, Style::new().fg(OK))
+            };
+            let count = if actionable == 0 {
+                "✓".to_owned()
+            } else if on == 0 {
+                format!("{actionable}")
+            } else {
+                format!("{on}/{actionable}")
+            };
+            (mark, style, count)
+        };
+        let title_style = if count == "✓" {
+            Style::new().dim()
+        } else {
+            Style::new()
+        };
+        // Title, then at least one space, then the count flush right;
+        // a title that cannot fit is cut with an ellipsis.
+        let room = width.saturating_sub(5 + count.chars().count() + 2);
+        let title = if group.title.chars().count() > room {
+            let cut = group
+                .title
+                .chars()
+                .take(room.saturating_sub(1))
+                .collect::<String>();
+            format!("{cut}…")
+        } else {
+            group.title.clone()
+        };
+        let pad = room - title.chars().count() + 1;
+        ListItem::new(Line::from(vec![
+            Span::styled(format!(" {mark} "), mark_style),
+            Span::styled(title, title_style),
+            Span::raw(" ".repeat(pad)),
+            Span::styled(
+                count,
+                if mark == ON || mark == PART {
+                    Style::new().fg(OK)
                 } else {
-                    let (on, actionable) = self.group_counts(items);
-                    let (mark, style) = if actionable == 0 {
-                        (" ✓ ", Style::new().fg(OK))
-                    } else if on == 0 {
-                        (OFF, Style::new().dim())
-                    } else if on == actionable {
-                        (ON, Style::new().fg(OK))
-                    } else {
-                        (PART, Style::new().fg(OK))
-                    };
-                    let count = if actionable == 0 {
-                        "all installed".to_owned()
-                    } else {
-                        format!("{on}/{actionable}")
-                    };
-                    (mark, style, count)
-                };
-                let left = format!(" {mark} {title}");
-                let pad = width.saturating_sub(left.chars().count() + count.len() + 1);
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!(" {mark} "), mark_style),
-                    Span::styled(title.clone(), Style::new().bold()),
-                    Span::raw(" ".repeat(pad)),
-                    Span::styled(count, Style::new().dim()),
-                ]))
-            }
+                    Style::new().dim()
+                },
+            ),
+        ]))
+    }
+
+    fn choose_row_item(&self, row: &Row) -> ListItem<'_> {
+        match row {
             Row::Preset(preset) => ListItem::new(Line::from(vec![
                 Span::styled("  ▸  ", Style::new().fg(ACCENT)),
                 Span::styled(column(self.preset_label(*preset)), Style::new().bold()),
@@ -330,9 +437,9 @@ impl Wizard {
                 let resource = &self.model.resources[*index];
                 if self.resource_installed(*index) {
                     return ListItem::new(Line::from(vec![
-                        Span::styled("  ✓  ", Style::new().fg(OK)),
+                        Span::styled("  ✓  ", Style::new().fg(OK).dim()),
                         Span::styled(column(&resource.label), Style::new().dim()),
-                        Span::styled("installed", Style::new().dim()),
+                        Span::styled(resource.description.clone(), Style::new().dim()),
                     ]));
                 }
                 if let Some(parent) = self.required_note(*index) {
@@ -353,9 +460,9 @@ impl Wizard {
                 let spec = &self.model.settings[*index];
                 if self.setting_applied(*index) {
                     return ListItem::new(Line::from(vec![
-                        Span::styled("  ✓  ", Style::new().fg(OK)),
+                        Span::styled("  ✓  ", Style::new().fg(OK).dim()),
                         Span::styled(column(&spec.label), Style::new().dim()),
-                        Span::styled("already set", Style::new().dim()),
+                        Span::styled(spec.description.clone(), Style::new().dim()),
                     ]));
                 }
                 let (mark, style) = mark_for(self.setting_on[*index]);
@@ -368,36 +475,47 @@ impl Wizard {
         }
     }
 
+    fn group_details(&self, group: &Group) -> Vec<Line<'_>> {
+        let items = group.items();
+        let mut lines = vec![
+            Line::styled(group.title.clone(), Style::new().bold().fg(ACCENT)),
+            Line::from(""),
+        ];
+        if items.is_empty() {
+            lines.push(Line::from(
+                "A bundle picks a set at once. Fine-tune in the other groups, or clear and \
+                 start by hand.",
+            ));
+            lines.push(Line::from(""));
+            lines.push(Line::styled(
+                "→ then space adds a bundle · enter adds it and continues",
+                Style::new().dim(),
+            ));
+        } else {
+            let (on, actionable) = self.group_counts(&items);
+            let installed = items.len() - actionable;
+            lines.push(Line::from(if actionable == 0 {
+                format!("All {} installed.", plural(installed, "item"))
+            } else if installed == 0 {
+                format!("{on} of {actionable} picked.")
+            } else {
+                format!("{on} of {actionable} picked · {installed} already installed.")
+            }));
+            lines.push(Line::from(""));
+            lines.push(Line::styled(
+                if actionable == 0 {
+                    "→ opens the group"
+                } else {
+                    "space picks or clears the whole group · → opens it"
+                },
+                Style::new().dim(),
+            ));
+        }
+        lines
+    }
+
     fn row_details(&self, row: &Row) -> Vec<Line<'_>> {
         match row {
-            Row::Header { title, items } => {
-                let mut lines = vec![
-                    Line::styled(title.clone(), Style::new().bold().fg(ACCENT)),
-                    Line::from(""),
-                ];
-                if items.is_empty() {
-                    lines.push(Line::from(
-                        "A bundle picks a set at once. Fine-tune below, or start empty.",
-                    ));
-                    lines.push(Line::from(""));
-                    lines.push(Line::styled(
-                        "space adds the bundle · enter adds it and continues",
-                        Style::new().dim(),
-                    ));
-                } else {
-                    let (on, actionable) = self.group_counts(items);
-                    lines.push(Line::from(format!(
-                        "{on} of {actionable} picked · {} already installed",
-                        items.len() - actionable
-                    )));
-                    lines.push(Line::from(""));
-                    lines.push(Line::styled(
-                        "space picks or clears the whole group",
-                        Style::new().dim(),
-                    ));
-                }
-                lines
-            }
             Row::Preset(preset) => {
                 let adds = self.preset_adds(*preset);
                 let mut lines = vec![
@@ -412,10 +530,17 @@ impl Wizard {
                 ];
                 lines.push(match preset {
                     Preset::Clear => Line::styled(
-                        format!("clears {} picked item(s)", self.total_selected()),
+                        format!("clears {} picked", plural(self.total_selected(), "item")),
                         Style::new().fg(WARN),
                     ),
-                    _ => Line::styled(format!("adds {adds} item(s)"), Style::new().fg(OK)),
+                    _ if adds == 0 => Line::styled(
+                        "nothing to add — everything in it is installed or picked",
+                        Style::new().dim(),
+                    ),
+                    _ => Line::styled(
+                        format!("adds {}", plural(adds, "item")),
+                        Style::new().fg(OK),
+                    ),
                 });
                 lines
             }
@@ -449,7 +574,7 @@ impl Wizard {
                     lines.push(field("goes to", String::new(), ACCENT));
                     for tree in trees {
                         lines.push(Line::styled(
-                            format!("  {}", tidy(&tree, &destination.home)),
+                            tidy(&tree, &destination.home),
                             Style::new().dim(),
                         ));
                     }
@@ -553,13 +678,14 @@ impl Wizard {
             .filter(|resource| resource.kind == ResourceKind::Skill)
             .count();
         let title = format!(
-            " Where do {skills} skill(s) go? · {}/{} agents ",
+            " Where do {} go? · {}/{} agents ",
+            plural(skills, "skill"),
             self.selected_agents().len(),
             SkillAgent::ALL.len()
         );
         let list = List::new(items)
             .block(bordered(&title, true))
-            .highlight_style(highlight());
+            .highlight_style(highlight(true));
         let mut state = ListState::default().with_selected(Some(stage.cursor));
         frame.render_stateful_widget(list, list_area, &mut state);
 
@@ -623,11 +749,8 @@ impl Wizard {
                     for step in &plan.prerequisites {
                         lines.push(Line::from(vec![
                             Span::styled("  ! ", Style::new().fg(WARN).bold()),
-                            Span::raw(step.target.clone()),
-                            Span::styled(
-                                format!("   {}", step.action.display()),
-                                Style::new().dim(),
-                            ),
+                            Span::raw(column(&step.target)),
+                            Span::styled(step.action.display(), Style::new().dim()),
                         ]));
                     }
                     lines.push(Line::from(""));
@@ -663,12 +786,12 @@ impl Wizard {
                 for resource in of_kind {
                     let mut spans = vec![
                         Span::styled("  + ", Style::new().fg(OK).bold()),
-                        Span::raw(resource.label.clone()),
+                        Span::raw(column(&resource.label)),
                     ];
                     if !direct_ids.contains(&resource.id) {
                         spans.push(Span::styled(
                             format!(
-                                "   needed by {}",
+                                "needed by {}",
                                 parent_of(&resource.install_target)
                                     .unwrap_or_else(|| "a picked skill".into())
                             ),
@@ -685,12 +808,11 @@ impl Wizard {
                 for spec in &settings {
                     lines.push(Line::from(vec![
                         Span::styled("  ~ ", Style::new().fg(WARN).bold()),
-                        Span::raw(spec.label.clone()),
+                        Span::raw(column(&spec.label)),
                         Span::styled(
-                            format!(
-                                "   {}",
-                                spec.target_path(&self.model.settings_paths).display()
-                            ),
+                            spec.target_path(&self.model.settings_paths)
+                                .display()
+                                .to_string(),
                             Style::new().dim(),
                         ),
                     ]));
@@ -771,11 +893,11 @@ impl Wizard {
                 };
                 let mut spans = vec![
                     Span::styled(format!(" {mark} "), style),
-                    Span::raw(item.label.clone()),
+                    Span::raw(format!("{:<36} ", item.label)),
                 ];
                 if !note.is_empty() {
                     spans.push(Span::styled(
-                        format!("   {}", first_line(&note)),
+                        first_line(&note).to_owned(),
                         style.add_modifier(Modifier::DIM),
                     ));
                 }
@@ -808,11 +930,11 @@ impl Wizard {
             } else {
                 let failed = report.failures.len();
                 lines.push(Line::styled(
-                    format!("✗ Done with {failed} failure(s)"),
+                    format!("✗ {} failed", plural(failed, "task")),
                     Style::new().fg(ERR).bold(),
                 ));
                 lines.push(Line::from(format!(
-                    "{} installed · {failed} failed — see the tasks above.",
+                    "{} installed · the failed rows above say why.",
                     report.installed.len()
                 )));
             }
@@ -846,6 +968,14 @@ impl Wizard {
     }
 }
 
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{count} {noun}s")
+    }
+}
+
 /// A fixed-width label column so descriptions line up.
 fn column(label: &str) -> String {
     format!("{label:<22} ")
@@ -862,7 +992,7 @@ fn tidy(path: &std::path::Path, home: &std::path::Path) -> String {
 /// `label  value` with a dim, fixed-width label column.
 fn field(label: &'static str, value: String, color: Color) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("{label:<8}"), Style::new().fg(color).dim()),
+        Span::styled(format!("{label:<10}"), Style::new().fg(color).dim()),
         Span::raw(value),
     ])
 }
@@ -894,8 +1024,12 @@ fn bordered(title: &str, focused: bool) -> Block<'_> {
         .title(title.to_owned())
 }
 
-fn highlight() -> Style {
-    Style::new().bg(Color::DarkGray)
+fn highlight(focused: bool) -> Style {
+    if focused {
+        Style::new().bg(ACCENT).fg(Color::Black)
+    } else {
+        Style::new().bg(Color::DarkGray)
+    }
 }
 
 fn list_offset(len: usize, visible: u16, cursor: usize) -> usize {

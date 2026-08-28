@@ -411,7 +411,7 @@ pub fn execute_install_plan_with(
                 let dependency_failed =
                     outcome.unavailable || (lane.manager == "pi" && !system.command_exists("pi"));
                 if dependency_failed {
-                    let message = format!("{} is unavailable", lane.manager.to_uppercase());
+                    let message = format!("{} is unavailable", display_name(lane.manager));
                     for step in &lane.steps {
                         handle_status(step.index, StepStatus::Skipped(message.clone()));
                     }
@@ -520,7 +520,7 @@ fn execute_lane(
     let mut unavailable = false;
     for indexed in &lane.steps {
         if unavailable {
-            let message = format!("{} is unavailable", lane.manager.to_uppercase());
+            let message = format!("{} is unavailable", display_name(lane.manager));
             let _ = sender.send((indexed.index, StepStatus::Skipped(message)));
             continue;
         }
@@ -599,6 +599,15 @@ pub(crate) fn command_failure_message(result: &crate::CommandResult) -> String {
     }
 }
 
+/// How a manager is written in reports: as its product name.
+pub fn display_name(manager: &str) -> String {
+    match manager {
+        "herdr" => "Herdr".into(),
+        "pi" => "Pi".into(),
+        other => other.into(),
+    }
+}
+
 fn prerequisite_step(
     manager: &str,
     platform: Platform,
@@ -619,7 +628,7 @@ fn prerequisite_step(
         ),
     };
     InstallStep {
-        target: manager.to_uppercase(),
+        target: display_name(manager),
         manager: manager.into(),
         action: StepAction::Command(command),
         verification: None,
