@@ -255,9 +255,188 @@ document.addEventListener('keydown', (e) => {
 });
 ```
 
+## Component Vocabulary
+
+Four components appear in nearly every technical deck. Each is written once here because each carries a trap that only a screenshot reveals.
+
+### Code and terminal blocks
+
+**`white-space` is the whole component.** A block written with literal newlines and no `white-space` collapses every line into one run of text. The markup looks correct, the render is ruined, and nothing but a screenshot catches it.
+
+```css
+.code,
+.term {
+    background: var(--bg-sunken);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 24px 28px;
+    font-family: var(--font-mono);
+    font-size: 18px;          /* the floor — never smaller on a 1920 stage */
+    line-height: 1.65;
+    white-space: pre;         /* `pre-wrap` when long lines must wrap instead of clip */
+    overflow: hidden;
+    tab-size: 2;
+}
+.code { border-left: 2px solid var(--accent); }
+
+/* Syntax tones: keyword, string, number, comment, emphasis.
+   Five is enough — more reads as confetti at presentation distance. */
+.code .k  { color: var(--accent); }
+.code .s  { color: var(--ok, #3FCF8E); }
+.code .n  { color: #E5C07B; }
+.code .c  { color: var(--fg-3); font-style: italic; }
+.code .hl { color: var(--fg-1); font-weight: 500; }
+
+/* A terminal earns its frame by showing a prompt and real result colours. */
+.term .cmd::before { content: "$ "; color: var(--accent); }
+.term .ok { color: var(--ok, #3FCF8E); }
+.term .no { color: var(--bad, #FF5F56); }
+```
+
+### Table
+
+```css
+.tbl { width: 100%; border-collapse: collapse; font-size: 19px; }
+.tbl th {
+    font-family: var(--font-label);
+    font-size: 18px; font-weight: 400;    /* the floor applies to headers too */
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--fg-2);                   /* headers are text: keep them above the AA floor */
+    text-align: left;
+    padding: 0 20px 14px 0;
+    border-bottom: 1px solid var(--line-strong);
+}
+.tbl td {
+    padding: 14px 20px 14px 0;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top; line-height: 1.4;
+}
+.tbl tr:last-child td { border-bottom: none; }
+```
+
+A table past 8 rows or 5 columns stops being readable at presentation distance — split it across two slides, or turn it into a figure.
+
+### Callout
+
+```css
+.note {
+    border-left: 2px solid var(--accent);
+    background: var(--bg-raised);
+    border-radius: 0 4px 4px 0;
+    padding: 15px 22px;
+    display: flex; gap: 18px; align-items: flex-start;
+}
+.note-label {
+    font-family: var(--font-label);
+    font-size: 18px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); white-space: nowrap; padding-top: 2px;
+}
+.note p { font-size: 19px; line-height: 1.45; }
+
+/* Inline code inherits a browser default near 13px — always set it back.
+   `em` compounds inside small parents, so pin it in px. */
+code {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--line-soft);
+    border-radius: 4px;
+    padding: 1px 6px;
+}
+```
+
+The label names the *kind* of aside in one word — `RULE`, `TRAP`, `CHECKPOINT`, `WHY` — so the reader classifies it before reading it.
+
+### Type floor
+
+Every component above sits at 18px or larger, and that is the floor for the whole stage. Three places leak below it by default and need pinning every time: inline `<code>` (a browser default near 13px), table headers styled as small caps, and text inside a callout that inherits from a smaller parent. When a block will not fit at 18px, the content is too long for one slide: split it. Shrinking to 15px reliably produces a slide nobody in the third row can read.
+
+## Presenter Mode
+
+Speaker notes live in the deck and open in a second window, so the deck stays one file and the audience never sees the notes.
+
+```html
+<section class="slide">
+    <div class="slide-content">…</div>
+    <aside class="notes" hidden>
+        Open with the failing build. Ask who has seen this before — usually half the room.
+        Land on the one-line fix before advancing.
+    </aside>
+</section>
+```
+
+`hidden` keeps notes out of the slide, out of the print/PDF export, and out of the checker's measurements.
+
+```javascript
+/* ===========================================
+   PRESENTER MODE — press P
+   A second window shows the current note, the next slide's note,
+   elapsed time, and the slide counter. It follows the main window.
+   =========================================== */
+class Presenter {
+    constructor(deck) {
+        this.deck = deck;
+        this.win = null;
+        this.start = null;
+    }
+
+    toggle() {
+        if (this.win && !this.win.closed) { this.win.close(); this.win = null; return; }
+        this.win = window.open('', 'presenter', 'width=900,height=650');
+        if (!this.win) return;               // popup blocked; stay silent and keep presenting
+        this.start = Date.now();
+        this.win.document.write(`<!doctype html><meta charset="utf-8"><title>Presenter</title>
+            <style>
+              body{margin:0;padding:28px;font:16px/1.6 system-ui,sans-serif;
+                   background:#0b0d12;color:#e8eaf0}
+              .row{display:flex;justify-content:space-between;align-items:baseline;
+                   border-bottom:1px solid #262a35;padding-bottom:12px;margin-bottom:20px}
+              .time{font-size:34px;font-variant-numeric:tabular-nums}
+              .count{color:#868ea1}
+              h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+                 color:#868ea1;margin:24px 0 8px}
+              .now{font-size:20px;white-space:pre-wrap}
+              .next{color:#868ea1;white-space:pre-wrap}
+            </style>
+            <div class="row"><span class="time" id="t">00:00</span>
+                             <span class="count" id="c"></span></div>
+            <h2>This slide</h2><div class="now" id="now"></div>
+            <h2>Next</h2><div class="next" id="next"></div>`);
+        this.win.document.close();
+        this.tick = setInterval(() => this.render(), 500);
+        this.render();
+    }
+
+    render() {
+        if (!this.win || this.win.closed) { clearInterval(this.tick); this.win = null; return; }
+        const d = this.win.document;
+        const noteAt = (i) => {
+            const s = this.deck.slides[i];
+            const n = s && s.querySelector('.notes');
+            return n ? n.textContent.trim() : '';
+        };
+        const i = this.deck.currentSlide ?? this.deck.current ?? 0;
+        const secs = Math.floor((Date.now() - this.start) / 1000);
+        d.getElementById('t').textContent =
+            String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(secs % 60).padStart(2, '0');
+        d.getElementById('c').textContent = `${i + 1} / ${this.deck.slides.length}`;
+        d.getElementById('now').textContent = noteAt(i) || '—';
+        d.getElementById('next').textContent = noteAt(i + 1) || '—';
+    }
+}
+
+const presenter = new Presenter(deck);
+document.addEventListener('keydown', (e) => {
+    if ((e.key === 'p' || e.key === 'P') &&
+        e.target.getAttribute('contenteditable') !== 'true') presenter.toggle();
+});
+```
+
+Call `presenter.render()` at the end of the deck's `showSlide()` so the second window advances with the first. Tell the user about `P` in the Phase 5 summary whenever the deck has notes.
+
 ## Image Pipeline (Skip If No Images)
 
-If user chose "No images" in Phase 1, skip this entirely. If images were provided, process them before generating HTML.
+Skip this section unless the user supplied an image folder. When they did, process the images before generating the HTML.
 
 **Dependency:** `pip install Pillow`
 

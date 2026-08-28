@@ -19,8 +19,6 @@ This pack brings the `beautiful-html-templates` design systems into the
 4. After the user chooses a bold template, read exactly that one template's
    full `design.md`.
 5. Do not read every `design.md` in the pack.
-6. Do not read or copy `template.html` from the source template library unless a
-   selected `design.md` is missing a critical implementation detail.
 
 The full source metadata index is not bundled in the user-facing skill. Normal
 generation should use `selection-index.json` only.

@@ -21,7 +21,7 @@ Use this small file for title-slide previews only. For final deck generation, re
 
 ## Visual Snapshot
 
-A fixed 1920×1080 stage on a flat `#0D1323` canvas. A left rail carries one icon per topic in agenda order — the current topic bright and enlarged, covered ones dimmed to neutral, upcoming ones in the accent shade — over a hairline, with a two-digit page number at its foot. Each slide opens with a wide-tracked all-caps eyebrow in the accent, a 52px heading beneath it, and a single hairline that leaves the eyebrow and turns into the top-right corner. Ten fixed layouts carry everything: comparison panels, one big numeral, card grids, numbered step flows, prose beside a figure, dividers, diagrams, and dated roadmap rows.
+A fixed 1920×1080 stage on a flat `#0D1323` canvas. A left rail carries one icon per topic in agenda order — the current topic bright and enlarged, covered ones dimmed to neutral, upcoming ones in the accent shade — over a hairline, with a two-digit page number at its foot. Each slide opens with a wide-tracked all-caps eyebrow in the accent, a 52px heading beneath it, and a single hairline that leaves the eyebrow and turns into the top-right corner. The chrome repeats on every slide; each body is composed for its own content, and carries a figure that shows the idea.
 
 The accent is not shipped — it comes from the deck's subject (blue for data and flow, amber for energy, red for risk, green for generation), and a multi-topic deck assigns one accent per topic, which the rail follows slide by slide.
 

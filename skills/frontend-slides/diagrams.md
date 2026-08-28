@@ -1,6 +1,37 @@
 # Diagram Slides
 
-Read this when a slide carries a diagram — architecture, flow, sequence, timeline, quadrant, funnel, Venn, org chart, Sankey, state machine. Diagrams come from the `/diagram-design` skill and land in the deck as inline SVG.
+Read this before composing the body of a content slide. A deck's default body is a drawing, not a bullet list — bullets are what a slide falls back to when its idea genuinely has no shape. Diagrams come from the `/diagram-design` skill and land in the deck as inline SVG.
+
+## Choosing the form
+
+Pick the form from what the content **is**, not from what you drew last time. Read the idea, name its shape, then pick:
+
+| The idea is…                              | Draw it as                       |
+| ----------------------------------------- | -------------------------------- |
+| Parts of a system and what talks to what  | architecture, dependency graph   |
+| One thing moving through stages           | flowchart, data flow, user journey |
+| Who does what, in order, across actors    | sequence, swimlane               |
+| A thing that can be in one of N states    | state machine                    |
+| Strictly stacked levels, each on the one below | layer stack, medallion      |
+| Two axes and where things land on them    | quadrant, scatter, Wardley map   |
+| Overlap and what is shared                | Venn, nested                     |
+| Narrowing from many to few                | funnel, pyramid, Sankey          |
+| Events against dates                      | timeline, Gantt, roadmap         |
+| Containment or hierarchy                  | tree, org chart, treemap, ER     |
+| A cycle with no end                       | loop, flywheel                   |
+| Causes behind one effect                  | fishbone                         |
+| Amounts to compare, or a trend            | bar, line, radar                 |
+
+## Varying the forms
+
+One deck that draws every idea as boxes-and-arrows teaches less than a deck whose forms change with its content — the reader learns to read the shape itself. Keep a running list of the forms already used, and before drawing each new one, name that list and pick outside it.
+
+Tag every figure with the form it uses — `<svg data-diagram="sequence" …>` — so the deck states its own variety and `scripts/check-deck.py` can hold these two bounds:
+
+- No form appears on two consecutive diagram slides.
+- A deck with six or more diagram slides carries at least five distinct forms.
+
+If the content genuinely repeats a shape past those bounds — three sequences in a row because the deck really is three protocols — keep the honest form and change something else instead: the orientation, the density, the axis, or split the slide.
 
 ## Authoring
 
@@ -17,4 +48,4 @@ Read this when a slide carries a diagram — architecture, flow, sequence, timel
 
 ## Verification
 
-Screenshot every diagram slide in the browser. A diagram is done when its text renders in the deck's fonts (not a fallback), nothing overflows the stage, and it reads at presentation distance — smallest label ≥ 18px at 1920×1080.
+Run `scripts/check-deck.py` and screenshot every diagram slide in the browser. A diagram is done when its text renders in the deck's fonts (not a fallback), nothing overflows the stage, and it reads at presentation distance — smallest label ≥ 18px at 1920×1080. Then check the deck as a whole against the two bounds above.
