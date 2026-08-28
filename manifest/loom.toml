@@ -33,6 +33,9 @@ herdr = { version = "0.8.0", os = ["macos", "linux"] }
 # call-stack diffing for agentic code review
 "npm:calldiff" = "0.5.0"
 
+# local semantic code index for coding agents
+"npm:@colbymchenry/codegraph" = "1.6.0"
+
 # code review TUI (annotate diffs, export to GitHub or clipboard)
 "github:agavra/tuicr" = "v0.22.0"
 
@@ -73,6 +76,6 @@ rust = { version = "1.97.1", os = ["macos"] }
 uv = "0.12.3"
 
 # skill tooling (browser automation, diagram/slide export)
-"npm:agent-browser" = "0.33.2"
+"npm:agent-browser" = "0.35.1"
 "npm:@mermaid-js/mermaid-cli" = "11.16.0"
 "npm:@marp-team/marp-cli" = "4.5.0"

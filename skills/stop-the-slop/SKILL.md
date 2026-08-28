@@ -7,15 +7,15 @@ description: Remove AI writing patterns from a draft, in Preserve stance (keep t
 
 You are a sharp human editor. Remove AI patterns while keeping the writing alive. Distinctive writing stays distinctive; reference prose gets every fact it should carry.
 
-Load `writing-clearly-and-concisely` first: it sets the register (Simplified Technical English plus Zinsser) every edit is written in. This skill adds the AI-pattern removal and the stance on top.
+Load `writing-clearly-and-concisely` and use its **register** section; nothing further from it unless the Jobs below name a file. The register (Simplified Technical English plus Zinsser) is the voice every Improve edit is written in and the floor every Preserve edit is measured against. This skill adds the stance and the slop catalogue on top.
 
 ## Stance
 
 Pick the stance first. Every later rule bends to it.
 
-**Preserve.** Personal writing: blog posts, newsletters, talks, anything with an "I". Keep the writer's point, structure, and voice. Make the minimum effective edit. Keep only facts the draft already had.
+**Preserve.** Personal writing: blog posts, newsletters, talks, anything with an "I". Keep the writer's point, structure, and voice. Make the minimum effective edit. Keep only facts the draft already had. Where the register and the voice collide (a 40-word spoken sentence, a fragment, a hedge), the voice wins; the register applies to sentences that were slop anyway.
 
-**Improve.** Reference docs: READMEs, API docs, runbooks, changelogs, copy with no author voice. Rewrite toward the best document: fill gaps from the codebase or linked sources, restore detail the draft blurred, drop sections that carry nothing. Every added fact needs a source you read.
+**Improve.** Reference docs: READMEs, API docs, runbooks, changelogs, copy with no author voice. Rewrite toward the best document in the register: fill gaps from the codebase or linked sources, restore detail the draft blurred, drop sections that carry nothing. Every added fact needs a source you read.
 
 Signals: first person, humor, digressions, opinions mean Preserve. No "I", generic structure, facts verifiable in the repo mean Improve. The user can say `preserve` or `improve` up front; when the draft is mixed and the user said neither, ask: "Keep this as your voice, or rewrite toward the best version of the doc?"
 
@@ -23,7 +23,7 @@ Signals: first person, humor, digressions, opinions mean Preserve. No "I", gener
 
 **Edit (default).** Return the edited draft plus a **What changed** section that opens with the stance used.
 
-**Detect.** The user asks whether a piece is AI slop, or to audit, scan, or flag without rewriting. For each pattern found: name it, quote the line, give the fix in a few words. Named patterns are evidence the user can check; AI detectors guess, so skip the guess about authorship. Offer to edit after.
+**Detect.** The user asks whether a piece is AI slop, or to audit, scan, or flag without rewriting. Load `writing-clearly-and-concisely/references/signs-of-ai-writing.md` as the catalogue alongside this skill's. For each pattern found: name it, quote the line, give the fix in a few words. Named patterns are evidence the user can check; AI detectors guess, so skip the guess about authorship. Offer to edit after.
 
 **Score.** Only when the user asks for a number. Rate 1-10 per dimension, show the table, name the two lowest with one quoted line each. Below 35/50: recommend an edit.
 
@@ -41,13 +41,11 @@ No draft: ask for it. Audience or format unclear: ask who it is for and where it
 
 ## Editing principles
 
-Both stances:
+The register already covers active voice, concrete words, direct verbs, and needless words. On top of it, both stances:
 
 - **Lead with the point when the setup adds nothing.** Keep a personal aside, story, or admission when it creates context, tension, or character.
-- **Open it up without dumbing it down.** Keep substance, nuance, precision. Strip jargon, long sentences, abstract nouns, tangled structure.
-- **Active voice, human subjects.** "The team shipped it Tuesday" beats "the decision emerged." Name the person doing the verb.
-- **Concrete over abstract.** "The integration cut deploy time from 40 minutes to 4" beats "improved efficiency." Protect the specific fact; a number the draft had stays a number.
-- **Direct verbs.** "Decided" over "made a decision," "can" over "has the ability to."
+- **Name the person doing the verb.** "The team shipped it Tuesday," where the draft had "the decision emerged."
+- **Protect the specific fact.** A number, name, or mechanism the draft had stays; the register's "omit needless words" applies to words, never to facts.
 - **Keep hedges that carry meaning.** "I think," "maybe," "to be honest" stay when they express real uncertainty or the writer's spoken rhythm.
 
 Preserve only:
@@ -58,7 +56,7 @@ Preserve only:
 
 Improve only:
 
-- Read the sources the draft points at (the repo, linked docs) and carry the facts a reader of this document needs. A vague claim the source can sharpen ("non-destructive" → "link only replaces directories proven identical") gets sharpened.
+- Read the sources the draft points at (the repo, linked docs) and carry every fact a reader of this document needs; done means a reader can act on the doc without opening those sources. A vague claim the source can sharpen ("non-destructive" → "link only replaces directories proven identical") gets sharpened.
 - Restructure freely toward the clearest document; the draft's shape is a suggestion.
 
 ## Words to cut
@@ -75,5 +73,5 @@ Seventeen structural patterns, each with a before/after, live in [references/pat
 
 1. Read the full draft. Pick the stance. Identify the core point and, in Preserve, 3-5 voice signals to keep (internal note). Core point unclear: ask.
 2. Detect request: return the findings report from Jobs and stop.
-3. Edit: apply the principles and patterns for the stance in the `writing-clearly-and-concisely` register, then check the result against `eval.md`. Any fail: fix and re-check.
+3. Edit: apply the principles and patterns for the stance, then check every sentence against `eval.md`. Any fail: fix and re-check until all pass.
 4. Output the full edited draft and What changed, opening with the stance.

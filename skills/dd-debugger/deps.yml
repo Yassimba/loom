@@ -1,6 +1,5 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
 skills:
   - dd-pup
-  - dd-symdb
 tools:
   - pup

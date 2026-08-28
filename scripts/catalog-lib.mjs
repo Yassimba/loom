@@ -235,6 +235,20 @@ export async function readHerdrPluginCatalog(repoRoot) {
       nextAction: "Run `herdr plugin list` to see the installed plugin.",
     });
   }
+  const external = JSON.parse(
+    await readFile(join(repoRoot, "manifest", "herdr-plugins.json"), "utf8"),
+  );
+  for (const plugin of external.plugins) {
+    resources.push({
+      id: `herdr-plugin:${plugin.id}`,
+      kind: "herdr-plugin",
+      group: "Herdr plugins",
+      label: plugin.label,
+      description: plugin.description,
+      installTarget: plugin.installTarget,
+      nextAction: plugin.nextAction,
+    });
+  }
   return resources.sort((left, right) => left.label.localeCompare(right.label));
 }
 

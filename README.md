@@ -57,7 +57,7 @@ Come back to it later:
 loom add       # choose more capabilities
 loom update    # update installed tooling and resources
 loom status    # check the setup
-loom add --skill tdd --herdr-plugin reviewr --yes
+loom add --skill tdd --herdr-plugin annotate --yes
 loom add --skill tdd --agent codex --agent opencode --yes
 loom add --skill tdd --agent claude --scope project --yes
 ```
@@ -112,7 +112,7 @@ See the package README under [`plugins/`](plugins/) for its commands and configu
 - `skills/<name>/SKILL.md` — the reviewed shared skills. Category grouping lives in `skills.sh.json`.
 - `plugins/<name>/` — Pi packages, each installable on its own.
 - `cli/loom/` — the Rust setup CLI.
-- `setup-catalog.json` — the generated catalog the CLI embeds.
+- `cli/loom/setup-catalog.json` — the generated catalog the CLI embeds.
 - `.claude-plugin/` — exposes the shared skills through the Claude Code marketplace.
 - `drafts/` — unreviewed skills. Not published.
 - `personal/` — machine-specific skills. Never published.
@@ -151,7 +151,7 @@ This repo builds on other people's work:
 - The Datadog `dd-*` skills are copied from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 (Apache 2.0); the `pup` CLI is pinned in the tool manifest.
 - The [Impeccable](skills/impeccable/SKILL.md) design skill is from [pbakaus/impeccable](https://github.com/pbakaus/impeccable) v4.1.2 (Apache 2.0).
 - The [i-have-adhd](skills/i-have-adhd/SKILL.md) skill is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` (MIT).
-- The six [Ponytail](skills/ponytail/SKILL.md) skills are from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 (MIT).
+- The three [Ponytail](skills/ponytail/SKILL.md) skills (ponytail, ponytail-review, ponytail-audit) are from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 (MIT).
 - The [Diagram Design](skills/diagram-design/SKILL.md) skill is from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.7 at `ac490fd` (MIT; bundled icon notices included).
 - subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); claude-bridge is [elidickinson/pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge). All install pinned from upstream npm.
 

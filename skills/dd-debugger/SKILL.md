@@ -40,7 +40,7 @@ export DD_API_KEY="key" DD_APP_KEY="key" DD_SITE="datadoghq.com"
 
 1. If you don't know the service, **ask the user** before proceeding.
 2. **Verify the service** using `pup debugger context <service>` to list environments with active instances. If multiple environments exist, **ask the user** which one to target before proceeding.
-3. **Find a method** using the `dd-symdb` skill (`pup symdb search --view probe-locations`)
+3. **Find a method** with `pup symdb search --view probe-locations`
 4. **Place a probe** with capture expressions for the values you need
 5. **Watch** events with `--fields` for compact output
 6. **Delete** the probe when done
@@ -310,7 +310,7 @@ pup debugger probes watch <ID> --limit 1 \
 | No events appearing | Check `--from` (default is `now`); probe may need time to instrument |
 | Instrumentation errors | Check stderr output from watch for status errors |
 | Auth error | Run `pup auth login` or set `DD_API_KEY` + `DD_APP_KEY` + `DD_SITE` |
-| Wrong method signature | Use the `dd-symdb` skill to find exact `TYPE:METHOD` or `TYPE:METHOD(args)` values |
+| Wrong method signature | Run `pup symdb search` to find exact `TYPE:METHOD` or `TYPE:METHOD(args)` values |
 
 ## References
 
