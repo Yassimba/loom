@@ -32,6 +32,16 @@
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic."
     },
     {
+      "id": "pi-package:@ff-labs/pi-fff",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "fff",
+      "description": "FFF-powered fuzzy file and content search with frecency ranking, git-aware results, and fast @-mention autocomplete. By dmtrKovalenko.",
+      "installTarget": "@ff-labs/pi-fff",
+      "version": "0.10.5",
+      "nextAction": "Run /reload in Pi, then /fff-health to inspect the index."
+    },
+    {
       "id": "pi-package:@yassimba/pi-openai-fast",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -49,6 +59,16 @@
       "installTarget": "pi-rewind-hook",
       "version": "1.8.6",
       "nextAction": "Branch to an earlier Pi message to see files rewind."
+    },
+    {
+      "id": "pi-package:pi-sandbox",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "sandbox",
+      "description": "Prompt before Pi reads or writes outside approved paths, and sandbox shell filesystem and network access on macOS/Linux. By carderne.",
+      "installTarget": "pi-sandbox",
+      "version": "0.6.5",
+      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path."
     },
     {
       "id": "pi-package:pi-subagents",
@@ -676,6 +696,16 @@
       "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
       "installTarget": "research",
       "nextAction": "Ask your coding agent to use the research skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:skill-doctor",
+      "kind": "skill",
+      "group": "General",
+      "label": "skill-doctor",
+      "description": "Grades agent skills by scoring agent conversations against efficiency and code-quality rubrics, then drafts concrete skill edits and a shareable report. Use when the user wants their agent setup graded from real conversation history, or asks which of their installed skills are actually working.",
+      "installTarget": "skill-doctor",
+      "nextAction": "Ask your coding agent to use the skill-doctor skill.",
       "dependencies": []
     },
     {
