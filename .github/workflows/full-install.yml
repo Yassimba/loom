@@ -51,8 +51,11 @@ jobs:
         shell: pwsh
         run: |
           $evidence = "$env:RUNNER_TEMP/loom-windows-e2e/native-explicit-pi-chat.txt"
-          & cli/loom/target/release/loom.exe add --pi-package chat --dry-run --yes *> $evidence
-          if ($LASTEXITCODE -eq 0) { throw "native pi-chat selection unexpectedly succeeded" }
+          $stdout = "$evidence.stdout"
+          $process = Start-Process cli/loom/target/release/loom.exe -ArgumentList "add", "--pi-package", "chat", "--dry-run", "--yes" -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $evidence
+          Get-Content $stdout | Add-Content $evidence
+          Remove-Item $stdout
+          if ($process.ExitCode -eq 0) { throw "native pi-chat selection unexpectedly succeeded" }
           if (-not (Select-String -Quiet -Path $evidence -Pattern "chat requires WSL2 on Windows")) {
             throw "native pi-chat rejection did not explain WSL2"
           }
