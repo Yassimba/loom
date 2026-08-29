@@ -5,77 +5,78 @@ description: "Architecture walkthrough of one feature: layered diagrams (overvie
 
 # Explain Code Flow
 
-Explain one feature from system shape down to runtime detail. Every drawn edge has source evidence; every figure proves one fact; the reader annotates the result in Plannotator.
+Explain one feature from system shape to runtime values. Every factual node and edge has source evidence; every figure proves one fact.
 
-**Diff mode** applies when the user names a git range, branch, or PR, or asks what changed: draw the feature as it is now, then a colored diff of each figure the change touches. Diff mode's rules live in [`references/diagram-diff.md`](references/diagram-diff.md); load it at step 1.
+**Diff mode:** when the user names a range, branch, PR, or change, load [`references/diagram-diff.md`](references/diagram-diff.md) at step 1. Pin `from` and `to` (`to` defaults to the working tree) and add a colored diff for each affected figure.
 
-## 1. Set the scope
+## 1. Set scope
 
-Find the feature, its live entry point, and its final result or effect. Confirm production code assembles and reaches it; when nothing does, the walkthrough shows that composition gap. In diff mode, pin `from` and `to` (`to` defaults to the working tree).
+Name the feature, live entry, source area, and final result or effect. Verify production code composes and reaches it; otherwise the composition gap is part of the explanation.
 
-Done when the feature boundary, the source area, and any revisions are pinned.
+Done: one explicit boundary from live entry to result, plus pinned revisions in diff mode.
 
-## 2. Map the evidence
+## 2. Map evidence
 
-When the repo has a `.codegraph/` index, query it first, once, for the call graph and the signatures: name the entry, the central types, and the final-result function. Its output is capped, so it elides lines inside long files; read what it leaves open with exact `sed -n 'a,bp'` ranges rather than a second wide query. Otherwise spawn one relentless Explore worker with [`references/repository-evidence.md`](references/repository-evidence.md): its inspection order and its Deliverables section are the worker's whole contract. In diff mode, also have it compute the change as `diagram-diff.md` describes.
+If `.codegraph/` exists, query it once for the entry, central types, final-result function, and call graph; use exact reads only for elided lines. Otherwise give one Explore worker [`references/repository-evidence.md`](references/repository-evidence.md) as its complete contract. In diff mode, include the change mapping required by `diagram-diff.md`.
 
-An anchor is only ever copied from a `grep -n` or `sed -n` result line, never typed from memory of a range: `grep -n "fn confirm_review" src/wizard/state.rs` → `state.rs:552`. Write the map to `ai-docs/explanations/<feature-slug>/brief.md` (evidence first, figure list appended in step 4); it is the drawing worker's whole input, so keep it to what a figure needs: entry chain, the types and functions that appear as nodes with one anchor each, threads and channels, externals. Field lists and per-branch key handling belong in the walkthrough, not the brief; every kilobyte here costs the writer about four seconds.
+Copy anchors only from `grep -n` or `sed -n` output, never memory. Write `ai-docs/explanations/<feature>/brief.md`: boundary, anchored entry chain, figure-worthy types/functions, runtime boundaries, externals, values, state changes, and composition gaps. Keep field inventories and branch trivia for the walkthrough. This brief is the only repository evidence drawing workers receive.
 
-Shell note: zsh expands a bare `=====` separator as a command; quote separator echoes (`echo '-----'`).
-
-Done when the map reaches from the live entry to the final result, every entity and state named appears in source, every anchor came from a grep or sed line, and any composition gap is identified.
+Done: the map reaches the effect, every named fact exists in source, and every anchor came from command output.
 
 ## 3. Verify
 
-Do not reread what the worker read. Run `python3 scripts/check-anchors.py <repo-root> brief.md`: it resolves every `file:line` and prints the source line beside it. Scan the list once; an anchor whose printed line does not carry the claimed symbol is drift, fix it from a fresh `grep -n`. Open a file only where the map is contradictory or an edge lacks an anchor; draw that edge only once anchored, otherwise label it an assumption.
+Do not repeat repository discovery. Run:
 
-Done when the check exits 0 and every printed line supports its claim.
+```bash
+python3 scripts/check-anchors.py <repo-root> brief.md
+```
 
-## 4. Choose the figures
+Scan each printed source line once. If it does not support the claim, replace the anchor from fresh `grep -n`; unresolved edges become labelled assumptions.
 
-Choose from the top of this ladder down; the type per rung is fixed here, so diagram-design's SKILL.md is not loaded. Each rung is one figure proving one fact, inside the budget in [`references/content-brief-by-type.md`](references/content-brief-by-type.md).
+Done: exit 0 and every printed line supports its claim.
 
-| Rung | Job | Type | Draw when |
+## 4. Choose figures
+
+Work down the ladder. A rung qualifies by its predicate, then survives only when removing it would leave a specific reader misunderstanding. Four figures is usual; skip redundancy. Load [`references/content-brief-by-type.md`](references/content-brief-by-type.md) and [`references/authoring-invariants.md`](references/authoring-invariants.md).
+
+| Rung | Fact | Type | Predicate |
 | --- | --- | --- | --- |
-| 1. Overview | live entry, major components, externals, final result, composition gap | Architecture | always |
-| 2. Layers | layers and dependency direction | Layer stack | the feature crosses layers |
-| 3. Structure | central types and how they relate | ER (entities, cardinality), Database schema (real tables), UML class (protocols, inheritance, operations) | three or more central types |
-| 4. Spine | real values in, the functions that transform them, values out; loops, fan-in, decisions, I/O, state changes | Sequence (call order is the point) or Data flow (custody and shape is the point) | always |
-| 5. Lifecycle | states, guarded transitions, terminal outcomes | State machine | the feature owns a state field or status enum |
-| 6. Zooms | one dense stage of the spine expanded | Flowchart, Sequence, or Data flow | a stage hides a decision tree or a loop |
+| 1. Overview | entry, components, externals, result, gap | Architecture | always |
+| 2. Layers | layers and dependency direction | Layer stack | crosses layers |
+| 3. Structure | central types and relationships | ER for entities; schema for tables; UML for protocols/inheritance | ≥3 central types |
+| 4. Spine | value in → transformations/state/I/O → value out | Sequence when order matters; Data flow when custody/shape matters | always |
+| 5. Lifecycle | guarded states and terminal outcomes | State machine | owns state/status |
+| 6. Zoom | one hidden decision tree, loop, or dense stage | Flowchart, Sequence, or Data flow | spine stage hides complexity |
 
-Add any other diagram-design type when it proves a fact prose cannot: Dependency graph for fan-in, Swimlane for handoffs between processes, Deployment when the feature spans hosts.
+Use another type only when it uniquely proves a fact, such as Dependency for fan-in, Swimlane for process handoffs, or Deployment for hosts.
 
-The Draw-when column qualifies a rung; your judgment admits it. For each qualifying rung, ask what the reader would misunderstand without it: a real answer admits the figure, no answer skips it. Effort never decides in either direction. Four figures is the usual size; a Layers or Structure figure that only restates the Overview and the prose is skipped.
-
-Per-figure content rules: [`references/authoring-invariants.md`](references/authoring-invariants.md) and [`references/content-brief-by-type.md`](references/content-brief-by-type.md).
-
-Done when the figure list is appended to `brief.md`: for each, the file name, the type, the nodes, and the one fact it proves (diff variants included).
+Append the figure list to `brief.md`: filename, type, nodes, and one fact proved; include diff variants.
 
 ## 5. Draw and export
 
-Figures are Python scripts over [`scripts/draw.py`](scripts/draw.py), a drawing kit whose primitives already satisfy diagram-design's default profile (palette, fonts, 4px grid, masked labels, orthogonal connectors, paint order). Check the project's `.diagram-design` marker: absent or `profile: default` uses the kit as is; any other profile means the kit's palette does not apply, so load diagram-design's `references/profiles.md` and pass the resolved tokens to the worker to override `draw.py`'s constants.
+Figures are Python scripts over [`scripts/draw.py`](scripts/draw.py). A missing or `profile: default` `.diagram-design` marker uses its palette; otherwise resolve diagram-design profile tokens and override the kit constants.
 
-Spawn one drawing worker per figure in the same message so coordinate planning runs in parallel. Its inputs are exactly `brief.md`, `scripts/draw.py` (the public API), `scripts/example-figure.py`, and [`references/authoring-invariants.md`](references/authoring-invariants.md); it reads neither `_draw_impl.py` nor diagram-design. Each worker writes and runs `diagrams/<rung>-<name>.py`, producing `.html` and `.svg`, then reports node/arrow counts and cuts from the brief. Drawing it yourself is the single-figure fallback.
+Spawn one drawing worker per figure in the same message so coordinate planning runs in parallel. Give each exactly `brief.md`, `scripts/draw.py`, `scripts/example-figure.py`, and `references/authoring-invariants.md`. It reads neither `_draw_impl.py` nor diagram-design. Each writes and runs `diagrams/<rung>-<name>.py`, producing `.html` and `.svg`, and reports node/arrow counts plus cuts. Draw directly for one figure.
 
-After every worker finishes, run `scripts/check-figures.sh diagrams/` **once**; parallel workers must not race or repeat the shared-folder check. It validates and rasterizes all figures into `diagrams/png/`. Fix every failure, then view each PNG once for collisions and crowding the checks cannot see. Re-run the affected check and stop.
+After all workers finish, run `scripts/check-figures.sh diagrams/` once. Parallel workers never run this shared-folder check. Fix failures, then inspect every generated PNG once for collisions and crowding; rerun affected checks.
 
-Done when every listed figure has a `.py`, an `.html`, and an `.svg`, the check exits 0, and every PNG was viewed.
+Done: every planned figure has `.py`, `.html`, `.svg`, a viewed PNG, and passing checks.
 
-## 6. Write the walkthrough
+## 6. Write walkthrough
 
-Write `ai-docs/explanations/<feature-slug>/walkthrough.md` in the `writing-clearly-and-concisely` register, sized by relevant files: 1–3 files, 150–300 words; 4–10, 300–600; 11+, 500–900. The figures carry the structure; the prose carries anchors and the facts no figure can.
+Write `walkthrough.md` in the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
 
-Open the document with the whole path in one sentence. Sections in order: **Context** (what starts the feature, what it produces, the scope, three lines at most; in diff mode, the range and two lines on what changed), one section per rung drawn in ladder order, **What changed** (diff mode: each diff figure with its text list), **Result** (the most important fact, one short paragraph).
+Order: **Context** (entry, output, scope; ≤3 lines), one section per drawn rung, optional **What changed**, then **Result**. Each rung has one bold claim, its SVG embed, and ≤5 anchored facts. Structure lists 3–7 central types grouped by layer when large. Spine is a numbered hop list: function, value in, value out, state/side effect. Separate production call sites from tests when reuse matters.
 
-Each rung section: one bold sentence stating the figure's fact, the figure embedded as `![caption](diagrams/<file>.svg)`, then at most five anchored facts. Rung 3 lists three to seven central types with anchors, grouped by layer for a large feature. Rung 4 is a numbered list of hops: per hop, the function, the value in, the value out. Anchor every structural claim with `file:line`; keep identifiers exact. When the user asks about private functions or reuse, list non-test call sites apart from test call sites.
+Done: Overview and Spine form one path, each flow appears once, every figure is embedded once, and structural claims are anchored.
 
-Done when architecture and spine form one path, each call flow appears once, and every figure in `diagrams/` appears once.
+## 7. Validate and annotate
 
-## 7. Open for annotation
+```bash
+python3 scripts/check-anchors.py <repo-root> walkthrough.md --quiet
+python3 scripts/build-html.py walkthrough.md
+```
 
-Run `python3 scripts/check-anchors.py <repo-root> walkthrough.md --quiet` (exit 0 or fix), then build `walkthrough.html` with `python3 scripts/build-html.py walkthrough.md`, which inlines every SVG per [`references/annotation-build.md`](references/annotation-build.md). Run `plannotator annotate walkthrough.html` in the background without a timeout; it blocks until the reader submits. Plannotator renders SVG only on its raw-HTML surface, so the `.md` stays the repo artifact and the `.html` is the one the reader opens. The reader annotates figures and prose and asks questions through Ask AI. Address the returned annotations in the same conversation, rebuilding the `.html` after any change; the `plannotator` skill holds the stdout contract.
+Fix failures. Then run `plannotator annotate walkthrough.html` in the background without a timeout; it blocks until submission. Address returned annotations and rebuild after changes. If closed, stop.
 
-In chat, give the result paragraph and the walkthrough path.
-
-Done when the annotations are addressed or the reader closed the session.
+In chat, return the Result paragraph and walkthrough path.
