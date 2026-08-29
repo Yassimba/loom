@@ -1,0 +1,9 @@
+# The security gate must not be editable by the PR it judges: required
+# checks run the workflow version from the PR branch, so changes to the
+# gate itself, its suppression files, and the update policy need an
+# explicit owner review before merge.
+/.github/                                @Yassimba
+/osv-scanner.toml                        @Yassimba
+/cli/loom/osv-scanner.toml               @Yassimba
+/skills/**/.skillspector-baseline.yaml   @Yassimba
+/renovate.json                           @Yassimba
