@@ -100,34 +100,65 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
 
     // Skills, projects, tools, Pi, and Herdr touch disjoint state, so every
     // lane runs at once; rows print in a fixed order once all are done.
-    let mut jobs: Vec<Box<dyn FnOnce() -> Lane + Send + '_>> = vec![
-        Box::new(move || update_installed_skills(system, catalog)),
-        Box::new(move || sync_projects_lane(system)),
+    type Job<'a> = Box<dyn FnOnce() -> Lane + Send + 'a>;
+    let mut jobs: Vec<(&'static str, Job<'_>)> = vec![
+        ("Skills", Box::new(move || update_installed_skills(system, catalog))),
+        ("Projects", Box::new(move || sync_projects_lane(system))),
     ];
     if mise {
-        jobs.push(Box::new(move || sync_tool_manifest(system)));
+        jobs.push(("Tools", Box::new(move || sync_tool_manifest(system))));
     } else {
-        jobs.push(Box::new(|| {
-            Lane::failed(
-                "Tools",
-                "mise is not on PATH; rerun the installer from the README",
-            )
-        }));
+        jobs.push((
+            "Tools",
+            Box::new(|| {
+                Lane::failed(
+                    "Tools",
+                    "mise is not on PATH; rerun the installer from the README",
+                )
+            }),
+        ));
     }
     for task in tasks {
-        jobs.push(Box::new(move || run_command_lane(system, task)));
+        let label = task.label;
+        jobs.push((label, Box::new(move || run_command_lane(system, task))));
     }
+    // Rows keep a fixed order, so the report cannot stream; a status line
+    // names the lanes still running instead, or the wait reads as a hang
+    // (Pi reinstalls and the repo download take minutes together).
+    let labels = jobs.iter().map(|(label, _)| *label).collect::<Vec<_>>();
     let (sender, results) = std::sync::mpsc::channel::<(usize, Lane)>();
+    let mut lanes = Vec::new();
     std::thread::scope(|scope| {
-        for (index, job) in jobs.into_iter().enumerate() {
+        for (index, (_, job)) in jobs.into_iter().enumerate() {
             let sender = sender.clone();
             scope.spawn(move || {
                 let _ = sender.send((index, job()));
             });
         }
+        drop(sender);
+        let mut running = labels.clone();
+        let started = std::time::Instant::now();
+        let mut last_set = String::new();
+        loop {
+            match results.recv_timeout(std::time::Duration::from_millis(250)) {
+                Ok((index, lane)) => {
+                    running.retain(|label| *label != labels[index]);
+                    lanes.push((index, lane));
+                    if running.is_empty() {
+                        break;
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+            let set = running.join(" · ");
+            if out.is_terminal() || set != last_set {
+                out.progress(format!("running  {set} · {}s", started.elapsed().as_secs()));
+                last_set = set;
+            }
+        }
     });
-    drop(sender);
-    let mut lanes = results.iter().collect::<Vec<_>>();
+    out.progress_done();
     lanes.sort_by_key(|(index, _)| *index);
 
     let mut failed = 0;
