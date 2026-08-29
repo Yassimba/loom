@@ -18,7 +18,7 @@ const CORE_BEGIN: &str = "# core:begin";
 const CORE_END: &str = "# core:end";
 
 /// The manifest key that provides Pi; a selected Pi package pulls it in.
-pub const PI_TOOL_KEY: &str = "npm:@mariozechner/pi-coding-agent";
+pub const PI_TOOL_KEY: &str = "npm:@earendil-works/pi-coding-agent";
 
 pub fn conf_d_target(home: &std::path::Path) -> PathBuf {
     home.join(".config")
@@ -52,6 +52,12 @@ fn line_key(line: &str) -> Option<&str> {
 const RENAMED_KEYS: &[(&str, &str)] = &[
     // loom-teams left the shared `github:` backend it collided with loom on.
     ("github:Yassimba/loom[exe=loom-teams]", "ubi:Yassimba/loom"),
+    // Pi moved npm scopes; extensions built for the new scope cannot load
+    // under the old package.
+    (
+        "npm:@mariozechner/pi-coding-agent",
+        "npm:@earendil-works/pi-coding-agent",
+    ),
 ];
 
 fn current_key(key: &str) -> &str {
@@ -181,7 +187,7 @@ node = \"24.19.0\"
 # core:end
 
 gh = \"2.97.0\"
-\"npm:@mariozechner/pi-coding-agent\" = \"0.73.1\"
+\"npm:@earendil-works/pi-coding-agent\" = \"0.84.4\"
 \"github:zdyxry/tokui\" = \"0.12.0\"
 ";
 

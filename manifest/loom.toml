@@ -29,7 +29,7 @@ node = "24.19.0"
 "ubi:Yassimba/loom" = { version = "loom-teams-v0.2.0", exe = "loom-teams", tag_regex = "^loom-teams-v" }
 
 # agents & multiplexer
-"npm:@mariozechner/pi-coding-agent" = "0.73.1"
+"npm:@earendil-works/pi-coding-agent" = "0.84.4"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its
 # manual install instruction and mise skips this entry.
 herdr = { version = "0.8.0", os = ["macos", "linux"] }
