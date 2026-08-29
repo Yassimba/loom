@@ -1,0 +1,34 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+
+  "minimumReleaseAge": "5 days",
+  "automerge": true,
+
+  "mise": {
+    "managerFilePatterns": ["/(^|/)mise\\.toml$/", "/^manifest/loom\\.toml$/"]
+  },
+
+  "packageRules": [
+    {
+      "description": "Major updates require manual review before merge",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Skip this repo's own binary pins: release.yml writes them after each release",
+      "matchFileNames": ["manifest/loom.toml"],
+      "matchPackageNames": ["Yassimba/loom"],
+      "enabled": false
+    }
+  ],
+
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "description": "CVE fixes skip the 5-day cooldown but still require manual review, so a malicious release disguised as a security patch cannot automerge",
+    "automerge": false,
+    "labels": ["security-fastlane"]
+  },
+
+  "lockFileMaintenance": { "enabled": true }
+}
