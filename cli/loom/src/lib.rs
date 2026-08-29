@@ -4,6 +4,7 @@ pub mod init;
 mod install;
 mod jsonc;
 pub mod manifest;
+mod pi_compat;
 pub mod settings;
 mod skills;
 pub mod status;

@@ -555,13 +555,20 @@ fn execute_lane(
         action_failures[offset] = Some(failure);
     }
     for (indexed, failure) in resources.into_iter().zip(action_failures) {
-        let failure = failure.flatten().or_else(|| {
-            verify_step(indexed.step, system).and_then(|_| {
-                // Parallel manager processes can race their shared registry.
-                // A serial retry restores any registration another process displaced.
-                execute_step(indexed.step, system)
+        let failure = failure
+            .flatten()
+            .or_else(|| {
+                verify_step(indexed.step, system).and_then(|_| {
+                    // Parallel manager processes can race their shared registry.
+                    // A serial retry restores any registration another process displaced.
+                    execute_step(indexed.step, system)
+                })
             })
-        });
+            .or_else(|| {
+                crate::pi_compat::apply_for_package(&indexed.step.target, system)
+                    .err()
+                    .map(|error| error.to_string())
+            });
         let status = match failure {
             Some(message) => StepStatus::Failed(message),
             None => StepStatus::Installed,
