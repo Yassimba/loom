@@ -7,7 +7,7 @@ description: "Architecture walkthrough of one feature: layered diagrams (overvie
 
 Explain one feature from system shape to runtime values. Every factual node and edge has source evidence; every figure proves one fact.
 
-When subagents are available, orchestrate evidence → figure plan → parallel drawings → walkthrough → validation in one workflow and wait once. Every child gets fresh context and a complete bounded handoff. Do not set turn or usage budgets: aborting a writer creates a slower, costlier parent fallback.
+When subagents are available, orchestrate evidence + figure plan → parallel drawings **and** walkthrough → validation in one workflow and wait once. Every child gets fresh context and a complete bounded handoff. Do not set turn or usage budgets: aborting a writer creates a slower, costlier parent fallback.
 
 **Diff mode:** when the user names a range, branch, PR, or change, load [`references/diagram-diff.md`](references/diagram-diff.md) at step 1. Pin `from` and `to` (`to` defaults to the working tree) and add a colored diff for each affected figure.
 
@@ -19,7 +19,7 @@ Done: one explicit boundary from live entry to result, plus pinned revisions in 
 
 ## 2. Map evidence
 
-If `.codegraph/` exists, query it once for the entry, central types, final-result function, and call graph; use exact reads only for elided lines. Otherwise spawn one **fresh-context worker** with [`references/repository-evidence.md`](references/repository-evidence.md), the feature boundary, repo root, and output path. It writes `ai-docs/explanations/<feature>/brief.md` and runs `check-anchors.py`. In diff mode, include the change contract from `diagram-diff.md`. Wait for it; the parent does not inspect production files or repeat its mapping.
+If `.codegraph/` exists, query it once for the entry, central types, final-result function, and call graph; use exact reads only for elided lines. Otherwise spawn one **fresh-context worker** with [`references/repository-evidence.md`](references/repository-evidence.md), [`references/content-brief-by-type.md`](references/content-brief-by-type.md), the feature boundary, repo root, and output path. It writes `ai-docs/explanations/<feature>/brief.md`, appends the justified figure list from step 4, and runs `check-anchors.py`. In diff mode, include the change contract from `diagram-diff.md`. Wait for it; the parent does not inspect production files or repeat its mapping.
 
 The brief contains the boundary, anchored entry chain, figure-worthy types/functions, runtime boundaries, externals, values, state changes, and composition gaps. Field inventories and branch trivia belong in the walkthrough. It is the only repository evidence drawing workers receive.
 
@@ -66,7 +66,7 @@ Done: every planned figure has `.py`, `.html`, `.svg`, a viewed PNG, and passing
 
 ## 6. Write walkthrough
 
-Spawn one **fresh-context writer** with `brief.md`, the final figure list, and this section; it reads no production files. It writes `walkthrough.md` in the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
+Launch one **fresh-context writer alongside the parallel drawing workers**. Give it `brief.md`, its final figure list, and this section; it reads no production files. It writes `walkthrough.md` in the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
 
 Order: **Context** (entry, output, scope; ≤3 lines), one section per drawn rung, optional **What changed**, then **Result**. Each rung has one bold claim, its SVG embed, and ≤5 anchored facts. Structure lists 3–7 central types grouped by layer when large. Spine is a numbered hop list: function, value in, value out, state/side effect. Separate production call sites from tests when reuse matters.
 
