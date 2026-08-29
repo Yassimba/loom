@@ -44,13 +44,13 @@ def main() -> None:
 
     keep_windows = drive(
         [args.loom, "setup", "--dry-run"],
-        [(1, "n\r"), (2, "/chat\r"), (2, "\x1bq")],
+        [(1, "n\r"), (2, "/gondolin\r"), (2, "\x1bq")],
     )
     (args.evidence / "native-keep-windows.txt").write_text(keep_windows, encoding="utf-8")
     if "Use WSL2 for the complete Loom setup?" not in keep_windows:
         raise AssertionError("WSL choice was not shown")
     if "No matches. Backspace widens, esc cancels." not in keep_windows:
-        raise AssertionError("pi-chat remained searchable after choosing native Windows")
+        raise AssertionError("the WSL-only Gondolin package remained searchable on native Windows")
 
     use_wsl = drive([args.loom, "setup", "--dry-run"], [(1, "y\r")])
     (args.evidence / "native-use-wsl-dry-run.txt").write_text(use_wsl, encoding="utf-8")
