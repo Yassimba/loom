@@ -863,7 +863,7 @@
       "group": "Tools",
       "label": "loom-teams",
       "description": "Teams/Outlook calendar as data over Microsoft Graph — export meetings as JSON, find scored meeting slots.",
-      "installTarget": "github:Yassimba/loom[exe=loom-teams]",
+      "installTarget": "ubi:Yassimba/loom",
       "nextAction": "Run `loom-teams setup` once and sign in, then `loom-teams find <name>`.",
       "bin": "loom-teams",
       "companions": []

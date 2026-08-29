@@ -2,7 +2,7 @@
   "comment": "Wizard metadata for the optional (non-core) tools in loom.toml. Keys must match the manifest's tool keys exactly; the catalog generator validates both directions.",
   "tools": [
     {
-      "key": "github:Yassimba/loom[exe=loom-teams]",
+      "key": "ubi:Yassimba/loom",
       "label": "loom-teams",
       "bin": "loom-teams",
       "description": "Teams/Outlook calendar as data over Microsoft Graph — export meetings as JSON, find scored meeting slots.",
