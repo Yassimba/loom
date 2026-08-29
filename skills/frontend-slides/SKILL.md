@@ -133,6 +133,7 @@ Read the screenshots too. The checker proves a deck is not broken; only your eye
 2. **Clean up** — delete `.frontend-slides/slide-previews/` if it exists.
 3. **Open** — `open [filename].html`.
 4. **Summarise** — file location, style name, slide count; navigation (arrows, space, swipe); how to retune it (`:root` variables for colour, the font link for type, `.reveal` for animation); that inline editing is there (hover the top-left corner or press `E`, click any text, `Ctrl+S` to save); presenter mode on `P` when the deck carries speaker notes; and the natural next moves — revisions, direct editing, sharing.
+5. **Offer annotation review** — when `plannotator` is installed, ask: *"Would you like me to open the whole deck in Plannotator so you can annotate it?"* On yes, follow [plannotator-review.md](plannotator-review.md). The review surface must show every slide in one scrollable document; the normal one-slide presentation view is incomplete.
 
 ## Phase 6: Share
 
