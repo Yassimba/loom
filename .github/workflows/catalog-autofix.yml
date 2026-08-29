@@ -34,10 +34,7 @@ jobs:
       - run: npm ci
       - name: Regenerate the catalog if stale
         run: |
-          if npm run catalog:check; then
-            echo "Catalog already fresh."
-            exit 0
-          fi
+          npm run catalog:check && exit 0
           npm run catalog:generate
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

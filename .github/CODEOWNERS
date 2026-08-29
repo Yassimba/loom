@@ -3,7 +3,6 @@
 # gate itself, its suppression files, and the update policy need an
 # explicit owner review before merge.
 /.github/                                @Yassimba
-/osv-scanner.toml                        @Yassimba
-/cli/loom/osv-scanner.toml               @Yassimba
+**/osv-scanner.toml                      @Yassimba
 /skills/**/.skillspector-baseline.yaml   @Yassimba
 /renovate.json                           @Yassimba
