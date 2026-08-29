@@ -3,9 +3,9 @@ name: Catalog autofix
 # cli/loom/setup-catalog.json embeds Pi package versions, so a Renovate
 # bump to manifest/pi-packages.json leaves the committed catalog stale
 # and catalog:check red. This regenerates it and pushes the fix to the
-# PR branch. Needs the AUTOFIX_TOKEN secret (fine-grained PAT with
-# contents: write): commits pushed with the default GITHUB_TOKEN do not
-# re-trigger required checks, which would strand the PR.
+# PR branch over the AUTOFIX_SSH_KEY deploy key: deploy-key pushes
+# re-trigger required checks, which pushes with the default
+# GITHUB_TOKEN would not, stranding the PR.
 # Loop-safe: the fix commit's own run finds a fresh catalog and pushes
 # nothing.
 
@@ -26,10 +26,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.head_ref }}
-          # falls back to the default token when AUTOFIX_TOKEN is not set;
-          # a fallback-pushed fix commit does NOT re-trigger required
-          # checks, so set the secret for unattended Renovate merges
-          token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+          ssh-key: ${{ secrets.AUTOFIX_SSH_KEY }}
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 24
