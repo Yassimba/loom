@@ -1,41 +1,31 @@
-# Content brief by diagram type
+# Figure content contracts
 
-Lifted from archify's `guide` router. Each row is the whole content brief for that type:
-the question the diagram answers and what it must include. Nothing about rendering.
+Each figure answers one question. Type grammar and budgets constrain content; they do not choose the figure.
 
-| Type         | Question answered                                   | Must include                                                                                          |
-| ------------ | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| architecture | What exists, who owns it, and how is it connected?  | 8–12 core components; one primary path; external dependencies; trust boundaries                       |
-| workflow     | What are the steps, who owns each, where are gates? | lanes = responsibility or phase; columns = progression; happy path monotonic; exceptions routed outside |
-| sequence     | In what order do calls happen?                      | callers and callees; request and return messages; fallback or error path; async side effects          |
-| dataflow     | Where does data come from and go?                   | sources and assets; transform stages; classification or consent; stores and consumers                 |
-| lifecycle    | What states exist and what moves between them?      | start and active states; event-labelled transitions; wait and retry states; all terminal outcomes     |
+| Type | Question | Required content |
+| --- | --- | --- |
+| Architecture | What exists and connects? | live entry, primary path, final effect, core components, externals, real boundaries |
+| Workflow | What happens, who owns it, where are gates? | lanes = owner/phase; columns = progress; monotonic happy path; exceptions outside corridor |
+| Sequence | In what order do calls happen? | callers/callees, requests/returns, fallback or error, async effects |
+| Data flow | Where does each value go and change shape? | sources, transformations, custody/classification, stores, consumers |
+| Lifecycle | What states exist and what moves between them? | start/active states, event-labelled guards, waits/retries, every terminal outcome |
+| ER | How do domain entities relate? | verified entities, key fields, cardinality |
+| Database schema | What is physically persisted? | real tables, SQL types/constraints, indexes, foreign keys |
+| UML class | How do central types compose and implement contracts? | classes/protocols, selected members, inheritance/composition |
 
-Use / avoid, per archify:
+Use Architecture for orientation, not exact call order or state transitions. Sequence is for order, not landscape. A recoverable lifecycle failure needs a real transition back to an active state, not a “retry” note.
 
-- architecture — use for onboarding, design reviews, repository orientation. Avoid when the audience needs exact call order, state transitions, or row-level lineage.
-- sequence — avoid when the reader needs the landscape rather than the order.
-- lifecycle — a card or note saying "retry" is not topology; a recoverable failure needs a real transition back to an active state.
+## Complexity budget
 
-Copy-ready prompt archify emits for architecture:
-
-> Analyze this repository, then create a high-level architecture diagram. Show 8–12 core runtime
-> components, one primary request or data path, external dependencies, ownership or trust
-> boundaries, and put supporting detail in cards instead of adding more edges.
-
-## Complexity budget (per figure)
-
-From diagram-design §7; `draw.py` does not enforce these, the author does.
-
-| Limit | Rule |
-| --- | --- |
-| Nodes | 9 (zone containers, start dots, terminal rings, and callouts do not count) |
-| Arrows / transitions | 12 |
-| Coral (focal) elements | 2 |
-| Lifelines (sequence) | 5 |
-| Fragments (sequence) | 1; 2 only when each is a single-region `opt`/`loop`, never nested |
-| Classes (UML) | 7 |
-| Entities (ER) | 8 |
+| Limit | Maximum |
+| --- | ---: |
+| Nodes | 9, excluding containers/start/terminal/callouts |
+| Arrows or transitions | 12 |
+| Focal elements | 2 |
+| Sequence lifelines | 5 |
+| Sequence fragments | 1; two only for separate single-region `opt`/`loop`, never nested |
+| UML classes | 7 |
+| ER entities | 8 |
 | Callouts | 2 |
 
-Over budget: keep the main path, turn side branches into a callout or a sublabel, and say in the report what was cut. Never cut the focal element the brief names or a terminal outcome; above nine real nodes it is two figures.
+Over budget: retain the main path, focal element, and terminal outcomes; aggregate side detail or split into figures with distinct facts. Never silently cut meaning to pass a check.
