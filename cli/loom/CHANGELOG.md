@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/Yassimba/loom/compare/loom-v0.15.0...loom-v0.16.0) (2026-08-29)
+
+
+### Features
+
+* **manifest:** offer claude-obsidian as an installable tool ([4700bdd](https://github.com/Yassimba/loom/commit/4700bddd7f88911318e03c07b3240ae61f99c72d))
+
 ## [0.15.0](https://github.com/Yassimba/loom/compare/loom-v0.14.1...loom-v0.15.0) (2026-08-29)
 
 
