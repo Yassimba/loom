@@ -27,6 +27,8 @@ jobs:
 
   skill-scan:
     runs-on: ubuntu-latest
+    env:
+      SPECTOR_DEADLINE: "600.0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -36,7 +38,8 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: /opt/pipx/venvs/skillspector
-          key: skillspector-b7241089d7ec15d8b30df980dacbb428214732b9-deadline600
+          # any workflow change (pin bump, deadline tweak) invalidates the cache
+          key: skillspector-${{ hashFiles('.github/workflows/security.yml') }}
       - name: Install SkillSpector
         if: steps.spector-cache.outputs.cache-hit != 'true'
         run: pipx install "git+https://github.com/NVIDIA/skillspector.git@b7241089d7ec15d8b30df980dacbb428214732b9" # v2.11.0
@@ -48,8 +51,8 @@ jobs:
         # the deadline configurable.
         run: |
           state=$(echo "$(pipx environment --value PIPX_LOCAL_VENVS)"/skillspector/lib/python*/site-packages/skillspector/state.py)
-          sed -i 's/^MAX_WORKFLOW_SECONDS = .*/MAX_WORKFLOW_SECONDS = 600.0/' "$state"
-          grep -q "MAX_WORKFLOW_SECONDS = 600.0" "$state"
+          sed -i "s/^MAX_WORKFLOW_SECONDS = .*/MAX_WORKFLOW_SECONDS = $SPECTOR_DEADLINE/" "$state"
+          grep -q "MAX_WORKFLOW_SECONDS = $SPECTOR_DEADLINE" "$state"
           # cache restores the venv but not the pipx shim; use the venv bin
           echo "$(pipx environment --value PIPX_LOCAL_VENVS)/skillspector/bin" >> "$GITHUB_PATH"
       - name: Scan public skills (static analysis)
@@ -60,9 +63,12 @@ jobs:
         # new findings gate after that.
         # PRs scan only skills whose files changed vs the base branch;
         # the weekly schedule and manual dispatch sweep everything.
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            dirs=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD -- skills/ | cut -d/ -f1-2 | sort -u | sed 's|$|/|')
+          if [ "$EVENT" = "pull_request" ]; then
+            dirs=$(git diff --name-only "origin/$BASE_REF"...HEAD -- skills/ | cut -d/ -f1-2 | sort -u | sed 's|$|/|')
           else
             dirs=$(printf '%s\n' skills/*/)
           fi
