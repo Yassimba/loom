@@ -1,6 +1,6 @@
 ---
-name: eli5
-description: Explain something new fast for a smart adult who has never used the topic. Use for "/eli5 [topic]", "eli5 this", "break this down for me", "I know nothing about X, catch me up", or another request for a quick plain-language explanation of how something works.
+name: explain-simply
+description: Explain something new fast for a smart adult who has never used the topic. Use for "/explain-simply [topic]", "explain this simply", "eli5 this", "break this down for me", "I know nothing about X, catch me up", or another request for a quick plain-language explanation of how something works.
 ---
 
 # ELI5
@@ -62,7 +62,7 @@ Use this light editorial style:
 - Use a full-width lavender hero band with a `1.5px` black bottom rule.
 - Use small uppercase step labels at about 11 px with `letter-spacing: .12em` in brick red.
 
-Do not add meta copy such as `/eli5`, category labels, claims about the reader, or a decorative footer. The page is the explanation.
+Do not add meta copy such as `/explain-simply`, category labels, claims about the reader, or a decorative footer. The page is the explanation.
 
 Before delivery, check two things:
 
