@@ -7,7 +7,7 @@ description: "Architecture walkthrough of one feature: layered diagrams (overvie
 
 Explain one feature from system shape to runtime values. Every factual node and edge has source evidence; every figure proves one fact.
 
-Minimize model round trips: use one fresh evidence worker, then let the parent complete every artifact from its bounded brief. After the brief returns, read the brief, drawing API/example, and invariants together; emit all figure scripts and `walkthrough.md` in one assistant turn; run generation and noninteractive checks in one shell command; inspect all PNGs in one parallel read; consolidate any repairs into one turn and rerun the shared command. Failures may add cycles—never skip quality work. Do not spawn figure, prose, planner, or validator workers, and set no turn or usage budget.
+Minimize model round trips: use one fresh evidence worker, then let the parent compile every artifact from one authored `explanation.py`. After the brief returns, read the brief, compact drawing API, bundle example, and invariants together; emit the bundle in one turn; run its compiler once; inspect all PNGs in one parallel read; consolidate repairs into one turn and recompile. Failures may add cycles—never skip quality work. Do not spawn figure, prose, planner, or validator workers, and set no turn or usage budget.
 
 **Diff mode:** when the user names a range, branch, PR, or change, load [`references/diagram-diff.md`](references/diagram-diff.md) at step 1. Pin `from` and `to` (`to` defaults to the working tree) and add a colored diff for each affected figure.
 
@@ -58,15 +58,21 @@ Append the figure list to `brief.md`: filename, type, nodes, and one fact proved
 
 Figures are Python scripts over [`scripts/draw.py`](scripts/draw.py). A missing or `profile: default` `.diagram-design` marker uses its palette; otherwise resolve diagram-design profile tokens and override the kit constants.
 
-The parent reads exactly `brief.md`, `scripts/draw.py`, `scripts/example-figure.py`, and `references/authoring-invariants.md`; it reads neither production files, `_draw_impl.py`, nor diagram-design. Plan coordinates for every figure, then emit every `diagrams/<rung>-<name>.py` in the same assistant turn. Each script produces matching `.html` and `.svg`.
+The parent reads exactly `brief.md`, `scripts/draw.py`, `scripts/example-bundle.py`, and `references/authoring-invariants.md`; it reads neither production files, `_draw_impl.py`, `bundle.py`, nor diagram-design. Plan explicit coordinates and routes for every figure. Write one `explanation.py` using the example's `BUNDLE`/`op` format; figure list order is paint order.
 
-Run every script followed by `scripts/check-figures.sh diagrams/` in one shell command. Inspect every generated PNG in one parallel read for collisions and crowding. Consolidate fixes across scripts, then rerun the same shared command.
+Compile everything with one command:
 
-Done: every planned figure has `.py`, `.html`, `.svg`, a viewed PNG, and passing checks.
+```bash
+python3 <skill>/scripts/bundle.py --repo <repo-root> ai-docs/explanations/<feature>/explanation.py
+```
+
+The compiler validates primitive calls and high-confidence geometry, renders exact declared artifacts, rasterizes, checks anchors, and builds inlined HTML; it never lays out or repairs a figure. Inspect every PNG in one parallel read. Consolidate fixes in `explanation.py`, then rerun the compiler once.
+
+Done: every planned figure has `.html`, `.svg`, a viewed PNG, exact artifact/embed sets, and passing checks; `explanation.py` is the single reviewed source.
 
 ## 6. Write walkthrough
 
-The parent writes `walkthrough.md` from `brief.md` in the same batched assistant turn as the figure scripts; it reads no production files. Use the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
+The parent supplies title, context, sections, facts, and result inside `explanation.py`; the compiler writes `walkthrough.md`. The parent reads no production files. Use the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
 
 Order: **Context** (entry, output, scope; ≤3 lines), one section per drawn rung, optional **What changed**, then **Result**. Each rung has one bold claim, its SVG embed, and ≤5 anchored facts. Structure lists 3–7 central types grouped by layer when large. Spine is a numbered hop list: function, value in, value out, state/side effect. Separate production call sites from tests when reuse matters.
 
@@ -79,6 +85,6 @@ python3 scripts/check-anchors.py <repo-root> walkthrough.md --quiet
 python3 scripts/build-html.py walkthrough.md
 ```
 
-Include these commands with figure generation in the shared validation shell call. Consolidate failures into one repair turn where possible, then rerun the whole call. Then run `plannotator annotate walkthrough.html` in the background without a timeout; it blocks until submission. Address returned annotations and rebuild after changes. If closed, stop.
+The bundle compiler runs these commands and rejects missing, stale, duplicate, or unembedded artifacts. Consolidate failures into one `explanation.py` repair turn where possible, then rerun it. Then run `plannotator annotate walkthrough.html` in the background without a timeout; it blocks until submission. Address returned annotations and rebuild after changes. If closed, stop.
 
 In chat, return the Result paragraph and walkthrough path.

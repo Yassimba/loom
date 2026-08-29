@@ -16,12 +16,16 @@ for f in "$dir"/*.html; do
   [ -e "$f" ] || { echo "no .html in $dir"; exit 1; }
   b="$(basename "${f%.html}")"
   python3 "$here/self_check.py" "$f" | tail -1 || fail=1
-  python3 "$here/verify-geometry.py" "$f" | grep -v '^Summary' && fail=1
+  geometry="$(python3 "$here/verify-geometry.py" "$f")" || {
+    printf '%s\n' "$geometry" | grep -v '^Summary' || true
+    fail=1
+  }
   [ -f "$dir/$b.svg" ] || { echo "MISSING $dir/$b.svg"; fail=1; }
   if command -v rsvg-convert >/dev/null; then
     rsvg-convert -w 1800 "$dir/$b.svg" -o "$png/$b.png" || fail=1
   else
-    echo "rsvg-convert not found; skipping PNG for $b (brew install librsvg)"
+    echo "rsvg-convert not found; PNG validation is required" >&2
+    fail=1
   fi
 done
 echo "PNGs in $png — view each one."
