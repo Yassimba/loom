@@ -53,4 +53,8 @@ Static checks do not prove semantic quality. At milestones, freeze the candidate
 - Prefer general improvements that explain why they should transfer to unseen languages and feature shapes.
 
 ## What's Been Tried
-- Baseline pending.
+- Baseline proxy: 14,879 words; quality gate found `check-figures.sh` masked self-check failures.
+- Kept: `pipefail` propagation; compact `draw.py` facade over private implementation; minimal worked figure; one shared post-parallel validation; compact figure/evidence/type contracts; streamlined seven-stage skill.
+- Current proxy: 3,462 words (76.7% lower). Deterministic checks pass.
+- Manual quality repair restored entity/table evidence and deployment-boundary guardrails removed by an over-aggressive compression.
+- Real nested `pi --print` runs are blocked in this shell by provider fetch failures. Resume with fresh subagent public/held-out runs before claiming end-to-end latency or token wins.
