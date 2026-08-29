@@ -150,6 +150,12 @@
       "label": "plannotator",
       "description": "Browser-based plan and code review for coding agents, with figure-led Guided Reviews: one document, a code peek, and in-app guides drawn by the changeset-walkthrough skill. The plannotator skills drive it.",
       "nextAction": "In Claude Code run `/plugin marketplace add Yassimba/plannotator` and `/plugin install plannotator@plannotator`, then restart. Pick changeset-walkthrough in loom to get the figure-led guides."
+    },
+    {
+      "key": "github:AgriciDaniel/claude-obsidian",
+      "label": "claude-obsidian",
+      "description": "An Obsidian vault as your agent's wiki: wiki-ingest, wiki-query, save, think, canvas, and the autoresearch loop, with a source-grounded Python core. By AgriciDaniel, MIT.",
+      "nextAction": "In Claude Code run `/plugin marketplace add AgriciDaniel/claude-obsidian` and `/plugin install claude-obsidian@agricidaniel-claude-obsidian`, then `/claude-obsidian:wiki`. Other agents load its skills from `$(mise where github:AgriciDaniel/claude-obsidian)/skills`."
     }
   ]
 }

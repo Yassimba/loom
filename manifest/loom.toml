@@ -21,6 +21,12 @@ node = "24.19.0"
 "github:Yassimba/loom[exe=loom]" = { version = "loom-v0.13.0", tag_regex = "^loom-v" }
 # core:end
 
+# claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
+# canvas, autoresearch skills + their Python core). The release zip is the
+# whole product, so `mise where github:AgriciDaniel/claude-obsidian` is the
+# product root its skills resolve scripts from.
+"github:AgriciDaniel/claude-obsidian" = "v2.1.1"
+
 # teams calendar CLI (export meetings as JSON, find slots). Same GitHub
 # releases as loom, but through the ubi backend: mise keys an install by
 # backend + repo, so two `github:` entries for one repo share a store dir and

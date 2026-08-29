@@ -1098,6 +1098,17 @@
       "nextAction": "In Claude Code run `/plugin marketplace add Yassimba/plannotator` and `/plugin install plannotator@plannotator`, then restart. Pick changeset-walkthrough in loom to get the figure-led guides.",
       "bin": "plannotator",
       "companions": []
+    },
+    {
+      "id": "tool:claude-obsidian",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "claude-obsidian",
+      "description": "An Obsidian vault as your agent's wiki: wiki-ingest, wiki-query, save, think, canvas, and the autoresearch loop, with a source-grounded Python core. By AgriciDaniel, MIT.",
+      "installTarget": "github:AgriciDaniel/claude-obsidian",
+      "nextAction": "In Claude Code run `/plugin marketplace add AgriciDaniel/claude-obsidian` and `/plugin install claude-obsidian@agricidaniel-claude-obsidian`, then `/claude-obsidian:wiki`. Other agents load its skills from `$(mise where github:AgriciDaniel/claude-obsidian)/skills`.",
+      "bin": "claude-obsidian",
+      "companions": []
     }
   ]
 }
