@@ -6,11 +6,19 @@
   "automerge": true,
 
   "mise": {
-    "description": "Contributor dev-env only; manifest/loom.toml belongs to mise-bump, which also regenerates the setup catalog",
-    "managerFilePatterns": ["/(^|/)mise\\.toml$/"]
+    "managerFilePatterns": ["/(^|/)mise\\.toml$/", "/^manifest/loom\\.toml$/"]
   },
 
   "customManagers": [
+    {
+      "description": "Pi package pins in the setup manifest; the catalog-autofix workflow regenerates the embedded catalog on these PRs",
+      "customType": "regex",
+      "managerFilePatterns": ["/^manifest/pi-packages\\.json$/"],
+      "matchStrings": [
+        "\"name\": \"(?<depName>[^\"]+)\",\\s*\"version\": \"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "npm"
+    },
     {
       "description": "Keep the SkillSpector pin in the security workflow current",
       "customType": "regex",
@@ -33,6 +41,12 @@
       "description": "Scanner bumps rewrite the gate itself, so they never automerge",
       "matchPackageNames": ["NVIDIA/skillspector"],
       "automerge": false
+    },
+    {
+      "description": "Skip this repo's own binary pins: release.yml writes them after each release",
+      "matchFileNames": ["manifest/loom.toml"],
+      "matchPackageNames": ["Yassimba/loom"],
+      "enabled": false
     }
   ],
 
