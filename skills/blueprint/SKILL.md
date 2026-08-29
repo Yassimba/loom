@@ -1,77 +1,104 @@
 ---
 name: blueprint
-description: Blueprint a change before building it — three ASCII views of the design, held for approval before any code. Use before implementing non-trivial work — proactively or when the user asks to see the design first — or when another skill needs a design-approval gate.
+description: "Design non-trivial code changes before implementation as zoomable, code-bound Plannotator Markdown plans with a projected structural diff, data in/out flow, implementation ledger, and approval gate. Use before substantial implementation or when asked for a design or plan."
 ---
 
 # Blueprint
 
-Show the human three ASCII pictures of what will be built, get sign-off, then build. The pictures are the contract.
+Explain what **will change**. Existing elements are source-backed; proposed elements are visibly **PROJECTED**. The approved Markdown plan is the implementation contract.
 
-Invoke the `show-me` skill (via the Skill tool) — formats, diffs, and captions follow it. No files, no viewer, no Mermaid unless the user asks. Chat only.
+The planning sequence is **PIN → MAP → PROJECT → DRAW → REVIEW → LOCK**. Production code begins after LOCK.
 
-## 1. Draft
+## 1. PIN the change
 
-Understand the change from whatever exists — a description, spec, ticket, or plan — then read the code it touches. Name the **tracer**: the one value or symbol whose journey the change rewires. Name the entry. Silent pick = wrong picture.
+Create `ai-docs/blueprints/<slug>/brief.md` from the request, ticket, or specification. Name:
 
-## 2. Show
+- outcome, acceptance criteria, constraints, non-goals
+- live entry point and final effect
+- **tracer**: the value, event, or entity whose journey changes
+- repository baseline: `HEAD` plus working-tree state
 
-Three views, in this order. Each sits next to one sentence. Real names only — generic boxes approve nothing.
+Ask about ambiguity that changes system shape. Mark smaller uncertainties `ASSUMPTION`.
 
-### Where it sits
+Done when the boundary has one entry, tracer, final effect, and checkable acceptance criteria.
 
-One layer up. Modules and callers around the change, in the project's domain words. A shallow file or component tree is enough. Use a `diff` fence when the layout moves.
+## 2. MAP current evidence
 
-```text
-cli/
-├── commands/     # parses the user action
-└── sessions/     # owns session state   ← change lives here
-      transport/  # sends API requests
+Follow [`../explain-code-flow/references/repository-evidence.md`](../explain-code-flow/references/repository-evidence.md). Query `.codegraph/` once when present; otherwise give one relentless Explore worker that reference as its contract.
+
+Map the live path end to end once: components, calls, concrete values in/out at every tracer hop, state changes, externals, affected files and symbols, and machinery the design preserves. Copy current anchors from `grep -n` or `sed -n`; projected code has no anchor.
+
+Write the verified map to `evidence.json` as the shared packet for projection, every figure, review, and implementation. Later workers read this packet instead of repeating repository discovery.
+
+Verify `brief.md` with `explain-code-flow/scripts/check-anchors.py` resolved from its skill directory.
+
+Done when every current node and edge has verified source, the tracer has concrete input and output shapes, and `evidence.json` contains the complete shared map.
+
+## 3. PROJECT the change
+
+Write `changes.json`, the projected edit ledger and compact implementation handoff defined in [`references/guided-review.md`](references/guided-review.md). Give every addition, removal, and changed contract a stable id (`C1`, `C2`, …), reason, and verification.
+
+Project current → proposed across nodes and edges:
+
+- **added** — exists only in the proposal
+- **removed** — exists now and leaves
+- **changed** — same identity, changed responsibility, contract, state, or route
+- **unchanged** — surrounding machinery deliberately preserved
+
+Use [`../explain-code-flow/references/diagram-diff.md`](../explain-code-flow/references/diagram-diff.md) for the `+` / `−` / `~` palette and redundant cues. Label the result **PROJECTED**. Every colored element carries its ledger id as `data-change="C1"`; every id appears in the plan's searchable change list.
+
+Done when every planned structural change has one ledger row and one projected disposition.
+
+## 4. DRAW the explanation
+
+Invoke `diagram-design`, then follow [`references/figure-selection.md`](references/figure-selection.md). Audit every current diagram type. The admitted figures must prove:
+
+1. where the change sits
+2. what changes
+3. data in → transformations, state and side effects → outputs and failures
+
+Use every selected `diagram-design` semantic pattern, profile, and type reference. Give one drawing worker `evidence.json`, `changes.json`, the figure selection, `explain-code-flow/scripts/draw.py`, `example-figure.py`, and `references/authoring-invariants.md`. The worker renders the full admitted set from the shared evidence packet; it does not remap the repository.
+
+Keep drawing scripts, HTML previews, and PNGs in one temporary working directory. Run `explain-code-flow/scripts/check-figures.sh` there, inspect all PNGs together as one contact sheet, and copy only the final SVGs into the Blueprint's `diagrams/` directory.
+
+Bind useful existing code with exact line ranges:
+
+```html
+<g data-code="src/session/store.ts:40-66">
 ```
 
-### The flow
+Keep projected elements unbound and visibly `PROJECTED`. Keep `viewBox` on every SVG so Plannotator can maximize it. Fix every defect found in the contact sheet and rerun the affected checks.
 
-ASCII graph of the tracer, entry to exit. Boxes for data, arrows for calls, `args → return` and file:line on each hop.
+Done when every DRAW verdict has one checked, retained SVG, every binding resolves, every projected node is labeled, and the required facts are covered.
 
-Existing flow → `diff` fence: current rails, intended AFTER as `+`/`-`, marked **projected**. New flow → one `text` block, marked projected.
+## 5. REVIEW the plan
 
-```diff
- on(save)
-   read content
--  write content
-+  if content is unchanged
-+    return cached result
-+  write new content
-   return result
-```
+Load [`references/guided-review.md`](references/guided-review.md). Build the canonical `plan.md` with the intent, current boundary, projected diff, tracer spine, admitted design views, ordered implementation path, verification, risks, rollback, and untouched areas. Reference every admitted SVG once with the exact empty-body `plannotator-svg` directive.
 
-### The callgraph
+Then run a prose gate over every authored artifact — `brief.md`, the `changes.json` strings, `plan.md`, and every figure label and callout — before the validator:
 
-`npx calldiff tree --entry <entry> --maxDepth 2 --locs` for the rails, then hand-write the intended `+`/`-` (full CLI: invoke `calldiff`). Entry unknown → `--file <path>`, say you picked. Language calldiff can't parse → hand-trace, marked **unverified**.
+1. Invoke the `stop-the-slop` skill in **Improve** stance. These are reference documents: no AI patterns, every fact kept.
+2. Check the result against the `i-have-adhd` rules: each overview leads with its point, lists are numbered and capped at five, and no sentence asks the reader to hold off-screen state.
+3. Hold the register of `writing-clearly-and-concisely`: ASD-STE100 Simplified Technical English. Replace each jargon word with the plain term, or define it in bold at first use when the reviewer needs it to search the code.
 
-```diff
- submit_form
-   create_session
-     persist_prompt
-+    expand_skill_mention
-     launch_agent
-```
+A sentence that fails any check is fixed and re-checked before validation runs.
 
-Skip a view only when it adds nothing the others already show, and say why. Extra show-me views (sequence, state, schema) only when these three leave a design question unanswered.
+Run the Blueprint validator, then submit `plan.md` through Plannotator as that reference specifies. The reviewer can expand figures, reveal bound existing code, and annotate stable elements or the whole figure.
 
-Done when: the three views (or the named skips) are in chat, every name is a real file/symbol/actor, and one takeaway says what gets built, in what order, and what stays untouched.
+- **Revise** — address annotations, rebuild affected artifacts, validate, and resubmit the same plan path.
+- **Rethink** — return to PIN with the rejected approach recorded.
+- Closing without approval pauses implementation.
 
-## 3. Gate
+Done when the reviewer explicitly approves one valid plan revision.
 
-No production code until approved. Ask (AskUserQuestion when available):
+## 6. LOCK the contract
 
-- **Approve** — the pictures lock; they are the map. Start building.
-- **Revise** — take the feedback, redraw, return here.
-- **Rethink** — approach is wrong; return to Draft.
+After explicit Plannotator approval, run the validator's `--lock` command from [`references/guided-review.md`](references/guided-review.md). It preserves `approved-plan.md` and writes `approval.json` with the approved plan hash, repository baseline hash, `HEAD`, plan path, and timestamp.
 
-If they ask for a revision you believe is a mistake, say the trade-off, then draw what they chose.
+Implementation may begin once both files exist. Implementation workers read the handoff in `changes.json`, `evidence.json`, and the named source files. They load `plan.md` or figures only when a listed unresolved risk points there. A later design change creates a new reviewed Blueprint revision rather than rewriting the approved contract.
 
-## 4. Verify (after the build)
+Done when `approved-plan.md` matches the reviewed plan, `approval.json` records its reproducible baseline, and the compact handoff can start implementation without the full review package.
 
-Same three views against built source. Ground the callgraph with `npx calldiff diff <ref-at-approval> --entry <entry> --maxDepth 2`. Report every `+`/`-` in one sentence. Accepted drift updates the pictures so the record matches reality.
+## After implementation
 
-Done when: promise-vs-built is in chat and every surprise is explained or fixed.
+Load [`references/verify-built.md`](references/verify-built.md). Compare **PROMISED → BUILT**, dispose every ledger id and acceptance criterion, bind actual changed code, and reopen unexplained drift for review.

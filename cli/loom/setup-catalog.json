@@ -117,10 +117,19 @@
       "kind": "skill",
       "group": "Coding",
       "label": "blueprint",
-      "description": "Blueprint a change before building it — three ASCII views of the design, held for approval before any code. Use before implementing non-trivial work — proactively or when the user asks to see the design first — or when another skill needs a design-approval gate.",
+      "description": "Design non-trivial code changes before implementation as zoomable, code-bound Plannotator Markdown plans with a projected structural diff, data in/out flow, implementation ledger, and approval gate. Use before substantial implementation or when asked for a design or plan.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
-      "dependencies": ["show-me", "calldiff", "npm:calldiff"]
+      "dependencies": [
+        "writing-clearly-and-concisely",
+        "stop-the-slop",
+        "i-have-adhd",
+        "diagram-design",
+        "plannotator",
+        "explain-code-flow",
+        "calldiff",
+        "npm:calldiff"
+      ]
     },
     {
       "id": "skill:brainstorming",

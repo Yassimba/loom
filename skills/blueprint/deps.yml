@@ -1,6 +1,12 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
 skills:
-  - show-me
+  - writing-clearly-and-concisely
+  - stop-the-slop
+  - i-have-adhd
+  - diagram-design
+  - plannotator
+  # Hard file dependency: Blueprint runs its scripts and loads its references.
+  - explain-code-flow
   - calldiff
 tools:
   - calldiff
