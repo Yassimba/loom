@@ -1,0 +1,19 @@
+# Accepted-risk ignores for osv-scanner (security.yml): transitive crates
+# pinned by ratatui/inquire with no compatible fixed version. Delete each
+# entry when the parent crate bumps past it.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0002"
+reason = "lru 0.12.5 is the newest ratatui allows; TUI-local cache, not attacker-reachable (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0253"
+reason = "lru 0.12.5 is the newest ratatui allows (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+reason = "paste is unmaintained (advisory, not a vuln); pulled by ratatui (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0057"
+reason = "fxhash is unmaintained (advisory, not a vuln); pulled by inquire (2026-08-29)"
