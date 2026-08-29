@@ -169,7 +169,11 @@ impl Out {
     pub fn progress(&self, text: impl AsRef<str>) {
         use std::io::Write;
         if self.terminal {
-            print!("\r\x1b[2K  {} {}", self.muted("⋯"), self.muted(text.as_ref()));
+            print!(
+                "\r\x1b[2K  {} {}",
+                self.muted("⋯"),
+                self.muted(text.as_ref())
+            );
             let _ = std::io::stdout().flush();
         } else {
             self.line(format!("  ... {}", text.as_ref()));
