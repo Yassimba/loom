@@ -7,6 +7,8 @@ description: "Architecture walkthrough of one feature: layered diagrams (overvie
 
 Explain one feature from system shape to runtime values. Every factual node and edge has source evidence; every figure proves one fact.
 
+When subagents are available, orchestrate evidence → figure plan → parallel drawings → walkthrough → validation in one workflow and wait once. Every child gets fresh context and a complete bounded handoff. Do not set turn or usage budgets: aborting a writer creates a slower, costlier parent fallback.
+
 **Diff mode:** when the user names a range, branch, PR, or change, load [`references/diagram-diff.md`](references/diagram-diff.md) at step 1. Pin `from` and `to` (`to` defaults to the working tree) and add a colored diff for each affected figure.
 
 ## 1. Set scope
