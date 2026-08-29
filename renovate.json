@@ -6,8 +6,22 @@
   "automerge": true,
 
   "mise": {
-    "managerFilePatterns": ["/(^|/)mise\\.toml$/", "/^manifest/loom\\.toml$/"]
+    "description": "Contributor dev-env only; manifest/loom.toml belongs to mise-bump, which also regenerates the setup catalog",
+    "managerFilePatterns": ["/(^|/)mise\\.toml$/"]
   },
+
+  "customManagers": [
+    {
+      "description": "Keep the SkillSpector pin in the security workflow current",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/security\\.yml$/"],
+      "matchStrings": [
+        "skillspector\\.git@(?<currentDigest>[a-f0-9]{40}).*# (?<currentValue>v[\\d.]+)"
+      ],
+      "depNameTemplate": "NVIDIA/skillspector",
+      "datasourceTemplate": "github-tags"
+    }
+  ],
 
   "packageRules": [
     {
@@ -16,10 +30,9 @@
       "automerge": false
     },
     {
-      "description": "Skip this repo's own binary pins: release.yml writes them after each release",
-      "matchFileNames": ["manifest/loom.toml"],
-      "matchPackageNames": ["Yassimba/loom"],
-      "enabled": false
+      "description": "Scanner bumps rewrite the gate itself, so they never automerge",
+      "matchPackageNames": ["NVIDIA/skillspector"],
+      "automerge": false
     }
   ],
 
