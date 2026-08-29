@@ -1,5 +1,5 @@
 {
-  "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: npm packages use an exact version and Git packages use an exact commit. Users get new versions only when a pin change lands on main; the mise-bump workflow proposes npm bumps. First-party packages still live in plugins/ workspaces.",
+  "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: npm packages use an exact version and Git packages use an exact commit. Users get new versions only when a pin change lands on main; Renovate proposes npm bumps and the catalog-autofix workflow regenerates the embedded catalog. First-party packages still live in plugins/ workspaces.",
   "packages": [
     {
       "name": "@companion-ai/feynman",
@@ -21,6 +21,13 @@
       "label": "autoresearch",
       "description": "Run autonomous optimization loops: change code, benchmark it, keep improvements, and revert regressions. By davebcn87.",
       "nextAction": "Run /autoresearch with an optimization target in Pi."
+    },
+    {
+      "name": "pi-mcp-adapter",
+      "version": "2.31.0",
+      "label": "mcp-adapter",
+      "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
+      "nextAction": "Run /mcp setup in Pi to configure an MCP server."
     },
     {
       "name": "pi-sandbox",
