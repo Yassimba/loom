@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/Yassimba/loom/compare/loom-v0.13.2...loom-v0.14.0) (2026-08-29)
+
+
+### Features
+
+* **loom:** show which update lanes are still running ([1633482](https://github.com/Yassimba/loom/commit/163348213d38cb6ae3b0c08c7d1106a04c05bc5a))
+
+
+### Bug Fixes
+
+* **loom:** install Pi from its new npm scope without mise ([964bc70](https://github.com/Yassimba/loom/commit/964bc7021441718093a00dde42faa6bdca04d186))
+* **manifest:** pin Pi under its new npm scope so extensions load again ([ab7e9b9](https://github.com/Yassimba/loom/commit/ab7e9b95ada532cca6a446852f8c68ccdbbb1eb5))
+
 ## [0.13.2](https://github.com/Yassimba/loom/compare/loom-v0.13.1...loom-v0.13.2) (2026-08-29)
 
 
