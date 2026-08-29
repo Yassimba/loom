@@ -520,16 +520,6 @@
       "dependencies": ["diagram-design", "stop-the-slop"]
     },
     {
-      "id": "skill:marp-slide",
-      "kind": "skill",
-      "group": "Presentations",
-      "label": "marp-slide",
-      "description": "Create Marp presentation slides — themed decks authored in Markdown. Use when the user asks for a Marp document or wants slides written in Markdown rather than .pptx.",
-      "installTarget": "marp-slide",
-      "nextAction": "Ask your coding agent to use the marp-slide skill.",
-      "dependencies": ["npm:@marp-team/marp-cli"]
-    },
-    {
       "id": "skill:dd-apm",
       "kind": "skill",
       "group": "Observability",
@@ -992,17 +982,6 @@
       "installTarget": "npm:@mermaid-js/mermaid-cli",
       "nextAction": "Ask your agent for a diagram.",
       "bin": "mmdc",
-      "companions": []
-    },
-    {
-      "id": "tool:marp-cli",
-      "kind": "tool",
-      "group": "Tools",
-      "label": "marp-cli",
-      "description": "Renders Markdown slide decks — used by the marp-slide skill.",
-      "installTarget": "npm:@marp-team/marp-cli",
-      "nextAction": "Ask your agent for a slide deck.",
-      "bin": "marp",
       "companions": []
     },
     {
