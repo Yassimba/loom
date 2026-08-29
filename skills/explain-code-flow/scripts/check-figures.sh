@@ -6,7 +6,7 @@
 # Per figure: self_check.py (diagram-design skin/a11y rules), verify-geometry.py
 # (label masks clipped by later nodes), and a PNG at 1800px wide via
 # rsvg-convert for the eyeball pass. Exits non-zero when any check fails.
-set -u
+set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 dir="${1:?diagrams dir}"
 png="${2:-$dir/png}"
