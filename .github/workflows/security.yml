@@ -31,6 +31,16 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Install SkillSpector
         run: pipx install "git+https://github.com/NVIDIA/skillspector.git@b7241089d7ec15d8b30df980dacbb428214732b9" # v2.11.0
+      - name: Raise SkillSpector's 60s scan deadline
+        # state.py hardcodes MAX_WORKFLOW_SECONDS = 60.0 with no env or
+        # flag override; CI runners can't finish the largest skills in
+        # 60s, which fail-closes the scan (exit 2, coverage 0%). Safe to
+        # patch: the install is commit-pinned. Drop when upstream makes
+        # the deadline configurable.
+        run: |
+          state=$(echo "$(pipx environment --value PIPX_LOCAL_VENVS)"/skillspector/lib/python*/site-packages/skillspector/state.py)
+          sed -i 's/^MAX_WORKFLOW_SECONDS = .*/MAX_WORKFLOW_SECONDS = 600.0/' "$state"
+          grep -q "MAX_WORKFLOW_SECONDS = 600.0" "$state"
       - name: Scan public skills (static analysis)
         # Exit 1 when any skill scores >50 (DO_NOT_INSTALL). drafts/ and
         # personal/ are not install surfaces, so they don't gate CI. A skill
