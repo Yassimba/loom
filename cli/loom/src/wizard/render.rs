@@ -3,7 +3,8 @@
 //! clickable Back/Next buttons.
 
 use super::state::{
-    ChooseStage, ExecStatus, Group, HitMap, InstallStage, Pane, Row, Stage, WhereStage, Wizard,
+    ChooseStage, ExecStatus, Group, HitMap, InstallStage, ItemState, Pane, Row, Stage, WhereStage,
+    Wizard,
 };
 use crate::settings::SettingSpec;
 use crate::{ResourceKind, SkillAgent};
@@ -27,15 +28,37 @@ const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 
 type ListHit = Option<(Rect, usize)>;
 
+#[derive(Default)]
+struct ItemCounts {
+    available: usize,
+    picked: usize,
+    required: usize,
+    installed: usize,
+    unavailable: usize,
+}
+
 impl Wizard {
     pub fn draw(&mut self, frame: &mut Frame) {
+        self.hits = HitMap::default();
+        if frame.area().width < 40 || frame.area().height < 10 {
+            frame.render_widget(
+                Paragraph::new(vec![
+                    Line::styled("loom needs a little more room", Style::new().bold()),
+                    Line::from("Resize to at least 40 columns by 10 rows."),
+                    Line::from("Or use `loom add --help` for scripted setup."),
+                ])
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true }),
+                frame.area(),
+            );
+            return;
+        }
         let [header, body, footer] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Min(1),
             Constraint::Length(1),
         ])
         .areas(frame.area());
-        self.hits = HitMap::default();
         self.render_header(frame, header);
         let list = match &self.stages[self.stage_index] {
             Stage::Choose(stage) => {
@@ -61,13 +84,43 @@ impl Wizard {
         if self.confirm_quit {
             self.render_confirm_quit(frame);
         }
+        if self.confirm_cancel {
+            self.render_confirm_cancel(frame);
+        }
+        if std::env::var_os("NO_COLOR").is_some()
+            || std::env::var("TERM").is_ok_and(|term| term == "dumb")
+        {
+            let dumb = std::env::var("TERM").is_ok_and(|term| term == "dumb");
+            for cell in &mut frame.buffer_mut().content {
+                cell.set_fg(Color::Reset).set_bg(Color::Reset);
+                if dumb {
+                    let replacement = match cell.symbol() {
+                        "✓" => Some("v"),
+                        "✗" => Some("x"),
+                        "○" => Some("o"),
+                        "⊘" => Some("-"),
+                        "›" | "→" | "▸" => Some(">"),
+                        "◂" => Some("<"),
+                        "•" => Some("*"),
+                        symbol if SPINNER.contains(&symbol) => Some("."),
+                        _ => None,
+                    };
+                    if let Some(symbol) = replacement {
+                        cell.set_symbol(symbol);
+                    }
+                }
+            }
+        }
     }
 
     // ---- chrome ------------------------------------------------------------
 
     fn render_header(&self, frame: &mut Frame, area: Rect) {
         let title = Line::from(vec![
-            Span::styled(" loom", Style::new().fg(ACCENT).bold()),
+            Span::styled(
+                format!(" loom {}", self.model.mode.command()),
+                Style::new().fg(ACCENT).bold(),
+            ),
             Span::styled(
                 concat!("  v", env!("CARGO_PKG_VERSION")),
                 Style::new().dim(),
@@ -137,7 +190,10 @@ impl Wizard {
                 }
                 Stage::Where(_) => " ↑↓ move · space toggle · enter continue · esc back",
                 Stage::Review { .. } => " enter install · ↑↓ scroll · esc back",
-                Stage::Install(stage) if stage.running => " installing…",
+                Stage::Install(stage) if stage.running && self.confirm_cancel => {
+                    " press ctrl-c again to cancel · install may be partial"
+                }
+                Stage::Install(stage) if stage.running => " installing… · ctrl-c cancel",
                 Stage::Install(_) => " enter finish · ↑↓ scroll",
             }
         };
@@ -280,6 +336,31 @@ impl Wizard {
         );
     }
 
+    fn render_confirm_cancel(&self, frame: &mut Frame) {
+        let lines = vec![
+            Line::from("Cancel the running install? Completed changes stay in place."),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("ctrl-c", Style::new().fg(ERR).bold()),
+                Span::raw(" cancel   "),
+                Span::styled("wait", Style::new().fg(ACCENT).bold()),
+                Span::raw(" continue installing"),
+            ]),
+        ];
+        let area = centered_rect(
+            frame.area(),
+            64.min(frame.area().width.saturating_sub(4)),
+            5,
+        );
+        frame.render_widget(Clear, area);
+        frame.render_widget(
+            Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(bordered(" Cancel install? ", true)),
+            area,
+        );
+    }
+
     // ---- choose ------------------------------------------------------------
 
     fn render_choose(
@@ -363,13 +444,19 @@ impl Wizard {
             }
             None => {
                 let group = stage.group();
-                let (on, actionable) = self.group_counts(&self.group_items(group));
-                let title = if group.everything {
-                    format!(" {} · {on}/{actionable} picked ", group.title)
-                } else if actionable == 0 {
-                    format!(" {} · all installed ", group.title)
+                let counts = self.item_counts(&self.group_items(group));
+                let title = if counts.available + counts.picked == 0 {
+                    format!(
+                        " {} · {} installed · {} required · {} unavailable ",
+                        group.title, counts.installed, counts.required, counts.unavailable
+                    )
                 } else {
-                    format!(" {} · {on}/{actionable} picked ", group.title)
+                    format!(
+                        " {} · {}/{} picked ",
+                        group.title,
+                        counts.picked,
+                        counts.available + counts.picked
+                    )
                 };
                 (group.rows.clone(), stage.item_cursor, title)
             }
@@ -438,27 +525,45 @@ impl Wizard {
         )
     }
 
+    fn item_counts(&self, items: &[super::state::Item]) -> ItemCounts {
+        let mut counts = ItemCounts::default();
+        for item in items {
+            match self.item_state(*item) {
+                ItemState::Available => counts.available += 1,
+                ItemState::Picked => counts.picked += 1,
+                ItemState::Required(_) => counts.required += 1,
+                ItemState::Installed => counts.installed += 1,
+                ItemState::Unavailable(_) => counts.unavailable += 1,
+            }
+        }
+        counts
+    }
+
     fn group_item(&self, group: &Group, width: usize) -> ListItem<'_> {
         let items = self.group_items(group);
         let (mark, mark_style, count) = if items.is_empty() {
             ("   ", Style::new(), String::new())
         } else {
-            let (on, actionable) = self.group_counts(&items);
-            let (mark, style) = if actionable == 0 {
+            let counts = self.item_counts(&items);
+            let actionable = counts.available + counts.picked;
+            let (mark, style) = if actionable == 0 && counts.required == 0 {
                 (" ✓ ", Style::new().fg(OK).dim())
-            } else if on == 0 {
+            } else if counts.picked == 0 && counts.required == 0 {
                 (OFF, Style::new().dim())
-            } else if on == actionable {
+            } else if counts.picked == actionable {
                 (ON, Style::new().fg(OK))
             } else {
                 (PART, Style::new().fg(OK))
             };
             let count = if actionable == 0 {
-                "✓".to_owned()
-            } else if on == 0 {
+                format!(
+                    "{}i {}r {}u",
+                    counts.installed, counts.required, counts.unavailable
+                )
+            } else if counts.picked == 0 {
                 format!("{actionable}")
             } else {
-                format!("{on}/{actionable}")
+                format!("{}/{actionable}", counts.picked)
             };
             (mark, style, count)
         };
@@ -520,16 +625,20 @@ impl Wizard {
             }
             Row::Setting(index) => {
                 let spec = &self.model.settings[*index];
-                if self.setting_applied(*index) {
-                    (
+                match self.item_state(super::state::Item::Setting(*index)) {
+                    ItemState::Installed => (
                         " ✓ ",
                         Style::new().fg(OK).dim(),
                         true,
                         spec.description.clone(),
-                    )
-                } else {
-                    let (mark, style) = mark_for(self.setting_on[*index]);
-                    (mark, style, false, spec.description.clone())
+                    ),
+                    ItemState::Unavailable(reason) => {
+                        (" - ", Style::new().fg(WARN).dim(), true, reason)
+                    }
+                    _ => {
+                        let (mark, style) = mark_for(self.setting_on[*index]);
+                        (mark, style, false, spec.description.clone())
+                    }
                 }
             }
         };
@@ -554,10 +663,10 @@ impl Wizard {
             Line::from(""),
         ];
         if group.everything {
-            let (on, actionable) = self.group_counts(&items);
+            let counts = self.item_counts(&items);
             lines.push(Line::from(format!(
-                "{on} of {actionable} picked across the whole catalog · {} already installed.",
-                items.len() - actionable
+                "{} picked · {} required · {} installed · {} unavailable.",
+                counts.picked, counts.required, counts.installed, counts.unavailable
             )));
             lines.push(Line::from(""));
             lines.push(Line::styled(
@@ -565,21 +674,22 @@ impl Wizard {
                 Style::new().dim(),
             ));
         } else {
-            let (on, actionable) = self.group_counts(&items);
-            let installed = items.len() - actionable;
-            lines.push(Line::from(if actionable == 0 {
-                format!("All {} installed.", plural(installed, "item"))
-            } else if installed == 0 {
-                format!("{on} of {actionable} picked.")
-            } else {
-                format!("{on} of {actionable} picked · {installed} already installed.")
-            }));
+            let counts = self.item_counts(&items);
+            let actionable = counts.available + counts.picked;
+            lines.push(Line::from(format!(
+                "{} picked · {} available · {} required · {} installed · {} unavailable.",
+                counts.picked,
+                counts.available,
+                counts.required,
+                counts.installed,
+                counts.unavailable
+            )));
             lines.push(Line::from(""));
             lines.push(Line::styled(
                 if actionable == 0 {
                     "→ opens the group"
                 } else {
-                    "space picks or clears the whole group · → opens it"
+                    "space picks or clears available items · → opens it"
                 },
                 Style::new().dim(),
             ));
@@ -684,26 +794,21 @@ impl Wizard {
     // ---- where -------------------------------------------------------------
 
     fn render_where(&self, frame: &mut Frame, area: Rect, stage: &WhereStage) -> ListHit {
-        let [list_area, details_area] =
-            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .areas(area);
+        let [list_area, details_area] = if area.width < 70 {
+            [area, Rect::new(area.x, area.y, 0, 0)]
+        } else {
+            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(area)
+        };
         let destination = self.skill_destination();
         let (global, project) = match self.skill_scope {
             crate::SkillScope::Global => ("(•)", "( )"),
             crate::SkillScope::Project => ("( )", "(•)"),
         };
-        let project_name = destination
-            .project_root
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| destination.project_root.display().to_string());
         let mut items = vec![ListItem::new(Line::from(vec![
             Span::styled(format!(" {global} "), Style::new().fg(OK)),
-            Span::raw("Global"),
-            Span::styled("  every project     ", Style::new().dim()),
+            Span::raw("Global    "),
             Span::styled(format!("{project} "), Style::new().fg(OK)),
             Span::raw("Project"),
-            Span::styled(format!("  only {project_name}/"), Style::new().dim()),
         ]))];
         let agent_width = SkillAgent::ALL
             .iter()
@@ -716,10 +821,14 @@ impl Wizard {
                 crate::SkillScope::Global => agent.global_skill_tree(&destination.home),
                 crate::SkillScope::Project => agent.project_skill_tree(&destination.project_root),
             };
+            let tree_room = (list_area.width as usize).saturating_sub(2 + 5 + agent_width + 1);
             items.push(ListItem::new(Line::from(vec![
                 Span::styled(format!(" {mark} "), style),
                 Span::raw(format!("{} ", pad(agent.label(), agent_width))),
-                Span::styled(tidy(&tree, &destination.home), Style::new().dim()),
+                Span::styled(
+                    cut(&tidy(&tree, &destination.home), tree_room),
+                    Style::new().dim(),
+                ),
             ])));
         }
         let skills = self
@@ -908,7 +1017,24 @@ impl Wizard {
     // ---- install -----------------------------------------------------------
 
     fn render_install(&self, frame: &mut Frame, area: Rect, stage: &InstallStage) {
-        let summary_height = if stage.report.is_some() { 7 } else { 0 };
+        let actions = stage
+            .report
+            .as_ref()
+            .map(|report| self.next_actions(report))
+            .unwrap_or_default();
+        let summary_height = if let Some(report) = &stage.report {
+            let setup_actions = if self.model.mode == crate::app::SelectionMode::Setup
+                && report.failures.is_empty()
+            {
+                3
+            } else {
+                0
+            };
+            (7 + actions.len() as u16 + report.failures.len() as u16 + setup_actions)
+                .min(area.height.saturating_sub(6))
+        } else {
+            0
+        };
         let [gauge_area, steps_area, summary_area] = Layout::vertical([
             Constraint::Length(3),
             Constraint::Min(1),
@@ -936,7 +1062,11 @@ impl Wizard {
             gauge_area,
         );
 
-        let spinner = SPINNER[stage.tick % SPINNER.len()];
+        let spinner = if std::env::var("TERM").is_ok_and(|term| term == "dumb") {
+            "."
+        } else {
+            SPINNER[stage.tick % SPINNER.len()]
+        };
         let label_width = stage
             .items
             .iter()
@@ -976,11 +1106,15 @@ impl Wizard {
             })
             .collect::<Vec<_>>();
         let visible = steps_area.height.saturating_sub(2);
-        let active = stage
-            .items
-            .iter()
-            .position(|item| matches!(item.status, ExecStatus::Running))
-            .unwrap_or(done.saturating_sub(1));
+        let active = if stage.running {
+            stage
+                .items
+                .iter()
+                .position(|item| matches!(item.status, ExecStatus::Running))
+                .unwrap_or(done.saturating_sub(1))
+        } else {
+            (stage.scroll as usize).min(stage.items.len().saturating_sub(1))
+        };
         let offset = if stage.running {
             list_offset(stage.items.len(), visible, active)
         } else {
@@ -1009,8 +1143,23 @@ impl Wizard {
                     report.installed.len()
                 )));
             }
-            for action in self.next_actions(report).iter().take(2) {
+            if let Some(item) = stage.items.get(active) {
+                let detail = match &item.status {
+                    ExecStatus::Failed(message) | ExecStatus::Skipped(message) => message,
+                    ExecStatus::Ok(message) => message,
+                    _ => &item.detail,
+                };
+                if !detail.is_empty() {
+                    lines.push(field("detail", detail.clone(), ACCENT));
+                }
+            }
+            for action in &actions {
                 lines.push(field("next", action.clone(), ACCENT));
+            }
+            if self.model.mode == crate::app::SelectionMode::Setup && report.failures.is_empty() {
+                for action in crate::app::SETUP_NEXT_ACTIONS {
+                    lines.push(field("next", action.into(), ACCENT));
+                }
             }
             lines.push(Line::from(vec![
                 Span::styled("enter", Style::new().fg(ACCENT).bold()),
@@ -1023,19 +1172,6 @@ impl Wizard {
                 summary_area,
             );
         }
-    }
-
-    fn next_actions(&self, report: &crate::InstallReport) -> Vec<String> {
-        let mut actions = Vec::new();
-        for resource in self.selection() {
-            let installed = report.installed.contains(&resource.id)
-                || (resource.kind == ResourceKind::Skill
-                    && report.installed.iter().any(|target| target == "skills"));
-            if installed && !actions.contains(&resource.next_action) {
-                actions.push(resource.next_action.clone());
-            }
-        }
-        actions
     }
 }
 

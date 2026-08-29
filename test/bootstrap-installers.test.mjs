@@ -53,7 +53,7 @@ test("piped Unix bootstrap reconnects interactive setup to the terminal", async 
   // so a wizard started on it dies with "Failed to initialize input reader".
   assert.match(installer, /terminal="\$\(tty 0<&2 2>\/dev\/null\)"/);
   assert.match(installer, /terminal=\/dev\/tty/);
-  assert.match(installer, /mise -C "\$HOME" exec -- loom setup "\$@" <"\$terminal"/);
+  assert.match(installer, /run_loom_setup "\$@" <"\$terminal"/);
   // A shell opened before the install has no mise hook: say to open a new one.
   assert.match(installer, /open a new shell \(or run: exec /);
   // A guided install with no terminal at all says what to run instead of
@@ -69,6 +69,18 @@ test("bootstraps forward explicit setup selectors", async () => {
 
   assert.match(unix, /mise -C "\$HOME" exec -- loom setup "\$@"/);
   assert.match(windows, /mise -C \$HOME exec -- loom setup @SetupArgs/);
+});
+
+test("bootstrap CI handoff can exercise the checked-out Loom binary", async () => {
+  const [unix, windows] = await Promise.all([
+    readFile(join(repoRoot, "install.sh"), "utf8"),
+    readFile(join(repoRoot, "install.ps1"), "utf8"),
+  ]);
+
+  assert.match(unix, /LOOM_E2E_LOOM_BIN/);
+  assert.match(unix, /"\$LOOM_E2E_LOOM_BIN" setup "\$@"/);
+  assert.match(windows, /\$env:LOOM_E2E_LOOM_BIN/);
+  assert.match(windows, /& \$env:LOOM_E2E_LOOM_BIN setup @SetupArgs/);
 });
 
 test("bootstraps install only the Loom selection, not the current project", async () => {

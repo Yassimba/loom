@@ -2,6 +2,30 @@
 
 Loom weaves a coding-agent setup into one installable collection: 50+ skills, Pi packages, and pinned tools. Its guided installer walks you through the collection, sets up anything you're missing (like Pi or Herdr), and checks that it all works.
 
+## A working agent setup in five minutes
+
+On macOS or Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh
+loom status
+cd your-project
+loom init
+```
+
+On Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
+loom status
+Set-Location your-project
+loom init
+```
+
+Choose **Recommended** in the first-time wizard for a small, editable coding workflow. Review the exact plan, install it, then start Claude, Codex, Pi, OpenCode, Cursor, Grok, or another agent that reads the selected skill tree. `loom status` verifies the selected resources; `loom init` prepares agent instructions, issue tracking, domain docs, editor links, and coding standards for the repository.
+
+Project-scoped skill installs are registered locally. `loom update` refreshes every surviving registered project without adding skills that were not already present in each tree.
+
 ## What's inside
 
 **Agent skills** — 70+ skills for coding agents that read a `skills/` tree (Claude Code, Codex, OpenCode, and Pi included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, and planning. The Observability group is Datadog via [pup](https://github.com/DataDog/pup) — logs, APM, monitors, live debugger, CI flakes. Install one or all of them.
@@ -162,7 +186,7 @@ This repo builds on other people's work:
 - The Datadog `dd-*` skills are copied from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 (Apache 2.0); the `pup` CLI is pinned in the tool manifest.
 - The [Impeccable](skills/impeccable/SKILL.md) design skill is from [pbakaus/impeccable](https://github.com/pbakaus/impeccable) v4.1.2 (Apache 2.0).
 - The [i-have-adhd](skills/i-have-adhd/SKILL.md) skill is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` (MIT).
-- The three [Ponytail](skills/ponytail/SKILL.md) skills (ponytail, ponytail-review, ponytail-audit) are from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 (MIT).
+- The [Ponytail](skills/ponytail/SKILL.md) skill is from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 (MIT).
 - The [Diagram Design](skills/diagram-design/SKILL.md) skill is from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.7 at `ac490fd` (MIT; bundled icon notices included).
 - subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); anthropic-auth is [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth). All install pinned from upstream npm.
 

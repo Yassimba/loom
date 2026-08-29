@@ -93,7 +93,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
         // itself is the mise manifest's job. Packages outside the catalog
         // are left alone.
         let listed = system
-            .run(&CommandSpec::new("pi", ["list"]))
+            .run_probe(&CommandSpec::new("pi", ["list"]))
             .ok()
             .filter(|result| result.success)
             .map(|result| format!("{}\n{}", result.stdout, result.stderr))
@@ -250,7 +250,8 @@ fn reconcile_pi_compat(system: &dyn System, targets: &[String]) -> Lane {
 
 fn run_command_lane(system: &dyn System, task: CommandLane) -> Lane {
     for command in &task.commands {
-        match system.run(command) {
+        let cancelled = std::sync::atomic::AtomicBool::new(false);
+        match system.run_controlled(command, crate::system::MANAGER_COMMAND_TIMEOUT, &cancelled) {
             Ok(result) if result.success => {}
             Ok(result) => {
                 return Lane::failed(

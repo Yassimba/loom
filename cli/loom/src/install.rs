@@ -22,7 +22,7 @@ pub enum NodeStatus {
 
 impl NodeStatus {
     pub fn detect(system: &dyn System) -> Self {
-        match system.run(&CommandSpec::new("node", ["--version"])) {
+        match system.run_probe(&CommandSpec::new("node", ["--version"])) {
             Ok(result) if result.success => match parse_node_version(result.stdout.trim()) {
                 Some(version) if version < PI_MIN_NODE => {
                     Self::TooOld(version.0, version.1, version.2)
@@ -353,6 +353,20 @@ pub fn execute_install_plan_with(
     system: &(dyn System + Sync),
     observer: &mut dyn FnMut(usize, StepStatus),
 ) -> InstallReport {
+    execute_install_plan_with_control(
+        plan,
+        system,
+        &std::sync::atomic::AtomicBool::new(false),
+        observer,
+    )
+}
+
+pub fn execute_install_plan_with_control(
+    plan: &InstallPlan,
+    system: &(dyn System + Sync),
+    cancelled: &std::sync::atomic::AtomicBool,
+    observer: &mut dyn FnMut(usize, StepStatus),
+) -> InstallReport {
     let lanes = install_lanes(plan);
     let mut outcomes = vec![None; plan.prerequisites.len() + plan.resources.len()];
     let (status_sender, statuses) = std::sync::mpsc::channel::<(usize, StepStatus)>();
@@ -374,7 +388,7 @@ pub fn execute_install_plan_with(
             let finish_sender = finish_sender.clone();
             running += 1;
             scope.spawn(move || {
-                let outcome = execute_lane(lane, system, &status_sender);
+                let outcome = execute_lane(lane, system, cancelled, &status_sender);
                 let _ = finish_sender.send((lane.manager.to_owned(), outcome));
             });
         }
@@ -410,7 +424,7 @@ pub fn execute_install_plan_with(
                 let finish_sender = finish_sender.clone();
                 running += 1;
                 scope.spawn(move || {
-                    let outcome = execute_lane(lane, system, &status_sender);
+                    let outcome = execute_lane(lane, system, cancelled, &status_sender);
                     let _ = finish_sender.send((lane.manager.to_owned(), outcome));
                 });
             }
@@ -504,6 +518,7 @@ struct LaneOutcome {
 fn execute_lane(
     lane: &InstallLane<'_>,
     system: &(dyn System + Sync),
+    cancelled: &std::sync::atomic::AtomicBool,
     sender: &std::sync::mpsc::Sender<(usize, StepStatus)>,
 ) -> LaneOutcome {
     let prerequisites = lane
@@ -517,8 +532,14 @@ fn execute_lane(
         .filter(|step| matches!(step.phase, StepPhase::Resource))
         .collect::<Vec<_>>();
     for (offset, indexed) in prerequisites.iter().enumerate() {
+        if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+            for skipped in prerequisites.iter().skip(offset).chain(&resources) {
+                let _ = sender.send((skipped.index, StepStatus::Skipped("cancelled".into())));
+            }
+            return LaneOutcome { unavailable: true };
+        }
         let _ = sender.send((indexed.index, StepStatus::Running));
-        let failure = execute_step(indexed.step, system).or_else(|| {
+        let failure = execute_step(indexed.step, system, cancelled).or_else(|| {
             system.refresh_path();
             (!system.command_exists(lane.manager)).then(|| {
                 format!(
@@ -539,29 +560,45 @@ fn execute_lane(
     }
 
     let (result_sender, results) = std::sync::mpsc::channel();
+    let mut launched = 0;
     std::thread::scope(|scope| {
         for (offset, indexed) in resources.iter().enumerate() {
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                for skipped in resources.iter().skip(offset) {
+                    let _ = sender.send((skipped.index, StepStatus::Skipped("cancelled".into())));
+                }
+                break;
+            }
+            launched += 1;
             let result_sender = result_sender.clone();
             let _ = sender.send((indexed.index, StepStatus::Running));
             scope.spawn(move || {
-                let _ = result_sender.send((offset, execute_action(indexed.step, system)));
+                let failure = execute_action(indexed.step, system, cancelled);
+                let _ = result_sender.send((offset, failure));
             });
         }
     });
     drop(result_sender);
 
-    let mut action_failures = vec![None; resources.len()];
+    let mut action_failures = vec![None; launched];
     for (offset, failure) in results {
         action_failures[offset] = Some(failure);
     }
-    for (indexed, failure) in resources.into_iter().zip(action_failures) {
+    for (indexed, failure) in resources.into_iter().take(launched).zip(action_failures) {
+        let failure = failure.flatten();
+        if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+            let _ = sender.send((
+                indexed.index,
+                StepStatus::Failed(failure.unwrap_or_else(|| "cancelled".into())),
+            ));
+            continue;
+        }
         let failure = failure
-            .flatten()
             .or_else(|| {
-                verify_step(indexed.step, system).and_then(|_| {
+                verify_step(indexed.step, system, cancelled).and_then(|_| {
                     // Parallel manager processes can race their shared registry.
                     // A serial retry restores any registration another process displaced.
-                    execute_step(indexed.step, system)
+                    execute_step(indexed.step, system, cancelled)
                 })
             })
             .or_else(|| {
@@ -578,45 +615,59 @@ fn execute_lane(
     LaneOutcome { unavailable: false }
 }
 
-fn execute_step(step: &InstallStep, system: &dyn System) -> Option<String> {
-    execute_action(step, system).or_else(|| verify_step(step, system))
+fn execute_step(
+    step: &InstallStep,
+    system: &dyn System,
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Option<String> {
+    execute_action(step, system, cancelled).or_else(|| verify_step(step, system, cancelled))
 }
 
-fn execute_action(step: &InstallStep, system: &dyn System) -> Option<String> {
+fn execute_action(
+    step: &InstallStep,
+    system: &dyn System,
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Option<String> {
     let command = match &step.action {
         StepAction::CopySkills {
             skills,
             destination,
-        } => return crate::skills::install_skills(system, skills, destination).err(),
+        } => return crate::skills::install_skills(system, skills, destination, cancelled).err(),
         StepAction::SyncTools { tools } => {
-            return crate::manifest::sync_selected(system, tools).err()
+            return crate::manifest::sync_selected_controlled(system, tools, cancelled).err()
         }
         StepAction::Command(command) => command,
     };
-    match system.run(command) {
+    match system.run_controlled(command, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
         Ok(result) if result.success => None,
         Ok(result) => Some(command_failure_message(&result)),
         Err(error) => Some(error.to_string()),
     }
 }
 
-fn verify_step(step: &InstallStep, system: &dyn System) -> Option<String> {
+fn verify_step(
+    step: &InstallStep,
+    system: &dyn System,
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Option<String> {
     let verification = step.verification.as_ref()?;
     match verification {
-        VerificationSpec::Command { command, needle } => match system.run(command) {
-            Ok(result) if !result.success => Some(format!(
-                "verification failed: {}",
-                command_failure_message(&result)
-            )),
-            Ok(result) => {
-                let output = format!("{}\n{}", result.stdout, result.stderr);
-                needle
-                    .as_ref()
-                    .filter(|needle| !output.contains(needle.as_str()))
-                    .map(|needle| format!("verification did not find {needle}"))
+        VerificationSpec::Command { command, needle } => {
+            match system.run_controlled(command, crate::system::PROBE_COMMAND_TIMEOUT, cancelled) {
+                Ok(result) if !result.success => Some(format!(
+                    "verification failed: {}",
+                    command_failure_message(&result)
+                )),
+                Ok(result) => {
+                    let output = format!("{}\n{}", result.stdout, result.stderr);
+                    needle
+                        .as_ref()
+                        .filter(|needle| !output.contains(needle.as_str()))
+                        .map(|needle| format!("verification did not find {needle}"))
+                }
+                Err(error) => Some(format!("verification failed: {error}")),
             }
-            Err(error) => Some(format!("verification failed: {error}")),
-        },
+        }
     }
 }
 

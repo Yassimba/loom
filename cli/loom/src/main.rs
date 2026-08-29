@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use inquire::Confirm;
-use loom::app::{install_selected, load_catalog, Selectors};
-use loom::init::{run_init, sync_projects, InitOptions};
+use loom::app::{install_selected, load_catalog, SelectionMode, Selectors};
+use loom::init::{run_init, sync_projects, DomainLayout, Editor, InitOptions, Tracker};
 use loom::status::run_status;
 use loom::ui::{Mark, Out};
 use loom::update::run_updates;
@@ -34,7 +34,7 @@ enum Command {
     },
     /// Show installed agents, integrations, and runtime health
     Status,
-    /// Scaffold this project's AGENTS.md and CLAUDE.md from the templates
+    /// Make this repository ready for coding agents
     Init {
         /// Include the Python section (--no-python to exclude)
         #[arg(long, overrides_with = "no_python")]
@@ -51,6 +51,20 @@ enum Command {
         adhd: bool,
         #[arg(long, hide = true)]
         no_adhd: bool,
+        /// Issue tracker: Beads or local Markdown
+        #[arg(long, value_enum)]
+        tracker: Option<Tracker>,
+        /// Domain documentation layout
+        #[arg(long, value_enum)]
+        domain: Option<DomainLayout>,
+        /// Editor used for clickable source links
+        #[arg(long, value_enum)]
+        editor: Option<Editor>,
+        /// Add the project's CODING_STANDARDS.md review checklist
+        #[arg(long, overrides_with = "no_coding_standards")]
+        coding_standards: bool,
+        #[arg(long, hide = true)]
+        no_coding_standards: bool,
         /// Wire CodeGraph into installed agents and index this project
         #[arg(long, overrides_with = "no_codegraph")]
         codegraph: bool,
@@ -59,7 +73,7 @@ enum Command {
         /// Accept detection defaults without prompting
         #[arg(long)]
         yes: bool,
-        /// Rewrite AGENTS.md and CLAUDE.md from scratch
+        /// Rewrite Loom-managed project files from scratch
         #[arg(long)]
         force: bool,
     },
@@ -136,7 +150,12 @@ fn print_completions(shell: clap_complete::Shell) -> Result<()> {
     Ok(())
 }
 
-fn run_selection(args: SelectionArgs, offer_wsl: bool, system: &RealSystem) -> Result<bool> {
+fn run_selection(
+    mode: SelectionMode,
+    args: SelectionArgs,
+    offer_wsl: bool,
+    system: &RealSystem,
+) -> Result<bool> {
     let catalog = load_catalog()?;
     let selectors = Selectors {
         skills: args.skills,
@@ -145,6 +164,7 @@ fn run_selection(args: SelectionArgs, offer_wsl: bool, system: &RealSystem) -> R
         tools: args.tools,
     };
     install_selected(
+        mode,
         &catalog,
         &selectors,
         &args.agents,
@@ -164,8 +184,8 @@ fn main() -> Result<()> {
         .command
         .unwrap_or_else(|| Command::Setup(SelectionArgs::default()));
     let success = match command {
-        Command::Setup(args) => run_selection(args, true, &system)?,
-        Command::Add(args) => run_selection(args, false, &system)?,
+        Command::Setup(args) => run_selection(SelectionMode::Setup, args, true, &system)?,
+        Command::Add(args) => run_selection(SelectionMode::Add, args, false, &system)?,
         Command::Status => run_status(&system),
         Command::Sync => {
             let out = Out::detect();
@@ -193,6 +213,11 @@ fn main() -> Result<()> {
             no_rust,
             adhd,
             no_adhd,
+            tracker,
+            domain,
+            editor,
+            coding_standards,
+            no_coding_standards,
             codegraph,
             no_codegraph,
             yes,
@@ -209,6 +234,10 @@ fn main() -> Result<()> {
                     python: flag(python, no_python),
                     rust: flag(rust, no_rust),
                     adhd: flag(adhd, no_adhd),
+                    tracker,
+                    domain,
+                    editor,
+                    coding_standards: flag(coding_standards, no_coding_standards),
                     codegraph: flag(codegraph, no_codegraph),
                     yes,
                     force,
@@ -298,6 +327,35 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(Command::Init { adhd: true, .. })
+        ));
+    }
+
+    #[test]
+    fn init_accepts_project_setup_flags() {
+        // Capability/seam: scripted project setup. This fails if automation
+        // can no longer select Beads and coding standards. No expiry.
+        let cli = Cli::try_parse_from([
+            "loom",
+            "init",
+            "--tracker",
+            "beads",
+            "--domain",
+            "multi",
+            "--editor",
+            "cursor",
+            "--coding-standards",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Init {
+                tracker: Some(Tracker::Beads),
+                domain: Some(DomainLayout::Multi),
+                editor: Some(Editor::Cursor),
+                coding_standards: true,
+                ..
+            })
         ));
     }
 

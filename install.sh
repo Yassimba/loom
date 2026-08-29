@@ -106,6 +106,15 @@ finish() {
 }
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
+# CI may point this handoff at the checked-out binary while keeping the real
+# bootstrap and manifest path intact.
+run_loom_setup() {
+  if [ -n "${LOOM_E2E_LOOM_BIN:-}" ]; then
+    "$LOOM_E2E_LOOM_BIN" setup "$@"
+  else
+    mise -C "$HOME" exec -- loom setup "$@"
+  fi
+}
 echo ""
 # The README pipes this script into sh, so stdin is the download pipe rather
 # than the user's terminal. Reconnect it to the terminal device itself: the
@@ -119,7 +128,7 @@ if [ ! -t 0 ]; then
     *) if ( : </dev/tty ) 2>/dev/null; then terminal=/dev/tty; else terminal=""; fi ;;
   esac
   if [ -n "$terminal" ] && [ -t 1 ]; then
-    mise -C "$HOME" exec -- loom setup "$@" <"$terminal"
+    run_loom_setup "$@" <"$terminal"
     finish $?
   fi
   if [ "$#" -eq 0 ]; then
@@ -127,5 +136,5 @@ if [ ! -t 0 ]; then
     exit 1
   fi
 fi
-mise -C "$HOME" exec -- loom setup "$@"
+run_loom_setup "$@"
 finish $?

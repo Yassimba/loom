@@ -78,13 +78,13 @@ Effort decides nothing in either direction, and neither does a target count. Six
 Keep it beside the walkthrough as `figure-selection.md`:
 
 ```markdown
-| Type | Verdict | Reason |
-| --- | --- | --- |
-| Data flow | DRAW ch2 | Four new steps feed four that already existed; the boundary is the point. |
-| Sequence | DRAW ch4 | Patch-before-envelope is ordering, not style — and a crash between them must stay safe. |
-| Venn | DRAW ch2 | What crosses the sanitizer: script/onclick out, data-code/style in. |
-| Sankey | SKIP | Nothing quantitative splits or merges. |
-| Fishbone | SKIP | Root-cause analysis of a defect; there is no defect. |
+| Type      | Verdict  | Reason                                                                                  |
+| --------- | -------- | --------------------------------------------------------------------------------------- |
+| Data flow | DRAW ch2 | Four new steps feed four that already existed; the boundary is the point.               |
+| Sequence  | DRAW ch4 | Patch-before-envelope is ordering, not style — and a crash between them must stay safe. |
+| Venn      | DRAW ch2 | What crosses the sanitizer: script/onclick out, data-code/style in.                     |
+| Sankey    | SKIP     | Nothing quantitative splits or merges.                                                  |
+| Fishbone  | SKIP     | Root-cause analysis of a defect; there is no defect.                                    |
 ```
 
 Two chapters with no figure and stated reasons is a result. Two chapters with no figure and no reasoning is an omission, and only the record tells them apart. It is also what a reader argues with — "why no state machine?" has an answer on the page.
@@ -94,7 +94,7 @@ Two chapters with no figure and stated reasons is a result. Two chapters with no
 The enumeration exists to stop under-drawing. It must not start over-drawing:
 
 - A figure that restates the chapter's file list is worse than no figure.
-- Two figures proving one fact is worse than one. When two types both fit, pick the one that carries it smaller and SKIP the other *naming the winner* — "the ER already carries it".
+- Two figures proving one fact is worse than one. When two types both fit, pick the one that carries it smaller and SKIP the other _naming the winner_ — "the ER already carries it".
 - A chapter earns figures on its own; do not spread them evenly to look thorough.
 
 Draw each figure as it is **after** the change, with the change coloured onto it — one figure, not a before-and-after pair. Removed nodes are drawn back in their former position so the reader sees what left.
@@ -120,7 +120,7 @@ Check the project's `.diagram-design` marker: absent or `profile: default` uses 
 **Bind every box that stands for a changed file.** Any node whose brief line names a path on the step-1 file list carries `data-code` with that path, exactly as the brief spells it, plus the anchor's line range so the click lands on the code rather than the file header; comma-separated for several, first one primary. A node standing for a concept, or for a file outside the patch, stays unbound — an unbound box is context, a bound one is a door, and a door onto a file the guide cannot open is worse than no door.
 
 ```html
-<g data-code="packages/server/review.ts:40-66">
+<g data-code="packages/server/review.ts:40-66"></g>
 ```
 
 Workers write `ai-docs/walkthroughs/<slug>/diagrams/<chapter>-<name>.py` calling `write()`, which emits the `.html` and the standalone `.svg`. When they are all back, run `../explain-code-flow/scripts/check-figures.sh diagrams/` once: it runs both mechanical checks and rasterizes every figure into `diagrams/png/`. Fix what it reports.
@@ -144,7 +144,12 @@ Write `ai-docs/walkthroughs/<slug>/guide.json`:
       "title": "Concept-level, never a filename paraphrase",
       "overview": "2-6 sentences: what changed, why, what it implies.",
       "diagrams": ["<svg viewBox=...>...</svg>"],
-      "diffs": [{ "file": "exact/path.ts", "summary": "1-2 sentences from the hunks alone." }]
+      "diffs": [
+        {
+          "file": "exact/path.ts",
+          "summary": "1-2 sentences from the hunks alone."
+        }
+      ]
     }
   ],
   "unplacedFiles": []
@@ -155,7 +160,7 @@ Write `ai-docs/walkthroughs/<slug>/guide.json`:
 
 Anchor the prose too. A phrase that makes a claim about one place in the code links to it with `[phrase](path:from-to)`, the path spelled as in the file list and the range copied from the brief; the reader clicks it and the code opens beside the document like a figure box. One or two per chapter, on the claims a reader would want to check, never on every file name.
 
-Prose register: the `i-have-adhd` shape, because the reader holds nothing between chapters. The first sentence of an overview names the thing to look at, in the figure or the diff. Then at most three sentences, one idea each, 25 words or fewer. A sequence of steps is a numbered list, one bounded action per item, never more than five. Plain words — file, function, the server. Code names in backticks, at most two per sentence, and the sentence still reads as English with them covered. No verdicts: not *elegant*, *robust*, *seamless*, *simply*. No em-dashes, no preamble, no recap. The figures and the diff carry the shape; your words carry the why.
+Prose register: the `i-have-adhd` shape, because the reader holds nothing between chapters. The first sentence of an overview names the thing to look at, in the figure or the diff. Then at most three sentences, one idea each, 25 words or fewer. A sequence of steps is a numbered list, one bounded action per item, never more than five. Plain words — file, function, the server. Code names in backticks, at most two per sentence, and the sentence still reads as English with them covered. No verdicts: not _elegant_, _robust_, _seamless_, _simply_. No em-dashes, no preamble, no recap. The figures and the diff carry the shape; your words carry the why.
 
 Reading loop the guide is built for: read the overview, click the figure to enlarge it, click a box to land in its code beside the document, `⇧Z` to zoom the code, comment, `Esc`, scroll to the next figure. Write each chapter so that loop works: the overview points at one box to click first.
 

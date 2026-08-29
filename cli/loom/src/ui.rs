@@ -34,6 +34,7 @@ const LABEL_WIDTH: usize = 20;
 pub struct Out {
     terminal: bool,
     color: bool,
+    ascii: bool,
 }
 
 impl Out {
@@ -43,6 +44,7 @@ impl Out {
         Self {
             terminal,
             color: terminal && std::env::var_os("NO_COLOR").is_none() && !term_is_dumb,
+            ascii: term_is_dumb,
         }
     }
 
@@ -52,6 +54,7 @@ impl Out {
         Self {
             terminal: false,
             color: false,
+            ascii: false,
         }
     }
 
@@ -101,10 +104,12 @@ impl Out {
     }
 
     pub fn mark(&self, mark: Mark) -> String {
-        match mark {
-            Mark::Ok => self.paint("1;32", "✓"),
-            Mark::Off => self.paint("33", "○"),
-            Mark::Bad => self.paint("1;31", "!"),
+        match (self.ascii, mark) {
+            (true, Mark::Ok) => "OK".into(),
+            (true, Mark::Off) => "-".into(),
+            (_, Mark::Ok) => self.paint("1;32", "✓"),
+            (_, Mark::Off) => self.paint("33", "○"),
+            (_, Mark::Bad) => self.paint("1;31", "!"),
         }
     }
 
@@ -221,6 +226,7 @@ mod tests {
         let interactive = Out {
             terminal: true,
             color: true,
+            ascii: false,
         };
         assert_eq!(interactive.line_ending(), "\r\n");
         assert_eq!(Out::plain().line_ending(), "\n");
@@ -230,6 +236,18 @@ mod tests {
     fn plain_output_carries_no_escape_codes() {
         let out = Out::plain();
         assert_eq!(out.accent("x"), "x");
+        assert_eq!(out.mark(Mark::Bad), "!");
+    }
+
+    #[test]
+    fn dumb_terminal_marks_are_ascii() {
+        let out = Out {
+            terminal: true,
+            color: false,
+            ascii: true,
+        };
+        assert_eq!(out.mark(Mark::Ok), "OK");
+        assert_eq!(out.mark(Mark::Off), "-");
         assert_eq!(out.mark(Mark::Bad), "!");
     }
 

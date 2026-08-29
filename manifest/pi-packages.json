@@ -23,6 +23,13 @@
       "nextAction": "Run /autoresearch with an optimization target in Pi."
     },
     {
+      "name": "pi-mcp-adapter",
+      "version": "2.31.0",
+      "label": "mcp-adapter",
+      "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
+      "nextAction": "Run /mcp setup in Pi to configure an MCP server."
+    },
+    {
       "name": "pi-sandbox",
       "version": "0.6.5",
       "label": "sandbox",

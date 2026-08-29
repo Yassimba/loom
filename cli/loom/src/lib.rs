@@ -15,9 +15,10 @@ pub mod wizard;
 
 pub use catalog::{Catalog, Resource, ResourceKind};
 pub use install::{
-    build_install_plan, execute_install_plan, execute_install_plan_with, CommandSpec,
-    InstallFailure, InstallPlan, InstallReport, InstallStep, NodeStatus, Platform,
-    PrerequisiteStatus, Runtime, StepAction, StepStatus, VerificationSpec, PI_MIN_NODE,
+    build_install_plan, execute_install_plan, execute_install_plan_with,
+    execute_install_plan_with_control, CommandSpec, InstallFailure, InstallPlan, InstallReport,
+    InstallStep, NodeStatus, Platform, PrerequisiteStatus, Runtime, StepAction, StepStatus,
+    VerificationSpec, PI_MIN_NODE,
 };
 pub use skills::{
     detect_skill_agents, detect_skill_trees, expand_skill_dependencies, SkillAgent,

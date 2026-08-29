@@ -135,11 +135,19 @@ fn render_selection(manifest: &str, current: &str, keys: &[String]) -> Result<St
 /// Fetch the manifest, rebuild the selection (previous keys + `extra`),
 /// write it to conf.d, and `mise install` the result.
 pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, String> {
+    sync_selected_controlled(system, extra, &std::sync::atomic::AtomicBool::new(false))
+}
+
+pub fn sync_selected_controlled(
+    system: &dyn System,
+    extra: &[String],
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Result<PathBuf, String> {
     let home = system
         .home_dir()
         .ok_or_else(|| "home directory is unavailable".to_string())?;
     let staging = home.join(".cache").join("loom").join("manifest-staging");
-    let result = skills::fetch_repo(system, &staging).and_then(|repo_root| {
+    let result = skills::fetch_repo_controlled(system, &staging, cancelled).and_then(|repo_root| {
         let source = repo_root.join(MANIFEST_IN_REPO);
         let manifest = fs::read_to_string(&source)
             .map_err(|error| format!("downloaded repo has no {MANIFEST_IN_REPO}: {error}"))?;
@@ -162,10 +170,14 @@ pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, S
     });
     let _ = fs::remove_dir_all(&staging);
     let target = result?;
-    mise_install(system).map_err(|error| format!("mise install failed: {error}"))?;
+    mise_install(system, cancelled).map_err(|error| format!("mise install failed: {error}"))?;
     // Moved pins leave their old versions in the store; prune is best-effort
     // cleanup and only removes versions no config references anymore.
-    let _ = system.run(&CommandSpec::new("mise", ["prune", "--yes"]));
+    let _ = system.run_controlled(
+        &CommandSpec::new("mise", ["prune", "--yes"]),
+        crate::system::MANAGER_COMMAND_TIMEOUT,
+        cancelled,
+    );
     system.refresh_path();
     Ok(target)
 }
@@ -175,9 +187,12 @@ pub fn sync_and_install(system: &dyn System) -> Result<PathBuf, String> {
     sync_selected(system, &[])
 }
 
-fn mise_install(system: &dyn System) -> Result<(), String> {
+fn mise_install(
+    system: &dyn System,
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Result<(), String> {
     let spec = CommandSpec::new("mise", ["install", "--yes"]);
-    match system.run(&spec) {
+    match system.run_controlled(&spec, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
         Ok(result) if result.success => Ok(()),
         Ok(result) => Err(crate::install::command_failure_message(&result)),
         Err(error) => Err(error.to_string()),

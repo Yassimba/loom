@@ -99,7 +99,7 @@
       "label": "beads",
       "bin": "br",
       "description": "Beads (br): local-first issue tracker for coding agents — tasks in SQLite with JSONL export for git. Rust port of Steve Yegge's beads.",
-      "nextAction": "Run `br quickstart` in a repo."
+      "nextAction": "Run `loom init --tracker beads --yes` in a repo."
     },
     {
       "key": "github:Dicklesworthstone/beads_viewer",

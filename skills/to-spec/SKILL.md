@@ -8,7 +8,7 @@ This skill takes the current conversation context and codebase understanding and
 
 The issue tracker configuration should have been provided to you.
 
-If it is missing: with `br` installed, treat Beads as the tracker by default (workflows: [`issue-tracker-beads.md`](../setup-project/issue-tracker-beads.md)) and suggest `/setup-project` to record the choice; otherwise run `/setup-project`.
+If it is missing, run `/loom` to initialize the project. Until then, use Beads when `br` is installed ([workflow](../loom/references/issue-tracker-beads.md)); otherwise use [local Markdown](../loom/references/issue-tracker-local.md).
 
 ## Process
 
