@@ -15,6 +15,8 @@ python3 scripts/build-html.py ai-docs/explanations/<slug>/walkthrough.md
 
 ## Launch and verify
 
+Load this launch only when the user asks to annotate.
+
 ```bash
 plannotator annotate walkthrough.html --json
 ```

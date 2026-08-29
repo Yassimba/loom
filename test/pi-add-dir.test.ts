@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
+import { realpathSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
-import piAddDirPrototype, {
+import piAddDir, {
+  completeAddedDirectories,
   completeDirectories,
-  PERMISSION_CHOICES,
+  footerStatus,
+  matchAddedDirectory,
   shouldSubmitAddDirPath,
-} from "../plugins/pi-add-dir-prototype/src/index.ts";
+} from "../plugins/pi-add-dir/src/index.ts";
 
 test("dot-dot immediately completes sibling directories before the trailing slash", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
@@ -51,7 +54,7 @@ test("a second forced Tab still uses add-dir command completion", async () => {
     cwd: string;
     sessionManager: { getBranch: () => never[] };
     ui: {
-      setWidget: () => void;
+      setStatus: () => void;
       setEditorComponent: (factory: unknown) => void;
       addAutocompleteProvider: (
         wrapper: (current: AutocompleteProvider) => AutocompleteProvider,
@@ -69,7 +72,7 @@ test("a second forced Tab still uses add-dir command completion", async () => {
     appendEntry() {},
     exec: async () => ({ code: 0, stdout: "", stderr: "" }),
   };
-  piAddDirPrototype(pi as unknown as ExtensionAPI);
+  piAddDir(pi as unknown as ExtensionAPI);
 
   try {
     assert(sessionStart);
@@ -79,7 +82,7 @@ test("a second forced Tab still uses add-dir command completion", async () => {
         cwd: root,
         sessionManager: { getBranch: () => [] },
         ui: {
-          setWidget() {},
+          setStatus() {},
           setEditorComponent() {},
           addAutocompleteProvider(wrapper) {
             wrapProvider = wrapper;
@@ -113,20 +116,6 @@ test("Enter submits the current add-dir path instead of its highlighted child", 
   assert.equal(shouldSubmitAddDirPath("\t", "/add-dir ../../enexis/turbine/", true), false);
 });
 
-test("one permission prompt includes every access and lifetime combination", () => {
-  assert.deepEqual(
-    PERMISSION_CHOICES.map(({ access, scope }) => `${access}:${scope}`),
-    [
-      "read:session",
-      "write:session",
-      "read:project",
-      "write:project",
-      "read:global",
-      "write:global",
-    ],
-  );
-});
-
 test("nested dot-dot immediately completes directories at any parent depth", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
   const current = join(root, "ancestor", "parent", "current");
@@ -139,4 +128,34 @@ test("nested dot-dot immediately completes directories at any parent depth", asy
   } finally {
     await rm(root, { recursive: true });
   }
+});
+
+test("footer status is a short dirs line without decoration", () => {
+  assert.equal(footerStatus([]), undefined);
+  assert.equal(footerStatus(["/tmp/turbine"]), "dirs turbine");
+  assert.equal(footerStatus(["/tmp/turbine", "/tmp/loom"]), "dirs turbine, loom");
+});
+
+test("matchAddedDirectory accepts a basename or a real path", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
+  const turbine = join(root, "turbine");
+  await mkdir(turbine);
+
+  try {
+    const resolved = realpathSync(turbine);
+    const directories = [resolved];
+    assert.equal(matchAddedDirectory(directories, "turbine", root), resolved);
+    assert.equal(matchAddedDirectory(directories, turbine, root), resolved);
+    assert.equal(matchAddedDirectory(directories, "missing", root), undefined);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test("rm-dir completion lists only added directories", () => {
+  const directories = ["/tmp/turbine", "/tmp/loom"];
+  const items = completeAddedDirectories("tur", directories) ?? [];
+  assert.equal(items.length, 1);
+  assert.equal(items[0]?.value, "/tmp/turbine");
+  assert.equal(items[0]?.label, "turbine");
 });

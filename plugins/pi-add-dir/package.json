@@ -1,0 +1,55 @@
+{
+  "name": "@yassimba/pi-add-dir",
+  "version": "0.1.0",
+  "description": "Add another directory to this Pi session. The next turn sees its path and root AGENTS.md / CLAUDE.md.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "context",
+    "directory"
+  ],
+  "files": [
+    "index.ts",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yassimba/loom.git",
+    "directory": "plugins/pi-add-dir"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "loom": {
+    "catalog": {
+      "label": "add-dir",
+      "description": "Add another directory to this Pi session. The next turn sees its path and root AGENTS.md / CLAUDE.md.",
+      "nextAction": "In Pi, run /add-dir with a path."
+    }
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  }
+}

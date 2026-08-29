@@ -777,39 +777,6 @@ mod tests {
 
         assert!(!visible.iter().any(|resource| resource.label == "chat"));
         assert!(!visible.iter().any(|resource| resource.label == "herdr"));
-        assert!(!visible.iter().any(|resource| resource.label == "sandbox"));
         assert!(visible.iter().any(|resource| resource.label == "pi"));
-    }
-
-    #[test]
-    fn sandbox_install_applies_its_defaults_after_package_success() {
-        let root = temp_root("sandbox");
-        let paths = SettingsPaths {
-            herdr_config: root.join("herdr.toml"),
-            zed_settings: root.join("zed-settings.json"),
-            zed_keymap: root.join("zed-keymap.json"),
-            pi_fff_config: root.join("agent/pi-fff.json"),
-            pi_sandbox_config: root.join("agent/sandbox.json"),
-        };
-        let sandbox = Catalog::embedded()
-            .unwrap()
-            .resources
-            .into_iter()
-            .find(|resource| resource.id == "pi-package:pi-sandbox")
-            .unwrap();
-        let settings = unapplied_related_settings(&[sandbox], &paths);
-        let mut failed_report = InstallReport::default();
-        apply_related_settings(&settings, &paths, &mut failed_report);
-        assert!(!paths.pi_sandbox_config.exists());
-
-        let mut report = InstallReport {
-            installed: vec!["pi-package:pi-sandbox".into()],
-            failures: vec![],
-        };
-        apply_related_settings(&settings, &paths, &mut report);
-
-        assert!(paths.pi_sandbox_config.is_file());
-        assert!(report.installed.contains(&"pi:sandbox-defaults".into()));
-        std::fs::remove_dir_all(root).unwrap();
     }
 }
