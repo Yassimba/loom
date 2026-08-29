@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.17.0](https://github.com/Yassimba/loom/compare/loom-v0.16.0...loom-v0.17.0) (2026-08-29)
+
+
+### Features
+
+* **installer:** guide Windows users through WSL2 ([354d5d8](https://github.com/Yassimba/loom/commit/354d5d8253662ece8d5024d8950f24560eed799b))
+
+
+### Bug Fixes
+
+* **installer:** reconcile Pi package conflicts ([c68be53](https://github.com/Yassimba/loom/commit/c68be53443d70ba0634982ccd663f3e4c4fefba9))
+
+
+### Performance Improvements
+
+* **installer:** parallelize resource installation ([3a443c4](https://github.com/Yassimba/loom/commit/3a443c4f7e7fc8dab3a9ebf5f3c6909a2581d3e7))
+
 ## [0.16.0](https://github.com/Yassimba/loom/compare/loom-v0.15.0...loom-v0.16.0) (2026-08-29)
 
 
