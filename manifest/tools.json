@@ -88,13 +88,6 @@
       "bin": "mmdc"
     },
     {
-      "key": "npm:@marp-team/marp-cli",
-      "label": "marp-cli",
-      "description": "Renders Markdown slide decks — used by the marp-slide skill.",
-      "nextAction": "Ask your agent for a slide deck.",
-      "bin": "marp"
-    },
-    {
       "key": "github:Dicklesworthstone/beads_rust",
       "label": "beads",
       "bin": "br",

@@ -61,8 +61,8 @@
     },
     {
       "title": "Presentations",
-      "description": "Build slide decks as browser presentations or Marp markdown.",
-      "skills": ["frontend-slides", "marp-slide"]
+      "description": "Build self-contained browser slide decks.",
+      "skills": ["frontend-slides"]
     },
     {
       "title": "Observability",

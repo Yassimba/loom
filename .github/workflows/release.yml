@@ -120,3 +120,5 @@ jobs:
   full-install:
     needs: pin
     uses: ./.github/workflows/full-install.yml
+    with:
+      checkout_ref: main

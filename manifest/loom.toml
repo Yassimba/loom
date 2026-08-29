@@ -88,4 +88,3 @@ uv = "0.12.5"
 # skill tooling (browser automation, diagram/slide export)
 "npm:agent-browser" = "0.35.1"
 "npm:@mermaid-js/mermaid-cli" = "11.16.0"
-"npm:@marp-team/marp-cli" = "4.5.0"
