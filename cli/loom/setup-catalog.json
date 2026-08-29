@@ -579,13 +579,13 @@
       "dependencies": ["github:DataDog/pup"]
     },
     {
-      "id": "skill:eli5",
+      "id": "skill:explain-simply",
       "kind": "skill",
       "group": "General",
-      "label": "eli5",
-      "description": "Explain something new fast for a smart adult who has never used the topic. Use for \"/eli5 [topic]\", \"eli5 this\", \"break this down for me\", \"I know nothing about X, catch me up\", or another request for a quick plain-language explanation of how something works.",
-      "installTarget": "eli5",
-      "nextAction": "Ask your coding agent to use the eli5 skill.",
+      "label": "explain-simply",
+      "description": "Explain something new fast for a smart adult who has never used the topic. Use for \"/explain-simply [topic]\", \"explain this simply\", \"eli5 this\", \"break this down for me\", \"I know nothing about X, catch me up\", or another request for a quick plain-language explanation of how something works.",
+      "installTarget": "explain-simply",
+      "nextAction": "Ask your coding agent to use the explain-simply skill.",
       "dependencies": []
     },
     {
@@ -746,7 +746,7 @@
       "description": "Restate the last message so it lands - plain language, a picture when the it helps and a from-scratch explanation when the concept is new.",
       "installTarget": "wtf",
       "nextAction": "Ask your coding agent to use the wtf skill.",
-      "dependencies": ["writing-clearly-and-concisely", "show-me", "eli5"]
+      "dependencies": ["writing-clearly-and-concisely", "show-me", "explain-simply"]
     },
     {
       "id": "skill:plannotator",
