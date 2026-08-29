@@ -1,6 +1,8 @@
 name: Full install smoke
 
 on:
+  push:
+    branches: [loom-windows-wsl-e2e]
   pull_request:
     paths:
       - .github/workflows/full-install.yml
