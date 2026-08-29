@@ -7,7 +7,7 @@ description: "Architecture walkthrough of one feature: layered diagrams (overvie
 
 Explain one feature from system shape to runtime values. Every factual node and edge has source evidence; every figure proves one fact.
 
-When subagents are available and two or more figures qualify, use this exact topology in one workflow: (1) one fresh evidence worker also appends the figure plan; (2) after it returns, `runs.all` launches one fresh worker per figure **plus** one fresh walkthrough writer; (3) after all return, one fresh validation/fix worker runs every check and inspects PNGs. The parent waits once. Delegating the whole walkthrough to one child, inheriting parent context, serializing figures, or adding a separate planner is invalid. Give every child a complete bounded handoff. Set no turn or usage budget: aborting a writer creates a slower, costlier fallback.
+Minimize model round trips: use one fresh evidence worker, then let the parent complete every artifact from its bounded brief. After the brief returns, read the brief, drawing API/example, and invariants together; emit all figure scripts and `walkthrough.md` in one assistant turn; run generation and noninteractive checks in one shell command; inspect all PNGs in one parallel read; consolidate any repairs into one turn and rerun the shared command. Failures may add cycles—never skip quality work. Do not spawn figure, prose, planner, or validator workers, and set no turn or usage budget.
 
 **Diff mode:** when the user names a range, branch, PR, or change, load [`references/diagram-diff.md`](references/diagram-diff.md) at step 1. Pin `from` and `to` (`to` defaults to the working tree) and add a colored diff for each affected figure.
 
@@ -58,15 +58,15 @@ Append the figure list to `brief.md`: filename, type, nodes, and one fact proved
 
 Figures are Python scripts over [`scripts/draw.py`](scripts/draw.py). A missing or `profile: default` `.diagram-design` marker uses its palette; otherwise resolve diagram-design profile tokens and override the kit constants.
 
-Spawn one **fresh-context** drawing worker per figure in the same message so coordinate planning runs in parallel without inheriting the parent's repository history. Give each exactly `brief.md`, `scripts/draw.py`, `scripts/example-figure.py`, `references/authoring-invariants.md`, and its figure row. It reads neither `_draw_impl.py` nor diagram-design. Each writes and runs `diagrams/<rung>-<name>.py`, producing `.html` and `.svg`, and reports node/arrow counts plus cuts. Draw directly for one figure.
+The parent reads exactly `brief.md`, `scripts/draw.py`, `scripts/example-figure.py`, and `references/authoring-invariants.md`; it reads neither production files, `_draw_impl.py`, nor diagram-design. Plan coordinates for every figure, then emit every `diagrams/<rung>-<name>.py` in the same assistant turn. Each script produces matching `.html` and `.svg`.
 
-After all workers finish, run `scripts/check-figures.sh diagrams/` once. Parallel workers never run this shared-folder check. Fix failures, then inspect every generated PNG once for collisions and crowding; rerun affected checks.
+Run every script followed by `scripts/check-figures.sh diagrams/` in one shell command. Inspect every generated PNG in one parallel read for collisions and crowding. Consolidate fixes across scripts, then rerun the same shared command.
 
 Done: every planned figure has `.py`, `.html`, `.svg`, a viewed PNG, and passing checks.
 
 ## 6. Write walkthrough
 
-Launch one **fresh-context writer alongside the parallel drawing workers**. Give it `brief.md`, its final figure list, and this section; it reads no production files. It writes `walkthrough.md` in the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
+The parent writes `walkthrough.md` from `brief.md` in the same batched assistant turn as the figure scripts; it reads no production files. Use the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
 
 Order: **Context** (entry, output, scope; ≤3 lines), one section per drawn rung, optional **What changed**, then **Result**. Each rung has one bold claim, its SVG embed, and ≤5 anchored facts. Structure lists 3–7 central types grouped by layer when large. Spine is a numbered hop list: function, value in, value out, state/side effect. Separate production call sites from tests when reuse matters.
 
@@ -79,6 +79,6 @@ python3 scripts/check-anchors.py <repo-root> walkthrough.md --quiet
 python3 scripts/build-html.py walkthrough.md
 ```
 
-Fix failures. Then run `plannotator annotate walkthrough.html` in the background without a timeout; it blocks until submission. Address returned annotations and rebuild after changes. If closed, stop.
+Include these commands with figure generation in the shared validation shell call. Consolidate failures into one repair turn where possible, then rerun the whole call. Then run `plannotator annotate walkthrough.html` in the background without a timeout; it blocks until submission. Address returned annotations and rebuild after changes. If closed, stop.
 
 In chat, return the Result paragraph and walkthrough path.
