@@ -17,9 +17,9 @@ Done: one explicit boundary from live entry to result, plus pinned revisions in 
 
 ## 2. Map evidence
 
-If `.codegraph/` exists, query it once for the entry, central types, final-result function, and call graph; use exact reads only for elided lines. Otherwise give one Explore worker [`references/repository-evidence.md`](references/repository-evidence.md) as its complete contract. In diff mode, include the change mapping required by `diagram-diff.md`.
+If `.codegraph/` exists, query it once for the entry, central types, final-result function, and call graph; use exact reads only for elided lines. Otherwise spawn one **fresh-context worker** with [`references/repository-evidence.md`](references/repository-evidence.md), the feature boundary, repo root, and output path. It writes `ai-docs/explanations/<feature>/brief.md` and runs `check-anchors.py`. In diff mode, include the change contract from `diagram-diff.md`. Wait for it; the parent does not inspect production files or repeat its mapping.
 
-Copy anchors only from `grep -n` or `sed -n` output, never memory. Write `ai-docs/explanations/<feature>/brief.md`: boundary, anchored entry chain, figure-worthy types/functions, runtime boundaries, externals, values, state changes, and composition gaps. Keep field inventories and branch trivia for the walkthrough. This brief is the only repository evidence drawing workers receive.
+The brief contains the boundary, anchored entry chain, figure-worthy types/functions, runtime boundaries, externals, values, state changes, and composition gaps. Field inventories and branch trivia belong in the walkthrough. It is the only repository evidence drawing workers receive.
 
 Done: the map reaches the effect, every named fact exists in source, and every anchor came from command output.
 
@@ -56,7 +56,7 @@ Append the figure list to `brief.md`: filename, type, nodes, and one fact proved
 
 Figures are Python scripts over [`scripts/draw.py`](scripts/draw.py). A missing or `profile: default` `.diagram-design` marker uses its palette; otherwise resolve diagram-design profile tokens and override the kit constants.
 
-Spawn one drawing worker per figure in the same message so coordinate planning runs in parallel. Give each exactly `brief.md`, `scripts/draw.py`, `scripts/example-figure.py`, and `references/authoring-invariants.md`. It reads neither `_draw_impl.py` nor diagram-design. Each writes and runs `diagrams/<rung>-<name>.py`, producing `.html` and `.svg`, and reports node/arrow counts plus cuts. Draw directly for one figure.
+Spawn one **fresh-context** drawing worker per figure in the same message so coordinate planning runs in parallel without inheriting the parent's repository history. Give each exactly `brief.md`, `scripts/draw.py`, `scripts/example-figure.py`, `references/authoring-invariants.md`, and its figure row. It reads neither `_draw_impl.py` nor diagram-design. Each writes and runs `diagrams/<rung>-<name>.py`, producing `.html` and `.svg`, and reports node/arrow counts plus cuts. Draw directly for one figure.
 
 After all workers finish, run `scripts/check-figures.sh diagrams/` once. Parallel workers never run this shared-folder check. Fix failures, then inspect every generated PNG once for collisions and crowding; rerun affected checks.
 
@@ -64,7 +64,7 @@ Done: every planned figure has `.py`, `.html`, `.svg`, a viewed PNG, and passing
 
 ## 6. Write walkthrough
 
-Write `walkthrough.md` in the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
+Spawn one **fresh-context writer** with `brief.md`, the final figure list, and this section; it reads no production files. It writes `walkthrough.md` in the `writing-clearly-and-concisely` register. Word bands by relevant files: 1–3 → 150–300; 4–10 → 300–600; 11+ → 500–900.
 
 Order: **Context** (entry, output, scope; ≤3 lines), one section per drawn rung, optional **What changed**, then **Result**. Each rung has one bold claim, its SVG embed, and ≤5 anchored facts. Structure lists 3–7 central types grouped by layer when large. Spine is a numbered hop list: function, value in, value out, state/side effect. Separate production call sites from tests when reuse matters.
 
