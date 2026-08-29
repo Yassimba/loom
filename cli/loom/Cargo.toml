@@ -24,4 +24,4 @@ toml_edit = "0.22"
 unicode-width = "0.2"
 
 [dev-dependencies]
-pretty_assertions = "1"
+pretty_assertions = "=1.4.1"
