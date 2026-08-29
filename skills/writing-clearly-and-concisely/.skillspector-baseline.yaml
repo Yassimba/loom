@@ -1,0 +1,9 @@
+version: 2
+
+rules:
+  - id: "AR2"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "P2"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"

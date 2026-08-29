@@ -1,0 +1,44 @@
+# Accepted-risk ignores for osv-scanner (security.yml). Every entry is a
+# vulnerability we cannot fix from this repo, with the reason and the path
+# that unblocks it. Dependabot alerts stay open to track upstream fixes;
+# delete the entry when the parent package updates.
+
+# --- shrinkwrapped inside @earendil-works/pi-coding-agent (npm overrides
+#     cannot modify a dependency's npm-shrinkwrap.json; fix lands when the
+#     Pi agent ships patched deps and Renovate bumps it) ---
+
+[[IgnoredVulns]]
+id = "CVE-2026-13149"
+reason = "brace-expansion 5.0.6 shrinkwrapped in pi-coding-agent; dev-tool DoS only (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-14257"
+reason = "brace-expansion 5.0.6 shrinkwrapped in pi-coding-agent; dev-tool DoS only (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-69152"
+reason = "brace-expansion 5.0.6 shrinkwrapped in pi-coding-agent; dev-tool DoS only (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-13697"
+reason = "undici 8.5.0 shrinkwrapped in pi-coding-agent (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-14643"
+reason = "undici 8.5.0 shrinkwrapped in pi-coding-agent (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-15157"
+reason = "undici 8.5.0 shrinkwrapped in pi-coding-agent (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-16728"
+reason = "undici 8.5.0 shrinkwrapped in pi-coding-agent (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-16729"
+reason = "undici 8.5.0 shrinkwrapped in pi-coding-agent (2026-08-29)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-59877"
+reason = "protobufjs 7.6.4 via @google/genai inside pi-coding-agent's shrinkwrap (2026-08-29)"

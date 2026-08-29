@@ -1,0 +1,79 @@
+name: Security
+
+# Two scanners, one gate:
+#  - osv-scanner: known vulnerabilities in every lockfile (npm, both
+#    Cargo.locks, pinned GitHub Actions) against the OSV database.
+#  - SkillSpector: static scan of every public skill for malicious
+#    patterns (prompt injection, exfiltration, curl|bash, obfuscation).
+# Renovate automerge is gated on this workflow passing, so "no
+# vulnerability found" is enforced, not assumed.
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  osv-scan:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1
+
+  skill-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Cache SkillSpector install
+        id: spector-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: /opt/pipx/venvs/skillspector
+          key: skillspector-b7241089d7ec15d8b30df980dacbb428214732b9-deadline600
+      - name: Install SkillSpector
+        if: steps.spector-cache.outputs.cache-hit != 'true'
+        run: pipx install "git+https://github.com/NVIDIA/skillspector.git@b7241089d7ec15d8b30df980dacbb428214732b9" # v2.11.0
+      - name: Raise SkillSpector's 60s scan deadline
+        # state.py hardcodes MAX_WORKFLOW_SECONDS = 60.0 with no env or
+        # flag override; CI runners can't finish the largest skills in
+        # 60s, which fail-closes the scan (exit 2, coverage 0%). Safe to
+        # patch: the install is commit-pinned. Drop when upstream makes
+        # the deadline configurable.
+        run: |
+          state=$(echo "$(pipx environment --value PIPX_LOCAL_VENVS)"/skillspector/lib/python*/site-packages/skillspector/state.py)
+          sed -i 's/^MAX_WORKFLOW_SECONDS = .*/MAX_WORKFLOW_SECONDS = 600.0/' "$state"
+          grep -q "MAX_WORKFLOW_SECONDS = 600.0" "$state"
+          # cache restores the venv but not the pipx shim; use the venv bin
+          echo "$(pipx environment --value PIPX_LOCAL_VENVS)/skillspector/bin" >> "$GITHUB_PATH"
+      - name: Scan public skills (static analysis)
+        # Exit 1 when any skill scores >50 (DO_NOT_INSTALL). drafts/ and
+        # personal/ are not install surfaces, so they don't gate CI. A skill
+        # may carry a reviewed .skillspector-baseline.yaml of glob rules
+        # (id + path + reason) suppressing accepted false positives; only
+        # new findings gate after that.
+        # PRs scan only skills whose files changed vs the base branch;
+        # the weekly schedule and manual dispatch sweep everything.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            dirs=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD -- skills/ | cut -d/ -f1-2 | sort -u | sed 's|$|/|')
+          else
+            dirs=$(printf '%s\n' skills/*/)
+          fi
+          [ -z "$dirs" ] && { echo "No skill changes — nothing to scan."; exit 0; }
+          fail=0
+          for d in $dirs; do
+            [ -d "$d" ] || continue  # skill was deleted in this PR
+            args=(--no-llm)
+            [ -f "$d.skillspector-baseline.yaml" ] && args+=(--baseline "$d.skillspector-baseline.yaml")
+            echo "::group::$d"
+            skillspector scan "$d" "${args[@]}" || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
