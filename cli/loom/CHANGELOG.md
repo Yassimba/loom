@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/Yassimba/loom/compare/loom-v0.18.0...loom-v0.18.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **release:** smoke the pinned main revision ([e3958f4](https://github.com/Yassimba/loom/commit/e3958f4b9abdc010e75f2d97039cae5612ce6b6b))
+
 ## [0.18.0](https://github.com/Yassimba/loom/compare/loom-v0.17.0...loom-v0.18.0) (2026-08-29)
 
 
