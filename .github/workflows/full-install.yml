@@ -77,12 +77,16 @@ jobs:
           }
           wsl --set-version Ubuntu 2
           wsl --list --verbose *> "$evidenceDir/wsl-list.txt"
+          function Convert-ToWslPath($path) {
+            $drive = $path.Substring(0, 1).ToLower()
+            "/mnt/$drive$($path.Substring(2).Replace('\', '/'))"
+          }
           $linuxExe = (Resolve-Path loom-linux/loom).Path
-          $linuxPath = (wsl -d Ubuntu -- wslpath -a $linuxExe).Trim()
+          $linuxPath = Convert-ToWslPath $linuxExe
           $fakeDir = Join-Path $env:RUNNER_TEMP "loom-e2e-bin"
           New-Item -ItemType Directory -Path $fakeDir -Force | Out-Null
           "#!/bin/sh`nexit 0`n" | Set-Content -Path (Join-Path $fakeDir "pi") -NoNewline
-          $fakeLinuxPath = (wsl -d Ubuntu -- wslpath -a $fakeDir).Trim()
+          $fakeLinuxPath = Convert-ToWslPath $fakeDir
           $command = "chmod +x '$linuxPath' '$fakeLinuxPath/pi'; PATH='$fakeLinuxPath':`$PATH '$linuxPath' add --pi-package chat --dry-run --yes"
           wsl -d Ubuntu -- bash -lc $command *> "$evidenceDir/wsl-pi-chat-plan.txt"
           if ($LASTEXITCODE -ne 0) { throw "WSL pi-chat dry-run failed" }
