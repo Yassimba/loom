@@ -88,11 +88,22 @@ if [ -n "$profile" ]; then
   if ! grep -Fqx "$activate" "$profile"; then
     printf '\n%s\n' "$activate" >> "$profile"
     echo "$NAME: added mise activation to $profile"
+    activation_added=1
   fi
 else
   echo ""
   echo "$NAME: could not detect your shell; add mise activation to its profile" >&2
 fi
+
+# After the guided setup: a shell opened before this run has no mise hook yet,
+# so `loom` is "command not found" there until it restarts. Say so once.
+finish() {
+  if [ "${activation_added:-0}" = 1 ]; then
+    echo ""
+    echo "$NAME: open a new shell (or run: exec $(basename "${SHELL:-sh}")) so loom and the tools are on PATH"
+  fi
+  exit "$1"
+}
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 echo ""
@@ -108,11 +119,13 @@ if [ ! -t 0 ]; then
     *) if ( : </dev/tty ) 2>/dev/null; then terminal=/dev/tty; else terminal=""; fi ;;
   esac
   if [ -n "$terminal" ] && [ -t 1 ]; then
-    exec mise -C "$HOME" exec -- loom setup "$@" <"$terminal"
+    mise -C "$HOME" exec -- loom setup "$@" <"$terminal"
+    finish $?
   fi
   if [ "$#" -eq 0 ]; then
     echo "$NAME: installed, but there is no terminal here for the guided setup. Open a shell and run: loom" >&2
     exit 1
   fi
 fi
-exec mise -C "$HOME" exec -- loom setup "$@"
+mise -C "$HOME" exec -- loom setup "$@"
+finish $?
