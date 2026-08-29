@@ -503,46 +503,79 @@ struct LaneOutcome {
 
 fn execute_lane(
     lane: &InstallLane<'_>,
-    system: &dyn System,
+    system: &(dyn System + Sync),
     sender: &std::sync::mpsc::Sender<(usize, StepStatus)>,
 ) -> LaneOutcome {
-    let mut unavailable = false;
-    for indexed in &lane.steps {
-        if unavailable {
-            let message = format!("{} is unavailable", display_name(lane.manager));
-            let _ = sender.send((indexed.index, StepStatus::Skipped(message)));
-            continue;
-        }
+    let prerequisites = lane
+        .steps
+        .iter()
+        .filter(|step| matches!(step.phase, StepPhase::Prerequisite))
+        .collect::<Vec<_>>();
+    let resources = lane
+        .steps
+        .iter()
+        .filter(|step| matches!(step.phase, StepPhase::Resource))
+        .collect::<Vec<_>>();
+    for (offset, indexed) in prerequisites.iter().enumerate() {
         let _ = sender.send((indexed.index, StepStatus::Running));
         let failure = execute_step(indexed.step, system).or_else(|| {
-            if matches!(indexed.phase, StepPhase::Prerequisite) {
-                system.refresh_path();
-                (!system.command_exists(lane.manager)).then(|| {
-                    format!(
-                        "installer completed, but {} is still unavailable on PATH",
-                        lane.manager
-                    )
-                })
-            } else {
-                None
+            system.refresh_path();
+            (!system.command_exists(lane.manager)).then(|| {
+                format!(
+                    "installer completed, but {} is still unavailable on PATH",
+                    lane.manager
+                )
+            })
+        });
+        if let Some(message) = failure {
+            let _ = sender.send((indexed.index, StepStatus::Failed(message)));
+            let message = format!("{} is unavailable", display_name(lane.manager));
+            for skipped in prerequisites.iter().skip(offset + 1).chain(&resources) {
+                let _ = sender.send((skipped.index, StepStatus::Skipped(message.clone())));
             }
+            return LaneOutcome { unavailable: true };
+        }
+        let _ = sender.send((indexed.index, StepStatus::Prepared));
+    }
+
+    let (result_sender, results) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        for (offset, indexed) in resources.iter().enumerate() {
+            let result_sender = result_sender.clone();
+            let _ = sender.send((indexed.index, StepStatus::Running));
+            scope.spawn(move || {
+                let _ = result_sender.send((offset, execute_action(indexed.step, system)));
+            });
+        }
+    });
+    drop(result_sender);
+
+    let mut action_failures = vec![None; resources.len()];
+    for (offset, failure) in results {
+        action_failures[offset] = Some(failure);
+    }
+    for (indexed, failure) in resources.into_iter().zip(action_failures) {
+        let failure = failure.flatten().or_else(|| {
+            verify_step(indexed.step, system).and_then(|_| {
+                // Parallel manager processes can race their shared registry.
+                // A serial retry restores any registration another process displaced.
+                execute_step(indexed.step, system)
+            })
         });
         let status = match failure {
-            Some(message) => {
-                if matches!(indexed.phase, StepPhase::Prerequisite) {
-                    unavailable = true;
-                }
-                StepStatus::Failed(message)
-            }
-            None if matches!(indexed.phase, StepPhase::Prerequisite) => StepStatus::Prepared,
+            Some(message) => StepStatus::Failed(message),
             None => StepStatus::Installed,
         };
         let _ = sender.send((indexed.index, status));
     }
-    LaneOutcome { unavailable }
+    LaneOutcome { unavailable: false }
 }
 
 fn execute_step(step: &InstallStep, system: &dyn System) -> Option<String> {
+    execute_action(step, system).or_else(|| verify_step(step, system))
+}
+
+fn execute_action(step: &InstallStep, system: &dyn System) -> Option<String> {
     let command = match &step.action {
         StepAction::CopySkills {
             skills,
@@ -554,13 +587,14 @@ fn execute_step(step: &InstallStep, system: &dyn System) -> Option<String> {
         StepAction::Command(command) => command,
     };
     match system.run(command) {
-        Ok(result) if result.success => {}
-        Ok(result) => return Some(command_failure_message(&result)),
-        Err(error) => return Some(error.to_string()),
+        Ok(result) if result.success => None,
+        Ok(result) => Some(command_failure_message(&result)),
+        Err(error) => Some(error.to_string()),
     }
-    let Some(verification) = &step.verification else {
-        return None;
-    };
+}
+
+fn verify_step(step: &InstallStep, system: &dyn System) -> Option<String> {
+    let verification = step.verification.as_ref()?;
     match verification {
         VerificationSpec::Command { command, needle } => match system.run(command) {
             Ok(result) if !result.success => Some(format!(
