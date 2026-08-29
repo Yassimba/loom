@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/Yassimba/loom/compare/loom-v0.14.1...loom-v0.15.0) (2026-08-29)
+
+
+### Features
+
+* **explain-simply:** rename the eli5 skill so it stops colliding with feynman's ([ac55077](https://github.com/Yassimba/loom/commit/ac55077ad697d6e2f71be07df38b3de053672123))
+
 ## [0.14.1](https://github.com/Yassimba/loom/compare/loom-v0.14.0...loom-v0.14.1) (2026-08-29)
 
 
