@@ -112,8 +112,8 @@ test("a second forced Tab still uses add-dir command completion", async () => {
 });
 
 test("Enter submits the current add-dir path instead of its highlighted child", () => {
-  assert.equal(shouldSubmitAddDirPath("\r", "/add-dir ../../enexis/turbine/", true), true);
-  assert.equal(shouldSubmitAddDirPath("\t", "/add-dir ../../enexis/turbine/", true), false);
+  assert.equal(shouldSubmitAddDirPath("\r", "/add-dir ../../projects/turbine/", true), true);
+  assert.equal(shouldSubmitAddDirPath("\t", "/add-dir ../../projects/turbine/", true), false);
 });
 
 test("nested dot-dot immediately completes directories at any parent depth", async () => {
