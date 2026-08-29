@@ -1,0 +1,15 @@
+version: 2
+
+rules:
+  - id: "AE1"
+    path: "SKILL.md"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "AS3"
+    path: "SKILL.md"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "P2"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "RP1"
+    path: "SKILL.md"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"

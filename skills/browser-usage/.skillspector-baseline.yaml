@@ -1,0 +1,21 @@
+version: 2
+
+rules:
+  - id: "P1"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "RA2"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "TM1"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "TM2"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "YR1"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "YR4"
+    path: "references/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
