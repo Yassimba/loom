@@ -33,20 +33,38 @@ jobs:
           MISE_GLOBAL_CONFIG_FILE: ${{ github.workspace }}/manifest/loom.toml
           MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
       - name: Bump Pi package pins (manifest/pi-packages.json)
+        # Newest version at least 5 days old, matching Renovate's
+        # minimumReleaseAge: young releases wait a week for malware
+        # researchers and scanners before landing in the manifest.
         run: |
           python3 - <<'EOF'
           import json, subprocess
+          from datetime import datetime, timedelta, timezone
           path = "manifest/pi-packages.json"
+          cutoff = datetime.now(timezone.utc) - timedelta(days=5)
           data = json.load(open(path))
           for package in data["packages"]:
               if "version" not in package:
                   continue
-              latest = subprocess.run(
-                  ["npm", "view", package["name"], "version"],
+              out = subprocess.run(
+                  ["npm", "view", package["name"], "time", "--json"],
                   capture_output=True, text=True,
-              ).stdout.strip()
-              if latest:
-                  package["version"] = latest
+              ).stdout
+              if not out:
+                  continue
+              times = json.loads(out)
+              aged = [
+                  version for version, stamp in times.items()
+                  if version not in ("created", "modified")
+                  and "-" not in version  # skip prereleases
+                  and datetime.fromisoformat(stamp.replace("Z", "+00:00")) <= cutoff
+              ]
+              key = lambda v: [int(p) for p in v.split(".")]
+              if aged:
+                  pick = max(aged, key=key)
+                  # never downgrade a pin that is already ahead of the aged pick
+                  if key(pick) > key(package["version"]):
+                      package["version"] = pick
           with open(path, "w") as handle:
               json.dump(data, handle, indent=2, ensure_ascii=False)
               handle.write("\n")
