@@ -48,7 +48,7 @@ fi
 run_loom() {
   local working_dir=$PWD
   local loom_bin=${LOOM_E2E_LOOM_BIN:-loom}
-  "$mise_bin" -C "$HOME" exec -- sh -c \
+  PATH="$(dirname "$mise_bin"):$PATH" "$mise_bin" -C "$HOME" exec -- sh -c \
     'cd "$1" && shift && exec "$@"' sh "$working_dir" "$loom_bin" "$@"
 }
 run_loom --version >"$evidence_dir/loom-version.txt" 2>&1
