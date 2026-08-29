@@ -1,0 +1,18 @@
+version: 2
+
+rules:
+  - id: "AS3"
+    path: "scripts/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "AST4"
+    path: "scripts/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "LP3"
+    path: "SKILL.md"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "MP2"
+    path: "assets/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"
+  - id: "YR4"
+    path: "assets/*"
+    reason: "Reviewed 2026-08-29: benign instructional/example content flagged by static patterns, not a directive to the agent"

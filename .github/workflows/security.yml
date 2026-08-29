@@ -1,0 +1,49 @@
+name: Security
+
+# Two scanners, one gate:
+#  - osv-scanner: known vulnerabilities in every lockfile (npm, both
+#    Cargo.locks, pinned GitHub Actions) against the OSV database.
+#  - SkillSpector: static scan of every public skill for malicious
+#    patterns (prompt injection, exfiltration, curl|bash, obfuscation).
+# Renovate automerge is gated on this workflow passing, so "no
+# vulnerability found" is enforced, not assumed.
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  osv-scan:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1
+
+  skill-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install SkillSpector
+        run: pipx install "git+https://github.com/NVIDIA/skillspector.git@b7241089d7ec15d8b30df980dacbb428214732b9" # v2.11.0
+      - name: Scan public skills (static analysis)
+        # Exit 1 when any skill scores >50 (DO_NOT_INSTALL). drafts/ and
+        # personal/ are not install surfaces, so they don't gate CI. A skill
+        # may carry a reviewed .skillspector-baseline.yaml of glob rules
+        # (id + path + reason) suppressing accepted false positives; only
+        # new findings gate after that.
+        run: |
+          fail=0
+          for d in skills/*/; do
+            args=(--no-llm)
+            [ -f "$d.skillspector-baseline.yaml" ] && args+=(--baseline "$d.skillspector-baseline.yaml")
+            echo "::group::$d"
+            skillspector scan "$d" "${args[@]}" || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
