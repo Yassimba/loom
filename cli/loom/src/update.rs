@@ -36,6 +36,45 @@ struct CommandLane {
     commands: Vec<CommandSpec>,
 }
 
+fn pi_package_commands(
+    catalog: &Catalog,
+    listed: &str,
+    native_windows: bool,
+) -> Vec<CommandSpec> {
+    let mut scope = None;
+    let mut user = Vec::new();
+    let mut project = Vec::new();
+    for line in listed.lines().map(str::trim) {
+        match line {
+            "User packages:" => scope = Some(false),
+            "Project packages:" => scope = Some(true),
+            _ => match scope {
+                Some(false) => user.push(line),
+                Some(true) => project.push(line),
+                None => {}
+            },
+        }
+    }
+    catalog
+        .resources
+        .iter()
+        .filter(|resource| resource.kind == ResourceKind::PiPackage)
+        .filter(|resource| !native_windows || !resource.windows_wsl)
+        .flat_map(|resource| {
+            let spec = resource.pi_install_spec();
+            let global = user
+                .iter()
+                .any(|line| line.contains(&resource.install_target))
+                .then(|| CommandSpec::new("pi", ["install", &spec]));
+            let local = project
+                .iter()
+                .any(|line| line.contains(&resource.install_target))
+                .then(|| CommandSpec::new("pi", ["install", "-l", &spec]));
+            [global, local].into_iter().flatten()
+        })
+        .collect()
+}
+
 pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     let out = Out::detect();
     out.title("update", concat!("v", env!("CARGO_PKG_VERSION")));
@@ -63,19 +102,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             .filter(|result| result.success)
             .map(|result| format!("{}\n{}", result.stdout, result.stderr))
             .unwrap_or_default();
-        let commands = catalog
-            .resources
-            .iter()
-            .filter(|resource| resource.kind == ResourceKind::PiPackage)
-            .filter(|resource| listed.contains(&resource.install_target))
-            .map(|resource| {
-                let spec = match &resource.version {
-                    Some(version) => format!("npm:{}@{version}", resource.install_target),
-                    None => format!("npm:{}", resource.install_target),
-                };
-                CommandSpec::new("pi", ["install", &spec])
-            })
-            .collect::<Vec<_>>();
+        let commands = pi_package_commands(catalog, &listed, cfg!(windows));
         pi_compat_targets = catalog
             .resources
             .iter()
@@ -284,5 +311,42 @@ fn sync_projects_lane(system: &dyn System) -> Lane {
         label: "Projects",
         detail: sync.summary,
         notes: sync.notes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pi_package_updates_preserve_user_and_project_scope() {
+        let catalog = Catalog::embedded().unwrap();
+        let listed = "User packages:\n  npm:pi-subagents\n\nProject packages:\n  npm:pi-subagents\n  git:github.com/earendil-works/pi-chat@abc\n";
+
+        let commands = pi_package_commands(&catalog, listed, false)
+            .into_iter()
+            .map(|command| command.display())
+            .collect::<Vec<_>>();
+
+        assert!(commands
+            .iter()
+            .any(|command| command == "pi install npm:pi-subagents@0.58.0"));
+        assert!(commands
+            .iter()
+            .any(|command| command == "pi install -l npm:pi-subagents@0.58.0"));
+        assert!(commands.iter().any(|command| {
+            command.starts_with("pi install -l git:github.com/earendil-works/pi-chat@")
+        }));
+        assert!(!commands.iter().any(|command| {
+            command.starts_with("pi install git:github.com/earendil-works/pi-chat@")
+        }));
+
+        let windows_commands = pi_package_commands(&catalog, listed, true)
+            .into_iter()
+            .map(|command| command.display())
+            .collect::<Vec<_>>();
+        assert!(!windows_commands
+            .iter()
+            .any(|command| command.contains("pi-chat")));
     }
 }

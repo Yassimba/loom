@@ -632,7 +632,7 @@ impl Wizard {
             )),
             ResourceKind::PiPackage => lines.push(field(
                 "via",
-                format!("pi install {}", resource.install_target),
+                format!("pi install {}", resource.pi_install_spec()),
                 ACCENT,
             )),
             ResourceKind::HerdrPlugin => lines.push(field(

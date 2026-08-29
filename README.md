@@ -41,9 +41,19 @@ curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh
 
 ### Windows
 
+For the complete toolset, use WSL2:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Then run the macOS/Linux command above inside Ubuntu. Native Windows remains supported:
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
 ```
+
+On native Windows, setup explains which capabilities require WSL2 and hides them if you choose to continue without it.
 
 One command does the minimum and asks about the rest: it installs [mise](https://mise.jdx.dev), syncs the core of the [tool manifest](manifest/loom.toml) (node and the `loom` CLI, exact-pinned), and drops you into the guided setup. Your own `~/.config/mise/config.toml` is never touched; use it to layer personal tools on top.
 
@@ -103,9 +113,10 @@ pi install npm:pi-subagents
 pi install npm:pi-web-access
 pi install npm:pi-rewind-hook
 pi install npm:@gotgenes/pi-anthropic-auth
+pi install git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe180b40924f5
 ```
 
-See the package README under [`plugins/`](plugins/) for its commands and configuration.
+`pi-chat` additionally needs QEMU and tmux, and therefore runs through WSL2 rather than native Windows. See the package README under [`plugins/`](plugins/) or its upstream repository for commands and configuration.
 
 ## Repository layout
 

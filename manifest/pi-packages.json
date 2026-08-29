@@ -1,5 +1,5 @@
 {
-  "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: `pi install npm:<name>@<version>`. Users get new versions only when a pin change lands on main; the mise-bump workflow proposes bumps. First-party packages still live in plugins/ workspaces.",
+  "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: npm packages use an exact version and Git packages use an exact commit. Users get new versions only when a pin change lands on main; the mise-bump workflow proposes npm bumps. First-party packages still live in plugins/ workspaces.",
   "packages": [
     {
       "name": "@companion-ai/feynman",
@@ -27,7 +27,8 @@
       "version": "0.6.5",
       "label": "sandbox",
       "description": "Prompt before Pi reads or writes outside approved paths, and sandbox shell filesystem and network access on macOS/Linux. By carderne.",
-      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path."
+      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path.",
+      "windowsSupport": "wsl"
     },
     {
       "name": "pi-subagents",
@@ -42,6 +43,14 @@
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "nextAction": "Ask Pi to search the web."
+    },
+    {
+      "name": "pi-chat",
+      "source": "git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe180b40924f5",
+      "label": "chat",
+      "description": "Bridge Discord and Telegram channels to isolated Pi sessions in Gondolin micro-VMs. By earendil-works.",
+      "nextAction": "Install QEMU and tmux with your system package manager, then run /chat-config and /chat-connect in Pi.",
+      "windowsSupport": "wsl"
     },
     {
       "name": "pi-rewind-hook",

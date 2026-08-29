@@ -22,6 +22,17 @@
       "nextAction": "Run /autoresearch with an optimization target in Pi."
     },
     {
+      "id": "pi-package:pi-chat",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "chat",
+      "description": "Bridge Discord and Telegram channels to isolated Pi sessions in Gondolin micro-VMs. By earendil-works.",
+      "installTarget": "pi-chat",
+      "source": "git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe180b40924f5",
+      "nextAction": "Install QEMU and tmux with your system package manager, then run /chat-config and /chat-connect in Pi.",
+      "windowsWsl": true
+    },
+    {
       "id": "pi-package:@companion-ai/feynman",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -68,7 +79,8 @@
       "description": "Prompt before Pi reads or writes outside approved paths, and sandbox shell filesystem and network access on macOS/Linux. By carderne.",
       "installTarget": "pi-sandbox",
       "version": "0.6.5",
-      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path."
+      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path.",
+      "windowsWsl": true
     },
     {
       "id": "pi-package:pi-subagents",
@@ -626,7 +638,8 @@
       "description": "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, terminals, commands, or communication with another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1.",
       "installTarget": "herdr",
       "nextAction": "Ask your coding agent to use the herdr skill.",
-      "dependencies": []
+      "dependencies": [],
+      "windowsWsl": true
     },
     {
       "id": "skill:i-have-adhd",
@@ -855,7 +868,8 @@
       "label": "Annotate",
       "description": "Comment on terminal selections and copy annotations as agent context (plannotator/herdr-annotate). Needs Bun on PATH.",
       "installTarget": "plannotator/herdr-annotate",
-      "nextAction": "Add the `annotate.*` key bindings from github.com/plannotator/herdr-annotate to ~/.config/herdr/config.toml, then `herdr config check`."
+      "nextAction": "Add the `annotate.*` key bindings from github.com/plannotator/herdr-annotate to ~/.config/herdr/config.toml, then `herdr config check`.",
+      "windowsWsl": true
     },
     {
       "id": "tool:loom-teams",
@@ -884,11 +898,12 @@
       "kind": "tool",
       "group": "Tools",
       "label": "herdr",
-      "description": "Terminal multiplexer for coding agents (macOS/Linux; on Windows install from herdr.dev).",
+      "description": "Terminal multiplexer for coding agents (macOS/Linux; use WSL2 on Windows).",
       "installTarget": "herdr",
       "nextAction": "Run `herdr` to start the multiplexer.",
       "bin": "herdr",
-      "companions": []
+      "companions": [],
+      "windowsWsl": true
     },
     {
       "id": "tool:calldiff",
@@ -917,7 +932,7 @@
       "kind": "tool",
       "group": "Tools",
       "label": "tuicr",
-      "description": "Code review TUI with vim keybindings — annotate diffs, PRs, or MRs and export to GitHub or clipboard.",
+      "description": "Code review TUI with vim keybindings - annotate diffs, PRs, or MRs and export to GitHub or clipboard.",
       "installTarget": "github:agavra/tuicr",
       "nextAction": "Run `tuicr` in a repo with changes.",
       "bin": "tuicr",

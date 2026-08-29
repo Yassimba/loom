@@ -569,6 +569,8 @@ mod tests {
             dependencies: dependencies.iter().map(ToString::to_string).collect(),
             bin: None,
             version: None,
+            source: None,
+            windows_wsl: false,
             companions: Vec::new(),
         }
     }
