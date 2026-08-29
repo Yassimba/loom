@@ -86,6 +86,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     }
 
     let mut tasks = Vec::new();
+    let mut pi_compat_targets = Vec::new();
     if system.command_exists("pi") {
         // Pinned reinstalls instead of `pi update --all`: cataloged packages
         // move only when their pin (or a first-party publish) does, and Pi
@@ -98,6 +99,13 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             .map(|result| format!("{}\n{}", result.stdout, result.stderr))
             .unwrap_or_default();
         let commands = pi_package_commands(catalog, &listed, cfg!(windows));
+        pi_compat_targets = catalog
+            .resources
+            .iter()
+            .filter(|resource| crate::pi_compat::is_managed(&resource.id))
+            .filter(|resource| listed.contains(&resource.install_target))
+            .map(|resource| resource.id.clone())
+            .collect();
         if !commands.is_empty() {
             tasks.push(CommandLane {
                 label: "Pi packages",
@@ -185,6 +193,12 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
         }
     });
     out.progress_done();
+    if !pi_compat_targets.is_empty() {
+        lanes.push((
+            labels.len(),
+            reconcile_pi_compat(system, &pi_compat_targets),
+        ));
+    }
     lanes.sort_by_key(|(index, _)| *index);
 
     let mut failed = 0;
@@ -217,6 +231,21 @@ fn sync_tool_manifest(system: &dyn System) -> Lane {
         }
         Err(message) => Lane::failed("Tools", message),
     }
+}
+
+fn reconcile_pi_compat(system: &dyn System, targets: &[String]) -> Lane {
+    let mut changed = 0;
+    for target in targets {
+        match crate::pi_compat::apply_for_package(target, system) {
+            Ok(true) => changed += 1,
+            Ok(false) => {}
+            Err(error) => return Lane::failed("Pi compatibility", error.to_string()),
+        }
+    }
+    Lane::ok(
+        "Pi compatibility",
+        format!("{} verified · {changed} repaired", targets.len()),
+    )
 }
 
 fn run_command_lane(system: &dyn System, task: CommandLane) -> Lane {
