@@ -1,5 +1,7 @@
 use crate::ui::{tidy_path, Mark, Out};
-use crate::{skills, CommandSpec, System};
+use crate::{skills, CommandSpec, InstallReport, System};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Health {
@@ -35,8 +37,11 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
     );
     print_manifest(system, &style);
     style.blank();
+    style.section("Selected resources");
+    let resources_healthy = print_managed_resources(system, &style);
+    style.blank();
     style.section("Agent skills");
-    print_skill_trees(system, &style);
+    let skills_healthy = print_skill_trees(system, &style);
     style.blank();
     style.section("Integrations");
     print_opencode_adapter(system, &style);
@@ -68,15 +73,199 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
     for check in &checks {
         style.row(check.health.mark(), check.name, style.muted(&check.detail));
     }
-    let healthy = checks.iter().all(|check| check.health != Health::Bad);
+    let healthy = resources_healthy
+        && skills_healthy
+        && checks.iter().all(|check| check.health != Health::Bad);
     if healthy {
-        style.verdict(true, "All checks passed");
+        style.verdict(true, "Selected resources and runtimes verified");
         style.hint("optional managers are installed on demand by `loom setup`");
     } else {
         style.verdict(false, "Some checks need attention");
         style.next("repair the failed managers, then run `loom status` again");
     }
     healthy
+}
+
+const RESOURCE_REGISTRY: &str = ".config/loom/resources.json";
+
+fn resource_registry(home: &Path) -> PathBuf {
+    home.join(RESOURCE_REGISTRY)
+}
+
+fn read_selected_resources(home: &Path) -> Result<HashSet<String>, String> {
+    let path = resource_registry(home);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(HashSet::new()),
+        Err(error) => return Err(format!("could not read {}: {error}", path.display())),
+    };
+    serde_json::from_str::<Vec<String>>(&text)
+        .map(|items| items.into_iter().collect())
+        .map_err(|error| format!("could not parse {}: {error}", path.display()))
+}
+
+/// Remember successfully installed manager-owned resources so status can
+/// distinguish an optional manager from one that disappeared after setup.
+pub fn record_managed_resources(system: &dyn System, report: &InstallReport) -> Result<(), String> {
+    let installed = report
+        .installed
+        .iter()
+        .filter(|id| id.starts_with("pi-package:") || id.starts_with("herdr-plugin:"))
+        .cloned()
+        .collect::<Vec<_>>();
+    if installed.is_empty() {
+        return Ok(());
+    }
+    let Some(home) = system.home_dir() else {
+        return Err("home directory is unavailable".into());
+    };
+    let mut selected = read_selected_resources(&home)?;
+    let before = selected.len();
+    selected.extend(installed);
+    if selected.len() == before {
+        return Ok(());
+    }
+    let path = resource_registry(&home);
+    std::fs::create_dir_all(path.parent().expect("registry has a parent"))
+        .map_err(|error| format!("could not create {}: {error}", path.display()))?;
+    let mut selected = selected.into_iter().collect::<Vec<_>>();
+    selected.sort();
+    let text = serde_json::to_string_pretty(&selected).expect("resource ids serialize");
+    std::fs::write(&path, format!("{text}\n"))
+        .map_err(|error| format!("could not write {}: {error}", path.display()))
+}
+
+fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
+    let Some(home) = system.home_dir() else {
+        style.row(Mark::Bad, "resources", "home directory is unavailable");
+        return false;
+    };
+    let Ok(catalog) = crate::Catalog::embedded() else {
+        style.row(Mark::Bad, "catalog", "embedded catalog is unavailable");
+        return false;
+    };
+    let selected = crate::manifest::selected_keys(&home);
+    let (managed, mut healthy) = match read_selected_resources(&home) {
+        Ok(selected) => (selected, true),
+        Err(error) => {
+            style.row(Mark::Bad, "resource registry", error);
+            (HashSet::new(), false)
+        }
+    };
+    for resource in catalog.resources.iter().filter(|resource| {
+        resource.kind == crate::ResourceKind::Tool && selected.contains(&resource.install_target)
+    }) {
+        let present = resource
+            .bin
+            .as_deref()
+            .is_some_and(|binary| system.command_exists(binary));
+        style.row(
+            if present { Mark::Ok } else { Mark::Bad },
+            &resource.label,
+            if present {
+                "selected tool available"
+            } else {
+                "selected tool missing from PATH"
+            },
+        );
+        healthy &= present;
+    }
+    healthy &= print_manager_inventory(
+        system,
+        style,
+        &catalog,
+        "pi",
+        &["list"],
+        crate::ResourceKind::PiPackage,
+        &managed,
+    );
+    healthy &= print_manager_inventory(
+        system,
+        style,
+        &catalog,
+        "herdr",
+        &["plugin", "list"],
+        crate::ResourceKind::HerdrPlugin,
+        &managed,
+    );
+    healthy
+}
+
+fn print_manager_inventory(
+    system: &dyn System,
+    style: &Out,
+    catalog: &crate::Catalog,
+    manager: &'static str,
+    args: &[&str],
+    kind: crate::ResourceKind,
+    selected: &HashSet<String>,
+) -> bool {
+    let selected_for_manager = catalog
+        .resources
+        .iter()
+        .any(|resource| resource.kind == kind && selected.contains(&resource.id));
+    if !system.command_exists(manager) {
+        style.row(
+            if selected_for_manager {
+                Mark::Bad
+            } else {
+                Mark::Off
+            },
+            manager,
+            if selected_for_manager {
+                "selected manager missing from PATH"
+            } else {
+                "not selected"
+            },
+        );
+        return !selected_for_manager;
+    }
+    match system.run_probe(&CommandSpec::new(manager, args.iter().copied())) {
+        Ok(result) if result.success => {
+            let output = format!("{}\n{}", result.stdout, result.stderr);
+            let mut healthy = true;
+            for resource in catalog
+                .resources
+                .iter()
+                .filter(|resource| resource.kind == kind)
+            {
+                let installed = output.contains(&resource.install_target)
+                    || output.contains(resource.id.trim_start_matches("herdr-plugin:"));
+                let expected = selected.contains(&resource.id);
+                healthy &= installed || !expected;
+                style.row(
+                    if installed {
+                        Mark::Ok
+                    } else if expected {
+                        Mark::Bad
+                    } else {
+                        Mark::Off
+                    },
+                    &resource.label,
+                    if installed {
+                        "catalog item installed"
+                    } else if expected {
+                        "selected catalog item missing"
+                    } else {
+                        "catalog item not installed"
+                    },
+                );
+            }
+            healthy
+        }
+        Ok(result) => {
+            style.row(
+                Mark::Bad,
+                manager,
+                crate::install::command_failure_message(&result),
+            );
+            false
+        }
+        Err(error) => {
+            style.row(Mark::Bad, manager, error.to_string());
+            false
+        }
+    }
 }
 
 fn print_opencode_adapter(system: &dyn System, style: &Out) {
@@ -141,18 +330,29 @@ fn print_manifest(system: &dyn System, style: &Out) {
 
 /// The agent skill trees the native installer would write into, with how
 /// many catalog skills each already holds.
-fn print_skill_trees(system: &dyn System, style: &Out) {
+fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
     let Some(home) = system.home_dir() else {
         style.row(Mark::Bad, "skills", "home directory is unavailable");
-        return;
+        return false;
     };
     let mut trees = crate::SkillAgent::ALL
         .into_iter()
         .map(|agent| (agent, agent.global_skill_tree(&home)))
         .filter(|(_, tree)| tree.parent().is_some_and(|parent| parent.is_dir()))
         .collect::<Vec<_>>();
+    let mut projects = match skills::prune_registered_skill_projects(&home) {
+        Ok(projects) => projects,
+        Err(error) => {
+            style.row(Mark::Bad, "skill projects", error);
+            return false;
+        }
+    };
     if let Some(current) = system.current_dir() {
-        let project = skills::project_root(&current);
+        projects.push(skills::project_root(&current));
+    }
+    projects.sort();
+    projects.dedup();
+    for project in projects {
         trees.extend(
             crate::SkillAgent::ALL
                 .into_iter()
@@ -171,7 +371,7 @@ fn print_skill_trees(system: &dyn System, style: &Out) {
                 skills::agent_dirs_display()
             )),
         );
-        return;
+        return true;
     }
     let catalog_skills = crate::Catalog::embedded()
         .map(|catalog| {
@@ -205,6 +405,7 @@ fn print_skill_trees(system: &dyn System, style: &Out) {
             format!("{}  {}", coverage, style.muted(tidy_path(&tree, &home))),
         );
     }
+    true
 }
 
 fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> RuntimeCheck {
@@ -216,7 +417,7 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
         };
     }
     let command = CommandSpec::new(name, args.iter().copied());
-    match system.run(&command) {
+    match system.run_probe(&command) {
         Ok(result) if result.success => RuntimeCheck {
             name,
             health: Health::Good,
@@ -238,5 +439,96 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
             health: Health::Bad,
             detail: error.to_string(),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct HomeSystem(PathBuf);
+
+    impl System for HomeSystem {
+        fn command_exists(&self, _name: &str) -> bool {
+            false
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, _command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
+            unreachable!()
+        }
+
+        fn home_dir(&self) -> Option<PathBuf> {
+            Some(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn a_missing_selected_manager_makes_status_unhealthy() {
+        let root = std::env::temp_dir().join(format!(
+            "loom-missing-manager-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let package = crate::Catalog::embedded()
+            .unwrap()
+            .resources
+            .into_iter()
+            .find(|resource| resource.kind == crate::ResourceKind::PiPackage)
+            .unwrap();
+        let system = HomeSystem(root.clone());
+        record_managed_resources(
+            &system,
+            &InstallReport {
+                installed: vec![package.id],
+                failures: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        assert!(!print_managed_resources(&system, &Out::plain()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn installed_manager_resources_are_recorded_without_clobbering_errors() {
+        let root = std::env::temp_dir().join(format!(
+            "loom-resource-registry-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let system = HomeSystem(root.clone());
+        record_managed_resources(
+            &system,
+            &InstallReport {
+                installed: vec!["pi-package:one".into(), "skill:ignored".into()],
+                failures: Vec::new(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            read_selected_resources(&root).unwrap(),
+            HashSet::from(["pi-package:one".into()])
+        );
+
+        let path = resource_registry(&root);
+        std::fs::write(&path, "not json").unwrap();
+        assert!(record_managed_resources(
+            &system,
+            &InstallReport {
+                installed: vec!["herdr-plugin:two".into()],
+                failures: Vec::new(),
+            },
+        )
+        .is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "not json");
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

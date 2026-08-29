@@ -11,10 +11,13 @@ use crate::{
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 /// Everything the wizard needs to know up front; pure data so tests can
 /// construct it without touching the file system.
 pub struct Model {
+    pub mode: crate::app::SelectionMode,
     pub resources: Vec<Resource>,
     /// Per-resource flag: already present on this machine (plugin listed by
     /// `herdr plugin list`, package listed by `pi list`, skill in an agent
@@ -37,7 +40,7 @@ pub enum WizardOutcome {
     Cancelled,
     NothingSelected,
     DryRun(InstallPlan, Vec<String>),
-    Installed(InstallReport),
+    Installed(InstallReport, Vec<String>),
 }
 
 /// What the event loop must do after a key or mouse event.
@@ -51,6 +54,15 @@ pub enum Action {
 pub(crate) enum Item {
     Resource(usize),
     Setting(usize),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ItemState {
+    Available,
+    Picked,
+    Required(String),
+    Installed,
+    Unavailable(String),
 }
 
 /// One pickable row in a group.
@@ -69,8 +81,8 @@ impl Row {
     }
 }
 
-/// A column-one entry: a titled set of rows. The first group, "Everything",
-/// has no rows of its own; it stands for every resource at once.
+/// A column-one entry: a titled set of rows. "Everything" has no rows of
+/// its own; it stands for every resource at once.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Group {
     pub title: String,
@@ -201,6 +213,7 @@ pub struct InstallJob {
     pub plan: InstallPlan,
     pub settings: Vec<SettingSpec>,
     pub paths: SettingsPaths,
+    pub cancelled: Arc<AtomicBool>,
 }
 
 /// Screen regions remembered from the last draw, for mouse hit-testing.
@@ -234,6 +247,9 @@ pub struct Wizard {
     pub(crate) probing: bool,
     /// Quit confirmation pending (a non-empty selection would be discarded).
     pub(crate) confirm_quit: bool,
+    /// First Ctrl-C during install arms cancellation; a second confirms it.
+    pub(crate) confirm_cancel: bool,
+    pub(crate) cancelled: Arc<AtomicBool>,
 }
 
 const CHOOSE: usize = 0;
@@ -275,6 +291,8 @@ impl Wizard {
             show_help: false,
             probing: false,
             confirm_quit: false,
+            confirm_cancel: false,
+            cancelled: Arc::new(AtomicBool::new(false)),
         };
         wizard.precheck_settings();
         wizard
@@ -392,38 +410,48 @@ impl Wizard {
         }
     }
 
-    /// Whether an item is on: selected, or required by a selection.
-    pub(crate) fn item_on(&self, item: Item) -> bool {
+    pub(crate) fn item_state(&self, item: Item) -> ItemState {
         match item {
-            Item::Resource(index) => self.selected[index] || self.required_note(index).is_some(),
-            Item::Setting(index) => self.setting_on[index],
+            Item::Resource(index) if self.resource_installed(index) => ItemState::Installed,
+            Item::Resource(index) => self.required_note(index).map_or_else(
+                || {
+                    if self.selected[index] {
+                        ItemState::Picked
+                    } else {
+                        ItemState::Available
+                    }
+                },
+                ItemState::Required,
+            ),
+            Item::Setting(index) if self.setting_applied(index) => ItemState::Installed,
+            Item::Setting(index) if !self.setting_available(index) => {
+                ItemState::Unavailable("pick or install its related capability first".into())
+            }
+            Item::Setting(index) if self.setting_on[index] => ItemState::Picked,
+            Item::Setting(_) => ItemState::Available,
         }
     }
 
-    /// Items the user can still act on: not installed, not locked in.
+    /// Whether an item is on: selected, or required by a selection.
+    pub(crate) fn item_on(&self, item: Item) -> bool {
+        matches!(
+            self.item_state(item),
+            ItemState::Picked | ItemState::Required(_)
+        )
+    }
+
+    /// Items the user can still act on: available or directly picked.
     pub(crate) fn actionable(&self, items: &[Item]) -> Vec<Item> {
         items
             .iter()
             .copied()
-            .filter(|item| match *item {
-                Item::Resource(index) => {
-                    !self.resource_installed(index) && self.required_note(index).is_none()
-                }
-                Item::Setting(index) => {
-                    !self.setting_applied(index) && self.setting_available(index)
-                }
+            .filter(|item| {
+                matches!(
+                    self.item_state(*item),
+                    ItemState::Available | ItemState::Picked
+                )
             })
             .collect()
-    }
-
-    /// (on, actionable) for a group header.
-    pub(crate) fn group_counts(&self, items: &[Item]) -> (usize, usize) {
-        let actionable = self.actionable(items);
-        let on = actionable
-            .iter()
-            .filter(|item| self.item_on(**item))
-            .count();
-        (on, actionable.len())
     }
 
     /// Pre-check settings that pair with what the user picked, unless the
@@ -487,6 +515,7 @@ impl Wizard {
                     self.selected[index] = false;
                 }
             }
+            self.precheck_settings();
         }
         self.probing = false;
     }
@@ -635,10 +664,13 @@ impl Wizard {
         };
         stage.items = items;
         stage.running = true;
+        self.confirm_cancel = false;
+        self.cancelled.store(false, Ordering::Relaxed);
         Ok(InstallJob {
             plan,
             settings,
             paths: self.model.settings_paths.clone(),
+            cancelled: Arc::clone(&self.cancelled),
         })
     }
 
@@ -655,6 +687,7 @@ impl Wizard {
             InstallEvent::Done(report) => {
                 stage.running = false;
                 stage.report = Some(report);
+                self.confirm_cancel = false;
             }
         }
     }
@@ -674,8 +707,13 @@ impl Wizard {
         let is_ctrl_c =
             key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c');
         if self.install_running() {
-            // Interrupting a running install would leave managers half
-            // configured; the worker finishes, then keys work again.
+            if is_ctrl_c {
+                if self.confirm_cancel {
+                    self.cancelled.store(true, Ordering::Relaxed);
+                } else {
+                    self.confirm_cancel = true;
+                }
+            }
             return None;
         }
         if self.show_help && !is_ctrl_c {
@@ -793,7 +831,10 @@ impl Wizard {
             },
             Stage::Install(stage) => match key.code {
                 KeyCode::Up | KeyCode::Char('k') => stage.scroll = stage.scroll.saturating_sub(1),
-                KeyCode::Down | KeyCode::Char('j') => stage.scroll = stage.scroll.saturating_add(1),
+                KeyCode::Down | KeyCode::Char('j') => {
+                    stage.scroll =
+                        (stage.scroll + 1).min(stage.items.len().saturating_sub(1) as u16)
+                }
                 _ => {}
             },
         }
@@ -805,7 +846,7 @@ impl Wizard {
     fn exit_outcome(&self) -> WizardOutcome {
         if let Stage::Install(stage) = &self.stages[self.stage_index] {
             if let Some(report) = &stage.report {
-                return WizardOutcome::Installed(report.clone());
+                return WizardOutcome::Installed(report.clone(), self.next_actions(report));
             }
         }
         WizardOutcome::Cancelled
@@ -825,10 +866,12 @@ impl Wizard {
     fn handle_enter(&mut self) -> Option<Action> {
         match &self.stages[self.stage_index] {
             Stage::Review { .. } => self.confirm_review(),
-            Stage::Install(stage) => stage
-                .report
-                .as_ref()
-                .map(|report| Action::Exit(WizardOutcome::Installed(report.clone()))),
+            Stage::Install(stage) => stage.report.as_ref().map(|report| {
+                Action::Exit(WizardOutcome::Installed(
+                    report.clone(),
+                    self.next_actions(report),
+                ))
+            }),
             Stage::Choose(_) => {
                 self.go_forward();
                 None
@@ -856,6 +899,10 @@ impl Wizard {
         } else if let Some(on) = self.agent_on.get_mut(cursor - 1) {
             *on = !*on;
         }
+    }
+
+    pub(crate) fn next_actions(&self, report: &crate::InstallReport) -> Vec<String> {
+        crate::app::next_actions(&self.expanded_selection(), report)
     }
 
     // ---- search ------------------------------------------------------------
@@ -974,7 +1021,7 @@ impl Wizard {
     // ---- mouse -------------------------------------------------------------
 
     pub fn handle_click(&mut self, column: u16, row: u16) -> Option<Action> {
-        if self.install_running() {
+        if self.show_help || self.confirm_quit || self.install_running() {
             return None;
         }
         if contains(self.hits.back_button, column, row) {
@@ -1032,15 +1079,45 @@ impl Wizard {
     }
 
     pub fn handle_scroll(&mut self, down: bool) {
+        if self.show_help || self.confirm_quit {
+            return;
+        }
         let code = if down { KeyCode::Down } else { KeyCode::Up };
         let _ = self.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
 }
 
-/// The Choose columns: Everything first, then skills by category, tools, Pi
-/// packages, Herdr plugins, and settings by group.
+/// The Choose columns: Recommended for first setup, Everything, then skills
+/// by category, tools, Pi packages, Herdr plugins, and settings by group.
 fn choose_groups(model: &Model) -> Vec<Group> {
     let mut groups = Vec::new();
+    if model.mode == crate::app::SelectionMode::Setup {
+        let recommended = [
+            "brainstorming",
+            "tdd",
+            "diagnosing-bugs",
+            "code-review",
+            "commit",
+            "writing-clearly-and-concisely",
+        ];
+        let rows = model
+            .resources
+            .iter()
+            .enumerate()
+            .filter(|(_, resource)| {
+                resource.kind == ResourceKind::Skill
+                    && recommended.contains(&resource.install_target.as_str())
+            })
+            .map(|(index, _)| Row::Resource(index))
+            .collect::<Vec<_>>();
+        if !rows.is_empty() {
+            groups.push(Group {
+                title: "Recommended".into(),
+                rows,
+                everything: false,
+            });
+        }
+    }
     if !model.resources.is_empty() {
         groups.push(Group {
             title: "Everything".into(),

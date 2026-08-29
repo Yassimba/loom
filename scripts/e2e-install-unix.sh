@@ -45,16 +45,29 @@ mise_bin=${HOME}/.local/bin/mise
 if [[ ! -x "$mise_bin" ]]; then
   mise_bin=$(PATH="$base_path" command -v mise)
 fi
-"$mise_bin" -C "$HOME" exec -- loom --version >"$evidence_dir/loom-version.txt" 2>&1
-"$mise_bin" -C "$HOME" exec -- loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1
+run_loom() {
+  "$mise_bin" -C "$HOME" exec -- "${LOOM_E2E_LOOM_BIN:-loom}" "$@"
+}
+run_loom --version >"$evidence_dir/loom-version.txt" 2>&1
+run_loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1
 "$mise_bin" -C "$HOME" exec -- tokei --version >"$evidence_dir/tokei-version.txt" 2>&1
-"$mise_bin" -C "$HOME" exec -- loom status >"$evidence_dir/loom-status.txt" 2>&1
+run_loom status >"$evidence_dir/loom-status.txt" 2>&1
+project=${RUNNER_TEMP}/loom-first-project
+mkdir -p "$project"
+(
+  cd "$project"
+  run_loom init --yes
+) >"$evidence_dir/loom-init.txt" 2>&1
+test -f "$project/AGENTS.md"
+test -f "$project/CLAUDE.md"
+run_loom update --yes >"$evidence_dir/loom-update.txt" 2>&1
 "$mise_bin" -C "$HOME" exec -- br --version >"$evidence_dir/br-version.txt" 2>&1
 "$mise_bin" -C "$HOME" exec -- bv --version >"$evidence_dir/bv-version.txt" 2>&1
 "$mise_bin" doctor >"$evidence_dir/mise-doctor.txt" 2>&1 || true
 
 selection=${HOME}/.config/mise/conf.d/loom.toml
 test -f "$selection"
+selection_before=$(cksum <"$selection")
 test "$(grep -c '^# core:begin' "$selection")" -eq 1
 test "$(grep -c '^# core:end' "$selection")" -eq 1
 grep -Fq 'beads_rust' "$selection"
@@ -91,6 +104,7 @@ case "$shell_name" in
     ;;
 esac
 
+skill_before=$(cksum <"${HOME}/.agents/skills/next/SKILL.md")
 env PATH="$(dirname "$mise_bin"):$base_path" SHELL="$test_shell" \
   sh "$workspace/install.sh" "${setup_args[@]}" \
   >"$evidence_dir/rerun-stdout.txt" \
@@ -100,6 +114,22 @@ activation=$(printf 'export PATH="%s:$PATH"; eval "$("%s" activate %s)"' "$(dirn
 test "$(grep -Fxc "$activation" "$profile")" -eq 1
 grep -Fq 'beads_rust' "$selection"
 grep -Fq 'beads_viewer' "$selection"
+test "$(cksum <"$selection")" = "$selection_before"
+test "$(cksum <"${HOME}/.agents/skills/next/SKILL.md")" = "$skill_before"
+manifest="${LOOM_REPO_DIR:-$workspace}/manifest/loom.toml"
+awk '/^# core:begin/{inside=1; next} /^# core:end/{inside=0} inside && /^[^#[:space:]].*=/{print}' "$manifest" |
+  while IFS= read -r pin; do grep -Fqx "$pin" "$selection"; done
+grep -Fxf <(grep -E '^"(aqua:XAMPPRocky/tokei|cargo:tokei)"' "$manifest") "$selection" >/dev/null
+loom_version=$(awk -F'"' '/^version = /{print $2; exit}' "${LOOM_REPO_DIR:-$workspace}/cli/loom/Cargo.toml")
+grep -Fqx "loom $loom_version" "$evidence_dir/loom-version.txt"
+grep -Fq 'tokei 12.1.2' "$evidence_dir/tokei-version.txt"
+grep -Fq 'loom setup' "$evidence_dir/rerun-stdout.txt"
+grep -Fq 'Everything selected is already set up; no changes made' "$evidence_dir/rerun-stdout.txt"
+grep -Fq 'next run `loom status` to verify the setup' "$evidence_dir/bootstrap-stdout.txt"
+grep -Fq 'next run `loom init` inside your first project' "$evidence_dir/bootstrap-stdout.txt"
+grep -Fq 'Selected resources and runtimes verified' "$evidence_dir/loom-status.txt"
+grep -Fq 'Done' "$evidence_dir/loom-init.txt"
+grep -Eq 'Up to date|refreshed' "$evidence_dir/loom-update.txt"
 
 find "${HOME}/.agents/skills/next" \
   "${HOME}/.claude/skills/next" \

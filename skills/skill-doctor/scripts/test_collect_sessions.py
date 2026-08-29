@@ -12,7 +12,9 @@ from collect_sessions import (
     detect_skills_from_entries,
     discover_skills,
     find_claude_session_files,
+    find_pi_session_files,
     parse_claude_session,
+    parse_pi_session,
     session_matches_repos,
 )
 
@@ -30,10 +32,13 @@ class ClaudeSessionTests(unittest.TestCase):
             second = root / "second"
             first_skill = first / ".agents" / "skills" / "alpha" / "SKILL.md"
             second_skill = second / ".claude" / "skills" / "beta" / "SKILL.md"
+            pi_skill = second / ".pi" / "skills" / "gamma" / "SKILL.md"
             first_skill.parent.mkdir(parents=True)
             second_skill.parent.mkdir(parents=True)
+            pi_skill.parent.mkdir(parents=True)
             first_skill.write_text("---\ndescription: Alpha\n---\n")
             second_skill.write_text("---\ndescription: Beta\n---\n")
+            pi_skill.write_text("---\ndescription: Gamma\n---\n")
 
             skills = discover_skills(
                 [first, second],
@@ -42,7 +47,7 @@ class ClaudeSessionTests(unittest.TestCase):
                 False,
             )
 
-            self.assertEqual(set(skills), {"alpha", "beta"})
+            self.assertEqual(set(skills), {"alpha", "beta", "gamma"})
             self.assertTrue(
                 session_matches_repos(second / "src", [first, second])
             )
@@ -190,6 +195,105 @@ class ClaudeSessionTests(unittest.TestCase):
             parsed = parse_claude_session(path, set(), True)
             self.assertEqual(parsed[0]["id"], "session-1-child-1")
             self.assertEqual(parsed[0]["thread_source"], "subagent")
+
+
+class PiSessionTests(unittest.TestCase):
+    def test_discovers_recent_sessions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pi_home = Path(tmp)
+            recent = pi_home / "sessions" / "--repo--" / "recent.jsonl"
+            old = pi_home / "sessions" / "--repo--" / "old.jsonl"
+            write_jsonl(recent, [{"type": "session"}])
+            write_jsonl(old, [{"type": "session"}])
+            old_time = (datetime.now(timezone.utc) - timedelta(days=10)).timestamp()
+            os.utime(old, (old_time, old_time))
+
+            files = find_pi_session_files(
+                pi_home,
+                datetime.now(timezone.utc) - timedelta(days=1),
+            )
+
+            self.assertEqual([path for _, path in files], [recent])
+
+    def test_parses_messages_tools_skills_and_stats(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "session.jsonl"
+            write_jsonl(path, [
+                {
+                    "type": "session",
+                    "version": 3,
+                    "id": "pi-session-1",
+                    "timestamp": "2026-08-29T10:00:00Z",
+                    "cwd": "/tmp/repo",
+                },
+                {
+                    "type": "message",
+                    "id": "user-1",
+                    "parentId": None,
+                    "timestamp": "2026-08-29T10:00:01Z",
+                    "message": {
+                        "role": "user",
+                        "content": "Improve my skill",
+                    },
+                },
+                {
+                    "type": "message",
+                    "id": "assistant-1",
+                    "parentId": "user-1",
+                    "timestamp": "2026-08-29T10:00:02Z",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": "I will inspect it."},
+                            {
+                                "type": "toolCall",
+                                "id": "call-1",
+                                "name": "read",
+                                "arguments": {
+                                    "path": "/tmp/repo/.pi/skills/update-skill/SKILL.md"
+                                },
+                            },
+                            {
+                                "type": "toolCall",
+                                "id": "call-2",
+                                "name": "edit",
+                                "arguments": {"path": "/tmp/repo/source.py"},
+                            },
+                        ],
+                        "stopReason": "toolUse",
+                    },
+                },
+                {
+                    "type": "message",
+                    "id": "result-1",
+                    "parentId": "assistant-1",
+                    "timestamp": "2026-08-29T10:00:03Z",
+                    "message": {
+                        "role": "toolResult",
+                        "toolCallId": "call-2",
+                        "toolName": "edit",
+                        "content": [{"type": "text", "text": "permission denied"}],
+                        "isError": True,
+                    },
+                },
+            ])
+
+            meta, stats, entries, skills = parse_pi_session(
+                path,
+                {"update-skill"},
+            )
+
+            self.assertEqual(meta["id"], "pi-session-1")
+            self.assertEqual(meta["cwd"], "/tmp/repo")
+            self.assertEqual(meta["originator"], "pi")
+            self.assertEqual(stats["user_turns"], 1)
+            self.assertEqual(stats["assistant_turns"], 1)
+            self.assertEqual(stats["tool_calls"], 2)
+            self.assertEqual(stats["error_outputs"], 1)
+            self.assertTrue(stats["has_code_edits"])
+            self.assertEqual(skills, ["update-skill"])
+            self.assertIn(("user", "Improve my skill"), entries)
+            self.assertIn(("assistant", "I will inspect it."), entries)
 
 
 if __name__ == "__main__":

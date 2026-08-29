@@ -3,11 +3,32 @@ use crate::ui::{confirm_plan, print_plan, Mark, Out};
 use crate::wizard::{run_wizard, Model, WizardOutcome};
 use crate::{
     build_install_plan, execute_install_plan, expand_skill_dependencies, Catalog, CommandSpec,
-    InstallReport, NodeStatus, Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent,
-    SkillDestination, SkillScope, System,
+    InstallFailure, InstallReport, NodeStatus, Platform, PrerequisiteStatus, Resource,
+    ResourceKind, SkillAgent, SkillDestination, SkillScope, System,
 };
 use anyhow::{bail, Context, Result};
 use inquire::Confirm;
+
+pub(crate) const SETUP_NEXT_ACTIONS: [&str; 3] = [
+    "if a newly installed command is missing, open a new shell",
+    "run `loom status` to verify the setup",
+    "run `loom init` inside your first project",
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectionMode {
+    Setup,
+    Add,
+}
+
+impl SelectionMode {
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::Setup => "setup",
+            Self::Add => "add",
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct Selectors {
@@ -28,6 +49,7 @@ impl Selectors {
 
 #[allow(clippy::too_many_arguments)]
 pub fn install_selected(
+    mode: SelectionMode,
     catalog: &Catalog,
     selectors: &Selectors,
     requested_agents: &[SkillAgent],
@@ -88,6 +110,7 @@ pub fn install_selected(
             catalog.resources.clone()
         };
         return run_interactive(
+            mode,
             catalog,
             resources,
             status,
@@ -112,11 +135,45 @@ pub fn install_selected(
         println!("Nothing selected; no changes made.");
         return Ok(true);
     }
+    let installed = detect_installed(&resources, status, system, &destination);
+    let already_installed = InstallReport {
+        installed: resources
+            .iter()
+            .zip(&installed)
+            .filter(|(resource, installed)| {
+                **installed
+                    && matches!(
+                        resource.kind,
+                        ResourceKind::PiPackage | ResourceKind::HerdrPlugin
+                    )
+            })
+            .map(|(resource, _)| resource.id.clone())
+            .collect(),
+        failures: Vec::new(),
+    };
+    let resources = resources
+        .into_iter()
+        .zip(installed)
+        .filter_map(|(resource, installed)| (!installed).then_some(resource))
+        .collect::<Vec<_>>();
+    if resources.is_empty() {
+        if !dry_run {
+            crate::status::record_managed_resources(system, &already_installed)
+                .map_err(anyhow::Error::msg)?;
+        }
+        let out = Out::detect();
+        out.title(mode.command(), "already configured");
+        out.verdict(
+            true,
+            "Everything selected is already set up; no changes made",
+        );
+        return Ok(true);
+    }
     let plan = build_install_plan(&resources, &[], status, platform, &destination)?;
     let settings_paths = SettingsPaths::detect()?;
     let related_settings = unapplied_related_settings(&resources, &settings_paths);
     let out = Out::detect();
-    out.title("add", format!("{} item(s)", resources.len()));
+    out.title(mode.command(), format!("{} item(s)", resources.len()));
     print_plan(&out, &plan);
     print_settings_plan(&out, &related_settings, &settings_paths);
     if dry_run {
@@ -127,20 +184,25 @@ pub fn install_selected(
         out.verdict(true, "Cancelled; no changes made");
         return Ok(true);
     }
+    crate::status::record_managed_resources(system, &already_installed)
+        .map_err(anyhow::Error::msg)?;
 
     let mut report = execute_install_plan(&plan, system);
     apply_related_settings(&related_settings, &settings_paths, &mut report);
+    if let Err(message) = crate::status::record_managed_resources(system, &report) {
+        report.failures.push(InstallFailure {
+            target: "resource registry".into(),
+            message,
+        });
+    }
     print_report(&out, catalog, &report);
-    if let Some(next) = resources
-        .iter()
-        .find(|resource| {
-            report.installed.contains(&resource.id)
-                || (resource.kind == ResourceKind::Skill
-                    && report.installed.iter().any(|target| target == "skills"))
-        })
-        .map(|resource| resource.next_action.as_str())
-    {
-        out.next(next);
+    for action in next_actions(&resources, &report) {
+        out.next(action);
+    }
+    if mode == SelectionMode::Setup && report.failures.is_empty() {
+        for action in SETUP_NEXT_ACTIONS {
+            out.next(action);
+        }
     }
     Ok(report.failures.is_empty())
 }
@@ -200,7 +262,9 @@ fn prepare_wsl(system: &(dyn System + Sync), dry_run: bool) -> Result<bool> {
     Ok(true)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_interactive(
+    mode: SelectionMode,
     catalog: &Catalog,
     resources: Vec<Resource>,
     status: PrerequisiteStatus,
@@ -228,6 +292,7 @@ fn run_interactive(
     // screen; starting all-false keeps the first frame instant.
     let installed = vec![false; resources.len()];
     let model = Model {
+        mode,
         resources,
         installed,
         settings,
@@ -250,7 +315,7 @@ fn run_interactive(
         }
         WizardOutcome::DryRun(plan, setting_changes) => {
             let out = Out::detect();
-            out.title("setup", "dry run");
+            out.title(mode.command(), "dry run");
             print_plan(&out, &plan);
             for change in &setting_changes {
                 out.row(Mark::Off, "setting", change);
@@ -258,10 +323,24 @@ fn run_interactive(
             out.verdict(true, "Dry run; no changes made");
             Ok(true)
         }
-        WizardOutcome::Installed(report) => {
+        WizardOutcome::Installed(mut report, actions) => {
+            if let Err(message) = crate::status::record_managed_resources(system, &report) {
+                report.failures.push(InstallFailure {
+                    target: "resource registry".into(),
+                    message,
+                });
+            }
             let out = Out::detect();
             out.blank();
             print_report(&out, catalog, &report);
+            for action in actions {
+                out.next(action);
+            }
+            if mode == SelectionMode::Setup && report.failures.is_empty() {
+                for action in SETUP_NEXT_ACTIONS {
+                    out.next(action);
+                }
+            }
             Ok(report.failures.is_empty())
         }
     }
@@ -281,7 +360,7 @@ pub(crate) fn detect_installed(
             return None;
         }
         system
-            .run(&CommandSpec::new(program, args.iter().copied()))
+            .run_probe(&CommandSpec::new(program, args.iter().copied()))
             .ok()
             .filter(|result| result.success)
             .map(|result| format!("{}\n{}", result.stdout, result.stderr))
@@ -335,9 +414,12 @@ pub(crate) fn detect_installed(
                         || last_component_is(line, plain)
                 })
             }),
-            ResourceKind::Skill => skill_trees
-                .iter()
-                .any(|tree| crate::skills::skill_present_in(tree, &resource.install_target)),
+            ResourceKind::Skill => {
+                !skill_trees.is_empty()
+                    && skill_trees
+                        .iter()
+                        .all(|tree| crate::skills::skill_present_in(tree, &resource.install_target))
+            }
         })
         .collect()
 }
@@ -390,6 +472,19 @@ fn apply_related_settings(
             }),
         }
     }
+}
+
+pub(crate) fn next_actions(resources: &[Resource], report: &InstallReport) -> Vec<String> {
+    let mut actions = Vec::new();
+    for resource in resources {
+        let installed = report.installed.contains(&resource.id)
+            || (resource.kind == ResourceKind::Skill
+                && report.installed.iter().any(|target| target == "skills"));
+        if installed && !actions.contains(&resource.next_action) {
+            actions.push(resource.next_action.clone());
+        }
+    }
+    actions
 }
 
 fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
@@ -467,6 +562,17 @@ pub fn load_catalog() -> Result<Catalog> {
 mod tests {
     use super::*;
 
+    fn temp_root(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "loom-app-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
     struct NoCommands;
 
     impl System for NoCommands {
@@ -479,6 +585,165 @@ mod tests {
         fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
             panic!("dry run executed {}", command.display())
         }
+    }
+
+    struct InstalledSkillSystem {
+        home: std::path::PathBuf,
+        commands: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl System for InstalledSkillSystem {
+        fn command_exists(&self, _name: &str) -> bool {
+            false
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
+            self.commands.lock().unwrap().push(command.display());
+            Ok(crate::CommandResult {
+                success: false,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        }
+
+        fn home_dir(&self) -> Option<std::path::PathBuf> {
+            Some(self.home.clone())
+        }
+
+        fn current_dir(&self) -> Option<std::path::PathBuf> {
+            Some(self.home.clone())
+        }
+    }
+
+    #[test]
+    fn scripted_setup_skips_resources_that_are_already_installed() {
+        let root = temp_root("noop");
+        let skill = Resource {
+            id: "skill:already-there".into(),
+            kind: ResourceKind::Skill,
+            group: "test".into(),
+            label: "Already there".into(),
+            description: String::new(),
+            install_target: "already-there".into(),
+            next_action: String::new(),
+            dependencies: Vec::new(),
+            bin: None,
+            version: None,
+            source: None,
+            windows_wsl: false,
+            companions: Vec::new(),
+        };
+        let tree = SkillAgent::AgentsStandard.global_skill_tree(&root);
+        std::fs::create_dir_all(tree.join("already-there")).unwrap();
+        std::fs::write(tree.join("already-there/SKILL.md"), "installed").unwrap();
+        let catalog = Catalog {
+            schema_version: 1,
+            resources: vec![skill],
+        };
+        let selectors = Selectors {
+            skills: vec!["already-there".into()],
+            ..Selectors::default()
+        };
+
+        let system = InstalledSkillSystem {
+            home: root.clone(),
+            commands: std::sync::Mutex::new(Vec::new()),
+        };
+        assert!(install_selected(
+            SelectionMode::Setup,
+            &catalog,
+            &selectors,
+            &[SkillAgent::AgentsStandard],
+            SkillScope::Global,
+            false,
+            true,
+            false,
+            &system,
+        )
+        .unwrap());
+        assert_eq!(system.commands.into_inner().unwrap(), ["node --version"]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    struct InstalledPackageSystem {
+        home: std::path::PathBuf,
+    }
+
+    impl System for InstalledPackageSystem {
+        fn command_exists(&self, name: &str) -> bool {
+            name == "pi"
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
+            Ok(crate::CommandResult {
+                success: command.program == "pi",
+                stdout: if command.program == "pi" {
+                    "@example/already-there\n".into()
+                } else {
+                    String::new()
+                },
+                stderr: String::new(),
+            })
+        }
+
+        fn home_dir(&self) -> Option<std::path::PathBuf> {
+            Some(self.home.clone())
+        }
+
+        fn current_dir(&self) -> Option<std::path::PathBuf> {
+            Some(self.home.clone())
+        }
+    }
+
+    #[test]
+    fn no_op_package_selection_is_recorded_for_status() {
+        let root = temp_root("record-noop");
+        let package = Resource {
+            id: "pi-package:already-there".into(),
+            kind: ResourceKind::PiPackage,
+            group: "test".into(),
+            label: "Already there".into(),
+            description: String::new(),
+            install_target: "@example/already-there".into(),
+            next_action: String::new(),
+            dependencies: Vec::new(),
+            bin: None,
+            version: Some("1.0.0".into()),
+            source: None,
+            windows_wsl: false,
+            companions: Vec::new(),
+        };
+        let catalog = Catalog {
+            schema_version: 1,
+            resources: vec![package],
+        };
+        let selectors = Selectors {
+            pi_packages: vec!["already-there".into()],
+            ..Selectors::default()
+        };
+
+        assert!(install_selected(
+            SelectionMode::Setup,
+            &catalog,
+            &selectors,
+            &[],
+            SkillScope::Global,
+            false,
+            true,
+            false,
+            &InstalledPackageSystem { home: root.clone() },
+        )
+        .unwrap());
+        let recorded: Vec<String> = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".config/loom/resources.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(recorded, ["pi-package:already-there"]);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -518,14 +783,7 @@ mod tests {
 
     #[test]
     fn sandbox_install_applies_its_defaults_after_package_success() {
-        let root = std::env::temp_dir().join(format!(
-            "loom-app-sandbox-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let root = temp_root("sandbox");
         let paths = SettingsPaths {
             herdr_config: root.join("herdr.toml"),
             zed_settings: root.join("zed-settings.json"),

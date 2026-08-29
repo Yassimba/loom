@@ -53,6 +53,16 @@
       "nextAction": "Run /reload in Pi, then /fff-health to inspect the index."
     },
     {
+      "id": "pi-package:pi-mcp-adapter",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "mcp-adapter",
+      "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
+      "installTarget": "pi-mcp-adapter",
+      "version": "2.31.0",
+      "nextAction": "Run /mcp setup in Pi to configure an MCP server."
+    },
+    {
       "id": "pi-package:@yassimba/pi-openai-fast",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -184,7 +194,7 @@
       "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
       "installTarget": "code-review",
       "nextAction": "Ask your coding agent to use the code-review skill.",
-      "dependencies": ["setup-project"]
+      "dependencies": ["loom"]
     },
     {
       "id": "skill:commit",
@@ -284,7 +294,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "refactor",
-      "description": "Refactor with clear orchestration, strong interfaces, and happy-path-first design",
+      "description": "Refactor to reduce unneeded complexity",
       "installTarget": "refactor",
       "nextAction": "Ask your coding agent to use the refactor skill.",
       "dependencies": ["writing-clearly-and-concisely"]
@@ -317,17 +327,7 @@
       "description": "Pre-push quality gate + pull/merge request creation. Use when the user wants to ship, release, push a branch, or open a PR/MR — runs the project's own lint, type-check, and test gates first, then commits, pushes, and opens the request on the project's forge (gh or glab).",
       "installTarget": "release",
       "nextAction": "Ask your coding agent to use the release skill.",
-      "dependencies": ["commit", "diagnosing-bugs", "setup-project"]
-    },
-    {
-      "id": "skill:setup-project",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "setup-project",
-      "description": "Configure this repo for the engineering skills — issue tracker (Beads, GitHub, GitLab, or local markdown), domain-doc layout, editor deep links, ai-docs gitignore. Use when the user wants a repo set up for the engineering skills, after a fresh `loom init`, or when another skill finds `ai-docs/agents/` missing.",
-      "installTarget": "setup-project",
-      "nextAction": "Ask your coding agent to use the setup-project skill.",
-      "dependencies": []
+      "dependencies": ["commit", "diagnosing-bugs", "loom"]
     },
     {
       "id": "skill:tdd",
@@ -367,7 +367,7 @@
       "description": "Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.",
       "installTarget": "to-spec",
       "nextAction": "Ask your coding agent to use the to-spec skill.",
-      "dependencies": ["setup-project"]
+      "dependencies": ["loom"]
     },
     {
       "id": "skill:to-tickets",
@@ -377,7 +377,7 @@
       "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker — edges as text in a local file, or native blocking links on a real tracker.",
       "installTarget": "to-tickets",
       "nextAction": "Ask your coding agent to use the to-tickets skill.",
-      "dependencies": ["implement", "setup-project"]
+      "dependencies": ["implement", "loom"]
     },
     {
       "id": "skill:update-docstrings",
@@ -397,7 +397,7 @@
       "description": "Plan a huge chunk of work — more than one agent session can hold — as a shared map of investigation tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.",
       "installTarget": "wayfinder",
       "nextAction": "Ask your coding agent to use the wayfinder skill.",
-      "dependencies": ["domain-modeling", "grilling", "prototype", "setup-project"]
+      "dependencies": ["domain-modeling", "grilling", "prototype", "loom"]
     },
     {
       "id": "skill:whats-next",
@@ -504,7 +504,7 @@
       "kind": "skill",
       "group": "Diagrams",
       "label": "diagram-design",
-      "description": "Create branded architecture, IT current-state, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar/spider, polar chart (polar/radial lollipop), loop/flywheel, nested, tree, org chart, layer stack, Venn, pyramid/funnel, treemap, bar, line, Gantt and scatter charts, high-level, process, medallion, data flow, DP integration, DP security matrix, Sankey, fishbone, Wardley map, kanban, user journey, deployment, dependency graph, UML class, story map, or database schema diagrams as standalone HTML/SVG/PNG. Redraw .drawio/.drawio.png/.drawio.svg or Mermaid .mmd sources at a chosen size/detail; onboard brand tokens from a website; add semantic patterns, callouts, accessible motion, or sketchy/hand-drawn styling.",
+      "description": "Create or redraw polished architecture, process, data, UML, statistical, roadmap, and other diagrams as self-contained HTML/SVG/PNG. Use when a visual explains structure, flow, state, hierarchy, time, comparison, or causality better than prose.",
       "installTarget": "diagram-design",
       "nextAction": "Ask your coding agent to use the diagram-design skill.",
       "dependencies": []
@@ -528,16 +528,6 @@
       "installTarget": "marp-slide",
       "nextAction": "Ask your coding agent to use the marp-slide skill.",
       "dependencies": ["npm:@marp-team/marp-cli"]
-    },
-    {
-      "id": "skill:pptx",
-      "kind": "skill",
-      "group": "Presentations",
-      "label": "pptx",
-      "description": "Create, edit, or read .pptx files — decks, templates, layouts, speaker notes, comments, including extracting a file's text for use elsewhere. Use whenever a .pptx file is the input or output, and when the user asks for a deck, slides, or a presentation without naming another format (Marp/Markdown slides belong to marp-slide).",
-      "installTarget": "pptx",
-      "nextAction": "Ask your coding agent to use the pptx skill.",
-      "dependencies": []
     },
     {
       "id": "skill:dd-apm",
@@ -705,7 +695,7 @@
       "kind": "skill",
       "group": "General",
       "label": "loom",
-      "description": "Set up or troubleshoot Yassimba's curated setup through the loom CLI — exact-pinned tools via mise, agent-scoped global or project skills, Pi packages. Use when the user asks to install this collection, add a capability for one or more agents, install a skill globally or in the current project, scaffold AGENTS.md, update or sync the setup, or diagnose installation problems.",
+      "description": "Set up Loom on a machine or repository. Use when installing or updating Loom resources, initializing a project, finishing a selected tool's authentication, handling native Windows or WSL, checking status, or repairing setup.",
       "installTarget": "loom",
       "nextAction": "Ask your coding agent to use the loom skill.",
       "dependencies": []
@@ -848,26 +838,6 @@
       "description": "Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the task needs to exist at all (YAGNI), reach for the standard library before custom code, native platform features before dependencies, one line before fifty. Supports intensity levels: lite, full (default), ultra. Use on ANY coding task: writing, adding, refactoring, fixing, reviewing, or designing code, and choosing libraries or dependencies. Also use whenever the user says \"ponytail\", \"be lazy\", \"lazy mode\", \"simplest solution\", \"minimal solution\", \"yagni\", \"do less\", or \"shortest path\", or complains about over-engineering, bloat, boilerplate, or unnecessary dependencies. Do NOT use for non-coding requests (general knowledge, prose, translation, summaries, recipes).\n",
       "installTarget": "ponytail",
       "nextAction": "Ask your coding agent to use the ponytail skill.",
-      "dependencies": []
-    },
-    {
-      "id": "skill:ponytail-review",
-      "kind": "skill",
-      "group": "Ponytail",
-      "label": "ponytail-review",
-      "description": "Code review focused exclusively on over-engineering. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility. One line per finding: location, what to cut, what replaces it. Use when the user says \"review for over-engineering\", \"what can we delete\", \"is this over-engineered\", \"simplify review\", or invokes /ponytail-review. Complements correctness-focused review, this one only hunts complexity.\n",
-      "installTarget": "ponytail-review",
-      "nextAction": "Ask your coding agent to use the ponytail-review skill.",
-      "dependencies": []
-    },
-    {
-      "id": "skill:ponytail-audit",
-      "kind": "skill",
-      "group": "Ponytail",
-      "label": "ponytail-audit",
-      "description": "Whole-repo audit for over-engineering. Like ponytail-review, but scans the entire codebase instead of a diff: a ranked list of what to delete, simplify, or replace with stdlib/native equivalents. Use when the user says \"audit this codebase\", \"audit for over-engineering\", \"what can I delete from this repo\", \"find bloat\", \"ponytail-audit\", or \"/ponytail-audit\". One-shot report, does not apply fixes.\n",
-      "installTarget": "ponytail-audit",
-      "nextAction": "Ask your coding agent to use the ponytail-audit skill.",
       "dependencies": []
     },
     {
@@ -1042,7 +1012,7 @@
       "label": "beads",
       "description": "Beads (br): local-first issue tracker for coding agents — tasks in SQLite with JSONL export for git. Rust port of Steve Yegge's beads.",
       "installTarget": "github:Dicklesworthstone/beads_rust",
-      "nextAction": "Run `br quickstart` in a repo.",
+      "nextAction": "Run `loom init --tracker beads --yes` in a repo.",
       "bin": "br",
       "companions": []
     },

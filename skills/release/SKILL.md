@@ -13,7 +13,7 @@ Three rules bind every phase:
 - Fix problems in the source, never by silencing the tool. Suppression requires the user's explicit approval.
 - Root-cause substantive test failures before touching them — route through `/diagnosing-bugs`.
 
-The issue tracker configuration should have been provided to you. If it is missing: with `br` installed, treat Beads as the tracker by default (workflows: [`issue-tracker-beads.md`](../setup-project/issue-tracker-beads.md)) and suggest `/setup-project` to record the choice; otherwise run `/setup-project`.
+The issue tracker configuration should be in `ai-docs/agents/issue-tracker.md`. If it is missing, run `/loom` to initialize the project. Until then, use Beads when `br` is installed ([workflow](../loom/references/issue-tracker-beads.md)); otherwise use [local Markdown](../loom/references/issue-tracker-local.md).
 
 ## Phase 0 — Discover Forge and Toolchain
 
@@ -159,7 +159,7 @@ If a prose-quality skill is installed (e.g. `writing-clearly-and-concisely`), in
    git push -u <remote> HEAD
    ```
 
-2. **Build the body from the branch's tickets on the configured tracker.** Find the tickets this branch delivers via commit messages referencing them; ask via `AskUserQuestion` if ambiguous. How to read them depends on the tracker `/setup-project` configured:
+2. **Build the body from the branch's tickets on the configured tracker.** Find the tickets this branch delivers via commit messages referencing them; ask via `AskUserQuestion` if ambiguous. How to read them depends on the tracker `loom init` configured:
 
    - **Local files** → the tickets live in `ai-docs/tickets.md`. Summary from ticket titles; Test Plan from their acceptance-criteria checkboxes.
    - **A real issue tracker** → fetch each issue with the forge's read-an-issue verb. Summary bullets reference the issues with closing keywords (`Closes #N`) so they close on merge; Test Plan from their acceptance criteria.

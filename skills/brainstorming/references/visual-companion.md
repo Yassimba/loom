@@ -27,7 +27,7 @@ Save `screen_dir` and `state_dir` from the response. Tell the user to open the U
 
 **Finding connection info:** the server writes its startup JSON to `$STATE_DIR/server-info`. If you launched it in the background and didn't capture stdout, read that file for the URL and port. When using `--project-dir`, the session directory is under `<project>/ai-docs/brainstorm/`.
 
-**Persistence:** pass the project root as `--project-dir` so mockups survive server restarts in `ai-docs/brainstorm/`; without it, files go to `/tmp` and get cleaned up. If `ai-docs/` isn't gitignored yet, remind the user to add it (`setup-project` normally does this); mockups worth keeping get promoted into the plan directory by the skill's save flow.
+**Persistence:** pass the project root as `--project-dir` so mockups survive server restarts in `ai-docs/brainstorm/`; without it, files go to `/tmp` and get cleaned up. If `ai-docs/` isn't gitignored yet, remind the user to add it (`loom init` normally does this); mockups worth keeping get promoted into the plan directory by the skill's save flow.
 
 **Keeping the server alive:** it must keep running across conversation turns.
 

@@ -1,7 +1,8 @@
 use loom::manifest::PI_TOOL_KEY;
 use loom::{
-    execute_install_plan, execute_install_plan_with, CommandResult, CommandSpec, InstallPlan,
-    InstallStep, SkillAgent, SkillDestination, SkillScope, StepAction, StepStatus, System,
+    execute_install_plan, execute_install_plan_with, execute_install_plan_with_control,
+    CommandResult, CommandSpec, InstallPlan, InstallStep, SkillAgent, SkillDestination, SkillScope,
+    StepAction, StepStatus, System,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -114,6 +115,37 @@ fn independent_manager_lanes_start_before_either_finishes() {
         system.overlapped.load(Ordering::SeqCst),
         "independent manager lanes should overlap"
     );
+}
+
+#[test]
+fn cancellation_skips_resources_before_launch() {
+    let plan = InstallPlan {
+        prerequisites: Vec::new(),
+        resources: vec![
+            step("pi-package:one", "pi", "install-one"),
+            step("pi-package:two", "pi", "install-two"),
+        ],
+    };
+    let system = FakeSystem {
+        commands: Mutex::new(Vec::new()),
+    };
+    let cancelled = AtomicBool::new(true);
+    let mut statuses = Vec::new();
+
+    let report =
+        execute_install_plan_with_control(&plan, &system, &cancelled, &mut |index, status| {
+            statuses.push((index, status))
+        });
+
+    assert!(system.commands.lock().unwrap().is_empty());
+    assert_eq!(
+        statuses,
+        [
+            (0, StepStatus::Skipped("cancelled".into())),
+            (1, StepStatus::Skipped("cancelled".into())),
+        ]
+    );
+    assert_eq!(report.failures.len(), 2);
 }
 
 #[test]

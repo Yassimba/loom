@@ -1,6 +1,6 @@
-//! `loom init` — scaffold a project's AGENTS.md and CLAUDE.md from the
-//! published templates (manifest/init/ in the repo), with sections chosen by
-//! what the project is and what the machine has.
+//! `loom init` — make a repository ready for coding agents: instructions,
+//! issue tracking, domain docs, editor links, coding standards, and optional
+//! integrations selected from project and machine evidence.
 //!
 //! Templates are configuration: editing them in the repo and merging to main
 //! changes what every future init writes, like the tool manifest. Sections
@@ -11,13 +11,81 @@ use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, CommandSpec, System};
 use anyhow::{Context, Result};
 use inquire::Select;
+use std::fmt;
 use std::fs;
 use std::path::Path;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum)]
+pub enum Tracker {
+    Beads,
+    Local,
+}
+
+impl fmt::Display for Tracker {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Beads => "Beads (br + bv)",
+            Self::Local => "Local Markdown",
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum)]
+pub enum DomainLayout {
+    Single,
+    Multi,
+}
+
+impl fmt::Display for DomainLayout {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Single => "Single context",
+            Self::Multi => "Multiple contexts",
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum)]
+pub enum Editor {
+    Vscode,
+    Zed,
+    Cursor,
+    Jetbrains,
+    None,
+}
+
+impl Editor {
+    fn deep_link(self) -> Option<&'static str> {
+        match self {
+            Self::Vscode => Some("vscode://file/{path}:{line}"),
+            Self::Zed => Some("zed://file/{path}:{line}"),
+            Self::Cursor => Some("cursor://file/{path}:{line}"),
+            Self::Jetbrains => Some("idea://open?file={path}&line={line}"),
+            Self::None => None,
+        }
+    }
+}
+
+impl fmt::Display for Editor {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Vscode => "VS Code",
+            Self::Zed => "Zed",
+            Self::Cursor => "Cursor",
+            Self::Jetbrains => "JetBrains",
+            Self::None => "None",
+        })
+    }
+}
 
 pub struct InitOptions {
     pub python: Option<bool>,
     pub rust: Option<bool>,
     pub adhd: Option<bool>,
+    pub tracker: Option<Tracker>,
+    pub domain: Option<DomainLayout>,
+    pub editor: Option<Editor>,
+    pub coding_standards: Option<bool>,
     pub codegraph: Option<bool>,
     pub yes: bool,
     pub force: bool,
@@ -28,7 +96,7 @@ struct Section {
     template: &'static str,
 }
 
-const SECTIONS: [Section; 3] = [
+const SECTIONS: [Section; 5] = [
     Section {
         name: "python",
         template: "manifest/init/sections/python.md",
@@ -41,11 +109,23 @@ const SECTIONS: [Section; 3] = [
         name: "i-have-adhd",
         template: "manifest/init/sections/i-have-adhd.md",
     },
+    Section {
+        name: "coding-standards",
+        template: "manifest/init/sections/coding-standards.md",
+    },
+    Section {
+        name: "project-setup",
+        template: "manifest/init/sections/project-setup.md",
+    },
 ];
 
 const RETIRED_SECTIONS: [&str; 1] = ["beads"];
 
 const BASE_TEMPLATE: &str = "manifest/init/AGENTS.base.md";
+const CODING_STANDARDS_TEMPLATE: &str = "manifest/init/CODING_STANDARDS.md";
+const BEADS_WORKFLOW_TEMPLATE: &str = "skills/loom/references/issue-tracker-beads.md";
+const LOCAL_WORKFLOW_TEMPLATE: &str = "skills/loom/references/issue-tracker-local.md";
+const DOMAIN_TEMPLATE: &str = "skills/loom/references/domain.md";
 
 fn marker_open(name: &str) -> String {
     format!("<!-- loom:section:{name}")
@@ -122,18 +202,60 @@ fn select_yes_no(prompt: &str, help: &str, default: bool, assume_yes: bool) -> R
         == "Yes")
 }
 
+fn select_choice<T>(
+    prompt: &str,
+    help: &str,
+    choices: Vec<T>,
+    default: T,
+    assume_yes: bool,
+) -> Result<T>
+where
+    T: Clone + Eq + fmt::Display,
+{
+    if assume_yes || !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return Ok(default);
+    }
+    let cursor = choices
+        .iter()
+        .position(|choice| choice == &default)
+        .unwrap_or_default();
+    Ok(Select::new(prompt, choices)
+        .with_help_message(help)
+        .with_starting_cursor(cursor)
+        .without_filtering()
+        .prompt()?)
+}
+
+fn detect_editor(system: &dyn System) -> Editor {
+    [
+        ("cursor", Editor::Cursor),
+        ("zed", Editor::Zed),
+        ("code", Editor::Vscode),
+        ("idea", Editor::Jetbrains),
+    ]
+    .into_iter()
+    .find_map(|(command, editor)| system.command_exists(command).then_some(editor))
+    .unwrap_or(Editor::None)
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct InitFeatures {
     project_instructions: bool,
     python: bool,
     rust: bool,
     adhd: bool,
+    tracker: Option<Tracker>,
+    domain: Option<DomainLayout>,
+    editor: Option<Editor>,
+    coding_standards: bool,
     codegraph: bool,
 }
 
 fn choose_features(
     project: &Path,
+    beads_tools_installed: bool,
     codegraph_installed: bool,
+    default_editor: Editor,
     options: &InitOptions,
     mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
 ) -> Result<InitFeatures> {
@@ -143,7 +265,7 @@ fn choose_features(
         "Creates or updates AGENTS.md and CLAUDE.md for this project.",
         true,
     )?;
-    let (python, rust, adhd) = if project_instructions {
+    let (python, rust, adhd, tracker, domain, editor, coding_standards) = if project_instructions {
         (
             match options.python {
                 Some(explicit) => explicit,
@@ -169,10 +291,65 @@ fn choose_features(
                     false,
                 )?,
             },
+            Some(match options.tracker {
+                Some(explicit) => explicit,
+                None => select_choice(
+                    "Choose the issue tracker",
+                    "Beads provides a dependency graph; local Markdown stores issues under ai-docs/plans/.",
+                    vec![Tracker::Beads, Tracker::Local],
+                    if beads_tools_installed || project.join(".beads").is_dir() {
+                        Tracker::Beads
+                    } else {
+                        Tracker::Local
+                    },
+                    options.yes,
+                )?,
+            }),
+            Some(match options.domain {
+                Some(explicit) => explicit,
+                None => select_choice(
+                    "Choose the domain-doc layout",
+                    "Most repositories have one context; monorepos may map several contexts.",
+                    vec![DomainLayout::Single, DomainLayout::Multi],
+                    if project.join("CONTEXT-MAP.md").exists() {
+                        DomainLayout::Multi
+                    } else {
+                        DomainLayout::Single
+                    },
+                    options.yes,
+                )?,
+            }),
+            Some(match options.editor {
+                Some(explicit) => explicit,
+                None => select_choice(
+                    "Choose the editor for source links",
+                    "Agents use this URL scheme for clickable file and line links.",
+                    vec![
+                        Editor::Vscode,
+                        Editor::Zed,
+                        Editor::Cursor,
+                        Editor::Jetbrains,
+                        Editor::None,
+                    ],
+                    default_editor,
+                    options.yes,
+                )?,
+            }),
+            match options.coding_standards {
+                Some(explicit) => explicit,
+                None => ask(
+                    "Add coding standards?",
+                    "Creates CODING_STANDARDS.md with type, design, and simplicity checks.",
+                    true,
+                )?,
+            },
         )
     } else {
-        (false, false, false)
+        (false, false, false, None, None, None, false)
     };
+    if tracker == Some(Tracker::Beads) && !beads_tools_installed {
+        anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
+    }
     let codegraph = match options.codegraph {
         Some(true) if !codegraph_installed => {
             anyhow::bail!("CodeGraph is not installed; run `loom add --tool codegraph`");
@@ -190,8 +367,86 @@ fn choose_features(
         python,
         rust,
         adhd,
+        tracker,
+        domain,
+        editor,
+        coding_standards,
         codegraph,
     })
+}
+
+fn setup_beads(system: &dyn System, project: &Path) -> Result<bool> {
+    if project.join(".beads").is_dir() {
+        return Ok(false);
+    }
+    let result = system
+        .run(&CommandSpec::new("br", ["init", "--quiet"]))
+        .context("could not initialize Beads")?;
+    if !result.success {
+        anyhow::bail!(
+            "Beads setup failed: {}",
+            crate::install::command_failure_message(&result)
+        );
+    }
+    Ok(true)
+}
+
+fn write_seed_file(path: &Path, content: &str, force: bool) -> Result<&'static str> {
+    if path.exists() && !force {
+        return Ok("has its own content; left alone");
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, content)?;
+    Ok(if force { "written" } else { "created" })
+}
+
+fn editor_document(editor: Editor) -> String {
+    match editor.deep_link() {
+        Some(template) => format!(
+            "# Editor links\n\nEditor: {editor}\n\nUse `{template}` for clickable source links. `{{path}}` is absolute.\n"
+        ),
+        None => "# Editor links\n\nEditor: None\n\nUse plain `path:line` source references.\n".into(),
+    }
+}
+
+fn domain_document(layout: DomainLayout, template: &str) -> String {
+    let layout = match layout {
+        DomainLayout::Single => "single-context",
+        DomainLayout::Multi => "multi-context",
+    };
+    format!("{template}\n\nSelected layout: **{layout}**.\n")
+}
+
+fn render_gitignore(existing: &str) -> Option<String> {
+    let covered = existing
+        .lines()
+        .map(str::trim)
+        .any(|line| line.trim_start_matches('/').trim_end_matches('/') == "ai-docs");
+    if covered {
+        return None;
+    }
+    let separator = if existing.is_empty() || existing.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    Some(format!("{existing}{separator}ai-docs/\n"))
+}
+
+fn ignore_agent_docs(project: &Path) -> Result<&'static str> {
+    let path = project.join(".gitignore");
+    let existing = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let Some(updated) = render_gitignore(&existing) else {
+        return Ok("already ignores ai-docs/");
+    };
+    fs::write(&path, updated)?;
+    Ok("ignores ai-docs/")
 }
 
 fn setup_codegraph(system: &dyn System) -> Result<()> {
@@ -210,11 +465,31 @@ fn setup_codegraph(system: &dyn System) -> Result<()> {
     Ok(())
 }
 
+fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
+    interactive
+        || options.yes
+        || options.python.is_some()
+        || options.rust.is_some()
+        || options.adhd.is_some()
+        || options.tracker.is_some()
+        || options.domain.is_some()
+        || options.editor.is_some()
+        || options.coding_standards.is_some()
+        || options.codegraph.is_some()
+}
+
 pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
+    if !init_has_consent(options, std::io::IsTerminal::is_terminal(&std::io::stdin())) {
+        anyhow::bail!(
+            "non-interactive `loom init` needs --yes or explicit feature flags; no files changed"
+        );
+    }
     let project = std::env::current_dir().context("no current directory")?;
     let features = choose_features(
         &project,
+        system.command_exists("br") && system.command_exists("bv"),
         system.command_exists("codegraph"),
+        detect_editor(system),
         options,
         |prompt, help, default| select_yes_no(prompt, help, default, options.yes),
     )?;
@@ -238,12 +513,38 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         .context("could not fetch the templates")?;
     let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
         .with_context(|| format!("template missing: {BASE_TEMPLATE}"))?;
+    let coding_standards = features
+        .coding_standards
+        .then(|| fs::read_to_string(repo_root.join(CODING_STANDARDS_TEMPLATE)))
+        .transpose()
+        .with_context(|| format!("template missing: {CODING_STANDARDS_TEMPLATE}"))?;
+    let issue_tracker_template = match features.tracker {
+        Some(Tracker::Beads) => Some(BEADS_WORKFLOW_TEMPLATE),
+        Some(Tracker::Local) => Some(LOCAL_WORKFLOW_TEMPLATE),
+        None => None,
+    };
+    let issue_tracker = issue_tracker_template
+        .map(|template| fs::read_to_string(repo_root.join(template)))
+        .transpose()
+        .with_context(|| {
+            format!(
+                "template missing: {}",
+                issue_tracker_template.unwrap_or_default()
+            )
+        })?;
+    let domain = features
+        .domain
+        .map(|_| fs::read_to_string(repo_root.join(DOMAIN_TEMPLATE)))
+        .transpose()
+        .with_context(|| format!("template missing: {DOMAIN_TEMPLATE}"))?;
     let mut chosen: Vec<(&'static str, String)> = Vec::new();
     for section in &SECTIONS {
         let wanted = match section.name {
             "python" => features.python,
             "rust" => features.rust,
             "i-have-adhd" => features.adhd,
+            "coding-standards" => features.coding_standards,
+            "project-setup" => features.tracker.is_some(),
             _ => false,
         };
         if wanted {
@@ -318,6 +619,45 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         }
     }
 
+    if let Some(content) = coding_standards {
+        let path = project.join("CODING_STANDARDS.md");
+        let detail = write_seed_file(&path, &content, options.force)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        out.row(Mark::Ok, "CODING_STANDARDS.md", detail);
+    }
+    if let (Some(tracker), Some(content)) = (features.tracker, issue_tracker) {
+        if tracker == Tracker::Beads {
+            let initialized = setup_beads(system, &project)?;
+            out.row(
+                Mark::Ok,
+                "Beads",
+                if initialized {
+                    "br initialized; bv workflow configured"
+                } else {
+                    "already initialized; bv workflow configured"
+                },
+            );
+        }
+        let path = project.join("ai-docs/agents/issue-tracker.md");
+        let detail = write_seed_file(&path, &content, options.force)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        out.row(Mark::Ok, "Issue tracker", format!("{tracker}: {detail}"));
+    }
+    if let (Some(layout), Some(content)) = (features.domain, domain) {
+        let path = project.join("ai-docs/agents/domain.md");
+        let content = domain_document(layout, &content);
+        let detail = write_seed_file(&path, &content, options.force)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        out.row(Mark::Ok, "Domain docs", format!("{layout}: {detail}"));
+    }
+    if let Some(editor) = features.editor {
+        let path = project.join("ai-docs/agents/editor.md");
+        let detail = write_seed_file(&path, &editor_document(editor), options.force)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        out.row(Mark::Ok, "Editor", format!("{editor}: {detail}"));
+    }
+    let ignore_detail = ignore_agent_docs(&project).context("could not update .gitignore")?;
+    out.row(Mark::Ok, ".gitignore", ignore_detail);
     if features.codegraph {
         setup_codegraph(system)?;
         out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
@@ -704,6 +1044,32 @@ mod tests {
     }
 
     #[test]
+    fn noninteractive_init_requires_explicit_consent() {
+        let mut options = InitOptions {
+            python: None,
+            rust: None,
+            adhd: None,
+            tracker: None,
+            domain: None,
+            editor: None,
+            coding_standards: None,
+            codegraph: None,
+            yes: false,
+            force: false,
+        };
+        assert!(!init_has_consent(&options, false));
+        options.force = true;
+        assert!(!init_has_consent(&options, false));
+        options.force = false;
+        assert!(init_has_consent(&options, true));
+        options.yes = true;
+        assert!(init_has_consent(&options, false));
+        options.yes = false;
+        options.python = Some(false);
+        assert!(init_has_consent(&options, false));
+    }
+
+    #[test]
     fn init_questions_show_context_defaults_and_skip_irrelevant_sections() {
         // Capability/seam: interactive `loom init` questions. This fails if
         // defaults, context, or the project-instructions dependency drift.
@@ -711,16 +1077,27 @@ mod tests {
             python: None,
             rust: None,
             adhd: None,
+            tracker: None,
+            domain: None,
+            editor: None,
+            coding_standards: None,
             codegraph: None,
-            yes: false,
+            yes: true,
             force: false,
         };
         let project = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut asked = Vec::new();
-        let selected = choose_features(project, true, &options, |prompt, help, default| {
-            asked.push((prompt.to_string(), help.to_string(), default));
-            Ok(default)
-        })
+        let selected = choose_features(
+            project,
+            true,
+            true,
+            Editor::Cursor,
+            &options,
+            |prompt, help, default| {
+                asked.push((prompt.to_string(), help.to_string(), default));
+                Ok(default)
+            },
+        )
         .unwrap();
 
         assert_eq!(
@@ -730,9 +1107,25 @@ mod tests {
                 python: false,
                 rust: true,
                 adhd: false,
+                tracker: Some(Tracker::Beads),
+                domain: Some(DomainLayout::Single),
+                editor: Some(Editor::Cursor),
+                coding_standards: true,
                 codegraph: true,
             }
         );
+        let local_defaults = choose_features(
+            project,
+            false,
+            false,
+            Editor::None,
+            &options,
+            |_, _, default| Ok(default),
+        )
+        .unwrap();
+        assert_eq!(local_defaults.tracker, Some(Tracker::Local));
+        assert_eq!(local_defaults.editor, Some(Editor::None));
+
         assert_eq!(
             asked,
             [
@@ -757,6 +1150,11 @@ mod tests {
                     false,
                 ),
                 (
+                    "Add coding standards?".into(),
+                    "Creates CODING_STANDARDS.md with type, design, and simplicity checks.".into(),
+                    true,
+                ),
+                (
                     "Set up CodeGraph?".into(),
                     "Wires installed agents and indexes this project.".into(),
                     true,
@@ -765,10 +1163,17 @@ mod tests {
         );
 
         let mut asked = Vec::new();
-        let selected = choose_features(project, true, &options, |prompt, _, _| {
-            asked.push(prompt.to_string());
-            Ok(prompt != "Set up project agent instructions?")
-        })
+        let selected = choose_features(
+            project,
+            false,
+            true,
+            Editor::None,
+            &options,
+            |prompt, _, _| {
+                asked.push(prompt.to_string());
+                Ok(prompt != "Set up project agent instructions?")
+            },
+        )
         .unwrap();
 
         assert_eq!(
@@ -777,5 +1182,34 @@ mod tests {
         );
         assert!(!selected.project_instructions);
         assert!(selected.codegraph);
+    }
+
+    #[test]
+    fn gitignore_setup_is_idempotent_and_keeps_existing_content() {
+        // Capability/seam: project-local agent-doc exclusion. This fails if
+        // init duplicates the rule or damages an existing final line. No expiry.
+        assert_eq!(
+            render_gitignore("target\n.env"),
+            Some("target\n.env\nai-docs/\n".into())
+        );
+        assert_eq!(render_gitignore("target\n/ai-docs/\n"), None);
+        assert_eq!(render_gitignore("ai-docs\n"), None);
+    }
+
+    #[test]
+    fn beads_setup_uses_noninteractive_init() {
+        // Capability/seam: Beads repository initialization. This fails if
+        // loom invokes the instructional quickstart command instead. No expiry.
+        let system = RecordingSystem {
+            commands: Mutex::new(Vec::new()),
+        };
+        let project = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+        assert!(setup_beads(&system, project).unwrap());
+
+        assert_eq!(
+            *system.commands.lock().unwrap(),
+            [CommandSpec::new("br", ["init", "--quiet"])]
+        );
     }
 }

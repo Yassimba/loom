@@ -168,21 +168,41 @@ try {
 mise -C $HOME install --yes
 if ($LASTEXITCODE -ne 0) { throw "$Name`: mise install failed" }
 
-# 4. Persist shell activation, so managed tools are on PATH in new shells.
-$MiseExe = (Get-Command mise -ErrorAction Stop).Source.Replace("'", "''")
-$MiseDir = (Split-Path -Parent $MiseExe).Replace("'", "''")
+# 4. Activate mise now and persist it for both Windows PowerShell and pwsh.
+$MiseCommand = (Get-Command mise -ErrorAction Stop).Source
+$MiseExe = $MiseCommand.Replace("'", "''")
+$MiseDir = (Split-Path -Parent $MiseCommand).Replace("'", "''")
 $Activation = "`$env:Path = '$MiseDir;' + `$env:Path; (& '$MiseExe' activate pwsh) | Out-String | Invoke-Expression"
-$ProfileDirectory = Split-Path -Parent $PROFILE
-if ($ProfileDirectory) {
-  New-Item -ItemType Directory -Path $ProfileDirectory -Force | Out-Null
+(& $MiseCommand activate pwsh) | Out-String | Invoke-Expression
+$Profiles = @(
+  [string]$PROFILE,
+  (Join-Path $HOME "Documents\WindowsPowerShell\profile.ps1"),
+  (Join-Path $HOME "Documents\PowerShell\profile.ps1")
+) | Select-Object -Unique
+$ChangedProfiles = @()
+foreach ($ProfilePath in $Profiles) {
+  $ProfileDirectory = Split-Path -Parent $ProfilePath
+  if ($ProfileDirectory) {
+    New-Item -ItemType Directory -Path $ProfileDirectory -Force | Out-Null
+  }
+  $ProfileContent = if (Test-Path $ProfilePath) { [string](Get-Content $ProfilePath -Raw) } else { "" }
+  if (-not $ProfileContent.Contains($Activation)) {
+    Add-Content -Path $ProfilePath -Value $Activation
+    $ChangedProfiles += $ProfilePath
+  }
 }
-$ProfileContent = if (Test-Path $PROFILE) { [string](Get-Content $PROFILE -Raw) } else { "" }
-if (-not $ProfileContent.Contains($Activation)) {
-  Add-Content -Path $PROFILE -Value $Activation
-  Write-Host "$Name`: added mise activation to $PROFILE"
+if ($ChangedProfiles.Count -gt 0) {
+  Write-Host "$Name`: added mise activation to $($ChangedProfiles -join ', ')"
+  Write-Host "$Name`: open a new PowerShell, or run: . `$PROFILE"
 }
 
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
+# CI may point this handoff at the checked-out binary while keeping the real
+# bootstrap and manifest path intact.
 Write-Host ""
-mise -C $HOME exec -- loom setup @SetupArgs
+if ($env:LOOM_E2E_LOOM_BIN) {
+  & $env:LOOM_E2E_LOOM_BIN setup @SetupArgs
+} else {
+  mise -C $HOME exec -- loom setup @SetupArgs
+}
 exit $LASTEXITCODE

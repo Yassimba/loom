@@ -99,6 +99,7 @@ fn ready() -> PrerequisiteStatus {
 fn model(status: PrerequisiteStatus) -> Model {
     let settings = test_settings();
     Model {
+        mode: crate::app::SelectionMode::Add,
         resources: catalog(),
         installed: vec![false; catalog().len()],
         setting_states: vec![SettingState::NotApplied; settings.len()],
@@ -311,10 +312,9 @@ fn installed_resources_show_but_cannot_be_picked() {
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(!wizard.selected[0]);
     go_to_group(&mut wizard, "Pi packages");
-    assert_eq!(
-        wizard.group_counts(&choose(&wizard).group().items()),
-        (0, 1)
-    );
+    let actionable = wizard.actionable(&choose(&wizard).group().items());
+    assert_eq!(actionable.len(), 1);
+    assert!(actionable.iter().all(|item| !wizard.item_on(*item)));
 }
 
 #[test]
@@ -493,7 +493,7 @@ fn install_events_drive_the_install_screen_to_completion() {
     assert!(!wizard.install_running());
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
-        Some(Action::Exit(WizardOutcome::Installed(report))) if report.installed.len() == 1
+        Some(Action::Exit(WizardOutcome::Installed(report, _))) if report.installed.len() == 1
     ));
 }
 
@@ -643,6 +643,150 @@ fn render_gallery() {
     wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
     wizard.handle_install_event(InstallEvent::Status(1, ExecStatus::Running));
     show(&mut wizard, &mut terminal);
+}
+
+#[test]
+fn setup_starts_with_the_recommended_group() {
+    let mut model = model(ready());
+    model.mode = crate::app::SelectionMode::Setup;
+    let wizard = Wizard::new(model);
+
+    assert_eq!(group_titles(&wizard)[0], "Recommended");
+    assert_eq!(choose(&wizard).groups[0].rows, [Row::Resource(3)]);
+}
+
+#[test]
+fn modal_overlays_consume_mouse_and_scroll_input() {
+    let mut wizard = wizard();
+    let mut terminal = Terminal::new(TestBackend::new(110, 30)).unwrap();
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    let before = wizard.selected.clone();
+    wizard.show_help = true;
+    let (area, _) = wizard.hits.list.unwrap();
+    wizard.handle_click(area.x + 3, area.y + 1);
+    wizard.handle_scroll(true);
+    assert_eq!(wizard.selected, before);
+    assert_eq!(cursor(&wizard), 0);
+
+    wizard.show_help = false;
+    wizard.confirm_quit = true;
+    wizard.handle_click(area.x + 3, area.y + 1);
+    assert_eq!(wizard.selected, before);
+}
+
+#[test]
+fn late_probe_refreshes_only_untouched_contextual_settings() {
+    let mut wizard = wizard();
+    let mut installed = vec![false; wizard.model.resources.len()];
+    installed[2] = true;
+    wizard.set_installed(installed);
+    assert!(wizard.setting_on[0]);
+
+    wizard.setting_touched[0] = true;
+    wizard.setting_on[0] = false;
+    wizard.set_installed(vec![false; wizard.model.resources.len()]);
+    assert!(!wizard.setting_on[0]);
+}
+
+#[test]
+fn unavailable_settings_have_an_explicit_state() {
+    let wizard = wizard();
+    assert!(matches!(
+        wizard.item_state(Item::Setting(0)),
+        ItemState::Unavailable(_)
+    ));
+}
+
+#[test]
+fn result_keeps_every_distinct_next_action() {
+    let mut model = model(ready());
+    model.resources[0].next_action = "try subagents".into();
+    model.resources[1].next_action = "choose a theme".into();
+    let mut wizard = Wizard::new(model);
+    wizard.selected[0] = true;
+    wizard.selected[1] = true;
+    let report = crate::InstallReport {
+        installed: vec!["Pi packages:subagents".into(), "Pi packages:themes".into()],
+        failures: vec![],
+    };
+
+    assert_eq!(
+        wizard.next_actions(&report),
+        vec!["try subagents".to_string(), "choose a theme".to_string()]
+    );
+}
+
+#[test]
+fn result_includes_next_actions_from_dependencies() {
+    let mut model = model(ready());
+    model.resources[0].dependencies = vec![model.resources[1].install_target.clone()];
+    model.resources[0].next_action = "use the package".into();
+    model.resources[1].next_action = "configure its dependency".into();
+    let mut wizard = Wizard::new(model);
+    wizard.selected[0] = true;
+    let report = crate::InstallReport {
+        installed: vec!["Pi packages:subagents".into(), "Pi packages:themes".into()],
+        failures: vec![],
+    };
+
+    assert_eq!(
+        wizard.next_actions(&report),
+        vec![
+            "use the package".to_string(),
+            "configure its dependency".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn running_install_requires_two_ctrl_c_presses_to_cancel() {
+    let mut wizard = wizard();
+    go_to(&mut wizard, Row::Resource(0));
+    press(
+        &mut wizard,
+        &[KeyCode::Char(' '), KeyCode::Enter, KeyCode::Enter],
+    );
+    let _job = wizard.begin_install().unwrap();
+    let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+    wizard.handle_key(ctrl_c);
+    assert!(wizard.confirm_cancel);
+    assert!(!wizard.cancelled.load(std::sync::atomic::Ordering::Relaxed));
+    wizard.handle_key(ctrl_c);
+    assert!(wizard.cancelled.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+#[test]
+fn tiny_terminal_asks_for_a_resize() {
+    let mut wizard = wizard();
+    let mut terminal = Terminal::new(TestBackend::new(30, 8)).unwrap();
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(text.contains("more room"));
+    assert!(wizard.hits.list.is_none());
+}
+
+#[test]
+fn where_scope_options_fit_a_standard_terminal() {
+    let mut wizard = wizard();
+    go_to(&mut wizard, Row::Resource(3));
+    press(&mut wizard, &[KeyCode::Char(' '), KeyCode::Enter]);
+    let mut terminal = Terminal::new(TestBackend::new(104, 26)).unwrap();
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(text.contains("(•) Global    ( ) Project"));
 }
 
 #[test]

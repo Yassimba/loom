@@ -92,8 +92,13 @@ printf '%s\\n' '[tools]' '# core:begin' '"github:Yassimba/loom[exe=loom]" = "loo
 test("the PowerShell bootstrap persists mise activation idempotently", async () => {
   const script = await readFile(join(repoRoot, "install.ps1"), "utf8");
 
-  assert.match(script, /\$MiseExe = \(Get-Command mise/);
+  assert.match(script, /\$MiseCommand = \(Get-Command mise/);
   assert.match(script, /\$Activation = ".*\$MiseExe' activate pwsh\)/);
   assert.match(script, /\.Contains\(\$Activation\)/);
-  assert.match(script, /Add-Content -Path \$PROFILE -Value \$Activation/);
+  assert.match(script, /Add-Content -Path \$ProfilePath -Value \$Activation/);
+  assert.match(script, /Documents\\WindowsPowerShell\\profile\.ps1/);
+  assert.match(script, /Documents\\PowerShell\\profile\.ps1/);
+  assert.match(script, /activate pwsh\) \| Out-String \| Invoke-Expression/);
+  assert.match(script, /Select-Object -Unique/);
+  assert.match(script, /open a new PowerShell, or run: \. `\$PROFILE/);
 });

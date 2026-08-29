@@ -11,7 +11,7 @@ use state::{Action, ExecStatus, InstallEvent, InstallJob, Wizard};
 pub use state::{Model, WizardOutcome};
 
 use crate::settings::apply_setting;
-use crate::{execute_install_plan_with, InstallFailure, StepStatus, System};
+use crate::{execute_install_plan_with_control, InstallFailure, StepStatus, System};
 use anyhow::Result;
 use ratatui::crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind,
@@ -123,16 +123,32 @@ fn run_install_job(
     sender: &mpsc::Sender<InstallEvent>,
 ) {
     let plan_steps = job.plan.prerequisites.len() + job.plan.resources.len();
-    let mut report = execute_install_plan_with(&job.plan, system, &mut |index, status| {
-        let status = match status {
-            StepStatus::Running => ExecStatus::Running,
-            StepStatus::Prepared | StepStatus::Installed => ExecStatus::Ok("installed".into()),
-            StepStatus::Failed(message) => ExecStatus::Failed(message),
-            StepStatus::Skipped(message) => ExecStatus::Skipped(message),
-        };
-        let _ = sender.send(InstallEvent::Status(index, status));
-    });
+    let mut report = execute_install_plan_with_control(
+        &job.plan,
+        system,
+        &job.cancelled,
+        &mut |index, status| {
+            let status = match status {
+                StepStatus::Running => ExecStatus::Running,
+                StepStatus::Prepared | StepStatus::Installed => ExecStatus::Ok("installed".into()),
+                StepStatus::Failed(message) => ExecStatus::Failed(message),
+                StepStatus::Skipped(message) => ExecStatus::Skipped(message),
+            };
+            let _ = sender.send(InstallEvent::Status(index, status));
+        },
+    );
     for (offset, spec) in job.settings.iter().enumerate() {
+        if job.cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+            let _ = sender.send(InstallEvent::Status(
+                plan_steps + offset,
+                ExecStatus::Skipped("cancelled".into()),
+            ));
+            report.failures.push(InstallFailure {
+                target: spec.id.clone(),
+                message: "cancelled".into(),
+            });
+            continue;
+        }
         let index = plan_steps + offset;
         let related_install_failed = spec.related_resource.as_ref().is_some_and(|related| {
             job.plan

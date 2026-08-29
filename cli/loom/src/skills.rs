@@ -12,6 +12,7 @@ pub const TARBALL_URL: &str = "https://codeload.github.com/Yassimba/loom/tar.gz/
 
 const OPENCODE_PLUGIN_SOURCE: &str = "manifest/opencode/plugins/loom-session-env.js";
 const OPENCODE_PLUGIN_NAME: &str = "loom-session-env.js";
+const SKILL_PROJECTS_REGISTRY: &str = "skill-projects.json";
 
 /// A user-facing skill destination. `AgentsStandard` is the portable
 /// `.agents/skills` tree used directly by several hosts.
@@ -203,6 +204,83 @@ pub(crate) fn opencode_adapter_path(home: &Path) -> PathBuf {
         .join(OPENCODE_PLUGIN_NAME)
 }
 
+fn skill_projects_registry(home: &Path) -> PathBuf {
+    home.join(".config")
+        .join("loom")
+        .join(SKILL_PROJECTS_REGISTRY)
+}
+
+pub(crate) fn read_skill_projects(home: &Path) -> Result<Vec<PathBuf>, String> {
+    let path = skill_projects_registry(home);
+    let raw = match fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("could not read {}: {error}", path.display())),
+    };
+    serde_json::from_str(&raw)
+        .map_err(|error| format!("could not parse {}: {error}", path.display()))
+}
+
+fn write_skill_projects(home: &Path, projects: &[PathBuf]) -> Result<(), String> {
+    let path = skill_projects_registry(home);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
+    }
+    let json = serde_json::to_string_pretty(projects).map_err(|error| error.to_string())?;
+    fs::write(&path, format!("{json}\n"))
+        .map_err(|error| format!("could not write {}: {error}", path.display()))
+}
+
+fn is_real_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+}
+
+fn register_skill_project(home: &Path, project: &Path) -> Result<(), String> {
+    if !is_real_directory(project) {
+        return Err(format!(
+            "refusing to register a missing or symlinked project: {}",
+            project.display()
+        ));
+    }
+    let mut projects = read_skill_projects(home)?;
+    if !projects.iter().any(|candidate| candidate == project) {
+        projects.push(project.to_path_buf());
+        write_skill_projects(home, &projects)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn prune_registered_skill_projects(home: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut registered = read_skill_projects(home)?;
+    registered.sort();
+    registered.dedup();
+    let before_prune = registered.clone();
+    registered.retain(|root| is_real_directory(root));
+    if registered != before_prune {
+        write_skill_projects(home, &registered)?;
+    }
+    Ok(registered)
+}
+
+pub(crate) fn registered_skill_projects(
+    home: &Path,
+    current: &Path,
+) -> Result<Vec<PathBuf>, String> {
+    let registered = prune_registered_skill_projects(home)?;
+
+    // Keep refreshing a legacy/current project tree without claiming Loom
+    // installed it. Only project-scoped installs add roots to the registry.
+    let mut visited = registered;
+    let current = project_root(current);
+    if is_real_directory(&current) {
+        visited.push(current);
+    }
+    visited.sort();
+    visited.dedup();
+    Ok(visited)
+}
+
 pub(crate) fn project_opencode_adapter_path(project_root: &Path) -> PathBuf {
     project_root
         .join(".opencode")
@@ -262,6 +340,7 @@ pub fn install_skills(
     system: &dyn System,
     skills: &[String],
     destination: &SkillDestination,
+    cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<Vec<TreeReport>, String> {
     let home = system
         .home_dir()
@@ -270,9 +349,15 @@ pub fn install_skills(
     if trees.is_empty() {
         return Err("no skill agents selected".to_string());
     }
+    if destination.scope == SkillScope::Project && !is_real_directory(&destination.project_root) {
+        return Err(format!(
+            "refusing to install into a missing or symlinked project: {}",
+            destination.project_root.display()
+        ));
+    }
 
     let staging = home.join(".cache").join("loom").join("staging");
-    let result = fetch_repo(system, &staging).and_then(|repo_root| {
+    let result = fetch_repo_controlled(system, &staging, cancelled).and_then(|repo_root| {
         let source_root = repo_root.join("skills");
         let mut missing = skills
             .iter()
@@ -285,7 +370,11 @@ pub fn install_skills(
             ));
         }
         install_opencode_adapter(&home, &repo_root, destination)?;
-        copy_into_trees(&source_root, &trees, skills)
+        let reports = copy_into_trees(&source_root, &trees, skills)?;
+        if destination.scope == SkillScope::Project {
+            register_skill_project(&home, &destination.project_root)?;
+        }
+        Ok(reports)
     });
     let _ = fs::remove_dir_all(&staging);
     result
@@ -348,14 +437,14 @@ pub fn refresh_installed_skills(
     let current_dir = system
         .current_dir()
         .ok_or_else(|| "current directory is unavailable".to_string())?;
-    let project = project_root(&current_dir);
+    let projects = registered_skill_projects(&home, &current_dir)?;
     let mut trees = detect_skill_trees(&home);
-    trees.extend(
+    trees.extend(projects.iter().flat_map(|root| {
         SkillAgent::ALL
             .into_iter()
-            .map(|agent| agent.project_skill_tree(&project))
-            .filter(|tree| tree.is_dir()),
-    );
+            .map(|agent| agent.project_skill_tree(root))
+            .filter(|tree| tree.is_dir())
+    }));
     let mut seen = HashSet::new();
     trees.retain(|tree| seen.insert(tree.clone()));
 
@@ -371,11 +460,10 @@ pub fn refresh_installed_skills(
             if installed.is_empty() {
                 return None;
             }
-            // Dependencies may name tools (a skill that drives a CLI); only
-            // skills are copied into a skill tree.
-            let names = expand_skill_dependencies(resources, installed)
+            // Refresh exactly the skills already present in this tree. A
+            // maintenance run must not widen the user's earlier selection.
+            let names = installed
                 .into_iter()
-                .filter(|resource| resource.kind == ResourceKind::Skill)
                 .map(|resource| resource.install_target)
                 .collect::<Vec<_>>();
             Some((tree, names))
@@ -394,8 +482,10 @@ pub fn refresh_installed_skills(
             reports.append(&mut copied);
             let adapter = if *tree == home.join(".config").join("opencode").join("skills") {
                 Some(opencode_adapter_path(&home))
-            } else if *tree == project.join(".opencode").join("skills") {
-                Some(project_opencode_adapter_path(&project))
+            } else if tree.ends_with(Path::new(".opencode").join("skills")) {
+                tree.parent()
+                    .and_then(Path::parent)
+                    .map(project_opencode_adapter_path)
             } else {
                 None
             };
@@ -415,6 +505,14 @@ pub fn refresh_installed_skills(
 /// `LOOM_REPO_DIR` overrides the download with a local checkout — for
 /// testing unpushed skills and manifest changes end to end.
 pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf, String> {
+    fetch_repo_controlled(system, staging, &std::sync::atomic::AtomicBool::new(false))
+}
+
+pub(crate) fn fetch_repo_controlled(
+    system: &dyn System,
+    staging: &Path,
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Result<PathBuf, String> {
     if let Some(local) = std::env::var_os("LOOM_REPO_DIR") {
         let root = PathBuf::from(local);
         if !root.join("skills").is_dir() {
@@ -444,7 +542,7 @@ pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf,
             ],
         ),
     ] {
-        match system.run(&spec) {
+        match system.run_controlled(&spec, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
             Ok(result) if result.success => {}
             Ok(result) => {
                 return Err(format!(
@@ -639,6 +737,103 @@ mod tests {
                 project.join(".grok/skills"),
             ]
         );
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn project_skill_registry_deduplicates_and_prunes_missing_roots() {
+        let home = temp_home("project-registry");
+        let first = home.join("first");
+        let second = home.join("second");
+        fs::create_dir_all(&first).unwrap();
+        fs::create_dir_all(&second).unwrap();
+        register_skill_project(&home, &first).unwrap();
+        register_skill_project(&home, &second).unwrap();
+        register_skill_project(&home, &first).unwrap();
+        fs::remove_dir_all(&second).unwrap();
+
+        let third = home.join("third");
+        fs::create_dir_all(&third).unwrap();
+        let projects = registered_skill_projects(&home, &third).unwrap();
+
+        assert_eq!(projects, [first.clone(), third]);
+        assert_eq!(read_skill_projects(&home).unwrap(), [first]);
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn project_install_rejects_a_symlink_before_writing() {
+        use std::os::unix::fs::symlink;
+
+        struct NeverRun(PathBuf);
+        impl System for NeverRun {
+            fn command_exists(&self, _name: &str) -> bool {
+                false
+            }
+            fn refresh_path(&self) {}
+            fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
+                panic!("symlink validation ran {}", command.display())
+            }
+            fn home_dir(&self) -> Option<PathBuf> {
+                Some(self.0.clone())
+            }
+        }
+
+        let home = temp_home("project-install-symlink");
+        let target = home.join("target");
+        let project = home.join("project");
+        fs::create_dir_all(target.join(".git")).unwrap();
+        symlink(&target, &project).unwrap();
+        let destination = SkillDestination::new(
+            vec![SkillAgent::AgentsStandard],
+            SkillScope::Project,
+            &home,
+            &project,
+        );
+
+        let error = install_skills(
+            &NeverRun(home.clone()),
+            &["tdd".into()],
+            &destination,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+        .unwrap_err();
+        assert!(error.contains("symlinked project"));
+        assert!(!target.join(".agents").exists());
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn project_registry_prunes_symlinked_roots() {
+        use std::os::unix::fs::symlink;
+
+        let home = temp_home("project-registry-symlink");
+        let project = home.join("project");
+        let target = home.join("target");
+        fs::create_dir_all(&project).unwrap();
+        fs::create_dir_all(&target).unwrap();
+        register_skill_project(&home, &project).unwrap();
+        fs::remove_dir(&project).unwrap();
+        symlink(&target, &project).unwrap();
+
+        assert!(prune_registered_skill_projects(&home).unwrap().is_empty());
+        assert!(read_skill_projects(&home).unwrap().is_empty());
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn malformed_project_registry_is_preserved() {
+        let home = temp_home("project-registry-malformed");
+        let path = skill_projects_registry(&home);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "not json\n").unwrap();
+
+        let error = registered_skill_projects(&home, &home.join("current")).unwrap_err();
+
+        assert!(error.contains("could not parse"));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "not json\n");
         fs::remove_dir_all(&home).ok();
     }
 

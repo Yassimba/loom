@@ -26,7 +26,6 @@
         "refactor-nuclear",
         "refactor-tests",
         "release",
-        "setup-project",
         "tdd",
         "terraform-engineer",
         "ticket-overview",
@@ -62,8 +61,8 @@
     },
     {
       "title": "Presentations",
-      "description": "Build slide decks in Marp markdown or PowerPoint.",
-      "skills": ["frontend-slides", "marp-slide", "pptx"]
+      "description": "Build slide decks as browser presentations or Marp markdown.",
+      "skills": ["frontend-slides", "marp-slide"]
     },
     {
       "title": "Observability",
@@ -109,7 +108,7 @@
     {
       "title": "Ponytail",
       "description": "Build less: choose YAGNI, stdlib, and native features before adding code, then audit what can still be removed.",
-      "skills": ["ponytail", "ponytail-review", "ponytail-audit"]
+      "skills": ["ponytail"]
     }
   ]
 }
