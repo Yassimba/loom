@@ -100,6 +100,9 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: main
+          # deploy key: main's ruleset requires PRs but lets deploy keys
+          # push pin commits directly
+          ssh-key: ${{ secrets.AUTOFIX_SSH_KEY }}
       - env:
           MATRIX: ${{ needs.release-please.outputs.binaries }}
         run: |
