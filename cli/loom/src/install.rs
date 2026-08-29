@@ -298,18 +298,7 @@ pub fn build_install_plan(
             ResourceKind::Skill | ResourceKind::Tool => continue,
             ResourceKind::PiPackage => (
                 "pi",
-                CommandSpec::new(
-                    "pi",
-                    [
-                        "install",
-                        &match &resource.version {
-                            Some(version) => {
-                                format!("npm:{}@{version}", resource.install_target)
-                            }
-                            None => format!("npm:{}", resource.install_target),
-                        },
-                    ],
-                ),
+                CommandSpec::new("pi", ["install", &resource.pi_install_spec()]),
                 VerificationSpec::Command {
                     command: CommandSpec::new("pi", ["list"]),
                     needle: Some(resource.install_target.clone()),

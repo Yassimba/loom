@@ -39,6 +39,8 @@ jobs:
           path = "manifest/pi-packages.json"
           data = json.load(open(path))
           for package in data["packages"]:
+              if "version" not in package:
+                  continue
               latest = subprocess.run(
                   ["npm", "view", package["name"], "version"],
                   capture_output=True, text=True,
@@ -49,6 +51,10 @@ jobs:
               json.dump(data, handle, indent=2, ensure_ascii=False)
               handle.write("\n")
           EOF
+      - name: Refresh generated setup catalog
+        run: |
+          npm ci
+          npm run catalog:generate
       - name: Open bump PR
         uses: peter-evans/create-pull-request@67df31e08a133c6a77008b89689677067fef169e # v6.1.0
         with:

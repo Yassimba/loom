@@ -17,8 +17,9 @@
     {
       "key": "herdr",
       "label": "herdr",
-      "description": "Terminal multiplexer for coding agents (macOS/Linux; on Windows install from herdr.dev).",
-      "nextAction": "Run `herdr` to start the multiplexer."
+      "description": "Terminal multiplexer for coding agents (macOS/Linux; use WSL2 on Windows).",
+      "nextAction": "Run `herdr` to start the multiplexer.",
+      "windowsSupport": "wsl"
     },
     {
       "key": "npm:calldiff",
@@ -36,7 +37,7 @@
       "key": "github:agavra/tuicr",
       "label": "tuicr",
       "bin": "tuicr",
-      "description": "Code review TUI with vim keybindings — annotate diffs, PRs, or MRs and export to GitHub or clipboard.",
+      "description": "Code review TUI with vim keybindings - annotate diffs, PRs, or MRs and export to GitHub or clipboard.",
       "nextAction": "Run `tuicr` in a repo with changes."
     },
     {

@@ -105,6 +105,7 @@ fn completion_command(catalog: &Catalog) -> clap::Command {
                 .resources
                 .iter()
                 .filter(|resource| resource.kind == kind)
+                .filter(|resource| !cfg!(windows) || !resource.windows_wsl)
                 .map(|resource| resource.label.clone())
                 .collect::<Vec<_>>(),
         )
@@ -135,6 +136,26 @@ fn print_completions(shell: clap_complete::Shell) -> Result<()> {
     Ok(())
 }
 
+fn run_selection(args: SelectionArgs, offer_wsl: bool, system: &RealSystem) -> Result<bool> {
+    let catalog = load_catalog()?;
+    let selectors = Selectors {
+        skills: args.skills,
+        pi_packages: args.pi_packages,
+        herdr_plugins: args.herdr_plugins,
+        tools: args.tools,
+    };
+    install_selected(
+        &catalog,
+        &selectors,
+        &args.agents,
+        args.scope,
+        offer_wsl,
+        args.yes,
+        args.dry_run,
+        system,
+    )
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let system = RealSystem::default();
@@ -143,24 +164,8 @@ fn main() -> Result<()> {
         .command
         .unwrap_or_else(|| Command::Setup(SelectionArgs::default()));
     let success = match command {
-        Command::Setup(args) | Command::Add(args) => {
-            let catalog = load_catalog()?;
-            let selectors = Selectors {
-                skills: args.skills,
-                pi_packages: args.pi_packages,
-                herdr_plugins: args.herdr_plugins,
-                tools: args.tools,
-            };
-            install_selected(
-                &catalog,
-                &selectors,
-                &args.agents,
-                args.scope,
-                args.yes,
-                args.dry_run,
-                &system,
-            )?
-        }
+        Command::Setup(args) => run_selection(args, true, &system)?,
+        Command::Add(args) => run_selection(args, false, &system)?,
         Command::Status => run_status(&system),
         Command::Sync => {
             let out = Out::detect();
@@ -253,6 +258,8 @@ mod tests {
                 dependencies: vec![],
                 bin: None,
                 version: None,
+                source: None,
+                windows_wsl: false,
                 companions: vec![],
             }],
         };

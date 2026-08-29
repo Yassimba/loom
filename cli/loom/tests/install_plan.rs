@@ -35,6 +35,8 @@ fn resource(kind: ResourceKind, id: &str, target: &str) -> Resource {
         dependencies: Vec::new(),
         bin: None,
         version: None,
+        source: None,
+        windows_wsl: false,
         companions: Vec::new(),
     }
 }
@@ -115,6 +117,34 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
                 needle: Some("yassin.jumplist".into()),
             }),
         ]
+    );
+}
+
+#[test]
+fn git_pi_package_uses_its_exact_source() {
+    let mut chat = resource(ResourceKind::PiPackage, "pi-package:pi-chat", "pi-chat");
+    chat.source = Some(
+        "git:github.com/earendil-works/pi-chat@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+    );
+    let status = PrerequisiteStatus {
+        pi: true,
+        herdr: true,
+        npm: true,
+        mise: false,
+        node: NodeStatus::Supported,
+    };
+
+    let plan = build_install_plan(&[chat], &[], status, Platform::Unix).unwrap();
+
+    assert_eq!(
+        plan.resources[0].action,
+        StepAction::Command(CommandSpec::new(
+            "pi",
+            [
+                "install",
+                "git:github.com/earendil-works/pi-chat@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            ],
+        ))
     );
 }
 
