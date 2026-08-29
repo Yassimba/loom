@@ -1,11 +1,11 @@
 use loom::manifest::PI_TOOL_KEY;
 use loom::{
-    execute_install_plan, CommandResult, CommandSpec, InstallPlan, InstallStep, SkillAgent,
-    SkillDestination, SkillScope, StepAction, System,
+    execute_install_plan, execute_install_plan_with, CommandResult, CommandSpec, InstallPlan,
+    InstallStep, SkillAgent, SkillDestination, SkillScope, StepAction, StepStatus, System,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
@@ -114,6 +114,89 @@ fn independent_manager_lanes_start_before_either_finishes() {
         system.overlapped.load(Ordering::SeqCst),
         "independent manager lanes should overlap"
     );
+}
+
+#[test]
+fn resources_in_the_same_manager_lane_overlap() {
+    let plan = InstallPlan {
+        prerequisites: Vec::new(),
+        resources: vec![
+            step("pi-package:one", "pi", "install-one"),
+            step("pi-package:two", "pi", "install-two"),
+        ],
+    };
+    let system = OverlapSystem::new();
+
+    let report = execute_install_plan(&plan, &system);
+
+    assert!(report.failures.is_empty());
+    assert!(
+        system.overlapped.load(Ordering::SeqCst),
+        "resources sharing a manager should overlap"
+    );
+}
+
+struct LostRegistrationSystem {
+    one_runs: AtomicUsize,
+    two_runs: AtomicUsize,
+}
+
+impl System for LostRegistrationSystem {
+    fn command_exists(&self, _name: &str) -> bool {
+        true
+    }
+
+    fn refresh_path(&self) {}
+
+    fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
+        let stdout = match command.program.as_str() {
+            "install-one" => {
+                self.one_runs.fetch_add(1, Ordering::SeqCst);
+                String::new()
+            }
+            "install-two" => {
+                self.two_runs.fetch_add(1, Ordering::SeqCst);
+                String::new()
+            }
+            "pi" if self.one_runs.load(Ordering::SeqCst) > 1 => "one\ntwo".into(),
+            "pi" => "two".into(),
+            other => panic!("unexpected command: {other}"),
+        };
+        Ok(CommandResult {
+            success: true,
+            stdout,
+            stderr: String::new(),
+        })
+    }
+}
+
+#[test]
+fn a_registration_lost_during_parallel_install_is_restored_serially() {
+    let verified_step = |target: &str, program: &str, needle: &str| InstallStep {
+        verification: Some(loom::VerificationSpec::Command {
+            command: CommandSpec::new("pi", ["list"]),
+            needle: Some(needle.into()),
+        }),
+        ..step(target, "pi", program)
+    };
+    let plan = InstallPlan {
+        prerequisites: Vec::new(),
+        resources: vec![
+            verified_step("pi-package:one", "install-one", "one"),
+            verified_step("pi-package:two", "install-two", "two"),
+        ],
+    };
+    let system = LostRegistrationSystem {
+        one_runs: AtomicUsize::new(0),
+        two_runs: AtomicUsize::new(0),
+    };
+
+    let report = execute_install_plan(&plan, &system);
+
+    assert!(report.failures.is_empty());
+    assert_eq!(report.installed, vec!["pi-package:one", "pi-package:two"]);
+    assert_eq!(system.one_runs.load(Ordering::SeqCst), 2);
+    assert_eq!(system.two_runs.load(Ordering::SeqCst), 1);
 }
 
 struct MisePiSystem {
@@ -260,6 +343,44 @@ fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
         commands,
         vec!["pi", "sh -c curl -fsSL https://herdr.dev/install.sh | sh"]
     );
+}
+
+#[test]
+fn failed_prerequisite_skips_later_prerequisites_in_its_lane() {
+    let plan = InstallPlan {
+        prerequisites: vec![
+            InstallStep {
+                target: "Herdr".into(),
+                manager: "herdr".into(),
+                action: StepAction::Command(CommandSpec::new(
+                    "sh",
+                    ["-c", "curl -fsSL https://herdr.dev/install.sh | sh"],
+                )),
+                verification: None,
+            },
+            step("prepare-herdr", "herdr", "prepare-herdr"),
+        ],
+        resources: vec![step("herdr-plugin:jumplist", "herdr", "herdr")],
+    };
+    let system = FakeSystem {
+        commands: std::sync::Mutex::new(Vec::new()),
+    };
+    let mut statuses = Vec::new();
+
+    let report = execute_install_plan_with(&plan, &system, &mut |index, status| {
+        statuses.push((index, status));
+    });
+
+    assert_eq!(
+        report
+            .failures
+            .iter()
+            .map(|failure| failure.target.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Herdr", "prepare-herdr", "herdr-plugin:jumplist"]
+    );
+    assert!(statuses.contains(&(1, StepStatus::Skipped("Herdr is unavailable".into()))));
+    assert_eq!(system.commands.into_inner().unwrap().len(), 1);
 }
 
 struct HiddenCommandSystem;
