@@ -47,19 +47,35 @@ fn line_key(line: &str) -> Option<&str> {
     (!key.is_empty() && !key.contains(char::is_whitespace)).then_some(key)
 }
 
+/// Manifest keys that moved: a selection written under the old key follows
+/// the tool to its new key instead of being dropped as "no longer published".
+const RENAMED_KEYS: &[(&str, &str)] = &[
+    // loom-teams left the shared `github:` backend it collided with loom on.
+    ("github:Yassimba/loom[exe=loom-teams]", "ubi:Yassimba/loom"),
+];
+
+fn current_key(key: &str) -> &str {
+    RENAMED_KEYS
+        .iter()
+        .find(|(old, _)| *old == key)
+        .map_or(key, |(_, new)| new)
+}
+
 /// The keys already selected on this machine (empty when nothing is synced
-/// yet). Core keys are implicit and excluded.
+/// yet). Core keys are implicit and excluded; renamed keys come back current.
 pub fn selected_keys(home: &std::path::Path) -> Vec<String> {
     let Ok(content) = fs::read_to_string(conf_d_target(home)) else {
         return Vec::new();
     };
     let core = core_section(&content).unwrap_or_default();
-    content
+    let mut keys = content
         .lines()
         .filter(|line| !core.contains(*line))
         .filter_map(line_key)
-        .map(str::to_string)
-        .collect()
+        .map(|key| current_key(key).to_string())
+        .collect::<Vec<_>>();
+    keys.dedup();
+    keys
 }
 
 fn core_section(manifest: &str) -> Option<String> {
@@ -177,6 +193,15 @@ gh = \"2.97.0\"
         assert!(rendered.contains("gh = \"2.97.0\""));
         assert!(rendered.contains("\"github:zdyxry/tokui\" = \"0.12.0\""));
         assert!(!rendered.contains("pi-coding-agent"));
+    }
+
+    #[test]
+    fn renamed_keys_follow_the_tool() {
+        assert_eq!(
+            current_key("github:Yassimba/loom[exe=loom-teams]"),
+            "ubi:Yassimba/loom"
+        );
+        assert_eq!(current_key("gh"), "gh");
     }
 
     #[test]

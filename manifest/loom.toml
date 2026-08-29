@@ -21,8 +21,12 @@ node = "24.19.0"
 "github:Yassimba/loom[exe=loom]" = { version = "loom-v0.13.0", tag_regex = "^loom-v" }
 # core:end
 
-# teams calendar CLI (export meetings as JSON, find slots)
-"github:Yassimba/loom[exe=loom-teams]" = { version = "loom-teams-v0.2.0", tag_regex = "^loom-teams-v" }
+# teams calendar CLI (export meetings as JSON, find slots). Same GitHub
+# releases as loom, but through the ubi backend: mise keys an install by
+# backend + repo, so two `github:` entries for one repo share a store dir and
+# one metadata file — the last install wins the exe, and `mise prune` deletes
+# the other's version as unreferenced.
+"ubi:Yassimba/loom" = { version = "loom-teams-v0.2.0", exe = "loom-teams", tag_regex = "^loom-teams-v" }
 
 # agents & multiplexer
 "npm:@mariozechner/pi-coding-agent" = "0.73.1"
