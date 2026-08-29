@@ -15,6 +15,7 @@ Map real runtime behavior. Inspect in order:
 - Mark unverified claims as assumptions.
 - File proximity, naming, and imports do not prove runtime causality.
 - Separate production reachability from tests. Tests may corroborate behavior, never serve as the production entry.
+- State edges correspond to one live event or function invocation. When one event atomically changes several inputs, record every directly reachable result; never invent an intermediate transition by linearizing derived-state evaluation.
 
 ## Deliverable
 
