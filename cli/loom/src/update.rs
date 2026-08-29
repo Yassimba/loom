@@ -36,11 +36,7 @@ struct CommandLane {
     commands: Vec<CommandSpec>,
 }
 
-fn pi_package_commands(
-    catalog: &Catalog,
-    listed: &str,
-    native_windows: bool,
-) -> Vec<CommandSpec> {
+fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) -> Vec<CommandSpec> {
     let mut scope = None;
     let mut user = Vec::new();
     let mut project = Vec::new();

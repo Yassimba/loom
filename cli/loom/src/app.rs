@@ -156,7 +156,11 @@ fn native_windows_resources(catalog: &Catalog) -> Vec<Resource> {
 
 fn first_wsl2_distribution(output: &str) -> Option<String> {
     output.replace('\0', "").lines().find_map(|line| {
-        let columns = line.trim().trim_start_matches('*').split_whitespace().collect::<Vec<_>>();
+        let columns = line
+            .trim()
+            .trim_start_matches('*')
+            .split_whitespace()
+            .collect::<Vec<_>>();
         let name = columns.first()?;
         (columns.last() == Some(&"2")
             && !name.eq_ignore_ascii_case("NAME")
@@ -493,7 +497,9 @@ mod tests {
             Some("Ubuntu".into())
         );
         assert_eq!(
-            first_wsl2_distribution("NAME STATE VERSION\ndocker-desktop Running 2\nDebian Stopped 1\n"),
+            first_wsl2_distribution(
+                "NAME STATE VERSION\ndocker-desktop Running 2\nDebian Stopped 1\n"
+            ),
             None
         );
     }
