@@ -25,6 +25,7 @@ Boundary: <entry> → <final effect or composition gap>
 Entrypoints: <symbol — path:line>
 Runtime boundaries: <process/thread/service>
 Types: <type → implementation — path:line>
+Entities/tables: <fields, cardinality, persistence — path:line>  # only when real
 Spine:
 1. <function — value in → value out/state change — path:line>
 Externals: <system/transport — path:line>

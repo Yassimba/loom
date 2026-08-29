@@ -16,7 +16,7 @@ Apply every relevant rule; rendering mechanics live in `draw.py`.
 - Preserve exact product names, identifiers, commands, protocols, API paths, and environments.
 - Use only verified component identities. File proximity, naming, or an import does not prove a relationship.
 - Keep external actors outside a boundary only when source evidence proves that boundary.
-- Group only real ownership, trust, process, or deployment boundaries; boundaries never replace edges.
+- Group only real ownership, trust, process, or deployment boundaries; boundaries never replace edges. Region or cluster wording alone does not prove deployment topology.
 
 ## Labels
 
