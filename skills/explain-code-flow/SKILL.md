@@ -39,7 +39,7 @@ Done: exit 0 and every printed line supports its claim.
 
 ## 4. Choose figures
 
-Work down the ladder. A rung qualifies by its predicate, then survives only when removing it would leave a specific reader misunderstanding. Four figures is usual; skip redundancy. Load [`references/content-brief-by-type.md`](references/content-brief-by-type.md) and [`references/authoring-invariants.md`](references/authoring-invariants.md).
+Work down the ladder. A rung qualifies by its predicate, then survives only when removing it would leave a specific reader misunderstanding. Skip redundancy. For features spanning 1–5 production files, four figures is the ceiling unless the user explicitly requests separate structural views; when more rungs qualify, keep Overview and Spine, then rank the unique misunderstandings. Load [`references/content-brief-by-type.md`](references/content-brief-by-type.md) and [`references/authoring-invariants.md`](references/authoring-invariants.md).
 
 | Rung | Fact | Type | Predicate |
 | --- | --- | --- | --- |
