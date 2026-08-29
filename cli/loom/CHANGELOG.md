@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.2](https://github.com/Yassimba/loom/compare/loom-v0.13.1...loom-v0.13.2) (2026-08-29)
+
+
+### Bug Fixes
+
+* **manifest:** give loom-teams its own mise backend so it stops evicting loom ([dd57a0c](https://github.com/Yassimba/loom/commit/dd57a0cb43e11cabe59159d2846418bfcef18243))
+
 ## [0.13.1](https://github.com/Yassimba/loom/compare/loom-v0.13.0...loom-v0.13.1) (2026-08-28)
 
 
