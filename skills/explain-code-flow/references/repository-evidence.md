@@ -1,38 +1,36 @@
-# Repository evidence
+# Repository evidence contract
 
-Archify's contract for diagrams that must reflect real code. Its `repository-evidence.mjs` does no
-code analysis: it only verifies that each cited `source` path and line range exists at a git
-revision and builds a permalink. The analysis discipline is this paragraph:
+Map real runtime behavior. Inspect in order:
 
-> When the diagram must reflect real code, inspect repository entrypoints, runtime boundaries,
-> storage, transports, and deployment configuration before authoring. Record only evidence you
-> actually verified. Never infer runtime causality from file proximity or naming alone.
+1. executable entry and composition root;
+2. process/service/thread boundaries;
+3. stores, caches, queues, and files;
+4. HTTP, RPC, buses, sockets, and other transports;
+5. deployment or CI configuration when it affects the feature.
 
-What to inspect, in order:
+## Evidence rules
 
-1. Entrypoints — main, handlers, routers, CLI commands, scheduled jobs.
-2. Runtime boundaries — processes, containers, services, workers.
-3. Storage — databases, caches, queues, object stores.
-4. Transports — HTTP, gRPC, message buses, files, sockets.
-5. Deployment configuration — compose, k8s, Terraform, CI.
+- Every factual node and edge cites a source line you opened.
+- Copy line numbers from `grep -n` or `sed -n`; report `path:N: source line`.
+- Mark unverified claims as assumptions.
+- File proximity, naming, and imports do not prove runtime causality.
+- Separate production reachability from tests. Tests may corroborate behavior, never serve as the production entry.
 
-Evidence rules:
+## Deliverable
 
-- Every node and edge that claims to be real cites `file:line` you opened.
-- A line number is copied from a `grep -n` / `sed -n` result, never estimated from a range you remember; report it as `path:N: <the line>` so it can be checked without reopening the file.
-- A claim you did not verify is marked as an assumption, not drawn as fact.
-- Proximity in the tree, shared naming, or an import alone is not a runtime call.
+Return a compact call-chain packet, not a repository tour:
 
-## Deliverables
+```markdown
+Boundary: <entry> → <final effect or composition gap>
+Entrypoints: <symbol — path:line>
+Runtime boundaries: <process/thread/service>
+Types: <type → implementation — path:line>
+Spine:
+1. <function — value in → value out/state change — path:line>
+Externals: <system/transport — path:line>
+States: <state --event/guard--> state — path:line>  # only when real
+Modes/catalogs: <dispatch table — path:line>        # only when real
+Counts: <relevant files and lines>
+```
 
-Report each of these with current `file:line` anchors, call chains over prose, under 1,500 words:
-
-- entry points and composition root
-- layers and dependency direction
-- core types, protocols, and their implementations
-- domain entities with fields and relationships; persisted tables when present
-- lifecycle states and the events between them, when present
-- one end-to-end call chain with the data at each hop: shape in, shape out
-- external systems and state changes
-- modes, dispatch tables, and catalogs
-- file and line counts
+Include only facts a figure or anchored walkthrough needs. Omit field inventories and per-key branches unless they change a figure. Budget: ≤600 words for 1–5 relevant files, ≤900 for 6–10, ≤1,200 for 11+. The main agent, not this worker, chooses figures.
