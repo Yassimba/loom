@@ -57,6 +57,8 @@ printf '%s\\n' '[tools]' '# core:begin' '"github:Yassimba/loom[exe=loom]" = "loo
         },
       );
       assert.equal(result.status, 0, result.stderr || result.stdout);
+      // The new-shell hint appears exactly when activation was just added.
+      assert.equal(result.stdout.includes("open a new shell"), run === 0, result.stdout);
     }
 
     const bashrc = await readFile(join(home, ".bashrc"), "utf8");

@@ -53,7 +53,9 @@ test("piped Unix bootstrap reconnects interactive setup to the terminal", async 
   // so a wizard started on it dies with "Failed to initialize input reader".
   assert.match(installer, /terminal="\$\(tty 0<&2 2>\/dev\/null\)"/);
   assert.match(installer, /terminal=\/dev\/tty/);
-  assert.match(installer, /exec mise -C "\$HOME" exec -- loom setup "\$@" <"\$terminal"/);
+  assert.match(installer, /mise -C "\$HOME" exec -- loom setup "\$@" <"\$terminal"/);
+  // A shell opened before the install has no mise hook: say to open a new one.
+  assert.match(installer, /open a new shell \(or run: exec /);
   // A guided install with no terminal at all says what to run instead of
   // launching a UI that cannot read.
   assert.match(installer, /Open a shell and run: loom/);
