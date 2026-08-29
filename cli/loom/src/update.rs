@@ -102,7 +102,10 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     // lane runs at once; rows print in a fixed order once all are done.
     type Job<'a> = Box<dyn FnOnce() -> Lane + Send + 'a>;
     let mut jobs: Vec<(&'static str, Job<'_>)> = vec![
-        ("Skills", Box::new(move || update_installed_skills(system, catalog))),
+        (
+            "Skills",
+            Box::new(move || update_installed_skills(system, catalog)),
+        ),
         ("Projects", Box::new(move || sync_projects_lane(system))),
     ];
     if mise {
