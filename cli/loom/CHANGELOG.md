@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/Yassimba/loom/compare/loom-v0.14.0...loom-v0.14.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **loom:** keep a selection pin the published manifest no longer names ([d9251e5](https://github.com/Yassimba/loom/commit/d9251e530765e5b040e6d0982cf9dbdc59cfb1d9))
+
 ## [0.14.0](https://github.com/Yassimba/loom/compare/loom-v0.13.2...loom-v0.14.0) (2026-08-29)
 
 
