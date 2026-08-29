@@ -92,7 +92,7 @@ fn core_section(manifest: &str) -> Option<String> {
 
 /// Build the selection file: core block + the manifest's lines for the
 /// selected keys, all carrying the manifest's current pins.
-fn render_selection(manifest: &str, keys: &[String]) -> Result<String, String> {
+fn render_selection(manifest: &str, current: &str, keys: &[String]) -> Result<String, String> {
     let core = core_section(manifest)
         .ok_or_else(|| format!("{MANIFEST_IN_REPO} is missing its core:begin/core:end block"))?;
     let mut out = String::from(
@@ -103,22 +103,30 @@ fn render_selection(manifest: &str, keys: &[String]) -> Result<String, String> {
     );
     out.push_str(&core);
     out.push('\n');
-    let mut missing = Vec::new();
+    let mut kept = Vec::new();
     for key in keys {
         match manifest.lines().find(|line| line_key(line) == Some(key)) {
             Some(line) => {
                 out.push_str(line);
                 out.push('\n');
             }
-            None => missing.push(key.as_str()),
+            None => {
+                // A key the published manifest no longer carries keeps its
+                // current line: this binary may simply predate a rename
+                // (a newer loom maps it), and dropping it would uninstall
+                // the tool on the next prune.
+                if let Some(line) = current.lines().find(|line| line_key(line) == Some(key)) {
+                    out.push_str(line);
+                    out.push('\n');
+                    kept.push(key.as_str());
+                }
+            }
         }
     }
-    if !missing.is_empty() {
-        // A tool that left the published manifest silently leaves the
-        // selection too — its pin has no source of truth anymore.
+    if !kept.is_empty() {
         eprintln!(
-            "  ! tools no longer in the published manifest, dropped: {}",
-            missing.join(", ")
+            "  ! not in the published manifest, kept as pinned: {} — a newer loom may know where it moved",
+            kept.join(", ")
         );
     }
     Ok(out)
@@ -141,8 +149,9 @@ pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, S
                 keys.push(key.clone());
             }
         }
-        let content = render_selection(&manifest, &keys)?;
         let target = conf_d_target(&home);
+        let current = fs::read_to_string(&target).unwrap_or_default();
+        let content = render_selection(&manifest, &current, &keys)?;
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)
                 .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
@@ -194,7 +203,7 @@ gh = \"2.97.0\"
     #[test]
     fn selection_carries_core_plus_chosen_lines() {
         let rendered =
-            render_selection(MANIFEST, &["gh".into(), "github:zdyxry/tokui".into()]).unwrap();
+            render_selection(MANIFEST, "", &["gh".into(), "github:zdyxry/tokui".into()]).unwrap();
         assert!(rendered.contains("node = \"24.19.0\""));
         assert!(rendered.contains("gh = \"2.97.0\""));
         assert!(rendered.contains("\"github:zdyxry/tokui\" = \"0.12.0\""));
@@ -211,8 +220,11 @@ gh = \"2.97.0\"
     }
 
     #[test]
-    fn vanished_tools_drop_from_the_selection() {
-        let rendered = render_selection(MANIFEST, &["gone".into()]).unwrap();
+    fn vanished_tools_keep_their_current_pin() {
+        let current = "[tools]\ngone = \"1.0.0\"\n";
+        let rendered = render_selection(MANIFEST, current, &["gone".into()]).unwrap();
+        assert!(rendered.contains("gone = \"1.0.0\""));
+        let rendered = render_selection(MANIFEST, "", &["gone".into()]).unwrap();
         assert!(!rendered.contains("gone"));
     }
 
