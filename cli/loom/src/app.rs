@@ -7,6 +7,7 @@ use crate::{
     SkillDestination, SkillScope, System,
 };
 use anyhow::{bail, Context, Result};
+use inquire::Confirm;
 
 #[derive(Default)]
 pub struct Selectors {
@@ -25,11 +26,13 @@ impl Selectors {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn install_selected(
     catalog: &Catalog,
     selectors: &Selectors,
     requested_agents: &[SkillAgent],
     scope: SkillScope,
+    offer_wsl: bool,
     assume_yes: bool,
     dry_run: bool,
     system: &(dyn System + Sync),
@@ -46,6 +49,28 @@ pub fn install_selected(
     } else {
         Platform::Unix
     };
+    if platform == Platform::Windows && offer_wsl && selectors.is_empty() {
+        let mut labels = catalog
+            .resources
+            .iter()
+            .filter(|resource| resource.windows_wsl)
+            .map(|resource| resource.label.as_str())
+            .collect::<Vec<_>>();
+        labels.sort_unstable();
+        labels.dedup();
+        if !labels.is_empty() {
+            println!(
+                "{} are not available on native Windows. WSL2 lets Loom offer the complete setup.\n",
+                labels.join(", ")
+            );
+            if Confirm::new("Use WSL2 for the complete Loom setup?")
+                .with_default(true)
+                .prompt()?
+            {
+                return prepare_wsl(system, dry_run);
+            }
+        }
+    }
     let home = system.home_dir().context("home directory is unavailable")?;
     let current_dir = system
         .current_dir()
@@ -57,11 +82,32 @@ pub fn install_selected(
     };
     let destination = SkillDestination::new(agents, scope, &home, &current_dir);
     if selectors.is_empty() {
-        return run_interactive(catalog, status, platform, dry_run, destination, system);
+        let resources = if platform == Platform::Windows {
+            native_windows_resources(catalog)
+        } else {
+            catalog.resources.clone()
+        };
+        return run_interactive(
+            catalog,
+            resources,
+            status,
+            platform,
+            dry_run,
+            destination,
+            system,
+        );
     }
 
     let resources =
         expand_skill_dependencies(&catalog.resources, resolve_selectors(catalog, selectors)?);
+    if platform == Platform::Windows {
+        if let Some(resource) = resources.iter().find(|resource| resource.windows_wsl) {
+            bail!(
+                "{} requires WSL2 on Windows. Open Ubuntu and run this loom command there.",
+                resource.label
+            );
+        }
+    }
     if resources.is_empty() {
         println!("Nothing selected; no changes made.");
         return Ok(true);
@@ -99,8 +145,60 @@ pub fn install_selected(
     Ok(report.failures.is_empty())
 }
 
+fn native_windows_resources(catalog: &Catalog) -> Vec<Resource> {
+    catalog
+        .resources
+        .iter()
+        .filter(|resource| !resource.windows_wsl)
+        .cloned()
+        .collect()
+}
+
+fn first_wsl2_distribution(output: &str) -> Option<String> {
+    output.replace('\0', "").lines().find_map(|line| {
+        let columns = line.trim().trim_start_matches('*').split_whitespace().collect::<Vec<_>>();
+        let name = columns.first()?;
+        (columns.last() == Some(&"2")
+            && !name.eq_ignore_ascii_case("NAME")
+            && !name.starts_with("docker-desktop"))
+        .then(|| (*name).to_owned())
+    })
+}
+
+fn prepare_wsl(system: &(dyn System + Sync), dry_run: bool) -> Result<bool> {
+    if dry_run {
+        println!("\nWould prepare WSL2; no changes made.");
+        return Ok(true);
+    }
+    let mut distribution = system
+        .run(&CommandSpec::new("wsl", ["--list", "--verbose"]))
+        .ok()
+        .filter(|result| result.success)
+        .and_then(|result| first_wsl2_distribution(&result.stdout));
+    if distribution.is_none() {
+        if !Confirm::new("Install WSL2 with Ubuntu now? This may require elevation and a reboot.")
+            .with_default(true)
+            .prompt()?
+        {
+            println!("\nWhen ready, run: wsl --install -d Ubuntu");
+            return Ok(true);
+        }
+        let result = system.run(&CommandSpec::new("wsl", ["--install", "-d", "Ubuntu"]))?;
+        if !result.success {
+            bail!("WSL2 installation failed: {}", result.stderr.trim());
+        }
+        distribution = Some("Ubuntu".into());
+    }
+    let distribution = distribution.expect("a distribution was found or installed");
+    println!(
+        "\nOpen it with `wsl -d \"{distribution}\"`, then run:\n\n  curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh\n"
+    );
+    Ok(true)
+}
+
 fn run_interactive(
     catalog: &Catalog,
+    resources: Vec<Resource>,
     status: PrerequisiteStatus,
     platform: Platform,
     dry_run: bool,
@@ -108,7 +206,15 @@ fn run_interactive(
     system: &(dyn System + Sync),
 ) -> Result<bool> {
     let settings_paths = SettingsPaths::detect()?;
-    let settings = curated_settings();
+    let settings = curated_settings()
+        .into_iter()
+        .filter(|setting| {
+            setting
+                .related_resource
+                .as_ref()
+                .is_none_or(|related| resources.iter().any(|resource| &resource.id == related))
+        })
+        .collect::<Vec<_>>();
     let setting_states = settings
         .iter()
         .map(|spec| setting_state(spec, &settings_paths))
@@ -116,9 +222,9 @@ fn run_interactive(
     let zed_present = settings_paths.zed_settings.exists();
     // Installed marks arrive from a background probe once the wizard is on
     // screen; starting all-false keeps the first frame instant.
-    let installed = vec![false; catalog.resources.len()];
+    let installed = vec![false; resources.len()];
     let model = Model {
-        resources: catalog.resources.clone(),
+        resources,
         installed,
         settings,
         setting_states,
@@ -356,6 +462,53 @@ pub fn load_catalog() -> Result<Catalog> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct NoCommands;
+
+    impl System for NoCommands {
+        fn command_exists(&self, _name: &str) -> bool {
+            false
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
+            panic!("dry run executed {}", command.display())
+        }
+    }
+
+    #[test]
+    fn wsl_dry_run_executes_nothing() {
+        assert!(prepare_wsl(&NoCommands, true).unwrap());
+    }
+
+    #[test]
+    fn wsl_distribution_parser_requires_a_user_wsl2_distro() {
+        let output = "  N\0A\0M\0E\0  S\0T\0A\0T\0E\0  V\0E\0R\0S\0I\0O\0N\0\r\0\n\0* U\0b\0u\0n\0t\0u\0  R\0u\0n\0n\0i\0n\0g\0  2\0\r\0\n\0";
+        assert_eq!(first_wsl2_distribution(output), Some("Ubuntu".into()));
+        assert_eq!(
+            first_wsl2_distribution(
+                "NAME STATE VERSION\ndocker-desktop Running 2\nDebian Stopped 1\nUbuntu Stopped 2\n"
+            ),
+            Some("Ubuntu".into())
+        );
+        assert_eq!(
+            first_wsl2_distribution("NAME STATE VERSION\ndocker-desktop Running 2\nDebian Stopped 1\n"),
+            None
+        );
+    }
+
+    #[test]
+    fn native_windows_hides_wsl_resources() {
+        let catalog = Catalog::embedded().unwrap();
+
+        let visible = native_windows_resources(&catalog);
+
+        assert!(!visible.iter().any(|resource| resource.label == "chat"));
+        assert!(!visible.iter().any(|resource| resource.label == "herdr"));
+        assert!(!visible.iter().any(|resource| resource.label == "sandbox"));
+        assert!(visible.iter().any(|resource| resource.label == "pi"));
+    }
 
     #[test]
     fn sandbox_install_applies_its_defaults_after_package_success() {

@@ -23,6 +23,8 @@ fn resource(kind: ResourceKind, group: &str, label: &str) -> Resource {
         dependencies: Vec::new(),
         bin: None,
         version: None,
+        source: None,
+        windows_wsl: false,
         companions: Vec::new(),
     }
 }

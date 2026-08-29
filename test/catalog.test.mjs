@@ -132,6 +132,7 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       description: "Hosted elsewhere",
       installTarget: "example/herdr-remote",
       nextAction: "Bind a key.",
+      windowsWsl: true,
     },
     {
       id: "herdr-plugin:example.sample",
@@ -141,6 +142,7 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       description: "Sample Herdr capability",
       installTarget: "Yassimba/loom/plugins/herdr-sample",
       nextAction: "Run `herdr plugin list` to see the installed plugin.",
+      windowsWsl: true,
     },
     {
       id: "tool:gh",
@@ -154,6 +156,31 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       companions: [],
     },
   ]);
+});
+
+test("external Pi packages accept an exact Git commit source", async () => {
+  const repoRoot = await createCatalogFixture();
+  const source = `git:github.com/example/pi-chat@${"a".repeat(40)}`;
+  await writeFile(
+    join(repoRoot, "manifest", "pi-packages.json"),
+    JSON.stringify({
+      packages: [
+        {
+          name: "pi-chat",
+          source,
+          label: "chat",
+          description: "Chat bridge",
+          windowsSupport: "wsl",
+        },
+      ],
+    }),
+  );
+
+  const chat = (await buildSetupCatalog(repoRoot)).find(({ id }) => id === "pi-package:pi-chat");
+
+  assert.equal(chat.source, source);
+  assert.equal(chat.version, undefined);
+  assert.equal(chat.windowsWsl, true);
 });
 
 test("every public Pi extension package is offered in the setup catalog", async () => {

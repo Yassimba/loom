@@ -39,10 +39,15 @@ pub struct Resource {
     /// The executable to probe on PATH (tool resources only).
     #[serde(default)]
     pub bin: Option<String>,
-    /// Exact version pin (external Pi packages only): installs go through
-    /// `pi install npm:<target>@<version>` and update only when the pin does.
+    /// Exact npm version pin (external Pi packages only).
     #[serde(default)]
     pub version: Option<String>,
+    /// Exact non-npm Pi package source, currently a Git commit pin.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Hidden by native Windows setup; available when Loom runs inside WSL.
+    #[serde(default)]
+    pub windows_wsl: bool,
     /// Per-OS variant keys installed alongside the primary (tool resources
     /// only); mise os filters decide which applies on each machine.
     #[serde(default)]
@@ -54,6 +59,15 @@ pub struct Resource {
 pub struct Catalog {
     pub schema_version: u32,
     pub resources: Vec<Resource>,
+}
+
+impl Resource {
+    pub fn pi_install_spec(&self) -> String {
+        self.source.clone().unwrap_or_else(|| match &self.version {
+            Some(version) => format!("npm:{}@{version}", self.install_target),
+            None => format!("npm:{}", self.install_target),
+        })
+    }
 }
 
 impl Catalog {

@@ -11,6 +11,10 @@ function parseFrontmatter(content, path) {
   return value;
 }
 
+function duplicateValues(values) {
+  return [...new Set(values.filter((value, index) => values.indexOf(value) !== index))];
+}
+
 function readSkillEntries(manifest) {
   if (!Array.isArray(manifest?.groupings)) {
     throw new Error("skills.sh.json must contain a groupings array");
@@ -29,10 +33,9 @@ function readSkillEntries(manifest) {
   ) {
     throw new Error("every reviewed skill and grouping title must be a non-empty string");
   }
-  const names = entries.map(({ name }) => name);
-  const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+  const duplicates = duplicateValues(entries.map(({ name }) => name));
   if (duplicates.length > 0) {
-    throw new Error(`duplicate reviewed skill names: ${[...new Set(duplicates)].join(", ")}`);
+    throw new Error(`duplicate reviewed skill names: ${duplicates.join(", ")}`);
   }
   return entries;
 }
@@ -107,6 +110,7 @@ export async function readReviewedSkillCatalog(repoRoot) {
       nextAction: `Ask your coding agent to use the ${name} skill.`,
       dependencies: candidate.dependencies.skills,
       toolDependencies: candidate.dependencies.tools,
+      ...(candidate.frontmatter.windowsSupport === "wsl" ? { windowsWsl: true } : {}),
     };
   });
 }
@@ -163,12 +167,12 @@ export async function readPiPackageCatalog(repoRoot) {
       description: catalog.description,
       installTarget: manifest.name,
       nextAction: catalog.nextAction ?? "Start Pi and use the installed package.",
+      ...(catalog.windowsSupport === "wsl" ? { windowsWsl: true } : {}),
     });
   }
-  const names = resources.map((resource) => resource.installTarget);
-  const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
+  const duplicates = duplicateValues(resources.map((resource) => resource.installTarget));
   if (duplicates.length > 0) {
-    throw new Error(`duplicate Pi package names: ${[...new Set(duplicates)].join(", ")}`);
+    throw new Error(`duplicate Pi package names: ${duplicates.join(", ")}`);
   }
   return resources.sort((left, right) => left.label.localeCompare(right.label));
 }
@@ -184,24 +188,31 @@ async function readExternalPiPackages(repoRoot) {
     throw error;
   }
   const meta = JSON.parse(raw);
-  return meta.packages.map(({ name, version, label, description, nextAction }) => {
-    if (!name || !label || !description) {
-      throw new Error(`pi-packages.json entries need name, label, and description`);
-    }
-    if (!/^\d+\.\d+\.\d+$/.test(version ?? "")) {
-      throw new Error(`pi-packages.json: ${name} needs an exact version pin, got ${version}`);
-    }
-    return {
-      id: `pi-package:${name}`,
-      kind: "pi-package",
-      group: "Pi packages",
-      label,
-      description,
-      installTarget: name,
-      version,
-      nextAction: nextAction ?? "Start Pi and use the installed package.",
-    };
-  });
+  return meta.packages.map(
+    ({ name, version, source, label, description, nextAction, windowsSupport }) => {
+      if (!name || !label || !description) {
+        throw new Error(`pi-packages.json entries need name, label, and description`);
+      }
+      if (source) {
+        if (version || !/^git:[^@]+@[0-9a-f]{40}$/.test(source)) {
+          throw new Error(`pi-packages.json: ${name} needs one exact npm version or Git commit`);
+        }
+      } else if (!/^\d+\.\d+\.\d+$/.test(version ?? "")) {
+        throw new Error(`pi-packages.json: ${name} needs an exact version pin, got ${version}`);
+      }
+      return {
+        id: `pi-package:${name}`,
+        kind: "pi-package",
+        group: "Pi packages",
+        label,
+        description,
+        installTarget: name,
+        ...(source ? { source } : { version }),
+        nextAction: nextAction ?? "Start Pi and use the installed package.",
+        ...(windowsSupport === "wsl" ? { windowsWsl: true } : {}),
+      };
+    },
+  );
 }
 
 function parseTomlString(content, key, path) {
@@ -233,6 +244,7 @@ export async function readHerdrPluginCatalog(repoRoot) {
       description: parseTomlString(content, "description", manifestPath),
       installTarget: `Yassimba/loom/plugins/${entry.name}`,
       nextAction: "Run `herdr plugin list` to see the installed plugin.",
+      windowsWsl: true,
     });
   }
   const external = JSON.parse(
@@ -247,6 +259,7 @@ export async function readHerdrPluginCatalog(repoRoot) {
       description: plugin.description,
       installTarget: plugin.installTarget,
       nextAction: plugin.nextAction,
+      windowsWsl: true,
     });
   }
   return resources.sort((left, right) => left.label.localeCompare(right.label));
@@ -295,6 +308,7 @@ export async function readToolCatalog(repoRoot) {
     // Per-OS variant keys installed alongside the primary; mise os filters
     // decide which actually applies on each machine.
     companions: tool.companions ?? [],
+    ...(tool.windowsSupport === "wsl" ? { windowsWsl: true } : {}),
   }));
 }
 
