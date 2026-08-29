@@ -148,7 +148,9 @@ if ([regex]::Matches($ProfileText, [regex]::Escape($Activation)).Count -ne 1) {
   throw "mise activation must appear exactly once in the PowerShell profile"
 }
 $SelectionText = Get-Content $Selection -Raw
-if ($SelectionText -ne $SelectionBefore) { throw "rerun changed the selected tool set" }
+if ($SelectionText.Replace("`r`n", "`n") -ne $SelectionBefore.Replace("`r`n", "`n")) {
+  throw "rerun changed the selected tool set"
+}
 $SkillHashAfter = (Get-FileHash (Join-Path $SkillRoots[0] "$Skill\SKILL.md") -Algorithm SHA256).Hash
 if ($SkillHashAfter -ne $SkillHashBefore) { throw "rerun changed the installed skill" }
 $Manifest = Join-Path $(if ($env:LOOM_REPO_DIR) { $env:LOOM_REPO_DIR } else { $Workspace }) "manifest\loom.toml"
