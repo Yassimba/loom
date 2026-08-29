@@ -874,7 +874,7 @@
       "group": "Tools",
       "label": "pi",
       "description": "The Pi coding agent. Required by Pi packages — selecting any of them pulls Pi in automatically.",
-      "installTarget": "npm:@mariozechner/pi-coding-agent",
+      "installTarget": "npm:@earendil-works/pi-coding-agent",
       "nextAction": "Run `pi` in a project to start the agent.",
       "bin": "pi",
       "companions": []
