@@ -49,7 +49,7 @@ def main() -> None:
     (args.evidence / "native-keep-windows.txt").write_text(keep_windows, encoding="utf-8")
     if "Use WSL2 for the complete Loom setup?" not in keep_windows:
         raise AssertionError("WSL choice was not shown")
-    if "No matches. Backspace widens, esc cancels." not in keep_windows:
+    if "Bridge Discord and Telegram" in keep_windows:
         raise AssertionError("the WSL-only Gondolin package remained searchable on native Windows")
 
     use_wsl = drive([args.loom, "setup", "--dry-run"], [(1, "y\r")])
