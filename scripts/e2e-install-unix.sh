@@ -46,7 +46,10 @@ if [[ ! -x "$mise_bin" ]]; then
   mise_bin=$(PATH="$base_path" command -v mise)
 fi
 run_loom() {
-  "$mise_bin" -C "$HOME" exec -- "${LOOM_E2E_LOOM_BIN:-loom}" "$@"
+  local working_dir=$PWD
+  local loom_bin=${LOOM_E2E_LOOM_BIN:-loom}
+  "$mise_bin" -C "$HOME" exec -- sh -c \
+    'cd "$1" && shift && exec "$@"' sh "$working_dir" "$loom_bin" "$@"
 }
 run_loom --version >"$evidence_dir/loom-version.txt" 2>&1
 run_loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1

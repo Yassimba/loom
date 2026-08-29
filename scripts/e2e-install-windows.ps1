@@ -51,11 +51,11 @@ foreach ($Candidate in @(
 }
 $Mise = (Get-Command mise -ErrorAction Stop).Source
 function Invoke-Loom {
-  if ($env:LOOM_E2E_LOOM_BIN) {
-    & $Mise -C $HOME exec -- $env:LOOM_E2E_LOOM_BIN @args
-  } else {
-    & $Mise -C $HOME exec -- loom @args
-  }
+  $WorkingDirectory = (Get-Location).Path.Replace("'", "''")
+  $Loom = $(if ($env:LOOM_E2E_LOOM_BIN) { $env:LOOM_E2E_LOOM_BIN } else { "loom" }).Replace("'", "''")
+  $Arguments = ($args | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join " "
+  $Command = "Set-Location -LiteralPath '$WorkingDirectory'; & '$Loom' $Arguments; exit `$LASTEXITCODE"
+  & $Mise -C $HOME exec -- $PowerShellExe -NoProfile -Command $Command
 }
 Invoke-Loom --version *> (Join-Path $EvidenceDir "loom-version.txt")
 if ($LASTEXITCODE -ne 0) { throw "installed Loom did not run" }
