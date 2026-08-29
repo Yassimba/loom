@@ -256,7 +256,7 @@ pub fn build_install_plan(
             manager: "pi".into(),
             action: StepAction::Command(CommandSpec::new(
                 "npm",
-                ["install", "--global", "@mariozechner/pi-coding-agent"],
+                ["install", "--global", "@earendil-works/pi-coding-agent"],
             )),
             verification: None,
         });

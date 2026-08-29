@@ -234,7 +234,7 @@ fn explicitly_requested_runtimes_are_installed_without_dependent_resources() {
             .map(|step| step.action.display())
             .collect::<Vec<_>>(),
         vec![
-            "npm install --global @mariozechner/pi-coding-agent",
+            "npm install --global @earendil-works/pi-coding-agent",
             "sh -c curl -fsSL https://herdr.dev/install.sh | sh",
         ]
     );
@@ -335,7 +335,7 @@ fn selected_tools_sync_through_mise_before_resources() {
         StepAction::SyncTools {
             tools: vec![
                 "gh".to_string(),
-                "npm:@mariozechner/pi-coding-agent".to_string(),
+                "npm:@earendil-works/pi-coding-agent".to_string(),
             ],
         }
     );
