@@ -105,6 +105,8 @@ jobs:
         run: |
           jq -r '.[] | "\(.crate) \(.tag)"' <<<"$MATRIX" | sort -u | while read -r crate tag; do
             sed -i "s|^\(\"github:Yassimba/loom\[exe=$crate\]\" = { version = \"\)[^\"]*|\1$tag|" manifest/loom.toml
+            # loom-teams lives on the ubi backend (see manifest/loom.toml): version first, exe after.
+            sed -i "s|^\(\"ubi:Yassimba/loom\" = { version = \"\)[^\"]*\(\", exe = \"$crate\"\)|\1$tag\2|" manifest/loom.toml
           done
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
