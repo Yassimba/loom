@@ -32,7 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 0
+          # PR checkouts are the merge commit, so HEAD^1 is the base tip
+          fetch-depth: 2
       - name: Cache SkillSpector install
         id: spector-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -65,10 +66,9 @@ jobs:
         # the weekly schedule and manual dispatch sweep everything.
         env:
           EVENT: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
         run: |
           if [ "$EVENT" = "pull_request" ]; then
-            dirs=$(git diff --name-only "origin/$BASE_REF"...HEAD -- skills/ | cut -d/ -f1-2 | sort -u | sed 's|$|/|')
+            dirs=$(git diff --name-only HEAD^1 HEAD -- skills/ | cut -d/ -f1-2 | sort -u | sed 's|$|/|')
           else
             dirs=$(printf '%s\n' skills/*/)
           fi

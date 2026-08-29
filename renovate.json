@@ -55,7 +55,5 @@
     "description": "CVE fixes skip the 5-day cooldown but still require manual review, so a malicious release disguised as a security patch cannot automerge",
     "automerge": false,
     "labels": ["security-fastlane"]
-  },
-
-  "lockFileMaintenance": { "enabled": true }
+  }
 }
