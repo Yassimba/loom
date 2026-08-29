@@ -158,6 +158,32 @@ impl Out {
     pub fn hint(&self, text: impl AsRef<str>) {
         self.line(format!("  {}", self.muted(text)));
     }
+
+    pub fn is_terminal(&self) -> bool {
+        self.terminal
+    }
+
+    /// One in-place status line while work runs (`  ⋯ running  Skills · Herdr`).
+    /// Redrawn on the same row in a terminal; printed once per change when
+    /// output is captured so logs never fill with carriage returns.
+    pub fn progress(&self, text: impl AsRef<str>) {
+        use std::io::Write;
+        if self.terminal {
+            print!("\r\x1b[2K  {} {}", self.muted("⋯"), self.muted(text.as_ref()));
+            let _ = std::io::stdout().flush();
+        } else {
+            self.line(format!("  ... {}", text.as_ref()));
+        }
+    }
+
+    /// Clear the status line before the report rows take its place.
+    pub fn progress_done(&self) {
+        use std::io::Write;
+        if self.terminal {
+            print!("\r\x1b[2K");
+            let _ = std::io::stdout().flush();
+        }
+    }
 }
 
 /// A path with the home directory folded to `~`.
