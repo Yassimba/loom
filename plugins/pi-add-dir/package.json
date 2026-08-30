@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-add-dir",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Add directory paths and root instructions to Pi's system prompt by session, project, or global scope.",
   "license": "MIT",
   "type": "module",

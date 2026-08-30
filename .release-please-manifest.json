@@ -1,6 +1,6 @@
 {
-  "cli/loom": "0.19.0",
+  "cli/loom": "0.19.1",
   "cli/loom-teams": "0.2.0",
   "plugins/openai-fast": "1.1.0",
-  "plugins/pi-add-dir": "0.2.0"
+  "plugins/pi-add-dir": "0.2.1"
 }
