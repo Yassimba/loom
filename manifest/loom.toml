@@ -18,7 +18,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.19.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.16.0", tag_regex = "^loom-v" }
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.18.1", tag_regex = "^loom-v" }
 # core:end
 
 # claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
@@ -83,7 +83,7 @@ rust = { version = "1.97.1", os = ["macos"] }
 "github:Dicklesworthstone/beads_viewer" = "v0.19.0"
 
 # python toolchain
-uv = "0.12.3"
+uv = "0.12.5"
 
 # skill tooling (browser automation, diagram/slide export)
 "npm:agent-browser" = "0.35.1"

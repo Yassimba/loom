@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.18.1](https://github.com/Yassimba/loom/compare/loom-v0.18.0...loom-v0.18.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **release:** smoke the pinned main revision ([e3958f4](https://github.com/Yassimba/loom/commit/e3958f4b9abdc010e75f2d97039cae5612ce6b6b))
+
+## [0.18.0](https://github.com/Yassimba/loom/compare/loom-v0.17.0...loom-v0.18.0) (2026-08-29)
+
+
+### Features
+
+* **blueprint:** author plans through Plannotator ([ff8da60](https://github.com/Yassimba/loom/commit/ff8da600f4d842b00dd1ddd55dad128a65dda907))
+* **loom:** expand setup and Plannotator workflows ([032cb52](https://github.com/Yassimba/loom/commit/032cb52c45241e25e4a8ad5079511974b3aec538))
+* **loom:** expand setup and project initialization ([35b1ceb](https://github.com/Yassimba/loom/commit/35b1ceb6e19c42584b27cb3f977ecf1781b8f4e8))
+
 ## [0.17.0](https://github.com/Yassimba/loom/compare/loom-v0.16.0...loom-v0.17.0) (2026-08-29)
 
 
