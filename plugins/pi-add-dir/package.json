@@ -1,7 +1,7 @@
 {
   "name": "@yassimba/pi-add-dir",
   "version": "0.2.0",
-  "description": "Add another directory to this Pi session. The next turn sees its path and root AGENTS.md / CLAUDE.md.",
+  "description": "Add directory paths and root instructions to Pi's system prompt by session, project, or global scope.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -36,7 +36,7 @@
   "loom": {
     "catalog": {
       "label": "add-dir",
-      "description": "Add another directory to this Pi session. The next turn sees its path and root AGENTS.md / CLAUDE.md.",
+      "description": "Add directory paths and root instructions to Pi's system prompt by session, project, or global scope.",
       "nextAction": "In Pi, run /add-dir with a path."
     }
   },
