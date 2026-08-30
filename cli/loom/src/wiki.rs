@@ -197,12 +197,18 @@ fn operation_stamp(prefix: &str) -> (String, String) {
 }
 
 fn python_command(product: &Path, args: impl IntoIterator<Item = String>) -> CommandSpec {
-    let mut argv = vec![product
-        .join("scripts/claude-obsidian.py")
-        .display()
-        .to_string()];
+    let mut argv = vec![
+        "exec".into(),
+        PYTHON_KEY.into(),
+        "--".into(),
+        "python".into(),
+        product
+            .join("scripts/claude-obsidian.py")
+            .display()
+            .to_string(),
+    ];
     argv.extend(args);
-    CommandSpec::new("python", argv)
+    CommandSpec::new("mise", argv)
 }
 
 fn approve_plan(plan: &ReviewedPlan, yes: bool) -> Result<bool> {
@@ -312,9 +318,9 @@ fn ensure_pi_ignored(
     yes: bool,
 ) -> Result<bool> {
     let path = vault.join(".gitignore");
-    let before = match fs::read(&path) {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+    let (before, existed) = match fs::read(&path) {
+        Ok(content) => (content, true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), false),
         Err(error) => return Err(error).with_context(|| format!("cannot read {}", path.display())),
     };
     let before_text = std::str::from_utf8(&before)
@@ -331,8 +337,8 @@ fn ensure_pi_ignored(
         "schema": "claude-obsidian.transaction.v1",
         "operation_id": format!("loom-pi-ignore-{}", std::process::id()),
         "operation_type": "setup",
-        "expected_hashes": {".gitignore": if before.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(sha256(&before)) }},
-        "writes": [{"path": ".gitignore", "mode": if before.is_empty() {"create"} else {"replace"}, "content": after, "sha256": sha256(after.as_bytes())}],
+        "expected_hashes": {".gitignore": if existed { serde_json::Value::String(sha256(&before)) } else { serde_json::Value::Null }},
+        "writes": [{"path": ".gitignore", "mode": if existed {"replace"} else {"create"}, "content": after, "sha256": sha256(after.as_bytes())}],
         "address_requests": [],
         "source_manifest_updates": {}
     });
@@ -412,6 +418,62 @@ fn has_project_packages(listed: &str, product: &Path, feynman: bool) -> bool {
                 .any(|line| line.starts_with("npm:@companion-ai/feynman@")))
 }
 
+fn stale_core_sources(vault: &Path, product: &Path) -> Result<Vec<String>> {
+    let settings_path = vault.join(".pi/settings.json");
+    let content = match fs::read_to_string(&settings_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("cannot read {}", settings_path.display()));
+        }
+    };
+    let settings: serde_json::Value = serde_json::from_str(&content)
+        .with_context(|| format!("invalid Pi settings: {}", settings_path.display()))?;
+    let current = product
+        .canonicalize()
+        .unwrap_or_else(|_| product.to_path_buf());
+    Ok(settings["packages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|source| source.as_str())
+        .filter(|source| source.contains("github-agrici-daniel-claude-obsidian"))
+        .filter(|source| {
+            let path = Path::new(source);
+            let resolved = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                vault.join(".pi").join(path)
+            };
+            resolved.canonicalize().unwrap_or(resolved) != current
+        })
+        .map(str::to_owned)
+        .collect())
+}
+
+fn prune_stale_core_sources(vault: &Path, stale: &[String]) -> Result<()> {
+    if stale.is_empty() {
+        return Ok(());
+    }
+    let path = vault.join(".pi/settings.json");
+    let mut settings: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path)?)
+        .with_context(|| format!("invalid Pi settings: {}", path.display()))?;
+    let packages = settings["packages"]
+        .as_array_mut()
+        .context("Pi settings packages must be an array")?;
+    packages.retain(|source| {
+        source
+            .as_str()
+            .is_none_or(|source| !stale.iter().any(|stale| stale == source))
+    });
+    let temporary = path.with_extension(format!("json.tmp-{}", std::process::id()));
+    let mut content = serde_json::to_vec_pretty(&settings)?;
+    content.push(b'\n');
+    fs::write(&temporary, content)?;
+    fs::rename(&temporary, &path)?;
+    Ok(())
+}
+
 fn feynman_spec() -> Result<String> {
     crate::app::load_catalog()?
         .resources
@@ -430,19 +492,32 @@ fn install_packages(
     let core = product.display().to_string();
     run_checked(
         system,
-        &CommandSpec::new("pi", ["install", "-l", &core]).in_dir(vault),
+        &CommandSpec::new("pi", ["install", "-l", "--approve", &core]).in_dir(vault),
     )?;
     if feynman {
         let spec = feynman_spec()?;
         run_checked(
             system,
-            &CommandSpec::new("pi", ["install", "-l", &spec]).in_dir(vault),
+            &CommandSpec::new("pi", ["install", "-l", "--approve", &spec]).in_dir(vault),
         )?;
     }
-    let listed = run_checked(system, &CommandSpec::new("pi", ["list"]).in_dir(vault))?;
+    let listed = run_checked(
+        system,
+        &CommandSpec::new("pi", ["list", "--approve"]).in_dir(vault),
+    )?;
     anyhow::ensure!(
         has_project_packages(&listed, product, feynman),
         "Pi did not report the exact selected packages under Project packages; rerun `loom wiki` and choose Repair"
+    );
+    let stale = stale_core_sources(vault, product)?;
+    prune_stale_core_sources(vault, &stale)?;
+    let listed = run_checked(
+        system,
+        &CommandSpec::new("pi", ["list", "--approve"]).in_dir(vault),
+    )?;
+    anyhow::ensure!(
+        has_project_packages(&listed, product, feynman),
+        "removing a stale core reference disturbed the current Vault packages; rerun `loom wiki` and choose Repair"
     );
     Ok(())
 }
@@ -451,7 +526,10 @@ fn offer_global_feynman_migration(system: &dyn System, vault: &Path, yes: bool) 
     if yes {
         return Ok(()); // scripted setup never removes an existing global package
     }
-    let listed = run_checked(system, &CommandSpec::new("pi", ["list"]).in_dir(vault))?;
+    let listed = run_checked(
+        system,
+        &CommandSpec::new("pi", ["list", "--approve"]).in_dir(vault),
+    )?;
     let global = listed
         .split("Project packages:")
         .next()
@@ -502,6 +580,27 @@ fn absolute_vault_target(system: &dyn System, path: &Path, create: bool) -> Resu
     Ok(parent.join(name))
 }
 
+fn canonicalize_with_missing_tail(path: &Path) -> PathBuf {
+    let mut existing = path.to_path_buf();
+    let mut missing = Vec::new();
+    while !existing.exists() {
+        let Some(name) = existing.file_name().map(ToOwned::to_owned) else {
+            return path.to_path_buf();
+        };
+        missing.push(name);
+        if !existing.pop() {
+            return path.to_path_buf();
+        }
+    }
+    let Ok(mut canonical) = existing.canonicalize() else {
+        return path.to_path_buf();
+    };
+    for name in missing.into_iter().rev() {
+        canonical.push(name);
+    }
+    canonical
+}
+
 fn registry_match_path(system: &dyn System, registry: &WikiRegistry, path: &Path) -> PathBuf {
     let candidate = if path.is_absolute() {
         path.to_path_buf()
@@ -511,7 +610,7 @@ fn registry_match_path(system: &dyn System, registry: &WikiRegistry, path: &Path
             .unwrap_or_else(|| PathBuf::from("."))
             .join(path)
     };
-    let candidate = candidate.canonicalize().unwrap_or(candidate);
+    let candidate = canonicalize_with_missing_tail(&candidate);
     registry
         .vaults
         .iter()
@@ -691,7 +790,7 @@ pub fn status_registered(system: &(dyn System + Sync)) -> bool {
             .as_ref()
             .is_some_and(|root| doctor_ok(system, root, &record.path));
         let packages = system
-            .run_probe(&CommandSpec::new("pi", ["list"]).in_dir(&record.path))
+            .run_probe(&CommandSpec::new("pi", ["list", "--approve"]).in_dir(&record.path))
             .ok()
             .filter(|result| result.success)
             .map(|result| result.stdout)
@@ -1166,10 +1265,11 @@ mod tests {
                 && command.args.first().map(String::as_str) == Some("where")
             {
                 "/product/claude-obsidian\n".into()
-            } else if command.program == "pi" && command.args == ["list"] {
-                "Project packages:\n  /product/claude-obsidian\n  npm:@companion-ai/feynman@0.3.47\n".into()
-            } else if command.program == "python" && command.args.iter().any(|arg| arg == "doctor")
+            } else if command.program == "pi"
+                && command.args.first().map(String::as_str) == Some("list")
             {
+                "Project packages:\n  /product/claude-obsidian\n  npm:@companion-ai/feynman@0.3.47\n".into()
+            } else if command.program == "mise" && command.args.iter().any(|arg| arg == "doctor") {
                 r#"{"schema":"claude-obsidian.doctor.v1","ok":true}"#.into()
             } else {
                 String::new()
@@ -1192,7 +1292,12 @@ mod tests {
     fn repair_runs_pinned_packages_in_the_vault_working_directory() {
         let home = temp("repair");
         let vault = home.join("vault");
-        fs::create_dir_all(&vault).unwrap();
+        fs::create_dir_all(vault.join(".pi")).unwrap();
+        fs::write(
+            vault.join(".pi/settings.json"),
+            r#"{"packages":["../../mise/installs/github-agrici-daniel-claude-obsidian/old"]}"#,
+        )
+        .unwrap();
         let mut registry = WikiRegistry::default();
         registry.register(vault.clone(), true);
         registry.save(&home).unwrap();
@@ -1210,6 +1315,15 @@ mod tests {
         assert!(commands
             .iter()
             .all(|command| command.cwd.as_deref() == Some(vault.as_path())));
+        assert!(!commands
+            .iter()
+            .any(|command| command.args.first().map(String::as_str) == Some("remove")));
+        assert!(commands
+            .iter()
+            .filter(|command| command.program == "pi")
+            .all(|command| command.args.iter().any(|arg| arg == "--approve")));
+        let settings = fs::read_to_string(vault.join(".pi/settings.json")).unwrap();
+        assert!(!settings.contains("github-agrici-daniel-claude-obsidian/old"));
         fs::remove_dir_all(home).unwrap();
     }
 
@@ -1337,6 +1451,8 @@ mod tests {
                     let operation: serde_json::Value =
                         serde_json::from_slice(&fs::read(bundle).unwrap()).unwrap();
                     assert_eq!(operation["operation_type"], "setup");
+                    assert_eq!(operation["writes"][0]["mode"], "replace");
+                    assert_eq!(operation["expected_hashes"][".gitignore"], sha256(&[]));
                     let vault_index = command
                         .args
                         .iter()
@@ -1362,7 +1478,7 @@ mod tests {
         let home = temp("ignore-review");
         let vault = home.join("vault");
         fs::create_dir_all(&vault).unwrap();
-        fs::write(vault.join(".gitignore"), ".vault-meta/\n").unwrap();
+        fs::write(vault.join(".gitignore"), "").unwrap();
         fs::write(vault.join("note.md"), "keep me").unwrap();
         let system = TransactionSystem {
             commands: Mutex::new(Vec::new()),
@@ -1381,6 +1497,16 @@ mod tests {
             .windows(2)
             .any(|pair| pair == ["--approved-plan-sha256", "ignore-hash"]));
         fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn upstream_python_commands_use_the_selected_mise_runtime() {
+        let command = python_command(
+            Path::new("/product"),
+            vec!["doctor".into(), "--vault".into(), "/vault".into()],
+        );
+        assert_eq!(command.program, "mise");
+        assert_eq!(&command.args[..4], ["exec", PYTHON_KEY, "--", "python"]);
     }
 
     #[test]
@@ -1417,6 +1543,18 @@ mod tests {
         fs::write(&path, [0xff, 0xfe]).unwrap();
         assert!(WikiRegistry::load(&home).is_err());
         fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn missing_paths_canonicalize_their_existing_parent() {
+        let root = temp("missing-canonical-parent");
+        fs::create_dir_all(&root).unwrap();
+        let requested = root.join("missing/vault");
+        assert_eq!(
+            canonicalize_with_missing_tail(&requested),
+            root.canonicalize().unwrap().join("missing/vault")
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

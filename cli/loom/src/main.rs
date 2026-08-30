@@ -274,6 +274,7 @@ fn run_uninstall(args: UninstallArgs, system: &RealSystem) -> Result<bool> {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let system = RealSystem::default();
+    loom::System::refresh_path(&system);
     if let Some(home) = loom::System::home_dir(&system) {
         loom::ownership::record_bootstrap_from_env(&home).map_err(anyhow::Error::msg)?;
     }
