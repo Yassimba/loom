@@ -6,7 +6,7 @@ use loom::init::{run_init, sync_projects, DomainLayout, Editor, InitOptions, Tra
 use loom::status::run_status;
 use loom::ui::{Mark, Out};
 use loom::update::run_updates;
-use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope};
+use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope, UninstallOptions};
 
 #[derive(Parser)]
 #[command(
@@ -26,6 +26,8 @@ enum Command {
     Setup(SelectionArgs),
     /// Add one or more capabilities
     Add(SelectionArgs),
+    /// Remove Loom-owned resources
+    Uninstall(UninstallArgs),
     /// Update installed managers, packages, plugins, and this CLI
     Update {
         /// Apply updates without confirmation
@@ -84,6 +86,34 @@ enum Command {
 }
 
 #[derive(Args, Default)]
+struct UninstallArgs {
+    /// Remove a named owned skill; repeat for multiple skills
+    #[arg(long = "skill", conflicts_with = "all")]
+    skills: Vec<String>,
+    /// Remove a named owned Pi package; repeat for multiple packages
+    #[arg(long = "pi-package", conflicts_with = "all")]
+    pi_packages: Vec<String>,
+    /// Remove a named owned Herdr plugin; repeat for multiple plugins
+    #[arg(long = "herdr-plugin", conflicts_with = "all")]
+    herdr_plugins: Vec<String>,
+    /// Remove a named owned tool; repeat for multiple tools
+    #[arg(long = "tool", conflicts_with = "all")]
+    tools: Vec<String>,
+    /// Select every visible owned resource
+    #[arg(long)]
+    all: bool,
+    /// Apply the displayed removal plan without confirmation
+    #[arg(long)]
+    yes: bool,
+    /// Show the removal plan without making changes
+    #[arg(long)]
+    dry_run: bool,
+    /// Delete modified Loom-owned content; requires --yes in scripts
+    #[arg(long, requires = "yes")]
+    force_modified: bool,
+}
+
+#[derive(Args, Default)]
 struct SelectionArgs {
     /// Install a named shared skill; repeat for multiple skills
     #[arg(long = "skill")]
@@ -125,7 +155,7 @@ fn completion_command(catalog: &Catalog) -> clap::Command {
         )
     };
     let mut command = Cli::command();
-    for name in ["setup", "add"] {
+    for name in ["setup", "add", "uninstall"] {
         command = command.mut_subcommand(name, |sub| {
             sub.mut_arg("skills", |arg| {
                 arg.value_parser(values(ResourceKind::Skill))
@@ -176,9 +206,40 @@ fn run_selection(
     )
 }
 
+fn run_uninstall(args: UninstallArgs, system: &RealSystem) -> Result<bool> {
+    let catalog = load_catalog()?;
+    let selectors = Selectors {
+        skills: args.skills,
+        pi_packages: args.pi_packages,
+        herdr_plugins: args.herdr_plugins,
+        tools: args.tools,
+    };
+    let selected = if selectors.is_empty() {
+        Vec::new()
+    } else {
+        loom::app::resolve_selectors(&catalog, &selectors)?
+            .into_iter()
+            .map(|resource| resource.id)
+            .collect()
+    };
+    loom::uninstall::run_uninstall(
+        system,
+        &UninstallOptions {
+            selected,
+            all: args.all,
+            yes: args.yes,
+            dry_run: args.dry_run,
+            force_modified: args.force_modified,
+        },
+    )
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let system = RealSystem::default();
+    if let Some(home) = loom::System::home_dir(&system) {
+        loom::ownership::record_bootstrap_from_env(&home).map_err(anyhow::Error::msg)?;
+    }
     // Bare `loom` is the guided setup — one less word to teach.
     let command = cli
         .command
@@ -186,6 +247,7 @@ fn main() -> Result<()> {
     let success = match command {
         Command::Setup(args) => run_selection(SelectionMode::Setup, args, true, &system)?,
         Command::Add(args) => run_selection(SelectionMode::Add, args, false, &system)?,
+        Command::Uninstall(args) => run_uninstall(args, &system)?,
         Command::Status => run_status(&system),
         Command::Sync => {
             let out = Out::detect();
@@ -228,7 +290,13 @@ fn main() -> Result<()> {
                 (_, true) => Some(false),
                 _ => None,
             };
-            run_init(
+            let home = loom::System::home_dir(&system)
+                .ok_or_else(|| anyhow::anyhow!("home directory is unavailable"))?;
+            let current = loom::System::current_dir(&system)
+                .ok_or_else(|| anyhow::anyhow!("current directory is unavailable"))?;
+            let project = loom::project_root(&current);
+            let before = loom::ownership::snapshot_project(&project);
+            let ok = run_init(
                 &system,
                 &InitOptions {
                     python: flag(python, no_python),
@@ -242,7 +310,12 @@ fn main() -> Result<()> {
                     yes,
                     force,
                 },
-            )?
+            )?;
+            if ok {
+                loom::ownership::record_project_changes(&home, before)
+                    .map_err(anyhow::Error::msg)?;
+            }
+            ok
         }
         Command::Completions { shell } => {
             print_completions(shell)?;
@@ -294,7 +367,7 @@ mod tests {
         };
 
         let command = completion_command(&catalog);
-        for name in ["setup", "add"] {
+        for name in ["setup", "add", "uninstall"] {
             let subcommand = command
                 .get_subcommands()
                 .find(|subcommand| subcommand.get_name() == name)

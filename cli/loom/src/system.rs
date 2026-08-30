@@ -26,6 +26,15 @@ pub trait System {
     fn command_exists(&self, name: &str) -> bool;
     fn refresh_path(&self);
     fn run(&self, command: &CommandSpec) -> Result<CommandResult>;
+    fn spawn_detached(&self, command: &CommandSpec) -> Result<()> {
+        let result = self.run(command)?;
+        anyhow::ensure!(
+            result.success,
+            "{}",
+            crate::install::command_failure_message(&result)
+        );
+        Ok(())
+    }
     fn run_probe(&self, command: &CommandSpec) -> Result<CommandResult> {
         self.run_controlled(command, PROBE_COMMAND_TIMEOUT, &AtomicBool::new(false))
     }
@@ -235,6 +244,16 @@ impl System for RealSystem {
 
     fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
         self.run_controlled(command, MANAGER_COMMAND_TIMEOUT, &AtomicBool::new(false))
+    }
+
+    fn spawn_detached(&self, command: &CommandSpec) -> Result<()> {
+        command_for(&self.path_value(), command)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .with_context(|| format!("could not start {}", command.program))?;
+        Ok(())
     }
 
     fn run_controlled(

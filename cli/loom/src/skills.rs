@@ -12,7 +12,6 @@ pub const TARBALL_URL: &str = "https://codeload.github.com/Yassimba/loom/tar.gz/
 
 const OPENCODE_PLUGIN_SOURCE: &str = "manifest/opencode/plugins/loom-session-env.js";
 const OPENCODE_PLUGIN_NAME: &str = "loom-session-env.js";
-const SKILL_PROJECTS_REGISTRY: &str = "skill-projects.json";
 
 /// A user-facing skill destination. `AgentsStandard` is the portable
 /// `.agents/skills` tree used directly by several hosts.
@@ -204,78 +203,53 @@ pub(crate) fn opencode_adapter_path(home: &Path) -> PathBuf {
         .join(OPENCODE_PLUGIN_NAME)
 }
 
-fn skill_projects_registry(home: &Path) -> PathBuf {
-    home.join(".config")
-        .join("loom")
-        .join(SKILL_PROJECTS_REGISTRY)
-}
-
 pub(crate) fn read_skill_projects(home: &Path) -> Result<Vec<PathBuf>, String> {
-    let path = skill_projects_registry(home);
-    let raw = match fs::read_to_string(&path) {
-        Ok(raw) => raw,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(format!("could not read {}: {error}", path.display())),
-    };
-    serde_json::from_str(&raw)
-        .map_err(|error| format!("could not parse {}: {error}", path.display()))
-}
-
-fn write_skill_projects(home: &Path, projects: &[PathBuf]) -> Result<(), String> {
-    let path = skill_projects_registry(home);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-    }
-    let json = serde_json::to_string_pretty(projects).map_err(|error| error.to_string())?;
-    fs::write(&path, format!("{json}\n"))
-        .map_err(|error| format!("could not write {}: {error}", path.display()))
+    let state = crate::ownership::InstallState::load(home)?;
+    let mut projects = state
+        .resources
+        .values()
+        .filter(|resource| {
+            resource.id.contains("skill:")
+                && matches!(
+                    &resource.scope,
+                    crate::ownership::OwnershipScope::Project { .. }
+                )
+        })
+        .filter_map(|resource| match &resource.scope {
+            crate::ownership::OwnershipScope::Project { root } => Some(root.clone()),
+            crate::ownership::OwnershipScope::Global => None,
+        })
+        .collect::<Vec<_>>();
+    projects.sort();
+    projects.dedup();
+    Ok(projects)
 }
 
 fn is_real_directory(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
 }
 
-fn register_skill_project(home: &Path, project: &Path) -> Result<(), String> {
+fn register_skill_project(_home: &Path, project: &Path) -> Result<(), String> {
     if !is_real_directory(project) {
         return Err(format!(
             "refusing to register a missing or symlinked project: {}",
             project.display()
         ));
     }
-    let mut projects = read_skill_projects(home)?;
-    if !projects.iter().any(|candidate| candidate == project) {
-        projects.push(project.to_path_buf());
-        write_skill_projects(home, &projects)?;
-    }
     Ok(())
 }
 
 pub(crate) fn prune_registered_skill_projects(home: &Path) -> Result<Vec<PathBuf>, String> {
     let mut registered = read_skill_projects(home)?;
-    registered.sort();
-    registered.dedup();
-    let before_prune = registered.clone();
     registered.retain(|root| is_real_directory(root));
-    if registered != before_prune {
-        write_skill_projects(home, &registered)?;
-    }
     Ok(registered)
 }
 
 pub(crate) fn registered_skill_projects(
     home: &Path,
-    current: &Path,
+    _current: &Path,
 ) -> Result<Vec<PathBuf>, String> {
-    let registered = prune_registered_skill_projects(home)?;
-
-    // Keep refreshing a legacy/current project tree without claiming Loom
-    // installed it. Only project-scoped installs add roots to the registry.
-    let mut visited = registered;
-    let current = project_root(current);
-    if is_real_directory(&current) {
-        visited.push(current);
-    }
+    let mut visited = prune_registered_skill_projects(home)?;
     visited.sort();
     visited.dedup();
     Ok(visited)
@@ -740,27 +714,6 @@ mod tests {
         fs::remove_dir_all(&home).ok();
     }
 
-    #[test]
-    fn project_skill_registry_deduplicates_and_prunes_missing_roots() {
-        let home = temp_home("project-registry");
-        let first = home.join("first");
-        let second = home.join("second");
-        fs::create_dir_all(&first).unwrap();
-        fs::create_dir_all(&second).unwrap();
-        register_skill_project(&home, &first).unwrap();
-        register_skill_project(&home, &second).unwrap();
-        register_skill_project(&home, &first).unwrap();
-        fs::remove_dir_all(&second).unwrap();
-
-        let third = home.join("third");
-        fs::create_dir_all(&third).unwrap();
-        let projects = registered_skill_projects(&home, &third).unwrap();
-
-        assert_eq!(projects, [first.clone(), third]);
-        assert_eq!(read_skill_projects(&home).unwrap(), [first]);
-        fs::remove_dir_all(&home).ok();
-    }
-
     #[cfg(unix)]
     #[test]
     fn project_install_rejects_a_symlink_before_writing() {
@@ -824,16 +777,28 @@ mod tests {
     }
 
     #[test]
-    fn malformed_project_registry_is_preserved() {
-        let home = temp_home("project-registry-malformed");
-        let path = skill_projects_registry(&home);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, "not json\n").unwrap();
+    fn project_roots_come_from_the_ownership_ledger() {
+        let home = temp_home("project-ledger");
+        let project = home.join("project");
+        fs::create_dir_all(&project).unwrap();
+        let mut state = crate::ownership::InstallState {
+            schema_version: 1,
+            resources: std::collections::BTreeMap::new(),
+        };
+        state.record(crate::ownership::OwnedResource {
+            id: format!("project:{}:skill:tdd", project.display()),
+            scope: crate::ownership::OwnershipScope::Project {
+                root: project.clone(),
+            },
+            depends_on: Vec::new(),
+            receipts: Vec::new(),
+        });
+        state.save(&home).unwrap();
 
-        let error = registered_skill_projects(&home, &home.join("current")).unwrap_err();
-
-        assert!(error.contains("could not parse"));
-        assert_eq!(fs::read_to_string(&path).unwrap(), "not json\n");
+        assert_eq!(
+            registered_skill_projects(&home, &home).unwrap(),
+            vec![project]
+        );
         fs::remove_dir_all(&home).ok();
     }
 

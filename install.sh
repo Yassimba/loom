@@ -21,7 +21,9 @@ esac
 command -v curl >/dev/null 2>&1 || { echo "$NAME: curl is required" >&2; exit 1; }
 
 # 1. mise — the only thing this script installs itself.
+mise_installed=0
 if ! command -v mise >/dev/null 2>&1; then
+  mise_installed=1
   echo "$NAME: installing mise (https://mise.jdx.dev)..."
   curl -fsSL --retry 5 --retry-delay 3 https://mise.run | sh
   export PATH="${HOME}/.local/bin:${PATH}"
@@ -89,6 +91,8 @@ if [ -n "$profile" ]; then
     printf '\n%s\n' "$activate" >> "$profile"
     echo "$NAME: added mise activation to $profile"
     activation_added=1
+    export LOOM_BOOTSTRAP_ACTIVATION_PATH="$profile"
+    export LOOM_BOOTSTRAP_ACTIVATION_LINE="$activate"
   fi
 else
   echo ""
@@ -109,6 +113,11 @@ finish() {
 # CI may point this handoff at the checked-out binary while keeping the real
 # bootstrap and manifest path intact.
 run_loom_setup() {
+  export LOOM_BOOTSTRAP=1
+  export LOOM_BOOTSTRAP_MISE_INSTALLED="$mise_installed"
+  export LOOM_BOOTSTRAP_MISE_ROOT="$(mise data dir)"
+  export LOOM_BOOTSTRAP_MISE_EXECUTABLE="$mise_bin"
+  export LOOM_BOOTSTRAP_MISE_MANAGER="direct"
   if [ -n "${LOOM_E2E_LOOM_BIN:-}" ]; then
     "$LOOM_E2E_LOOM_BIN" setup "$@"
   else

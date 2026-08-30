@@ -118,7 +118,14 @@ impl Wizard {
     fn render_header(&self, frame: &mut Frame, area: Rect) {
         let title = Line::from(vec![
             Span::styled(
-                format!(" loom {}", self.model.mode.command()),
+                format!(
+                    " loom {}",
+                    if self.model.purpose == super::state::WizardPurpose::Uninstall {
+                        "uninstall"
+                    } else {
+                        self.model.mode.command()
+                    }
+                ),
                 Style::new().fg(ACCENT).bold(),
             ),
             Span::styled(
@@ -189,7 +196,13 @@ impl Wizard {
                     " ↑↓ move · ←→ column · space pick · / search · enter continue · ? keys"
                 }
                 Stage::Where(_) => " ↑↓ move · space toggle · enter continue · esc back",
-                Stage::Review { .. } => " enter install · ↑↓ scroll · esc back",
+                Stage::Review { .. } => {
+                    if self.model.purpose == super::state::WizardPurpose::Uninstall {
+                        " enter review removal · ↑↓ scroll · esc back"
+                    } else {
+                        " enter install · ↑↓ scroll · esc back"
+                    }
+                }
                 Stage::Install(stage) if stage.running && self.confirm_cancel => {
                     " press ctrl-c again to cancel · install may be partial"
                 }
@@ -260,8 +273,14 @@ impl Wizard {
             Stage::Where(_) => (true, "Next", true),
             Stage::Review { .. } => (
                 true,
-                "Install",
-                self.nothing_chosen() || self.plan().is_ok(),
+                if self.model.purpose == super::state::WizardPurpose::Uninstall {
+                    "Remove"
+                } else {
+                    "Install"
+                },
+                self.model.purpose == super::state::WizardPurpose::Uninstall
+                    || self.nothing_chosen()
+                    || self.plan().is_ok(),
             ),
             Stage::Install(stage) => (false, "Finish", stage.report.is_some()),
         }
@@ -531,7 +550,7 @@ impl Wizard {
             match self.item_state(*item) {
                 ItemState::Available => counts.available += 1,
                 ItemState::Picked => counts.picked += 1,
-                ItemState::Required(_) => counts.required += 1,
+                ItemState::Required(_) | ItemState::RequiredKeep(_) => counts.required += 1,
                 ItemState::Installed => counts.installed += 1,
                 ItemState::Unavailable(_) => counts.unavailable += 1,
             }
@@ -612,12 +631,21 @@ impl Wizard {
                         resource.description.clone(),
                     )
                 } else if let Some(parent) = self.required_note(*index) {
-                    (
-                        ON,
-                        Style::new().fg(OK).dim(),
-                        true,
-                        format!("needed by {parent}"),
-                    )
+                    if self.model.purpose == super::state::WizardPurpose::Uninstall {
+                        (
+                            OFF,
+                            Style::new().fg(WARN).dim(),
+                            true,
+                            format!("kept; required by {parent}"),
+                        )
+                    } else {
+                        (
+                            ON,
+                            Style::new().fg(OK).dim(),
+                            true,
+                            format!("needed by {parent}"),
+                        )
+                    }
                 } else {
                     let (mark, style) = mark_for(self.selected[*index]);
                     (mark, style, false, resource.description.clone())
@@ -887,6 +915,41 @@ impl Wizard {
         if self.nothing_chosen() {
             lines.push(Line::from(
                 "Nothing picked. Enter leaves without changes; esc goes back.",
+            ));
+        } else if self.model.purpose == super::state::WizardPurpose::Uninstall {
+            let selected = self.selection();
+            lines.push(heading("Remove", selected.len()));
+            for resource in selected {
+                lines.push(Line::from(vec![
+                    Span::styled("  - ", Style::new().fg(ERR).bold()),
+                    Span::raw(resource.label),
+                ]));
+            }
+            let kept = self
+                .model
+                .resources
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| !self.selected[*index] || self.required_note(*index).is_some())
+                .collect::<Vec<_>>();
+            if !kept.is_empty() {
+                lines.push(Line::from(""));
+                lines.push(heading("Keep", kept.len()));
+                for (index, resource) in kept {
+                    let note = self
+                        .required_note(index)
+                        .map_or_else(String::new, |parent| format!("  required by kept {parent}"));
+                    lines.push(Line::from(vec![
+                        Span::styled("  o ", Style::new().dim()),
+                        Span::raw(resource.label.clone()),
+                        Span::styled(note, Style::new().fg(WARN).dim()),
+                    ]));
+                }
+            }
+            lines.push(Line::from(""));
+            lines.push(Line::styled(
+                "Enter reviews content safety and removal. Esc goes back.",
+                Style::new().fg(OK),
             ));
         } else {
             let expanded = self.expanded_selection();

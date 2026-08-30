@@ -71,6 +71,7 @@ function Install-MiseRelease {
     if ($InstallDirectory -notin $UserEntries) {
       $NewUserPath = (@($InstallDirectory) + $UserEntries) -join ';'
       [Environment]::SetEnvironmentVariable("Path", $NewUserPath, [System.EnvironmentVariableTarget]::User)
+      $script:MisePathAdded = $true
     }
     $env:Path = "$InstallDirectory;" + $env:Path
   } finally {
@@ -79,19 +80,24 @@ function Install-MiseRelease {
 }
 
 # 1. mise - the only thing this script installs itself.
+$MiseInstalledByLoom = $false
+$MiseInstallMethod = ""
+$MisePathAdded = $false
 if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
+  $MiseInstalledByLoom = $true
   Write-Host "$Name`: installing mise (https://mise.jdx.dev)..."
   $installed = $false
   if (Get-Command winget -ErrorAction SilentlyContinue) {
     winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -eq 0) { $installed = $true }
+    if ($LASTEXITCODE -eq 0) { $installed = $true; $MiseInstallMethod = "winget" }
   }
   if (-not $installed -and (Get-Command scoop -ErrorAction SilentlyContinue)) {
     scoop install mise
-    if ($LASTEXITCODE -eq 0) { $installed = $true }
+    if ($LASTEXITCODE -eq 0) { $installed = $true; $MiseInstallMethod = "scoop" }
   }
   if (-not $installed) {
     Install-MiseRelease
+    $MiseInstallMethod = "direct"
     $installed = $true
   }
   # The nested PowerShell of the README one-liner keeps its pre-install PATH.
@@ -199,6 +205,15 @@ if ($ChangedProfiles.Count -gt 0) {
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 # CI may point this handoff at the checked-out binary while keeping the real
 # bootstrap and manifest path intact.
+$env:LOOM_BOOTSTRAP = "1"
+$env:LOOM_BOOTSTRAP_MISE_INSTALLED = if ($MiseInstalledByLoom) { "1" } else { "0" }
+$env:LOOM_BOOTSTRAP_MISE_ROOT = [string](mise data dir)
+$env:LOOM_BOOTSTRAP_MISE_EXECUTABLE = $MiseCommand
+$env:LOOM_BOOTSTRAP_MISE_MANAGER = $MiseInstallMethod
+$env:LOOM_BOOTSTRAP_MISE_PATH_ADDED = if ($MisePathAdded) { "1" } else { "0" }
+$env:LOOM_BOOTSTRAP_MISE_PATH_ENTRY = Split-Path -Parent $MiseCommand
+$env:LOOM_BOOTSTRAP_ACTIVATION_LINE = $Activation
+$env:LOOM_BOOTSTRAP_ACTIVATION_PATHS_JSON = ConvertTo-Json -Compress @($ChangedProfiles)
 Write-Host ""
 if ($env:LOOM_E2E_LOOM_BIN) {
   & $env:LOOM_E2E_LOOM_BIN setup @SetupArgs

@@ -100,6 +100,8 @@ fn model(status: PrerequisiteStatus) -> Model {
     let settings = test_settings();
     Model {
         mode: crate::app::SelectionMode::Add,
+        purpose: WizardPurpose::Install,
+        uninstall_dependencies: std::collections::BTreeMap::new(),
         resources: catalog(),
         installed: vec![false; catalog().len()],
         setting_states: vec![SettingState::NotApplied; settings.len()],
@@ -492,7 +494,7 @@ fn install_events_drive_the_install_screen_to_completion() {
     assert!(!wizard.install_running());
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
-        Some(Action::Exit(WizardOutcome::Installed(report, _))) if report.installed.len() == 1
+        Some(Action::Exit(WizardOutcome::Installed(report, _, _))) if report.installed.len() == 1
     ));
 }
 
@@ -803,4 +805,50 @@ fn narrow_terminals_render_one_column_without_panicking() {
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
     assert!(wizard.hits.groups.is_none());
     assert!(wizard.hits.list.is_some());
+}
+
+#[test]
+fn uninstall_starts_selected_and_locks_dependencies_of_kept_resources() {
+    let mut model = model(ready());
+    model.purpose = WizardPurpose::Uninstall;
+    model.resources.truncate(2);
+    model.installed.truncate(2);
+    let dependency = model.resources[0].id.clone();
+    let dependent = model.resources[1].id.clone();
+    model
+        .uninstall_dependencies
+        .insert(dependent, vec![dependency]);
+    let mut wizard = Wizard::new(model);
+
+    assert_eq!(wizard.selection().len(), 2);
+    wizard.selected[1] = false;
+
+    assert!(matches!(
+        wizard.item_state(Item::Resource(0)),
+        ItemState::RequiredKeep(_)
+    ));
+    assert!(wizard.selection().is_empty());
+}
+
+#[test]
+fn uninstall_review_renders_on_a_narrow_terminal() {
+    let mut model = model(ready());
+    model.purpose = WizardPurpose::Uninstall;
+    model.resources.truncate(2);
+    model.installed.truncate(2);
+    let mut wizard = Wizard::new(model);
+    press(&mut wizard, &[KeyCode::Enter]);
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(text.contains("Remove"));
+    assert!(text.contains("review"));
 }

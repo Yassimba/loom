@@ -11,13 +11,23 @@ use crate::{
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// Everything the wizard needs to know up front; pure data so tests can
 /// construct it without touching the file system.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WizardPurpose {
+    Install,
+    Uninstall,
+}
+
 pub struct Model {
     pub mode: crate::app::SelectionMode,
+    pub purpose: WizardPurpose,
+    /// Uninstall uses ownership IDs and their exact dependency edges.
+    pub uninstall_dependencies: BTreeMap<String, Vec<String>>,
     pub resources: Vec<Resource>,
     /// Per-resource flag: already present on this machine (plugin listed by
     /// `herdr plugin list`, package listed by `pi list`, skill in an agent
@@ -40,7 +50,8 @@ pub enum WizardOutcome {
     Cancelled,
     NothingSelected,
     DryRun(InstallPlan, Vec<String>),
-    Installed(InstallReport, Vec<String>),
+    Installed(InstallReport, Vec<String>, Vec<Resource>),
+    UninstallSelection(Vec<String>),
 }
 
 /// What the event loop must do after a key or mouse event.
@@ -61,6 +72,7 @@ pub(crate) enum ItemState {
     Available,
     Picked,
     Required(String),
+    RequiredKeep(String),
     Installed,
     Unavailable(String),
 }
@@ -145,6 +157,22 @@ impl ChooseStage {
             }
         }
     }
+}
+
+fn uninstall_requires(
+    resource: &str,
+    target: &str,
+    dependencies: &BTreeMap<String, Vec<String>>,
+    seen: &mut std::collections::BTreeSet<String>,
+) -> bool {
+    if !seen.insert(resource.to_owned()) {
+        return false;
+    }
+    dependencies.get(resource).is_some_and(|required| {
+        required.iter().any(|dependency| {
+            dependency == target || uninstall_requires(dependency, target, dependencies, seen)
+        })
+    })
 }
 
 fn clamp_step(cursor: usize, delta: isize, len: usize) -> usize {
@@ -276,8 +304,9 @@ impl Wizard {
             .map(|agent| model.skill_destination.agents.contains(agent))
             .collect();
         let skill_scope = model.skill_destination.scope;
+        let uninstalling = model.purpose == WizardPurpose::Uninstall;
         let mut wizard = Self {
-            selected: vec![false; model.resources.len()],
+            selected: vec![uninstalling; model.resources.len()],
             setting_on: vec![false; model.settings.len()],
             agent_on,
             skill_scope,
@@ -304,15 +333,23 @@ impl Wizard {
         self.model
             .resources
             .iter()
-            .zip(&self.selected)
-            .filter(|(_, on)| **on)
-            .map(|(resource, _)| resource.clone())
+            .enumerate()
+            .filter(|(index, _)| {
+                self.selected[*index]
+                    && (self.model.purpose == WizardPurpose::Install
+                        || self.required_note(*index).is_none())
+            })
+            .map(|(_, resource)| resource.clone())
             .collect()
     }
 
     /// The selection with skill dependencies pulled in.
     pub(crate) fn expanded_selection(&self) -> Vec<Resource> {
-        crate::expand_skill_dependencies(&self.model.resources, self.selection())
+        if self.model.purpose == WizardPurpose::Uninstall {
+            self.selection()
+        } else {
+            crate::expand_skill_dependencies(&self.model.resources, self.selection())
+        }
     }
 
     pub(crate) fn selected_settings(&self) -> Vec<SettingSpec> {
@@ -348,6 +385,9 @@ impl Wizard {
     }
 
     pub(crate) fn resource_installed(&self, index: usize) -> bool {
+        if self.model.purpose == WizardPurpose::Uninstall {
+            return false;
+        }
         let resource = &self.model.resources[index];
         if resource.kind == ResourceKind::Skill {
             let destination = self.skill_destination();
@@ -421,7 +461,13 @@ impl Wizard {
                         ItemState::Available
                     }
                 },
-                ItemState::Required,
+                |reason| {
+                    if self.model.purpose == WizardPurpose::Uninstall {
+                        ItemState::RequiredKeep(reason)
+                    } else {
+                        ItemState::Required(reason)
+                    }
+                },
             ),
             Item::Setting(index) if self.setting_applied(index) => ItemState::Installed,
             Item::Setting(index) if !self.setting_available(index) => {
@@ -524,6 +570,27 @@ impl Wizard {
     /// when `index` is neither installed nor directly selected. Locked rows:
     /// shown as selected, not deselectable while the parent stays picked.
     pub(crate) fn required_note(&self, index: usize) -> Option<String> {
+        if self.model.purpose == WizardPurpose::Uninstall {
+            if !self.selected[index] {
+                return None;
+            }
+            let target = &self.model.resources[index].id;
+            for (parent_index, kept) in self.selected.iter().enumerate() {
+                if *kept {
+                    continue;
+                }
+                let parent = &self.model.resources[parent_index];
+                if uninstall_requires(
+                    &parent.id,
+                    target,
+                    &self.model.uninstall_dependencies,
+                    &mut std::collections::BTreeSet::new(),
+                ) {
+                    return Some(parent.label.clone());
+                }
+            }
+            return None;
+        }
         if self.resource_installed(index) || self.selected[index] {
             return None;
         }
@@ -554,7 +621,7 @@ impl Wizard {
 
     /// Where only exists when skills are going somewhere.
     pub(crate) fn stage_visible(&self, index: usize) -> bool {
-        index != WHERE || self.has_skills()
+        index != WHERE || (self.model.purpose == WizardPurpose::Install && self.has_skills())
     }
 
     pub(crate) fn visible_stages(&self) -> Vec<usize> {
@@ -597,6 +664,14 @@ impl Wizard {
     fn confirm_review(&mut self) -> Option<Action> {
         if self.nothing_chosen() {
             return Some(Action::Exit(WizardOutcome::NothingSelected));
+        }
+        if self.model.purpose == WizardPurpose::Uninstall {
+            return Some(Action::Exit(WizardOutcome::UninstallSelection(
+                self.selection()
+                    .into_iter()
+                    .map(|resource| resource.id)
+                    .collect(),
+            )));
         }
         let Ok(plan) = self.plan() else {
             // The review screen explains why the plan cannot run; stay.
@@ -846,7 +921,11 @@ impl Wizard {
     fn exit_outcome(&self) -> WizardOutcome {
         if let Stage::Install(stage) = &self.stages[self.stage_index] {
             if let Some(report) = &stage.report {
-                return WizardOutcome::Installed(report.clone(), self.next_actions(report));
+                return WizardOutcome::Installed(
+                    report.clone(),
+                    self.next_actions(report),
+                    self.expanded_selection(),
+                );
             }
         }
         WizardOutcome::Cancelled
@@ -870,6 +949,7 @@ impl Wizard {
                 Action::Exit(WizardOutcome::Installed(
                     report.clone(),
                     self.next_actions(report),
+                    self.expanded_selection(),
                 ))
             }),
             Stage::Choose(_) => {

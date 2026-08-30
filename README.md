@@ -142,6 +142,20 @@ pi install git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe18
 
 `pi-chat` additionally needs QEMU and tmux, and therefore runs through WSL2 rather than native Windows. See the package README under [`plugins/`](plugins/) or its upstream repository for commands and configuration.
 
+## Uninstall Loom-managed resources
+
+Run `loom uninstall` to open the removal menu with every Loom-owned resource selected. Deselect anything you want to keep; Loom also keeps required dependencies.
+
+For scripted removal, use exact selectors or remove everything:
+
+```bash
+loom uninstall --skill tdd --pi-package add-dir --yes
+loom uninstall --all --yes
+loom uninstall --all --dry-run
+```
+
+Modified files are preserved unless an interactive run confirms their deletion or a script passes `--force-modified`. Project resources are limited to the current repository, and partial removal retains the ownership ledger.
+
 ## Repository layout
 
 - `skills/<name>/SKILL.md` — the reviewed shared skills. Category grouping lives in `skills.sh.json`.

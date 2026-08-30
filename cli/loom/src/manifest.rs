@@ -84,6 +84,15 @@ pub fn selected_keys(home: &std::path::Path) -> Vec<String> {
     keys
 }
 
+pub fn selection_contains(home: &std::path::Path, key: &str) -> bool {
+    fs::read_to_string(conf_d_target(home)).is_ok_and(|content| {
+        content
+            .lines()
+            .filter_map(line_key)
+            .any(|selected| current_key(selected) == current_key(key))
+    })
+}
+
 fn core_section(manifest: &str) -> Option<String> {
     let begin = manifest.find(CORE_BEGIN)?;
     let end = manifest[begin..].find(CORE_END)? + begin + CORE_END.len();
@@ -180,6 +189,39 @@ pub fn sync_selected_controlled(
     );
     system.refresh_path();
     Ok(target)
+}
+
+/// Remove keys from Loom's selection without touching the user's mise files.
+pub fn remove_selected(
+    system: &dyn System,
+    removed: &[String],
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Result<(), String> {
+    let home = system
+        .home_dir()
+        .ok_or_else(|| "home directory is unavailable".to_string())?;
+    let target = conf_d_target(&home);
+    let current = fs::read_to_string(&target)
+        .map_err(|error| format!("could not read {}: {error}", target.display()))?;
+    let keys = selected_keys(&home)
+        .into_iter()
+        .filter(|key| !removed.contains(key))
+        .collect::<Vec<_>>();
+    let content = render_selection(&current, &current, &keys)?;
+    fs::write(&target, content)
+        .map_err(|error| format!("could not write {}: {error}", target.display()))?;
+    let result = system
+        .run_controlled(
+            &CommandSpec::new("mise", ["prune", "--yes"]),
+            crate::system::MANAGER_COMMAND_TIMEOUT,
+            cancelled,
+        )
+        .map_err(|error| error.to_string())?;
+    if !result.success {
+        return Err(crate::install::command_failure_message(&result));
+    }
+    system.refresh_path();
+    Ok(())
 }
 
 /// Refresh pins for the existing selection without changing it.

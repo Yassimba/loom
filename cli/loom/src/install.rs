@@ -198,9 +198,8 @@ pub fn build_install_plan(
             .iter()
             .any(|resource| resource.kind == ResourceKind::HerdrPlugin);
 
-    // Selected manifest tools install through mise; a missing Pi rides along
-    // as a tool when mise is available (the manifest pins it), and only
-    // falls back to a global npm install on mise-less machines.
+    // Every runtime arrives through Loom's pinned mise selection. This gives
+    // uninstall one ownership path instead of hidden npm/curl fallbacks.
     let mut tools = resources
         .iter()
         .filter(|resource| resource.kind == ResourceKind::Tool)
@@ -208,23 +207,11 @@ pub fn build_install_plan(
             std::iter::once(tool.install_target.clone()).chain(tool.companions.iter().cloned())
         })
         .collect::<Vec<_>>();
-    let pi_via_mise = needs_pi && !status.pi && status.mise;
-    if pi_via_mise && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
+    if needs_pi && !status.pi && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
         tools.push(crate::manifest::PI_TOOL_KEY.into());
     }
-
-    if !(needs_pi && !status.pi && status.mise) && needs_pi {
-        anyhow::ensure!(
-            status.pi || status.npm,
-            "installing Pi needs npm, which is not on PATH; install Node.js first"
-        );
-        // Same preflight for the Node runtime itself: a too-old Node would
-        // make `npm install` fail with an opaque engines error mid-plan.
-        if !status.pi {
-            if let Some(warning) = status.node.warning() {
-                anyhow::bail!("installing Pi is blocked: {warning}");
-            }
-        }
+    if needs_herdr && !status.herdr && !tools.contains(&"herdr".to_string()) {
+        tools.push("herdr".into());
     }
 
     let mut prerequisites = Vec::new();
@@ -249,25 +236,6 @@ pub fn build_install_plan(
             // Verified inside the sync itself: `mise install` fails loudly.
             verification: None,
         });
-    }
-    if needs_pi && !status.pi && !pi_via_mise {
-        prerequisites.push(InstallStep {
-            target: "Pi".into(),
-            manager: "pi".into(),
-            action: StepAction::Command(CommandSpec::new(
-                "npm",
-                ["install", "--global", "@earendil-works/pi-coding-agent"],
-            )),
-            verification: None,
-        });
-    }
-    if needs_herdr && !status.herdr {
-        prerequisites.push(prerequisite_step(
-            "herdr",
-            platform,
-            "curl -fsSL https://herdr.dev/install.sh | sh",
-            "irm https://herdr.dev/install.ps1 | iex",
-        ));
     }
 
     let skills = resources
@@ -438,10 +406,10 @@ pub fn execute_install_plan_with_control(
     // of which manager finished first.
     let mut report = InstallReport::default();
     for (index, outcome) in outcomes.into_iter().enumerate() {
-        let (step, resource) = if index < plan.prerequisites.len() {
-            (&plan.prerequisites[index], false)
+        let step = if index < plan.prerequisites.len() {
+            &plan.prerequisites[index]
         } else {
-            (&plan.resources[index - plan.prerequisites.len()], true)
+            &plan.resources[index - plan.prerequisites.len()]
         };
         match outcome {
             Some(StepStatus::Failed(message) | StepStatus::Skipped(message)) => {
@@ -450,7 +418,7 @@ pub fn execute_install_plan_with_control(
                     message,
                 });
             }
-            Some(StepStatus::Installed) if resource => report.installed.push(step.target.clone()),
+            Some(StepStatus::Installed) => report.installed.push(step.target.clone()),
             _ => {}
         }
     }

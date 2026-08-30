@@ -209,20 +209,20 @@ fn missing_foundations_are_installed_before_selected_resources() {
 
     let plan = build_install_plan(&resources, &[], status, Platform::Windows).unwrap();
 
-    // Skills need no prerequisite manager — only Herdr goes in first.
     assert_eq!(
         plan.prerequisites
             .iter()
             .map(|step| step.action.display())
             .collect::<Vec<_>>(),
         vec![
-            "powershell -NoProfile -ExecutionPolicy Bypass -Command irm https://herdr.dev/install.ps1 | iex",
+            "powershell -NoProfile -ExecutionPolicy Bypass -Command winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements",
+            "add to the mise selection and install: herdr",
         ]
     );
 }
 
 #[test]
-fn selecting_a_pi_package_without_pi_or_npm_gives_an_actionable_error() {
+fn selecting_a_pi_package_without_pi_or_npm_uses_the_pinned_mise_runtime() {
     let resources = vec![resource(
         ResourceKind::PiPackage,
         "pi-package:@yassimba/pi-openai-fast",
@@ -236,11 +236,17 @@ fn selecting_a_pi_package_without_pi_or_npm_gives_an_actionable_error() {
         node: NodeStatus::Supported,
     };
 
-    let error = build_install_plan(&resources, &[], status, Platform::Unix).unwrap_err();
+    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
 
     assert_eq!(
-        error.to_string(),
-        "installing Pi needs npm, which is not on PATH; install Node.js first"
+        plan.prerequisites
+            .iter()
+            .map(|step| step.action.display())
+            .collect::<Vec<_>>(),
+        vec![
+            "sh -c curl -fsSL https://mise.run | sh",
+            "add to the mise selection and install: npm:@earendil-works/pi-coding-agent",
+        ]
     );
 }
 
@@ -264,8 +270,8 @@ fn explicitly_requested_runtimes_are_installed_without_dependent_resources() {
             .map(|step| step.action.display())
             .collect::<Vec<_>>(),
         vec![
-            "npm install --global @earendil-works/pi-coding-agent",
-            "sh -c curl -fsSL https://herdr.dev/install.sh | sh",
+            "sh -c curl -fsSL https://mise.run | sh",
+            "add to the mise selection and install: npm:@earendil-works/pi-coding-agent, herdr",
         ]
     );
 }
@@ -291,7 +297,7 @@ fn an_already_installed_runtime_request_is_a_no_op() {
 }
 
 #[test]
-fn an_outdated_node_blocks_a_fresh_pi_install_with_instructions() {
+fn an_outdated_node_is_replaced_by_the_pinned_mise_runtime() {
     let resources = vec![resource(
         ResourceKind::PiPackage,
         "pi-package:@yassimba/pi-openai-fast",
@@ -305,13 +311,13 @@ fn an_outdated_node_blocks_a_fresh_pi_install_with_instructions() {
         node: NodeStatus::TooOld(16, 3, 0),
     };
 
-    let error = build_install_plan(&resources, &[], status, Platform::Unix).unwrap_err();
+    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
 
-    assert_eq!(
-        error.to_string(),
-        "installing Pi is blocked: Node.js 16.3.0 is older than the 20.6.0 Pi needs — \
-         update it with your package manager"
-    );
+    assert!(plan.prerequisites.iter().any(|step| {
+        step.action
+            .display()
+            .contains("npm:@earendil-works/pi-coding-agent")
+    }));
 }
 
 #[test]

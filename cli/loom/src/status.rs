@@ -1,7 +1,7 @@
 use crate::ui::{tidy_path, Mark, Out};
-use crate::{skills, CommandSpec, InstallReport, System};
+use crate::{skills, CommandSpec, System};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Health {
@@ -86,53 +86,19 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
     healthy
 }
 
-const RESOURCE_REGISTRY: &str = ".config/loom/resources.json";
-
-fn resource_registry(home: &Path) -> PathBuf {
-    home.join(RESOURCE_REGISTRY)
-}
-
 fn read_selected_resources(home: &Path) -> Result<HashSet<String>, String> {
-    let path = resource_registry(home);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(HashSet::new()),
-        Err(error) => return Err(format!("could not read {}: {error}", path.display())),
-    };
-    serde_json::from_str::<Vec<String>>(&text)
-        .map(|items| items.into_iter().collect())
-        .map_err(|error| format!("could not parse {}: {error}", path.display()))
-}
-
-/// Remember successfully installed manager-owned resources so status can
-/// distinguish an optional manager from one that disappeared after setup.
-pub fn record_managed_resources(system: &dyn System, report: &InstallReport) -> Result<(), String> {
-    let installed = report
-        .installed
-        .iter()
-        .filter(|id| id.starts_with("pi-package:") || id.starts_with("herdr-plugin:"))
-        .cloned()
-        .collect::<Vec<_>>();
-    if installed.is_empty() {
-        return Ok(());
-    }
-    let Some(home) = system.home_dir() else {
-        return Err("home directory is unavailable".into());
-    };
-    let mut selected = read_selected_resources(&home)?;
-    let before = selected.len();
-    selected.extend(installed);
-    if selected.len() == before {
-        return Ok(());
-    }
-    let path = resource_registry(&home);
-    std::fs::create_dir_all(path.parent().expect("registry has a parent"))
-        .map_err(|error| format!("could not create {}: {error}", path.display()))?;
-    let mut selected = selected.into_iter().collect::<Vec<_>>();
-    selected.sort();
-    let text = serde_json::to_string_pretty(&selected).expect("resource ids serialize");
-    std::fs::write(&path, format!("{text}\n"))
-        .map_err(|error| format!("could not write {}: {error}", path.display()))
+    let state = crate::ownership::InstallState::load(home)?;
+    Ok(state
+        .resources
+        .values()
+        .filter(|resource| {
+            resource
+                .receipts
+                .iter()
+                .any(|receipt| matches!(receipt, crate::ownership::Receipt::Manager { .. }))
+        })
+        .map(|resource| resource.id.clone())
+        .collect())
 }
 
 fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
@@ -445,6 +411,7 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     struct HomeSystem(PathBuf);
 
@@ -481,54 +448,54 @@ mod tests {
             .find(|resource| resource.kind == crate::ResourceKind::PiPackage)
             .unwrap();
         let system = HomeSystem(root.clone());
-        record_managed_resources(
-            &system,
-            &InstallReport {
-                installed: vec![package.id],
-                failures: Vec::new(),
-            },
-        )
-        .unwrap();
+        let mut state = crate::ownership::InstallState {
+            schema_version: 1,
+            resources: std::collections::BTreeMap::new(),
+        };
+        state.record(crate::ownership::OwnedResource {
+            id: package.id,
+            scope: crate::ownership::OwnershipScope::Global,
+            depends_on: Vec::new(),
+            receipts: vec![crate::ownership::Receipt::Manager {
+                manager: "pi".into(),
+                target: "missing".into(),
+            }],
+        });
+        state.save(&root).unwrap();
 
         assert!(!print_managed_resources(&system, &Out::plain()));
         std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
-    fn installed_manager_resources_are_recorded_without_clobbering_errors() {
+    fn installed_manager_resources_are_read_from_the_ownership_ledger() {
         let root = std::env::temp_dir().join(format!(
-            "loom-resource-registry-{}-{}",
+            "loom-resource-ledger-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos()
         ));
-        let system = HomeSystem(root.clone());
-        record_managed_resources(
-            &system,
-            &InstallReport {
-                installed: vec!["pi-package:one".into(), "skill:ignored".into()],
-                failures: Vec::new(),
-            },
-        )
-        .unwrap();
+        let mut state = crate::ownership::InstallState {
+            schema_version: 1,
+            resources: std::collections::BTreeMap::new(),
+        };
+        state.record(crate::ownership::OwnedResource {
+            id: "pi-package:one".into(),
+            scope: crate::ownership::OwnershipScope::Global,
+            depends_on: Vec::new(),
+            receipts: vec![crate::ownership::Receipt::Manager {
+                manager: "pi".into(),
+                target: "one".into(),
+            }],
+        });
+        state.save(&root).unwrap();
+
         assert_eq!(
             read_selected_resources(&root).unwrap(),
             HashSet::from(["pi-package:one".into()])
         );
-
-        let path = resource_registry(&root);
-        std::fs::write(&path, "not json").unwrap();
-        assert!(record_managed_resources(
-            &system,
-            &InstallReport {
-                installed: vec!["herdr-plugin:two".into()],
-                failures: Vec::new(),
-            },
-        )
-        .is_err());
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "not json");
         std::fs::remove_dir_all(root).unwrap();
     }
 }

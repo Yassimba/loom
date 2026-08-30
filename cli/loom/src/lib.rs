@@ -4,12 +4,14 @@ pub mod init;
 mod install;
 mod jsonc;
 pub mod manifest;
+pub mod ownership;
 mod pi_compat;
 pub mod settings;
 mod skills;
 pub mod status;
 mod system;
 pub mod ui;
+pub mod uninstall;
 pub mod update;
 pub mod wizard;
 
@@ -20,8 +22,15 @@ pub use install::{
     InstallStep, NodeStatus, Platform, PrerequisiteStatus, Runtime, StepAction, StepStatus,
     VerificationSpec, PI_MIN_NODE,
 };
+pub use ownership::{
+    digest_path, InstallState, OwnedPathKind, OwnedResource, OwnershipScope, Receipt,
+};
 pub use skills::{
-    detect_skill_agents, detect_skill_trees, expand_skill_dependencies, SkillAgent,
+    detect_skill_agents, detect_skill_trees, expand_skill_dependencies, project_root, SkillAgent,
     SkillDestination, SkillScope,
 };
 pub use system::{CommandResult, RealSystem, System};
+pub use uninstall::{
+    build_uninstall_plan, execute_uninstall_plan, receipt_status, ReceiptStatus, UninstallFailure,
+    UninstallOptions, UninstallPlan, UninstallReport, UninstallRequest, UninstallStep,
+};

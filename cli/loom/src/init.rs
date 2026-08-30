@@ -816,39 +816,30 @@ fn render_fresh(base: &str, chosen: &[(&'static str, String)]) -> String {
     out
 }
 
-/// Machine-local list of projects init has scaffolded, so sync can walk
-/// them. Absolute paths, deduped; entries whose AGENTS.md vanished prune
-/// themselves on the next sync.
-fn registry_path(home: &Path) -> std::path::PathBuf {
-    home.join(".config").join("loom").join("projects.json")
-}
-
+/// Project roots come from the ownership ledger. The init receipt is written
+/// by the command boundary after every project mutation succeeds.
 fn read_registry(home: &Path) -> Vec<String> {
-    fs::read_to_string(registry_path(home))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+    let Ok(state) = crate::ownership::InstallState::load(home) else {
+        return Vec::new();
+    };
+    let mut projects = state
+        .resources
+        .values()
+        .filter_map(|resource| match &resource.scope {
+            crate::ownership::OwnershipScope::Project { root } => Some(root.display().to_string()),
+            crate::ownership::OwnershipScope::Global => None,
+        })
+        .collect::<Vec<_>>();
+    projects.sort();
+    projects.dedup();
+    projects
 }
 
-fn write_registry(home: &Path, projects: &[String]) -> Result<()> {
-    let path = registry_path(home);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(
-        &path,
-        format!("{}\n", serde_json::to_string_pretty(projects)?),
-    )?;
+fn write_registry(_home: &Path, _projects: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn register_project(home: &Path, project: &Path) -> Result<()> {
-    let entry = project.display().to_string();
-    let mut projects = read_registry(home);
-    if !projects.contains(&entry) {
-        projects.push(entry);
-        write_registry(home, &projects)?;
-    }
+fn register_project(_home: &Path, _project: &Path) -> Result<()> {
     Ok(())
 }
 
