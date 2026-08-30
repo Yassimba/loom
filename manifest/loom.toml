@@ -47,7 +47,7 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 "npm:@colbymchenry/codegraph" = "1.6.0"
 
 # code review TUI (annotate diffs, export to GitHub or clipboard)
-"github:agavra/tuicr" = "v0.22.0"
+"github:agavra/tuicr" = "v0.23.1"
 
 # browser-based plan and code review for coding agents
 "github:Yassimba/plannotator" = "v0.27.9-loom.1"
