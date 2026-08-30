@@ -148,8 +148,17 @@
     {
       "key": "github:AgriciDaniel/claude-obsidian",
       "label": "claude-obsidian",
-      "description": "An Obsidian vault as your agent's wiki: wiki-ingest, wiki-query, save, think, canvas, and the autoresearch loop, with a source-grounded Python core. By AgriciDaniel, MIT.",
-      "nextAction": "In Claude Code run `/plugin marketplace add AgriciDaniel/claude-obsidian` and `/plugin install claude-obsidian@agricidaniel-claude-obsidian`, then `/claude-obsidian:wiki`. Other agents load its skills from `$(mise where github:AgriciDaniel/claude-obsidian)/skills`."
+      "group": "Wiki",
+      "description": "An Obsidian Vault as Pi's project-local wiki: wiki-ingest, wiki-query, save, think, canvas, and autoresearch. By AgriciDaniel, MIT.",
+      "nextAction": "Run `loom wiki` to create or adopt a Vault.",
+      "windowsSupport": "wsl"
+    },
+    {
+      "key": "python",
+      "label": "python",
+      "description": "Exact-pinned Python runtime required by claude-obsidian.",
+      "nextAction": "Run `loom wiki` to configure a Vault.",
+      "bin": "python"
     }
   ]
 }

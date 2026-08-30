@@ -6,7 +6,9 @@ use loom::init::{run_init, sync_projects, DomainLayout, Editor, InitOptions, Tra
 use loom::status::run_status;
 use loom::ui::{Mark, Out};
 use loom::update::run_updates;
+use loom::wiki::{WikiOperation, WikiRequest};
 use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope, UninstallOptions};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -33,6 +35,11 @@ enum Command {
         /// Apply updates without confirmation
         #[arg(long)]
         yes: bool,
+    },
+    /// Create, adopt, and manage Pi Wiki Vaults
+    Wiki {
+        #[command(subcommand)]
+        command: Option<WikiCommand>,
     },
     /// Show installed agents, integrations, and runtime health
     Status,
@@ -83,6 +90,36 @@ enum Command {
     Sync,
     /// Print shell completions (skill/tool/package names included)
     Completions { shell: clap_complete::Shell },
+}
+
+#[derive(Subcommand)]
+enum WikiCommand {
+    /// Create a new Vault at an absent path
+    Create {
+        path: PathBuf,
+        #[arg(long)]
+        feynman: bool,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Adopt an existing Obsidian Vault
+    Adopt {
+        path: PathBuf,
+        #[arg(long)]
+        feynman: bool,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Check every registered Vault
+    Status,
+    /// Restore project-local Pi wiring without changing knowledge
+    Repair { path: PathBuf },
+    /// Stop managing a Vault without deleting it
+    Unregister { path: PathBuf },
+    /// Open a Vault in Obsidian
+    Open { path: PathBuf },
+    /// Launch Pi with the Vault as its working directory
+    Launch { path: PathBuf },
 }
 
 #[derive(Args, Default)]
@@ -248,7 +285,61 @@ fn main() -> Result<()> {
         Command::Setup(args) => run_selection(SelectionMode::Setup, args, true, &system)?,
         Command::Add(args) => run_selection(SelectionMode::Add, args, false, &system)?,
         Command::Uninstall(args) => run_uninstall(args, &system)?,
-        Command::Status => run_status(&system),
+        Command::Wiki { command } => match command {
+            None => loom::wiki::run_interactive(&system)?,
+            Some(command) => {
+                let request = match command {
+                    WikiCommand::Create { path, feynman, yes } => WikiRequest {
+                        operation: WikiOperation::Create,
+                        vault: path,
+                        feynman,
+                        yes,
+                    },
+                    WikiCommand::Adopt { path, feynman, yes } => WikiRequest {
+                        operation: WikiOperation::Adopt,
+                        vault: path,
+                        feynman,
+                        yes,
+                    },
+                    WikiCommand::Status => WikiRequest {
+                        operation: WikiOperation::Status,
+                        vault: PathBuf::new(),
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Repair { path } => WikiRequest {
+                        operation: WikiOperation::Repair,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Unregister { path } => WikiRequest {
+                        operation: WikiOperation::Unregister,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Open { path } => WikiRequest {
+                        operation: WikiOperation::Open,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Launch { path } => WikiRequest {
+                        operation: WikiOperation::Launch,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                };
+                loom::wiki::run_wiki(&request, &system)?
+            }
+        },
+        Command::Status => {
+            let core = run_status(&system);
+            let wiki = loom::wiki::status_registered(&system);
+            core && wiki
+        }
         Command::Sync => {
             let out = Out::detect();
             out.title("sync", "project AGENTS.md files");
@@ -323,14 +414,18 @@ fn main() -> Result<()> {
         }
         Command::Update { yes } => {
             if !yes
-                && !Confirm::new("Update skills, tools, Pi packages, Herdr, and project AGENTS.md?")
-                    .with_default(true)
-                    .prompt()?
+                && !Confirm::new(
+                    "Update skills, tools, Pi packages, Herdr, Wiki Vaults, and project AGENTS.md?",
+                )
+                .with_default(true)
+                .prompt()?
             {
                 println!("Cancelled; no changes made.");
                 true
             } else {
-                run_updates(&system, &load_catalog()?)
+                let updated = run_updates(&system, &load_catalog()?);
+                let wikis_updated = loom::wiki::update_registered(&system);
+                updated && wikis_updated
             }
         }
     };
@@ -430,6 +525,36 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn wiki_create_is_pi_only_and_scriptable() {
+        let cli = Cli::try_parse_from([
+            "loom",
+            "wiki",
+            "create",
+            "/tmp/knowledge",
+            "--feynman",
+            "--yes",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Wiki {
+                command: Some(WikiCommand::Create {
+                    feynman: true,
+                    yes: true,
+                    ..
+                })
+            })
+        ));
+    }
+
+    #[test]
+    fn wiki_has_unregister_but_no_delete_command() {
+        assert!(Cli::try_parse_from(["loom", "wiki", "unregister", "/tmp/vault"]).is_ok());
+        assert!(Cli::try_parse_from(["loom", "wiki", "delete", "/tmp/vault"]).is_err());
     }
 
     #[test]

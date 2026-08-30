@@ -125,6 +125,36 @@ pub fn install_selected(
 
     let resources =
         expand_skill_dependencies(&catalog.resources, resolve_selectors(catalog, selectors)?);
+    if resources.iter().any(|resource| resource.group == "Wiki") {
+        let feynman = resources
+            .iter()
+            .any(|resource| resource.install_target == "@companion-ai/feynman");
+        let generic = resources
+            .iter()
+            .filter(|resource| resource.group != "Wiki")
+            .cloned()
+            .collect::<Vec<_>>();
+        if dry_run {
+            let out = Out::detect();
+            out.title(mode.command(), "dry run");
+            if !generic.is_empty() {
+                let plan = build_install_plan(&generic, &[], status, platform, &destination)?;
+                print_plan(&out, &plan);
+            }
+            out.row(
+                Mark::Off,
+                "Wiki",
+                "would enter the Vault-scoped setup; no Vault changes made",
+            );
+            out.verdict(true, "Dry run; no changes made");
+            return Ok(true);
+        }
+        anyhow::ensure!(
+            generic.is_empty(),
+            "scripted Wiki selection cannot be mixed with global resources; run the selections separately or use the interactive wizard"
+        );
+        return crate::wiki::run_interactive_with_default(system, feynman);
+    }
     if platform == Platform::Windows {
         if let Some(resource) = resources.iter().find(|resource| resource.windows_wsl) {
             bail!(
@@ -323,10 +353,23 @@ fn run_interactive(
         WizardOutcome::UninstallSelection(_) => {
             anyhow::bail!("install wizard returned an uninstall selection")
         }
+        WizardOutcome::WikiSelection { feynman } => {
+            crate::wiki::run_interactive_with_default(system, feynman)
+        }
         WizardOutcome::Installed(mut report, actions, selected_resources) => {
+            let wiki_feynman = selected_resources
+                .iter()
+                .any(|resource| resource.install_target == "@companion-ai/feynman");
+            let has_wiki = selected_resources
+                .iter()
+                .any(|resource| resource.group == "Wiki");
+            let generic_resources = selected_resources
+                .into_iter()
+                .filter(|resource| resource.group != "Wiki")
+                .collect::<Vec<_>>();
             if let Err(message) = record_install_ownership(
                 system,
-                &selected_resources,
+                &generic_resources,
                 &ownership_destination,
                 &settings,
                 &setting_before,
@@ -350,6 +393,9 @@ fn run_interactive(
                 for action in SETUP_NEXT_ACTIONS {
                     out.next(action);
                 }
+            }
+            if has_wiki && report.failures.is_empty() {
+                return crate::wiki::run_interactive_with_default(system, wiki_feynman);
             }
             Ok(report.failures.is_empty())
         }

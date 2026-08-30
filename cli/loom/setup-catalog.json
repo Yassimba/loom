@@ -44,12 +44,14 @@
     {
       "id": "pi-package:@companion-ai/feynman",
       "kind": "pi-package",
-      "group": "Pi packages",
+      "group": "Wiki",
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "installTarget": "@companion-ai/feynman",
       "version": "0.3.47",
-      "nextAction": "Ask Pi to run /deepresearch on a scientific topic."
+      "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
+      "dependencies": ["github:AgriciDaniel/claude-obsidian"],
+      "windowsWsl": true
     },
     {
       "id": "pi-package:@ff-labs/pi-fff",
@@ -1073,12 +1075,36 @@
     {
       "id": "tool:claude-obsidian",
       "kind": "tool",
-      "group": "Tools",
+      "group": "Wiki",
       "label": "claude-obsidian",
-      "description": "An Obsidian vault as your agent's wiki: wiki-ingest, wiki-query, save, think, canvas, and the autoresearch loop, with a source-grounded Python core. By AgriciDaniel, MIT.",
+      "description": "An Obsidian Vault as Pi's project-local wiki: wiki-ingest, wiki-query, save, think, canvas, and autoresearch. By AgriciDaniel, MIT.",
       "installTarget": "github:AgriciDaniel/claude-obsidian",
-      "nextAction": "In Claude Code run `/plugin marketplace add AgriciDaniel/claude-obsidian` and `/plugin install claude-obsidian@agricidaniel-claude-obsidian`, then `/claude-obsidian:wiki`. Other agents load its skills from `$(mise where github:AgriciDaniel/claude-obsidian)/skills`.",
+      "nextAction": "Run `loom wiki` to create or adopt a Vault.",
       "bin": "claude-obsidian",
+      "companions": [],
+      "windowsWsl": true
+    },
+    {
+      "id": "tool:python",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "python",
+      "description": "Exact-pinned Python runtime required by claude-obsidian.",
+      "installTarget": "python",
+      "nextAction": "Run `loom wiki` to configure a Vault.",
+      "bin": "python",
+      "companions": []
+    },
+    {
+      "id": "tool:obsidian-guidance",
+      "kind": "tool",
+      "group": "Wiki",
+      "label": "Obsidian",
+      "description": "Optional desktop editor for a Vault. Loom provides official install guidance and never invokes an OS package manager.",
+      "installTarget": "wiki:obsidian-guidance",
+      "nextAction": "Open the Vault in Obsidian, or keep using Markdown and Pi without the desktop app.",
+      "dependencies": ["github:AgriciDaniel/claude-obsidian"],
+      "bin": "obsidian",
       "companions": []
     }
   ]

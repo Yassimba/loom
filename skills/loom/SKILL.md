@@ -9,6 +9,7 @@ Loom is the only installer:
 
 - Machine: `loom setup`
 - Repository: `loom init`
+- Pi Wiki Vault: `loom wiki`
 
 ## Run
 
@@ -22,13 +23,15 @@ Loom is the only installer:
    powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
    ```
 
-2. Use `loom setup`, `loom add`, `loom init`, `loom update`, or `loom status` for the requested boundary. Read `--help` for current selectors and flags instead of guessing them.
+2. Use `loom setup`, `loom add`, `loom init`, `loom wiki`, `loom update`, or `loom status` for the requested boundary. Read `--help` for current selectors and flags instead of guessing them.
 
 3. Bare `setup` and `add` need a real terminal. When acting for the user, pass explicit selectors and preview with `--dry-run`.
 
 4. For repository defaults, offer `loom init --yes`. Use explicit choices only when the user supplied them.
 
 5. After setup or add, report every next action from Loom. Offer each selected tool's official authentication or configuration command; explain it and ask before running it. Credentials stay with that tool.
+
+For Wiki work, use Create or Adopt explicitly. Loom reviews all portable Vault writes through `claude-obsidian`, keeps product code outside the Vault, and installs Pi packages below ignored `.pi/`. `loom wiki unregister <path>` removes only the machine-local registry record. Never describe it as deleting the Vault. Run `cd <vault> && pi` to keep wiki skills project-local. Native Windows uses WSL for Vault mutations; Obsidian remains optional.
 
 Native Windows: before setup, read [references/windows.md](references/windows.md).
 

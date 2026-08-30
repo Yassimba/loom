@@ -6,7 +6,8 @@
       "version": "0.3.47",
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
-      "nextAction": "Ask Pi to run /deepresearch on a scientific topic."
+      "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
+      "windowsSupport": "wsl"
     },
     {
       "name": "@ff-labs/pi-fff",

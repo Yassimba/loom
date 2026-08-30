@@ -142,6 +142,21 @@ pi install git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe18
 
 `pi-chat` additionally needs QEMU and tmux, and therefore runs through WSL2 rather than native Windows. See the package README under [`plugins/`](plugins/) or its upstream repository for commands and configuration.
 
+## Set up a Pi Wiki Vault
+
+Select **Wiki** in `loom setup` or `loom add`, or run `loom wiki`. Create uses a new path. Adopt requires an existing directory with `.obsidian/`. Loom shows each `claude-obsidian` plan and applies only its reviewed hash.
+
+Loom keeps exact-pinned Python and product code outside the Vault. It installs Pi packages in ignored, machine-local `.pi/` state. Optional Feynman stays project-local too. Obsidian is optional; Loom links only to the official download and never runs an OS package manager.
+
+```bash
+cd /path/to/Vault && pi
+loom wiki status
+loom wiki repair /path/to/Vault
+loom wiki unregister /path/to/Vault
+```
+
+`loom status` checks all registered Vaults. `loom update` refreshes each surviving Vault. Missing Vaults are reported and never recreated. Unregister removes only Loom's local record; it never deletes notes. Run Vault mutations inside WSL2 on Windows.
+
 ## Uninstall Loom-managed resources
 
 Run `loom uninstall` to open the removal menu with every Loom-owned resource selected. Deselect anything you want to keep; Loom also keeps required dependencies.

@@ -657,6 +657,75 @@ fn setup_starts_with_the_recommended_group() {
 }
 
 #[test]
+fn wiki_group_routes_to_the_vault_workflow_with_optional_feynman() {
+    let mut model = model(ready());
+    let mut obsidian = resource(ResourceKind::Tool, "Wiki", "Obsidian");
+    obsidian.dependencies = vec!["core-target".into()];
+    let mut core = resource(ResourceKind::Tool, "Wiki", "claude-obsidian");
+    core.install_target = "core-target".into();
+    let mut feynman = resource(ResourceKind::PiPackage, "Wiki", "feynman");
+    feynman.install_target = "@companion-ai/feynman".into();
+    feynman.dependencies = vec!["core-target".into()];
+    model.resources = vec![obsidian, core, feynman];
+    model.installed = vec![false; 3];
+    let mut wizard = Wizard::new(model);
+
+    assert_eq!(group_titles(&wizard)[1], "Wiki");
+    go_to_group(&mut wizard, "Wiki");
+    press(&mut wizard, &[KeyCode::Char(' '), KeyCode::Enter]);
+    assert_eq!(title(&wizard), "Review");
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::Exit(WizardOutcome::WikiSelection { feynman: true }))
+    ));
+}
+
+#[test]
+fn mixed_wiki_selection_installs_generic_resources_before_handoff() {
+    let mut model = model(ready());
+    model.resources = vec![
+        resource(ResourceKind::Tool, "Essentials", "generic"),
+        resource(ResourceKind::Tool, "Wiki", "claude-obsidian"),
+    ];
+    model.installed = vec![false; 2];
+    let mut wizard = Wizard::new(model);
+    wizard.selected = vec![true, true];
+
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert_eq!(title(&wizard), "Review");
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::StartInstall)
+    ));
+    let job = wizard.begin_install().unwrap();
+    assert_eq!(job.plan.prerequisites.len() + job.plan.resources.len(), 1);
+    assert!(job
+        .plan
+        .prerequisites
+        .iter()
+        .all(|step| !step.target.contains("claude-obsidian")));
+}
+
+#[test]
+fn wiki_dry_run_never_enters_the_mutating_handoff() {
+    let mut model = model(ready());
+    model.dry_run = true;
+    model.resources = vec![resource(ResourceKind::Tool, "Wiki", "claude-obsidian")];
+    model.installed = vec![false];
+    let mut wizard = Wizard::new(model);
+    wizard.selected[0] = true;
+
+    press(&mut wizard, &[KeyCode::Enter]);
+    match press(&mut wizard, &[KeyCode::Enter]) {
+        Some(Action::Exit(WizardOutcome::DryRun(plan, summary))) => {
+            assert!(plan.resources.is_empty());
+            assert!(summary.iter().any(|line| line.contains("no Vault changes")));
+        }
+        _ => panic!("expected a non-mutating dry-run outcome"),
+    }
+}
+
+#[test]
 fn modal_overlays_consume_mouse_and_scroll_input() {
     let mut wizard = wizard();
     let mut terminal = Terminal::new(TestBackend::new(110, 30)).unwrap();

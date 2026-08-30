@@ -51,6 +51,10 @@ pub enum WizardOutcome {
     NothingSelected,
     DryRun(InstallPlan, Vec<String>),
     Installed(InstallReport, Vec<String>, Vec<Resource>),
+    /// A Wiki row routes to the Vault-scoped workflow instead of the global installer.
+    WikiSelection {
+        feynman: bool,
+    },
     UninstallSelection(Vec<String>),
 }
 
@@ -425,8 +429,13 @@ impl Wizard {
     }
 
     pub(crate) fn plan(&self) -> Result<InstallPlan> {
+        let resources = self
+            .expanded_selection()
+            .into_iter()
+            .filter(|resource| resource.group != "Wiki")
+            .collect::<Vec<_>>();
         build_install_plan(
-            &self.expanded_selection(),
+            &resources,
             &[],
             self.model.status,
             self.model.platform,
@@ -673,12 +682,22 @@ impl Wizard {
                     .collect(),
             )));
         }
+        let selected = self.expanded_selection();
+        let has_wiki = selected.iter().any(|resource| resource.group == "Wiki");
+        let only_wiki = has_wiki && selected.iter().all(|resource| resource.group == "Wiki");
+        if only_wiki && !self.model.dry_run {
+            return Some(Action::Exit(WizardOutcome::WikiSelection {
+                feynman: selected
+                    .iter()
+                    .any(|resource| resource.install_target == "@companion-ai/feynman"),
+            }));
+        }
         let Ok(plan) = self.plan() else {
             // The review screen explains why the plan cannot run; stay.
             return None;
         };
         if self.model.dry_run {
-            let summary = self
+            let mut summary = self
                 .selected_settings()
                 .iter()
                 .flat_map(|spec| {
@@ -688,7 +707,11 @@ impl Wizard {
                         .map(move |line| format!("{path}: {line}"))
                         .collect::<Vec<_>>()
                 })
-                .collect();
+                .collect::<Vec<_>>();
+            if has_wiki {
+                summary
+                    .push("Wiki: would enter the Vault-scoped setup; no Vault changes made".into());
+            }
             return Some(Action::Exit(WizardOutcome::DryRun(plan, summary)));
         }
         self.stage_index = INSTALL;
@@ -1214,6 +1237,10 @@ fn choose_groups(model: &Model) -> Vec<Group> {
             });
         }
     };
+    push_group(
+        "Wiki".into(),
+        indices(&model.resources, |resource| resource.group == "Wiki"),
+    );
     for category in groups_of(&model.resources, ResourceKind::Skill) {
         let items = indices(&model.resources, |resource| {
             resource.kind == ResourceKind::Skill && resource.group == category
@@ -1227,7 +1254,9 @@ fn choose_groups(model: &Model) -> Vec<Group> {
     ] {
         push_group(
             title.into(),
-            indices(&model.resources, |resource| resource.kind == kind),
+            indices(&model.resources, |resource| {
+                resource.kind == kind && resource.group != "Wiki"
+            }),
         );
     }
     let mut seen: Vec<&str> = Vec::new();

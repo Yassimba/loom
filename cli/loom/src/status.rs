@@ -119,7 +119,9 @@ fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
         }
     };
     for resource in catalog.resources.iter().filter(|resource| {
-        resource.kind == crate::ResourceKind::Tool && selected.contains(&resource.install_target)
+        resource.kind == crate::ResourceKind::Tool
+            && resource.group != "Wiki"
+            && selected.contains(&resource.install_target)
     }) {
         let present = resource
             .bin

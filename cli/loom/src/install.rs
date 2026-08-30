@@ -92,6 +92,7 @@ impl Runtime {
 pub struct CommandSpec {
     pub program: String,
     pub args: Vec<String>,
+    pub cwd: Option<std::path::PathBuf>,
 }
 
 impl CommandSpec {
@@ -102,7 +103,14 @@ impl CommandSpec {
         Self {
             program: program.into(),
             args: args.into_iter().map(Into::into).collect(),
+            cwd: None,
         }
+    }
+
+    /// Run this command with `directory` as its process working directory.
+    pub fn in_dir(mut self, directory: impl Into<std::path::PathBuf>) -> Self {
+        self.cwd = Some(directory.into());
+        self
     }
 
     pub fn display(&self) -> String {

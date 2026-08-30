@@ -118,6 +118,9 @@ fn command_for(path: &OsStr, spec: &CommandSpec) -> Command {
     let mut command = Command::new(program);
     command.args(&spec.args);
     command.env("PATH", path);
+    if let Some(directory) = &spec.cwd {
+        command.current_dir(directory);
+    }
     #[cfg(unix)]
     // Put every managed command in its own process group. Cancelling the
     // wrapper shell must also terminate package-manager and pipeline children.

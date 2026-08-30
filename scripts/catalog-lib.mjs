@@ -203,12 +203,15 @@ async function readExternalPiPackages(repoRoot) {
       return {
         id: `pi-package:${name}`,
         kind: "pi-package",
-        group: "Pi packages",
+        group: name === "@companion-ai/feynman" ? "Wiki" : "Pi packages",
         label,
         description,
         installTarget: name,
         ...(source ? { source } : { version }),
         nextAction: nextAction ?? "Start Pi and use the installed package.",
+        ...(name === "@companion-ai/feynman"
+          ? { dependencies: ["github:AgriciDaniel/claude-obsidian"] }
+          : {}),
         ...(windowsSupport === "wsl" ? { windowsWsl: true } : {}),
       };
     },
@@ -297,7 +300,7 @@ export async function readToolCatalog(repoRoot) {
   return meta.tools.map((tool) => ({
     id: `tool:${tool.label}`,
     kind: "tool",
-    group: "Tools",
+    group: tool.group ?? "Tools",
     label: tool.label,
     description: tool.description,
     installTarget: tool.key,
@@ -333,5 +336,25 @@ export async function buildSetupCatalog(repoRoot) {
     skill.dependencies = [...skill.dependencies, ...targets];
     delete skill.toolDependencies;
   }
-  return [...piPackages, ...skills, ...herdrPlugins, ...tools];
+  const obsidian = tools.some(
+    (tool) => tool.installTarget === "github:AgriciDaniel/claude-obsidian",
+  )
+    ? [
+        {
+          id: "tool:obsidian-guidance",
+          kind: "tool",
+          group: "Wiki",
+          label: "Obsidian",
+          description:
+            "Optional desktop editor for a Vault. Loom provides official install guidance and never invokes an OS package manager.",
+          installTarget: "wiki:obsidian-guidance",
+          nextAction:
+            "Open the Vault in Obsidian, or keep using Markdown and Pi without the desktop app.",
+          dependencies: ["github:AgriciDaniel/claude-obsidian"],
+          bin: "obsidian",
+          companions: [],
+        },
+      ]
+    : [];
+  return [...piPackages, ...skills, ...herdrPlugins, ...tools, ...obsidian];
 }

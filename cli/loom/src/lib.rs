@@ -13,6 +13,7 @@ mod system;
 pub mod ui;
 pub mod uninstall;
 pub mod update;
+pub mod wiki;
 pub mod wizard;
 
 pub use catalog::{Catalog, Resource, ResourceKind};
