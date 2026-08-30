@@ -67,7 +67,7 @@ zoxide = "0.10.0"
 "cargo:envex" = { version = "0.6.2", os = ["macos"] }
 # Cargo fallbacks for envx and tokei need a toolchain; companion metadata
 # pulls this in only with those tools, and only on macOS.
-rust = { version = "1.97.1", os = ["macos"] }
+rust = { version = "1.98.0", os = ["macos"] }
 
 # observability
 "github:DataDog/pup" = "v1.13.0"
