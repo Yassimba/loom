@@ -5,7 +5,21 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "types": ["node", "react", "react-dom"]
+    "types": ["node", "react", "react-dom"],
+    "paths": {
+      "virtual:progressive-review-authoring": [
+        "./skills/code-diagram/scripts/src/virtual-authoring.ts"
+      ],
+      "@dev.fast/progressive-review/software-map-model": [
+        "./skills/code-diagram/scripts/src/software-map-model.ts"
+      ]
+    }
   },
-  "include": ["skills/code-diagram/scripts/src/**/*.ts", "skills/code-diagram/scripts/src/**/*.tsx"]
+  "include": [
+    "skills/code-diagram/scripts/**/*.ts",
+    "skills/code-diagram/scripts/**/*.tsx",
+    "skills/code-diagram/fixtures/data.ts",
+    "skills/code-diagram/examples/**/*.ts",
+    "test/code-diagram.test.ts"
+  ]
 }

@@ -1,70 +1,95 @@
 ---
 name: code-diagram
-description: "Generate a Review-style, source-bound sequence diagram as one offline HTML document. Use for code runtime order or message flow that needs clickable exact source evidence. Sequence Diagram is the only supported surface in this preview."
+description: "Generate a strict Review-style walkthrough with SequenceDiagram, CallStackDiff, DatabaseLens, and SoftwareMap as one source-bound offline HTML file. Use for runtime order, stack changes, durable-store behavior, or repository architecture that needs clickable exact source evidence."
 ---
 
 # Code Diagram
 
-Build one source-bound sequence document. The shipped CLI writes a self-contained HTML file with Review's lane ordering, message routing, tour, and source panel.
+Author `review.mdx` plus typed `data.ts`. Optionally add typed `software-map.ts`; SoftwareMap is a separate Review artifact, not an MDX component. `check` and `build` use the same strict compiler path.
 
-This preview supports `type: "sequence"` only. Route other diagram types to their existing skill until later parity phases land.
+## Author typed data
 
-## 1. Author
+```ts
+import {
+  calls,
+  defineActors,
+  defineAnchors,
+  defineStores,
+  defineSoftwareActors,
+  defineSoftwareStores,
+} from "virtual:progressive-review-authoring";
+```
 
-Write a trusted local `.mjs` file that default-exports this shape:
+- `defineActors` creates stable actor references.
+- `defineAnchors` creates source-bound references. Set `graph: "base"` only for removed CallStackDiff frames; head/default reads the dirty worktree.
+- `calls(parent, child, reason)` annotates an asynchronous or otherwise non-local hop without changing reference identity.
+- `defineStores` creates typed relational or document collection/field targets for DatabaseLens.
+- `defineSoftwareActors(model, refs)` and `defineSoftwareStores(model, refs)` derive typed references from a normalized software map.
 
-```js
-export default {
-  version: 1,
-  title: "Request flow",
-  intro: ["One sentence that tells the reader what crosses the diagram."],
-  diagrams: [{
-    type: "sequence",
-    label: "Submit request",
-    actors: {
-      client: { label: "Client" },
-      api: { label: "API" },
+Every `softwareMapPath` must exist in the adjacent `software-map.ts`. Do not cast through `any`. Every Sequence message and database operation needs a peekable anchor or, for Sequence only, inline `code`.
+
+## Author `review.mdx`
+
+Use built-ins without importing them:
+
+```mdx
+import { base, head, messages, stores, actors, anchors } from "./data.ts";
+
+# Request flow
+
+<SequenceDiagram label="Submit" messages={messages} />
+<CallStackDiff title="Dispatch" base={base} head={head} />
+<DatabaseLens title="Persistence" stores={stores}>
+  <DbUseCase id="save" label="Save request">
+    <DbWrite from={actors.api} to={stores.db.documents.requests.status} label="persist status" anchor={anchors.save} />
+  </DbUseCase>
+</DatabaseLens>
+```
+
+`DbUseCase` must be a direct DatabaseLens child. `DbRead` and `DbWrite` must be direct use-case children. Reads flow target → actor; writes flow actor → target.
+
+## Author optional `software-map.ts`
+
+Use Review's map import and default-export the normalized map:
+
+```ts
+import { defineSoftwareMap } from "@dev.fast/progressive-review/software-map-model";
+
+export default defineSoftwareMap({
+  systems: {
+    app: {
+      containers: {
+        api: {
+          components: {
+            handler: {
+              codeElements: {
+                route: { sourceRanges: [{ file: "src/api.ts", fromLine: 10, toLine: 24 }] },
+              },
+            },
+          },
+        },
+      },
     },
-    messages: [{
-      from: "client",
-      to: "api",
-      label: "submit(input)",
-      evidence: { file: "src/client.ts", fromLine: 20, toLine: 24 },
-    }],
-  }],
-};
+  },
+});
 ```
 
-Use `scripts/authoring.d.ts` for the TypeScript contract. The optional `defineDocument` helper lives in `scripts/authoring.mjs`.
+Element IDs become stable dot paths. Relationships must reference existing paths. Missing `software-map.ts` simply omits the map; an invalid artifact fails `check`.
 
-Every message needs either exact repository-relative `evidence` or inline `code`. Use source evidence for factual production behavior. Inline code is for an authored snippet already visible to the reader.
+## Check and build
 
-Done: actor IDs resolve, parallel messages have distinct labels, and every factual message has evidence.
-
-## 2. Check
-
-Resolve `scripts/code-diagram.mjs` relative to this skill directory, then run:
+Resolve the script relative to this skill directory:
 
 ```bash
-node <skill>/scripts/code-diagram.mjs check diagram.mjs --repo <repo-root>
+node --import tsx <skill>/scripts/code-diagram.ts check review.mdx --repo <repo-root>
+node --import tsx <skill>/scripts/code-diagram.ts build review.mdx \
+  --repo <repo-root> --out ai-docs/diagrams/<name>.html
 ```
 
-Repair every diagnostic. The checker rejects unknown fields, unsupported diagram types, missing endpoints, duplicate identities, missing files, and stale line ranges.
+The checker type-checks both authored TypeScript files, compiles MDX, validates strict props/grammar/map structure, resolves dirty-head or pinned-base source, and verifies CallStackDiff `-`/`+` claims against `git diff HEAD`.
 
-Done: exit 0.
+The output embeds MDX, CSS, JavaScript, compiled models, and exact source lines. Source-linked clicks dispatch `code-diagram:open-source` on `window` with `{ sources, title }`; the host owns the editor UI. Map selections include every source range under the selected node. Removed map elements read source from the pinned base.
 
-## 3. Build
+The file loads from `file://` with a deny-by-default CSP and no server, external asset, network request, comments, telemetry, or session persistence. Executable authored HTML is rejected before output.
 
-```bash
-node <skill>/scripts/code-diagram.mjs build diagram.mjs \
-  --repo <repo-root> \
-  --out ai-docs/diagrams/<name>.html
-```
-
-The HTML contains its scripts, styles, semantic model, and declared source ranges. It loads from `file://` without a server or network request.
-
-Done: the command reports one output path; open it and verify each message opens the intended source lines.
-
-## Boundary
-
-The CLI executes `.mjs` input as trusted local code. Labels and source contents are escaped before browser rendering. Only declared source ranges enter the HTML.
+See `examples/loom-installer/` for all four surfaces in one document.

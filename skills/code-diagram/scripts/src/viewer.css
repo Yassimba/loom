@@ -79,113 +79,6 @@ body {
   background: var(--bg-2);
 }
 
-.code-diagram-source-panel {
-  position: relative;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.code-diagram-source-panel > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 22px 22px 18px;
-  border-bottom: 1px solid var(--rule);
-  background: var(--bg-2);
-}
-
-.code-diagram-source-panel header span,
-.code-diagram-source-panel header p,
-.code-diagram-source-path {
-  color: var(--ink-soft);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
-.code-diagram-source-panel h2 {
-  margin: 6px 0;
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 15px;
-  line-height: 1.35;
-}
-
-.code-diagram-source-panel header p {
-  margin: 0;
-}
-
-.code-diagram-source-panel header button {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--rule-soft);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink-soft);
-  font-size: 22px;
-  cursor: pointer;
-}
-
-.code-diagram-source-path {
-  padding: 10px 16px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--rule);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.code-diagram-source {
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 16px 0;
-  overflow: auto;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.65;
-  tab-size: 2;
-}
-
-.code-diagram-source > code {
-  display: block;
-  min-width: max-content;
-}
-
-.code-diagram-source-line {
-  display: grid;
-  grid-template-columns: 52px minmax(max-content, 1fr);
-  min-height: 20px;
-  padding-right: 16px;
-}
-
-.code-diagram-source-line:hover {
-  background: var(--accent-wash);
-}
-
-.code-diagram-line-number {
-  padding-right: 14px;
-  color: var(--ink-faint);
-  text-align: right;
-  user-select: none;
-}
-
-.code-diagram-source-panel nav {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--rule);
-  background: var(--bg-2);
-}
-
-.code-diagram-source-panel nav button,
 .diagram-tour-button {
   padding: 8px 12px;
   border: 1px solid var(--rule-soft);
@@ -197,15 +90,9 @@ body {
   cursor: pointer;
 }
 
-.code-diagram-source-panel nav button:hover:not(:disabled),
 .diagram-tour-button:hover {
   border-color: var(--accent);
   color: var(--ink);
-}
-
-.code-diagram-source-panel nav button:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 .sequence-message-handle {
@@ -215,6 +102,37 @@ body {
   background: transparent;
   opacity: 0;
 }
+
+.database-lens,
+.software-map,
+.call-stack-diff {
+  width: min(var(--review-inline-diagram-max-width), 100%);
+  margin: 28px auto;
+}
+
+.database-lens-toolbar,
+.database-lens-operations {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  background: var(--bg-2);
+}
+
+.database-lens-toolbar button,
+.database-lens-operations button {
+  margin-left: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.database-lens button.active { border-color: var(--accent); color: var(--ink); }
 
 @media (max-width: 900px) {
   .code-diagram-page {

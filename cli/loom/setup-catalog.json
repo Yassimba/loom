@@ -415,7 +415,7 @@
       "kind": "skill",
       "group": "Architecture",
       "label": "code-diagram",
-      "description": "Generate a Review-style, source-bound sequence diagram as one offline HTML document. Use for code runtime order or message flow that needs clickable exact source evidence. Sequence Diagram is the only supported surface in this preview.",
+      "description": "Generate a strict Review-style walkthrough with SequenceDiagram, CallStackDiff, DatabaseLens, and SoftwareMap as one source-bound offline HTML file. Use for runtime order, stack changes, durable-store behavior, or repository architecture that needs clickable exact source evidence.",
       "installTarget": "code-diagram",
       "nextAction": "Ask your coding agent to use the code-diagram skill.",
       "dependencies": []
