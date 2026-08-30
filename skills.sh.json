@@ -42,6 +42,7 @@
       "description": "Design and understand the shape of a system: deep modules, domain language, and guided walkthroughs of unfamiliar code.",
       "skills": [
         "calldiff",
+        "code-diagram",
         "codebase-design",
         "domain-modeling",
         "explain-code-flow",

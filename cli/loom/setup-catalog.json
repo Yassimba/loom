@@ -411,6 +411,16 @@
       "dependencies": ["npm:calldiff"]
     },
     {
+      "id": "skill:code-diagram",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "code-diagram",
+      "description": "Generate a Review-style, source-bound sequence diagram as one offline HTML document. Use for code runtime order or message flow that needs clickable exact source evidence. Sequence Diagram is the only supported surface in this preview.",
+      "installTarget": "code-diagram",
+      "nextAction": "Ask your coding agent to use the code-diagram skill.",
+      "dependencies": []
+    },
+    {
       "id": "skill:codebase-design",
       "kind": "skill",
       "group": "Architecture",

@@ -2,7 +2,7 @@
   "$schema": "https://docs.fallow.tools/schemas/fallowrc.json",
   "entry": ["plugins/*/src/index.ts", "plugins/*/src/*/index.ts", "manifest/opencode/plugins/*.js"],
   "ignorePatterns": ["skills/**", "drafts/**", "**/*.generated.*"],
-  "ignoreDependencies": [],
+  "ignoreDependencies": ["@xyflow/react"],
   "ignoreExportsUsedInFile": true,
   "health": {
     "maxCyclomatic": 15,
