@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-add-dir",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Add another directory to this Pi session. The next turn sees its path and root AGENTS.md / CLAUDE.md.",
   "license": "MIT",
   "type": "module",
