@@ -5,9 +5,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const unixInstaller = readFile(join(repoRoot, "install.sh"), "utf8");
+const windowsInstaller = readFile(join(repoRoot, "install.ps1"), "utf8");
 
 test("PowerShell refreshes persisted PATH before resolving mise", async () => {
-  const installer = await readFile(join(repoRoot, "install.ps1"), "utf8");
+  const installer = await windowsInstaller;
   const wingetInstall = installer.indexOf("winget install");
   const machinePath = installer.indexOf(
     "[System.EnvironmentVariableTarget]::Machine",
@@ -25,7 +27,7 @@ test("PowerShell refreshes persisted PATH before resolving mise", async () => {
 });
 
 test("PowerShell falls back to a checksummed native mise release", async () => {
-  const installer = await readFile(join(repoRoot, "install.ps1"), "utf8");
+  const installer = await windowsInstaller;
 
   assert.match(installer, /RuntimeInformation\]::OSArchitecture/);
   assert.match(installer, /SHASUMS256\.txt/);
@@ -33,9 +35,23 @@ test("PowerShell falls back to a checksummed native mise release", async () => {
   assert.match(installer, /mise\\bin\\mise-shim\.exe/);
 });
 
+test("PowerShell replaces selections atomically and carries mise ownership across reruns", async () => {
+  const installer = await windowsInstaller;
+
+  assert.match(installer, /function Restore-AtomicPath/);
+  assert.match(installer, /Restore-AtomicPath \$Selection/);
+  assert.match(installer, /Restore-AtomicPath \$PendingMise/);
+  assert.match(installer, /Restore-AtomicPath \$ProfilePath/);
+  assert.match(installer, /function Set-AtomicLines/);
+  assert.match(installer, /\[System\.IO\.File\]::Replace\(\$Incoming, \$Path, \$Backup\)/);
+  assert.match(installer, /bootstrap-mise-pending\.json/);
+  assert.match(installer, /ConvertFrom-Json/);
+  assert.match(installer, /Remove-Item -LiteralPath \$PendingMise/);
+});
+
 test("PowerShell accepts annotated core manifest markers", async () => {
   const [installer, manifest] = await Promise.all([
-    readFile(join(repoRoot, "install.ps1"), "utf8"),
+    windowsInstaller,
     readFile(join(repoRoot, "manifest", "loom.toml"), "utf8"),
   ]);
   const lines = manifest.split(/\r?\n/);
@@ -47,7 +63,7 @@ test("PowerShell accepts annotated core manifest markers", async () => {
 });
 
 test("piped Unix bootstrap reconnects interactive setup to the terminal", async () => {
-  const installer = await readFile(join(repoRoot, "install.sh"), "utf8");
+  const installer = await unixInstaller;
 
   // The pty behind stderr first: macOS kqueue cannot poll the /dev/tty alias,
   // so a wizard started on it dies with "Failed to initialize input reader".
@@ -62,20 +78,14 @@ test("piped Unix bootstrap reconnects interactive setup to the terminal", async 
 });
 
 test("bootstraps forward explicit setup selectors", async () => {
-  const [unix, windows] = await Promise.all([
-    readFile(join(repoRoot, "install.sh"), "utf8"),
-    readFile(join(repoRoot, "install.ps1"), "utf8"),
-  ]);
+  const [unix, windows] = await Promise.all([unixInstaller, windowsInstaller]);
 
   assert.match(unix, /mise -C "\$HOME" exec -- loom setup "\$@"/);
   assert.match(windows, /mise -C \$HOME exec -- loom setup @SetupArgs/);
 });
 
 test("bootstrap CI handoff can exercise the checked-out Loom binary", async () => {
-  const [unix, windows] = await Promise.all([
-    readFile(join(repoRoot, "install.sh"), "utf8"),
-    readFile(join(repoRoot, "install.ps1"), "utf8"),
-  ]);
+  const [unix, windows] = await Promise.all([unixInstaller, windowsInstaller]);
 
   assert.match(unix, /LOOM_E2E_LOOM_BIN/);
   assert.match(unix, /"\$LOOM_E2E_LOOM_BIN" setup "\$@"/);
@@ -84,10 +94,7 @@ test("bootstrap CI handoff can exercise the checked-out Loom binary", async () =
 });
 
 test("bootstraps install only the Loom selection, not the current project", async () => {
-  const [unix, windows] = await Promise.all([
-    readFile(join(repoRoot, "install.sh"), "utf8"),
-    readFile(join(repoRoot, "install.ps1"), "utf8"),
-  ]);
+  const [unix, windows] = await Promise.all([unixInstaller, windowsInstaller]);
 
   assert.match(unix, /mise -C "\$HOME" install --yes/);
   assert.match(windows, /mise -C \$HOME install --yes/);

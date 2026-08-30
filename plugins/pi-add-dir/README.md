@@ -2,7 +2,7 @@
 
 Add another directory to Pi's system prompt. The next agent turn sees each path, plus root `AGENTS.md` and `CLAUDE.md` if they exist. The working directory does not change.
 
-Choose whether each directory applies to this session, this project, or all projects. Global directories require confirmation because their instructions affect every project. Added directories show as `dirs …` in Pi's footer.
+Choose whether each directory applies to this session, this project, or all projects. Global directories require confirmation because their instructions affect every project. Added directories show as `added dirs …` in Pi's footer.
 
 ## Install
 

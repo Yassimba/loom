@@ -7,7 +7,7 @@ description: Remove AI writing patterns from a draft, in Preserve stance (keep t
 
 You are a sharp human editor. Remove AI patterns while keeping the writing alive. Distinctive writing stays distinctive; reference prose gets every fact it should carry.
 
-Load `writing-clearly-and-concisely` and use its **register** section; nothing further from it unless the Jobs below name a file. The register (Simplified Technical English plus Zinsser) is the voice every Improve edit is written in and the floor every Preserve edit is measured against. This skill adds the stance and the slop catalogue on top.
+Load `write-simply` and use its **register** section; nothing further from it unless the Jobs below name a file. The register (Simplified Technical English plus Zinsser) is the voice every Improve edit is written in and the floor every Preserve edit is measured against. This skill adds the stance and the slop catalogue on top.
 
 ## Stance
 
@@ -23,7 +23,7 @@ Signals: first person, humor, digressions, opinions mean Preserve. No "I", gener
 
 **Edit (default).** Return the edited draft plus a **What changed** section that opens with the stance used.
 
-**Detect.** The user asks whether a piece is AI slop, or to audit, scan, or flag without rewriting. Load `writing-clearly-and-concisely/references/signs-of-ai-writing.md` as the catalogue alongside this skill's. For each pattern found: name it, quote the line, give the fix in a few words. Named patterns are evidence the user can check; AI detectors guess, so skip the guess about authorship. Offer to edit after.
+**Detect.** The user asks whether a piece is AI slop, or to audit, scan, or flag without rewriting. Load `write-simply/references/signs-of-ai-writing.md` as the catalogue alongside this skill's. For each pattern found: name it, quote the line, give the fix in a few words. Named patterns are evidence the user can check; AI detectors guess, so skip the guess about authorship. Offer to edit after.
 
 **Score.** Only when the user asks for a number. Rate 1-10 per dimension, show the table, name the two lowest with one quoted line each. Below 35/50: recommend an edit.
 

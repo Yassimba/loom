@@ -388,7 +388,7 @@ fn main() -> Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("current directory is unavailable"))?;
             let project = loom::project_root(&current);
             let before = loom::ownership::snapshot_project(&project);
-            let ok = run_init(
+            let init = run_init(
                 &system,
                 &InitOptions {
                     python: flag(python, no_python),
@@ -402,12 +402,16 @@ fn main() -> Result<()> {
                     yes,
                     force,
                 },
-            )?;
-            if ok {
-                loom::ownership::record_project_changes(&home, before)
-                    .map_err(anyhow::Error::msg)?;
+            );
+            let ownership = loom::ownership::record_project_changes(&home, &before);
+            if let Err(error) = ownership {
+                let message = match loom::ownership::restore_project(&system, before) {
+                    Ok(()) => error,
+                    Err(rollback) => format!("{error}; rollback failed: {rollback}"),
+                };
+                return Err(anyhow::anyhow!(message));
             }
-            ok
+            init?
         }
         Command::Completions { shell } => {
             print_completions(shell)?;

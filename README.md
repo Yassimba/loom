@@ -1,152 +1,199 @@
 # Loom
 
-Loom weaves a coding-agent setup into one installable collection: 50+ skills, Pi packages, and pinned tools. Its guided installer walks you through the collection, sets up anything you're missing (like Pi or Herdr), and checks that it all works.
+Loom weaves an entire opinionated setup together for agentic engineering. One installer gives your coding agents the skills, tools, Pi packages, and project instructions used across the full engineering workflow.
 
-## A working agent setup in five minutes
+Use Loom with Pi (recommended), Claude Code, Codex, OpenCode, Cursor, Grok, or any agent that reads an Agent Skills folder.
 
-On macOS or Linux:
+## Start here
+
+### 1. Install Loom
+
+macOS or Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh
+```
+
+Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
+```
+
+The installer adds [mise](https://mise.jdx.dev), Node.js, and the `loom` command. It then opens the setup menu.
+
+Select **Everything** for the full setup. You can also pick skill groups, tools, Pi packages, or individual items. The menu shows the full plan before it installs anything.
+
+### 2. Check the install
+
+```bash
 loom status
+```
+
+This shows what is installed and any setup step that still needs your attention.
+
+### 3. Set up a project
+
+Run this once in each repository:
+
+```bash
 cd your-project
 loom init
 ```
 
-On Windows:
+`loom init` can create:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
-loom status
-Set-Location your-project
-loom init
-```
+- `AGENTS.md` and `CLAUDE.md` instructions
+- local issue tracking with Markdown or [Beads](https://github.com/Dicklesworthstone/beads_rust)
+- domain notes for the words and rules used by the project
+- coding standards
+- editor links that open the right source file
+- a local CodeGraph index, if you installed CodeGraph
 
-Choose **Recommended** in the first-time wizard for a small, editable coding workflow. Review the exact plan, install it, then start Claude, Codex, Pi, OpenCode, Cursor, Grok, or another agent that reads the selected skill tree. `loom status` verifies the selected resources; `loom init` prepares agent instructions, issue tracking, domain docs, editor links, and coding standards for the repository.
+Use `loom init --yes` to accept the detected defaults without questions.
 
-Project-scoped skill installs are registered locally. `loom update` refreshes every surviving registered project without adding skills that were not already present in each tree.
+### Windows and WSL2
 
-## What's inside
-
-**Agent skills** — 70+ skills for coding agents that read a `skills/` tree (Claude Code, Codex, OpenCode, and Pi included). They're about how you work with an agent, not what it builds: test-driven development, code review, refactoring, debugging, domain modeling, docs and diagrams, and planning. The Observability group is Datadog via [pup](https://github.com/DataDog/pup) — logs, APM, monitors, live debugger, CI flakes. Install one or all of them.
-
-**Pi packages** — extensions for the [Pi](https://github.com/badlogic/pi-mono) coding agent.
-
-- [**openai-fast**](plugins/openai-fast/) — turn on OpenAI fast mode (the priority service tier) from inside Pi.
-- **subagents**, **web-access**, **rewind**, **anthropic-auth** — installed straight from their upstream npm packages, [exact-pinned](manifest/pi-packages.json) so they update only when this repo bumps the pin.
-
-## The engineering flow
-
-Most of the skills chain into one loop: you start with a vague idea and end with committed code. Each step feeds the next.
-
-1. [**brainstorming**](skills/brainstorming/SKILL.md) — no idea yet. Talk through directions until one sticks; you end with a short brief.
-2. [**wayfinder**](skills/wayfinder/SKILL.md) — the idea is real but fuzzy, or too big for one session. Break the unknowns into investigation tickets and work through them until the route is clear.
-3. [**grill-with-docs**](skills/grill-with-docs/SKILL.md) — the agent interviews you, hard, until the idea is a spec. ADRs and a glossary fall out for free.
-4. [**grill-with-examples**](skills/grill-with-examples/SKILL.md) — for hairy business logic: pin down every rule with concrete examples. Each example becomes a test later.
-5. [**to-spec**](skills/to-spec/SKILL.md) — turn the conversation into a spec on your tracker. No more questions, just writing it down.
-6. [**to-tickets**](skills/to-tickets/SKILL.md) — split the spec into small tickets that each say what blocks them.
-7. [**implement**](skills/implement/SKILL.md) — build it. You approve a design sketch first, then it's TDD from there.
-8. [**code-review**](skills/code-review/SKILL.md) — review the diff twice over: does it follow the repo's rules, and does it do what the spec said.
-9. [**refactor**](skills/refactor/SKILL.md) — clean up, with the goal that the codebase ends up smaller than it started.
-10. [**e2e-test**](skills/e2e-test/SKILL.md) — actually run the app and watch it work; a green test suite isn't proof. Add [**e2e-ux-test**](skills/e2e-ux-test/SKILL.md) when a human has to like the UI too.
-11. [**commit**](skills/commit/SKILL.md) — tests green, then one clean Conventional Commits commit.
-
-Two more sit off to the side. If something breaks mid-flow, [**diagnosing-bugs**](skills/diagnosing-bugs/SKILL.md) makes you find the actual cause before anyone touches a fix. And [**writing-clearly-and-concisely**](skills/writing-clearly-and-concisely/SKILL.md) keeps the prose the loop produces (specs, commit messages, this README) readable.
-
-You don't have to do all of it. A small, clear feature can start at step 7.
-
-## Guided setup
-
-### macOS and Linux
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh
-```
-
-### Windows
-
-For the complete toolset, use WSL2:
+Native Windows works. Use WSL2 if you also want Linux-only tools such as Herdr or `pi-chat`:
 
 ```powershell
 wsl --install -d Ubuntu
 ```
 
-Then run the macOS/Linux command above inside Ubuntu. Native Windows remains supported:
+After Ubuntu starts, run the macOS/Linux install command inside it.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
-```
+## The main workflow
 
-On native Windows, setup explains which capabilities require WSL2 and hides them if you choose to continue without it.
-
-One command does the minimum and asks about the rest: it installs [mise](https://mise.jdx.dev), syncs the core of the [tool manifest](manifest/loom.toml) (node and the `loom` CLI, exact-pinned), and drops you into the guided setup. Your own `~/.config/mise/config.toml` is never touched; use it to layer personal tools on top.
-
-A four-step wizard follows: **Choose** is three columns — groups on the left (Everything, skills by category, tools (Pi, herdr, gh, glab, tokei/tokui, uv, and the skills' helper CLIs, every one pinned to the version Yassin runs), Pi packages, Herdr plugins, editor settings), the chosen group's items in the middle, details on the right; space picks a row or a whole group, `/` searches. **Where** asks which agents get the skills and whether the copies belong globally or to the current project (global is the default). **Review** names every destination and anything that has to install first, then **Install** runs it and ends by telling you what to try first.
-
-Tool versions move only when a new manifest lands on this repo — `loom update` re-syncs it and refreshes everything else you installed.
-
-Come back to it later:
-
-```bash
-loom add       # choose more capabilities
-loom update    # update installed tooling and resources
-loom status    # check the setup
-loom add --skill tdd --herdr-plugin annotate --yes
-loom add --skill tdd --agent codex --agent opencode --yes
-loom add --skill tdd --agent claude --scope project --yes
-```
-
-There's also a [`loom`](skills/loom/SKILL.md) skill, so a coding agent can run this same setup for you and ask before each step.
-
-## Install directly
-
-You don't need the CLI — it just drives the tools below, and each one works on its own.
-
-### Agent skills
-
-The CLI installs skills natively. Pick Claude, Codex, Pi, OpenCode, Cursor, Grok, or the portable Agent Skills tree with repeatable `--agent` flags; choose `--scope project` for the current Git worktree, otherwise installation is global. Omitting `--agent` preserves the convenient default of using the agents already detected on the machine. Dependencies follow the selected skill into exactly the same destinations.
-
-Global destinations are `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills`, `~/.config/opencode/skills`, `~/.cursor/skills`, and `~/.grok/skills`. Project destinations are `.claude/skills`, `.agents/skills` (also Codex's portable project location), `.pi/skills`, `.opencode/skills`, `.cursor/skills`, and `.grok/skills`. OpenCode's session adapter follows the same scope, landing in the corresponding `plugins` directory so Beads claims remain resumable.
-
-```bash
-loom add --skill tdd --yes     # global, for detected agents
-loom add --skill tdd --agent codex --scope project --yes
-loom update                    # refresh each existing copy in place
-```
-
-The repository is also on [skills.sh](https://skills.sh):
-
-```bash
-npx skills add Yassimba/loom
-```
-
-Claude Code users can get the same skills from its marketplace:
+You do not need every step for every change. Start at the first step that helps.
 
 ```text
-/plugin marketplace add Yassimba/loom
-/plugin install loom@loom
+brainstorming
+    ↓
+grill-with-docs
+    ↓
+to-spec → to-tickets
+                ↓
+            implement
+                ↓
+            e2e-test
+                ↓
+             release
 ```
 
-### Pi packages
+### 1. Find the idea: `brainstorming`
 
-Each Pi package installs on its own:
+Use this when the idea is still loose. The agent asks short questions, compares a few directions, and writes a small idea brief.
+
+Example:
+
+```text
+/brainstorming I want imports to be easier to undo
+```
+
+Skip this step when the task is already clear.
+
+### 2. Make the idea precise: `grill-with-docs`
+
+Use this when the goal is clear but the rules or design are not. The agent asks one question at a time and records decisions in the project's domain notes.
+
+For work that is too large for one agent session, use `wayfinder` instead. It puts the open questions on the issue tracker and works through them one at a time.
+
+### 3. Write the work down: `to-spec` and `to-tickets`
+
+`to-spec` turns the conversation into a spec. It does not restart the interview.
+
+`to-tickets` splits the approved spec into small pieces. Each ticket delivers a working path through the product and says which earlier tickets block it.
+
+If the project uses Beads:
+
+- `whats-next` shows the next ready ticket without taking it.
+- `next` claims the next ready ticket and starts it.
+
+### 4. Build one ticket: `implement`
+
+`implement` runs the build loop for one ticket:
+
+1. `ponytail` looks for the smallest change that works.
+2. `blueprint` shows the design and waits for approval.
+3. `tdd` writes a failing test before the code when a useful test fits.
+4. `code-review` checks the change against both the spec and the repository rules.
+5. `commit` creates one clean Conventional Commits commit.
+
+You can also run any of these skills by itself.
+
+### 5. Prove it works: `e2e-test`
+
+`e2e-test` starts the real app and uses it through its CLI, API, or web page. It saves output and screenshots, then checks the stored data.
+
+A passing test suite is useful, but this step checks the full running system.
+
+### 6. Ship it: `release`
+
+`release` runs lint, type checks, and tests in that order. It then commits any remaining work, pushes the branch, and opens a pull request or merge request.
+
+If a test fails for an unclear reason, it routes the problem through `diagnosing-bugs` before changing the code.
+
+## Other useful skills
+
+| When you need to... | Use... |
+| --- | --- |
+| Find the cause of a bug before fixing it | [`diagnosing-bugs`](skills/diagnosing-bugs/SKILL.md) |
+| Remove code or make it simpler | [`refactor`](skills/refactor/SKILL.md) or [`ponytail`](skills/ponytail/SKILL.md) |
+| Understand how a feature works | [`explain-code-flow`](skills/explain-code-flow/SKILL.md) |
+| See how call paths changed between commits | [`calldiff`](skills/calldiff/SKILL.md) |
+| Walk through a large change in the browser | [`changeset-walkthrough`](skills/changeset-walkthrough/SKILL.md) |
+| Review a plan or diff with comments | [`plannotator`](skills/plannotator/SKILL.md) |
+| Design or improve a web interface | [`impeccable`](skills/impeccable/SKILL.md) |
+| Draw a diagram | [`diagram-design`](skills/diagram-design/SKILL.md) or [`mermaid-skill`](skills/mermaid-skill/SKILL.md) |
+| Build browser slides | [`frontend-slides`](skills/frontend-slides/SKILL.md) |
+| Write a README or guide | [`write-readme`](skills/write-readme/SKILL.md) or [`write-documentation`](skills/write-documentation/SKILL.md) |
+| Make prose shorter and clearer | [`write-simply`](skills/write-simply/SKILL.md) |
+| Work with Datadog | the `dd-*` skills for logs, APM, monitors, docs, and live debugging |
+
+Browse the full list in [`skills.sh.json`](skills.sh.json) or in the `loom add` menu.
+
+## Add or update your setup
+
+Open the menu again at any time:
 
 ```bash
-pi install npm:@yassimba/pi-openai-fast
-pi install npm:pi-subagents
-pi install npm:pi-web-access
-pi install npm:pi-rewind-hook
-pi install npm:@gotgenes/pi-anthropic-auth
-pi install git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe180b40924f5
+loom add
 ```
 
-`pi-chat` additionally needs QEMU and tmux, and therefore runs through WSL2 rather than native Windows. See the package README under [`plugins/`](plugins/) or its upstream repository for commands and configuration.
+Install named items without the menu:
+
+```bash
+loom add --skill tdd --yes
+loom add --skill tdd --skill diagnosing-bugs --yes
+loom add --tool gh --tool gitleaks --yes
+loom add --pi-package add-dir --yes
+```
+
+Preview a command before it changes anything:
+
+```bash
+loom add --skill tdd --dry-run
+```
+
+Update only the items you already chose:
+
+```bash
+loom update
+```
+
+Loom uses fixed tool and package versions. `loom update` moves them only after this repository publishes new versions. It also updates registered project skill folders and Wiki Vaults without adding new capabilities.
 
 ## Set up a Pi Wiki Vault
 
-Select **Wiki** in `loom setup` or `loom add`, or run `loom wiki`. Create uses a new path. Adopt requires an existing directory with `.obsidian/`. Loom shows each `claude-obsidian` plan and applies only its reviewed hash.
+Select **Wiki** in `loom setup` or `loom add`, or open its dedicated manager:
 
-Loom keeps exact-pinned Python and product code outside the Vault. It installs Pi packages in ignored, machine-local `.pi/` state. Optional Feynman stays project-local too. Obsidian is optional; Loom links only to the official download and never runs an OS package manager.
+```bash
+loom wiki
+```
+
+Create makes a new Vault. Adopt requires an existing directory with `.obsidian/`. Loom shows the exact `claude-obsidian` changed paths and applies only the reviewed plan hash. Obsidian is optional: Loom can open its official download page, but never runs Homebrew, Winget, Snap, Flatpak, or another OS package manager.
+
+Wiki skills are available only inside the Vault. Loom keeps exact-pinned Python and `claude-obsidian` product code outside it, then writes project-local Pi state below ignored `.pi/`. Optional Feynman is also installed there, not globally.
 
 ```bash
 cd /path/to/Vault && pi
@@ -155,35 +202,86 @@ loom wiki repair /path/to/Vault
 loom wiki unregister /path/to/Vault
 ```
 
-`loom status` checks all registered Vaults. `loom update` refreshes each surviving Vault. Missing Vaults are reported and never recreated. Unregister removes only Loom's local record; it never deletes notes. Run Vault mutations inside WSL2 on Windows.
+`loom status` checks every registered Vault. `loom update` refreshes each surviving Vault independently. A missing Vault is reported and never recreated. Unregister removes only Loom's machine-local record; it never deletes notes. Rerun Loom on each machine to recreate `.pi/`. Vault writes require macOS, Linux, or WSL under the pinned `claude-obsidian` contract.
 
 ## Uninstall Loom-managed resources
 
-Run `loom uninstall` to open the removal menu with every Loom-owned resource selected. Deselect anything you want to keep; Loom also keeps required dependencies.
-
-For scripted removal, use exact selectors or remove everything:
+Open the removal menu with everything Loom owns selected. Deselect anything you want to keep; Loom also keeps its required dependencies:
 
 ```bash
-loom uninstall --skill tdd --pi-package add-dir --yes
-loom uninstall --all --yes
-loom uninstall --all --dry-run
+loom uninstall
 ```
 
-Modified files are preserved unless an interactive run confirms their deletion or a script passes `--force-modified`. Project resources are limited to the current repository, and partial removal retains the ownership ledger.
+Scripts can remove all owned resources without the menu, or select exact resources:
 
-## Repository layout
+```bash
+loom uninstall --all --yes
+loom uninstall --skill tdd --pi-package add-dir --yes
+loom uninstall --dry-run --all
+```
 
-- `skills/<name>/SKILL.md` — the reviewed shared skills. Category grouping lives in `skills.sh.json`.
-- `plugins/<name>/` — Pi packages, each installable on its own.
-- `cli/loom/` — the Rust setup CLI.
-- `cli/loom/setup-catalog.json` — the generated catalog the CLI embeds.
-- `.claude-plugin/` — exposes the shared skills through the Claude Code marketplace.
-- `drafts/` — unreviewed skills. Not published.
-- `personal/` — machine-specific skills. Never published.
+Modified files are preserved by default. Interactive runs ask again before deleting them; non-interactive runs require `--force-modified`. Project resources are limited to the current repository, and a partial uninstall keeps the ownership ledger so the remaining resources can be removed later.
+
+## Choose where skills go
+
+By default, Loom finds your installed agents and adds skills to their global folders.
+
+Use `--agent` to name an agent. Use `--scope project` to keep the skill inside the current repository:
+
+```bash
+loom add --skill tdd --agent codex --yes
+loom add --skill tdd --agent codex --agent opencode --yes
+loom add --skill tdd --agent claude --scope project --yes
+```
+
+When one skill calls another, Loom installs the required skill in the same place.
+
+## Install without Loom
+
+The `loom` command is the easiest option, but each install method also works on its own.
+
+### Install skills with skills.sh
+
+```bash
+npx skills add Yassimba/loom
+```
+
+### Install skills in Claude Code
+
+```text
+/plugin marketplace add Yassimba/loom
+/plugin install loom@loom
+```
+
+### Install Pi packages
+
+Loom includes two Pi packages from this repository:
+
+```bash
+pi install npm:@yassimba/pi-openai-fast
+pi install npm:@yassimba/pi-add-dir
+```
+
+- [`openai-fast`](plugins/openai-fast/) adds `/fast`, which requests the priority service tier for supported models.
+- [`add-dir`](plugins/pi-add-dir/) adds another directory and its root instructions to the current Pi session.
+
+The setup menu also offers fixed versions of Feynman, FFF search, autoresearch, MCP support, subagents, web access, chat, rewind, and Anthropic sign-in. See [`manifest/pi-packages.json`](manifest/pi-packages.json) for the current package names and versions.
+
+## What Loom manages
+
+- `skills/<name>/SKILL.md`: reviewed public skills
+- `plugins/<name>/`: Pi packages built in this repository
+- `manifest/loom.toml`: fixed versions of tools offered by the setup menu
+- `manifest/tools.json`: names and help text shown for those tools
+- `cli/loom/`: the Rust setup command
+- `cli/loom/setup-catalog.json`: the generated list built into the command
+- `.claude-plugin/`: the Claude Code marketplace package
+- `drafts/`: skills that are not reviewed or published
+- `personal/`: machine-specific skills that are never published
 
 ## Contributing
 
-Install the JavaScript workspace and run the repository gates:
+Install the JavaScript workspace, then run the repository checks:
 
 ```bash
 npm install
@@ -191,7 +289,7 @@ npm run check
 npm run audit
 ```
 
-Check the Rust CLI separately:
+Check the Rust command separately:
 
 ```bash
 cargo fmt --manifest-path cli/loom/Cargo.toml -- --check
@@ -199,27 +297,32 @@ cargo clippy --manifest-path cli/loom/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path cli/loom/Cargo.toml
 ```
 
-If you change a reviewed skill or package catalog metadata, regenerate the embedded catalog:
+If you change a public skill or package entry, rebuild the setup list:
 
 ```bash
 npm run catalog:generate
 ```
 
-For local Pi extension development, use `scripts/sync-pi-extensions.sh status` and `scripts/sync-pi-extensions.sh link`.
+For local Pi package work, use:
+
+```bash
+scripts/sync-pi-extensions.sh status
+scripts/sync-pi-extensions.sh link
+```
 
 ## Credits
 
-This repo builds on other people's work:
+- Several coding skills are adapted from [Matt Pocock's skills](https://github.com/mattpocock/skills).
+- [`research`](skills/research/SKILL.md) is adapted from [Matt Pocock's research skill](https://github.com/mattpocock/skills).
+- The `dd-*` skills are adapted from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 under Apache 2.0.
+- [`impeccable`](skills/impeccable/SKILL.md) is adapted from [pbakaus/impeccable](https://github.com/pbakaus/impeccable) v4.1.2 under Apache 2.0.
+- [`i-have-adhd`](skills/i-have-adhd/SKILL.md) is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` under MIT.
+- [`ponytail`](skills/ponytail/SKILL.md) is adapted from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 under MIT.
+- [`diagram-design`](skills/diagram-design/SKILL.md) is adapted from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.7 at `ac490fd` under MIT.
+- [`openai-fast`](plugins/openai-fast/) is adapted from [studioarray/pi-openai-fast](https://github.com/studioarray/pi-openai-fast) at `e82ed32` under MIT.
+- Pi subagents, web access, and rewind are adapted from [nicobailon's Pi packages](https://github.com/nicobailon). Anthropic sign-in is adapted from [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth).
 
-- Several of the coding skills are adapted from [Matt Pocock's skills](https://github.com/mattpocock/skills), and the [research](skills/research/SKILL.md) skill is his, copied verbatim.
-- The Datadog `dd-*` skills are copied from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 (Apache 2.0); the `pup` CLI is pinned in the tool manifest.
-- The [Impeccable](skills/impeccable/SKILL.md) design skill is from [pbakaus/impeccable](https://github.com/pbakaus/impeccable) v4.1.2 (Apache 2.0).
-- The [i-have-adhd](skills/i-have-adhd/SKILL.md) skill is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` (MIT).
-- The [Ponytail](skills/ponytail/SKILL.md) skill is from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 (MIT).
-- The [Diagram Design](skills/diagram-design/SKILL.md) skill is from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.7 at `ac490fd` (MIT; bundled icon notices included).
-- subagents, web-access, and rewind are [nicobailon](https://github.com/nicobailon)'s [pi-subagents](https://github.com/nicobailon/pi-subagents), [pi-web-access](https://github.com/nicobailon/pi-web-access), and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook); anthropic-auth is [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth). All install pinned from upstream npm.
-
-Each package's README and `THIRD_PARTY_NOTICES.md` record the exact upstream version. Thanks, all.
+Each adapted package has its own `README.md` and `THIRD_PARTY_NOTICES.md` with the exact source and license.
 
 ## License
 

@@ -10,6 +10,7 @@
 //! manifest lands on main, and change *set* only when the user asks.
 
 use crate::{skills, CommandSpec, System};
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
@@ -70,22 +71,27 @@ fn current_key(key: &str) -> &str {
 /// The keys already selected on this machine (empty when nothing is synced
 /// yet). Core keys are implicit and excluded; renamed keys come back current.
 pub fn selected_keys(home: &std::path::Path) -> Vec<String> {
-    let Ok(content) = fs::read_to_string(conf_d_target(home)) else {
+    let target = conf_d_target(home);
+    let _ = crate::fs_tx::recover(&target);
+    let Ok(content) = fs::read_to_string(target) else {
         return Vec::new();
     };
     let core = core_section(&content).unwrap_or_default();
-    let mut keys = content
+    let mut seen = HashSet::new();
+    let keys = content
         .lines()
         .filter(|line| !core.contains(*line))
         .filter_map(line_key)
         .map(|key| current_key(key).to_string())
-        .collect::<Vec<_>>();
-    keys.dedup();
+        .filter(|key| seen.insert(key.clone()))
+        .collect();
     keys
 }
 
 pub fn selection_contains(home: &std::path::Path, key: &str) -> bool {
-    fs::read_to_string(conf_d_target(home)).is_ok_and(|content| {
+    let target = conf_d_target(home);
+    let _ = crate::fs_tx::recover(&target);
+    fs::read_to_string(target).is_ok_and(|content| {
         content
             .lines()
             .filter_map(line_key)
@@ -155,6 +161,8 @@ pub fn sync_selected_controlled(
     let home = system
         .home_dir()
         .ok_or_else(|| "home directory is unavailable".to_string())?;
+    let target = conf_d_target(&home);
+    crate::fs_tx::recover(&target)?;
     let staging = home.join(".cache").join("loom").join("manifest-staging");
     let result = skills::fetch_repo_controlled(system, &staging, cancelled).and_then(|repo_root| {
         let source = repo_root.join(MANIFEST_IN_REPO);
@@ -166,15 +174,9 @@ pub fn sync_selected_controlled(
                 keys.push(key.clone());
             }
         }
-        let target = conf_d_target(&home);
         let current = fs::read_to_string(&target).unwrap_or_default();
         let content = render_selection(&manifest, &current, &keys)?;
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-        }
-        fs::write(&target, content)
-            .map_err(|error| format!("could not write {}: {error}", target.display()))?;
+        crate::fs_tx::atomic_write(&target, content.as_bytes())?;
         Ok(target)
     });
     let _ = fs::remove_dir_all(&staging);
@@ -201,6 +203,7 @@ pub fn remove_selected(
         .home_dir()
         .ok_or_else(|| "home directory is unavailable".to_string())?;
     let target = conf_d_target(&home);
+    crate::fs_tx::recover(&target)?;
     let current = fs::read_to_string(&target)
         .map_err(|error| format!("could not read {}: {error}", target.display()))?;
     let keys = selected_keys(&home)
@@ -208,8 +211,7 @@ pub fn remove_selected(
         .filter(|key| !removed.contains(key))
         .collect::<Vec<_>>();
     let content = render_selection(&current, &current, &keys)?;
-    fs::write(&target, content)
-        .map_err(|error| format!("could not write {}: {error}", target.display()))?;
+    crate::fs_tx::atomic_write(&target, content.as_bytes())?;
     let result = system
         .run_controlled(
             &CommandSpec::new("mise", ["prune", "--yes"]),
@@ -256,6 +258,35 @@ gh = \"2.97.0\"
 \"npm:@earendil-works/pi-coding-agent\" = \"0.84.4\"
 \"github:zdyxry/tokui\" = \"0.12.0\"
 ";
+
+    #[test]
+    fn selected_keys_recovers_an_interrupted_selection() {
+        let home = std::env::temp_dir().join(format!(
+            "loom-manifest-recovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let target = conf_d_target(&home);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(
+            &target,
+            "[tools]\n\"github:Yassimba/loom[exe=loom-teams]\" = \"old\"\ngh = \"2.97.0\"\n\"ubi:Yassimba/loom\" = \"new\"\n",
+        )
+        .unwrap();
+        let backup = target.with_file_name(".loom.toml.loom-old");
+        std::fs::rename(&target, &backup).unwrap();
+
+        assert_eq!(
+            selected_keys(&home),
+            vec!["ubi:Yassimba/loom".to_string(), "gh".to_string()]
+        );
+        assert!(target.is_file());
+        assert!(!backup.exists());
+        std::fs::remove_dir_all(home).unwrap();
+    }
 
     #[test]
     fn selection_carries_core_plus_chosen_lines() {

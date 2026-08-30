@@ -6,7 +6,7 @@ description: Draw the current topic — the shape of code (pseudocode, call tree
 # Show Me
 
 1. Name the point the reader needs in one line.
-2. Pick the smallest view that makes it clear, from the table. Place the view next to that line; captions follow the `writing-clearly-and-concisely` register (invoke it via the Skill tool).
+2. Pick the smallest view that makes it clear, from the table. Place the view next to that line; captions follow the `write-simply` register (invoke it via the Skill tool).
 
 | The point is…                                            | View                                      |
 | -------------------------------------------------------- | ----------------------------------------- |

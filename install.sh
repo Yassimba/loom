@@ -115,7 +115,8 @@ finish() {
 run_loom_setup() {
   export LOOM_BOOTSTRAP=1
   export LOOM_BOOTSTRAP_MISE_INSTALLED="$mise_installed"
-  export LOOM_BOOTSTRAP_MISE_ROOT="$(mise data dir)"
+  LOOM_BOOTSTRAP_MISE_ROOT="$(mise data dir)" || return $?
+  export LOOM_BOOTSTRAP_MISE_ROOT
   export LOOM_BOOTSTRAP_MISE_EXECUTABLE="$mise_bin"
   export LOOM_BOOTSTRAP_MISE_MANAGER="direct"
   if [ -n "${LOOM_E2E_LOOM_BIN:-}" ]; then
@@ -137,13 +138,15 @@ if [ ! -t 0 ]; then
     *) if ( : </dev/tty ) 2>/dev/null; then terminal=/dev/tty; else terminal=""; fi ;;
   esac
   if [ -n "$terminal" ] && [ -t 1 ]; then
-    run_loom_setup "$@" <"$terminal"
-    finish $?
+    status=0
+    run_loom_setup "$@" <"$terminal" || status=$?
+    finish "$status"
   fi
   if [ "$#" -eq 0 ]; then
     echo "$NAME: installed, but there is no terminal here for the guided setup. Open a shell and run: loom" >&2
     exit 1
   fi
 fi
-run_loom_setup "$@"
-finish $?
+status=0
+run_loom_setup "$@" || status=$?
+finish "$status"

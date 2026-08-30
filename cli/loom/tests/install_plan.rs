@@ -152,12 +152,8 @@ fn git_pi_package_uses_its_exact_source() {
 fn skill_selection_expands_to_its_dependency_closure() {
     let catalog = vec![
         skill_with_deps("skill:release", "release", &["commit"]),
-        skill_with_deps("skill:commit", "commit", &["writing-clearly-and-concisely"]),
-        skill_with_deps(
-            "skill:writing-clearly-and-concisely",
-            "writing-clearly-and-concisely",
-            &[],
-        ),
+        skill_with_deps("skill:commit", "commit", &["write-simply"]),
+        skill_with_deps("skill:write-simply", "write-simply", &[]),
         skill_with_deps("skill:unrelated", "unrelated", &[]),
     ];
 
@@ -179,11 +175,7 @@ fn skill_selection_expands_to_its_dependency_closure() {
     assert_eq!(
         plan.resources[0].action,
         StepAction::CopySkills {
-            skills: vec![
-                "release".into(),
-                "commit".into(),
-                "writing-clearly-and-concisely".into(),
-            ],
+            skills: vec!["release".into(), "commit".into(), "write-simply".into(),],
             destination: skill_destination(),
         }
     );

@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use inquire::Confirm;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 pub(crate) const SETUP_NEXT_ACTIONS: [&str; 3] = [
@@ -185,8 +185,6 @@ pub fn install_selected(
     let plan = build_install_plan(&resources, &[], status, platform, &destination)?;
     let settings_paths = SettingsPaths::detect()?;
     let related_settings = unapplied_related_settings(&resources, &settings_paths);
-    let setting_before = setting_snapshots(&related_settings, &settings_paths);
-    let adapter_before = adapter_snapshot(&destination);
     let out = Out::detect();
     out.title(mode.command(), format!("{} item(s)", resources.len()));
     print_plan(&out, &plan);
@@ -199,6 +197,9 @@ pub fn install_selected(
         out.verdict(true, "Cancelled; no changes made");
         return Ok(true);
     }
+    let setting_before = setting_snapshots(&related_settings, &settings_paths);
+    let adapter_existed = adapter_existed(&destination);
+    let skills_before = existing_skill_paths(&resources, &destination);
     let mut report = execute_install_plan(&plan, system);
     apply_related_settings(&related_settings, &settings_paths, &mut report);
     if let Err(message) = record_install_ownership(
@@ -208,7 +209,8 @@ pub fn install_selected(
         &related_settings,
         &setting_before,
         &settings_paths,
-        adapter_before,
+        adapter_existed,
+        &skills_before,
         status,
         &report,
     ) {
@@ -315,7 +317,8 @@ fn run_interactive(
     let installed = vec![false; resources.len()];
     let ownership_destination = skill_destination.clone();
     let setting_before = setting_snapshots(&settings, &settings_paths);
-    let adapter_before = adapter_snapshot(&ownership_destination);
+    let adapter_existed = adapter_existed(&ownership_destination);
+    let skills_before = existing_skill_paths(&resources, &ownership_destination);
     let model = Model {
         mode,
         purpose: crate::wizard::WizardPurpose::Install,
@@ -374,7 +377,8 @@ fn run_interactive(
                 &settings,
                 &setting_before,
                 &settings_paths,
-                adapter_before,
+                adapter_existed,
+                &skills_before,
                 status,
                 &report,
             ) {
@@ -522,17 +526,29 @@ fn setting_snapshots(
         .collect()
 }
 
-fn adapter_snapshot(destination: &SkillDestination) -> Option<String> {
-    if !destination.agents.contains(&SkillAgent::OpenCode) {
-        return None;
-    }
-    let path = match destination.scope {
-        SkillScope::Global => crate::skills::opencode_adapter_path(&destination.home),
-        SkillScope::Project => {
-            crate::skills::project_opencode_adapter_path(&destination.project_root)
-        }
-    };
-    fs::read_to_string(path).ok()
+fn existing_skill_paths(
+    resources: &[Resource],
+    destination: &SkillDestination,
+) -> BTreeSet<std::path::PathBuf> {
+    destination
+        .trees()
+        .into_iter()
+        .flat_map(|tree| {
+            resources
+                .iter()
+                .filter(|resource| resource.kind == ResourceKind::Skill)
+                .map(move |resource| tree.join(&resource.install_target))
+        })
+        .filter(|path| path.symlink_metadata().is_ok())
+        .collect()
+}
+
+fn adapter_existed(destination: &SkillDestination) -> bool {
+    destination.agents.contains(&SkillAgent::OpenCode)
+        && destination
+            .opencode_adapter_path()
+            .symlink_metadata()
+            .is_ok()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -543,7 +559,8 @@ fn record_install_ownership(
     settings: &[SettingSpec],
     setting_before: &BTreeMap<String, Option<String>>,
     settings_paths: &SettingsPaths,
-    adapter_before: Option<String>,
+    adapter_existed: bool,
+    skills_before: &BTreeSet<std::path::PathBuf>,
     prerequisite_status: PrerequisiteStatus,
     report: &InstallReport,
 ) -> Result<(), String> {
@@ -601,7 +618,8 @@ fn record_install_ownership(
                 .trees()
                 .into_iter()
                 .map(|tree| tree.join(&resource.install_target))
-                .filter(|path| path.is_dir())
+                .filter(|path| path.is_dir() && !skills_before.contains(path))
+                .map(|path| path.canonicalize().unwrap_or(path))
                 .map(|path| {
                     Ok(Receipt::Path {
                         digest: digest_path(&path)?,
@@ -624,12 +642,14 @@ fn record_install_ownership(
                 .map(|key| Receipt::MiseTool { key })
                 .collect(),
         };
-        state.record(OwnedResource {
-            id,
-            scope: resource_scope,
-            depends_on: dependencies,
-            receipts,
-        });
+        if !receipts.is_empty() {
+            state.record(OwnedResource {
+                id,
+                scope: resource_scope,
+                depends_on: dependencies,
+                receipts,
+            });
+        }
     }
     if report.installed.iter().any(|target| target == "tools") {
         for (needed, id, key) in [
@@ -684,16 +704,13 @@ fn record_install_ownership(
             }],
         });
     }
-    if destination.agents.contains(&SkillAgent::OpenCode)
+    if !adapter_existed
+        && destination.agents.contains(&SkillAgent::OpenCode)
         && report.installed.iter().any(|target| target == "skills")
     {
-        let path = match destination.scope {
-            SkillScope::Global => crate::skills::opencode_adapter_path(&destination.home),
-            SkillScope::Project => {
-                crate::skills::project_opencode_adapter_path(&destination.project_root)
-            }
-        };
+        let path = destination.opencode_adapter_path();
         if path.is_file() {
+            let path = path.canonicalize().unwrap_or(path);
             state.record(OwnedResource {
                 id: owned_id(&scope, "adapter:opencode"),
                 scope: scope.clone(),
@@ -702,7 +719,7 @@ fn record_install_ownership(
                     digest: digest_path(&path)?,
                     path,
                     path_kind: OwnedPathKind::File,
-                    before: adapter_before,
+                    before: None,
                 }],
             });
         }
@@ -1013,7 +1030,8 @@ mod tests {
                 zed_keymap: root.join("keymap.json"),
                 pi_fff_config: root.join("fff.json"),
             },
-            None,
+            false,
+            &BTreeSet::new(),
             PrerequisiteStatus {
                 pi: false,
                 herdr: true,
@@ -1070,6 +1088,87 @@ mod tests {
             &InstalledPackageSystem { home: root.clone() },
         )
         .unwrap());
+        assert!(crate::ownership::InstallState::load(&root)
+            .unwrap()
+            .resources
+            .is_empty());
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn adapter_presence_does_not_require_utf8_content() {
+        let root = temp_root("non-utf8-adapter");
+        let destination =
+            SkillDestination::new(vec![SkillAgent::OpenCode], SkillScope::Global, &root, &root);
+        let adapter = destination.opencode_adapter_path();
+        std::fs::create_dir_all(adapter.parent().unwrap()).unwrap();
+        std::fs::write(&adapter, [0xff]).unwrap();
+
+        assert!(adapter_existed(&destination));
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn ownership_does_not_adopt_a_preexisting_skill_dependency() {
+        let root = temp_root("preexisting-skill");
+        let tree = root.join(".agents/skills");
+        std::fs::create_dir_all(tree.join("dependency")).unwrap();
+        std::fs::write(tree.join("dependency/SKILL.md"), "custom").unwrap();
+        let resource = Resource {
+            id: "skill:dependency".into(),
+            kind: ResourceKind::Skill,
+            group: "test".into(),
+            label: "dependency".into(),
+            description: String::new(),
+            install_target: "dependency".into(),
+            next_action: String::new(),
+            dependencies: Vec::new(),
+            bin: None,
+            version: None,
+            source: None,
+            windows_wsl: false,
+            companions: Vec::new(),
+        };
+        let destination = SkillDestination::new(
+            vec![SkillAgent::AgentsStandard],
+            SkillScope::Global,
+            &root,
+            &root,
+        );
+        let skills_before = existing_skill_paths(std::slice::from_ref(&resource), &destination);
+        let report = InstallReport {
+            installed: vec!["skills".into()],
+            failures: Vec::new(),
+        };
+
+        record_install_ownership(
+            &InstalledSkillSystem {
+                home: root.clone(),
+                commands: std::sync::Mutex::new(Vec::new()),
+            },
+            &[resource],
+            &destination,
+            &[],
+            &BTreeMap::new(),
+            &SettingsPaths {
+                herdr_config: root.join("herdr.toml"),
+                zed_settings: root.join("zed.json"),
+                zed_keymap: root.join("keymap.json"),
+                pi_fff_config: root.join("fff.json"),
+            },
+            false,
+            &skills_before,
+            PrerequisiteStatus {
+                pi: false,
+                herdr: false,
+                npm: false,
+                mise: false,
+                node: NodeStatus::Missing,
+            },
+            &report,
+        )
+        .unwrap();
+
         assert!(crate::ownership::InstallState::load(&root)
             .unwrap()
             .resources

@@ -6,6 +6,12 @@ $EvidenceDir = Join-Path $env:RUNNER_TEMP "loom-install-e2e"
 New-Item -ItemType Directory -Path $EvidenceDir -Force | Out-Null
 $PowerShellExe = (Get-Command $env:LOOM_E2E_POWERSHELL -ErrorAction Stop).Source
 $TargetProfile = (& $PowerShellExe -NoProfile -Command '$PROFILE').Trim()
+$Documents = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+$ExpectedProfiles = @(
+  $TargetProfile,
+  (Join-Path $Documents "WindowsPowerShell\profile.ps1"),
+  (Join-Path $Documents "PowerShell\profile.ps1")
+)
 $Skill = if ($env:LOOM_E2E_SKILL) { $env:LOOM_E2E_SKILL } else { "next" }
 $ExpectBeads = $Skill -eq "next"
 
@@ -70,7 +76,7 @@ if ($env:LOOM_E2E_TOKEI -eq "skip") {
 $StatusLog = Join-Path $EvidenceDir "loom-status.txt"
 Invoke-Loom status *> $StatusLog
 if ($LASTEXITCODE -ne 0) { throw "loom status failed" }
-$Project = Join-Path $env:RUNNER_TEMP "loom-first-project"
+$Project = Join-Path $env:RUNNER_TEMP "loom first project with spaces"
 New-Item -ItemType Directory -Path $Project -Force | Out-Null
 Push-Location $Project
 try {
@@ -96,21 +102,12 @@ if ($ExpectBeads) {
 
 $Selection = Join-Path $HOME ".config\mise\conf.d\loom.toml"
 if (-not (Test-Path $Selection)) { throw "mise selection was not created" }
-$SelectionText = Get-Content $Selection -Raw
-$SelectionBefore = $SelectionText
-if ([regex]::Matches($SelectionText, '(?m)^# core:begin').Count -ne 1) {
+$SelectionBefore = Get-Content $Selection -Raw
+if ([regex]::Matches($SelectionBefore, '(?m)^# core:begin').Count -ne 1) {
   throw "selection must contain exactly one core start marker"
 }
-if ([regex]::Matches($SelectionText, '(?m)^# core:end').Count -ne 1) {
+if ([regex]::Matches($SelectionBefore, '(?m)^# core:end').Count -ne 1) {
   throw "selection must contain exactly one core end marker"
-}
-if ($ExpectBeads) {
-  foreach ($Expected in @("beads_rust", "beads_viewer")) {
-    if (-not $SelectionText.Contains($Expected)) { throw "selection is missing $Expected" }
-  }
-}
-if ($env:LOOM_E2E_TOKEI -ne "skip" -and -not $SelectionText.Contains('"aqua:XAMPPRocky/tokei"')) {
-  throw "selection is missing the native Tokei backend"
 }
 
 $SkillRoots = @(
@@ -136,21 +133,69 @@ $FreshShell = Join-Path $EvidenceDir "fresh-shell.txt"
 if ($LASTEXITCODE -ne 0) { throw "Loom is unavailable in a fresh PowerShell" }
 
 $SkillHashBefore = (Get-FileHash (Join-Path $SkillRoots[0] "$Skill\SKILL.md") -Algorithm SHA256).Hash
+# Recreate the exact state left when a package manager installed mise but the
+# first process could not discover it: ownership is pending and the ledger has
+# not recorded core:mise yet. Also route Documents to a path with spaces.
+$StatePath = Join-Path $HOME ".config\loom\install-state.json"
+$State = Get-Content $StatePath -Raw | ConvertFrom-Json
+$State.resources.PSObject.Properties.Remove("core:mise")
+[IO.File]::WriteAllText(
+  $StatePath,
+  ($State | ConvertTo-Json -Depth 20),
+  [Text.UTF8Encoding]::new($false)
+)
+$SelectionBackup = Join-Path (Split-Path -Parent $Selection) ".loom.toml.loom-old"
+Move-Item -LiteralPath $Selection -Destination $SelectionBackup
+$ProfileBackup = Join-Path (Split-Path -Parent $TargetProfile) ("." + (Split-Path -Leaf $TargetProfile) + ".loom-old")
+Move-Item -LiteralPath $TargetProfile -Destination $ProfileBackup
+$PendingMise = Join-Path $HOME ".config\loom\bootstrap-mise-pending.json"
+[IO.File]::WriteAllText(
+  $PendingMise,
+  (@{ manager = "direct"; pathAdded = $false } | ConvertTo-Json -Compress),
+  [Text.UTF8Encoding]::new($false)
+)
+$RedirectedDocuments = Join-Path $env:RUNNER_TEMP "e2e redirected Documents"
+$env:LOOM_E2E_DOCUMENTS_DIR = $RedirectedDocuments
 $RerunLog = Join-Path $EvidenceDir "rerun.txt"
-Invoke-Bootstrap *> $RerunLog
+try {
+  Invoke-Bootstrap *> $RerunLog
+} finally {
+  Remove-Item Env:LOOM_E2E_DOCUMENTS_DIR -ErrorAction SilentlyContinue
+}
+$State = Get-Content $StatePath -Raw | ConvertFrom-Json
+$MiseReceipt = $State.resources."core:mise".receipts | Where-Object { $_.kind -eq "mise-installation" } | Select-Object -First 1
+if (-not $MiseReceipt -or $MiseReceipt.manager -ne "direct") {
+  throw "pending mise ownership was not restored on rerun"
+}
+if (Test-Path $PendingMise) { throw "successful rerun left pending mise ownership behind" }
+if (-not (Test-Path $Selection) -or (Test-Path $SelectionBackup)) {
+  throw "rerun did not recover the interrupted mise selection"
+}
+if (-not (Test-Path $TargetProfile) -or (Test-Path $ProfileBackup)) {
+  throw "rerun did not recover the interrupted PowerShell profile"
+}
+$ExpectedProfiles += @(
+  (Join-Path $RedirectedDocuments "WindowsPowerShell\profile.ps1"),
+  (Join-Path $RedirectedDocuments "PowerShell\profile.ps1")
+)
+$ExpectedProfiles = $ExpectedProfiles | Select-Object -Unique
 
-$ProfileText = Get-Content $TargetProfile -Raw
-$ProfileText | Set-Content (Join-Path $EvidenceDir "profile.txt")
 $MiseQuoted = $Mise.Replace("'", "''")
 $MiseDirQuoted = (Split-Path -Parent $Mise).Replace("'", "''")
 $Activation = "`$env:Path = '$MiseDirQuoted;' + `$env:Path; (& '$MiseQuoted' activate pwsh) | Out-String | Invoke-Expression"
-if ([regex]::Matches($ProfileText, [regex]::Escape($Activation)).Count -ne 1) {
-  throw "mise activation must appear exactly once in the PowerShell profile"
+foreach ($ExpectedProfile in $ExpectedProfiles) {
+  if (-not (Test-Path $ExpectedProfile)) { throw "installer omitted PowerShell profile $ExpectedProfile" }
+  $ProfileText = Get-Content $ExpectedProfile -Raw
+  $ProfileText | Set-Content (Join-Path $EvidenceDir ("profile-" + [IO.Path]::GetFileName((Split-Path -Parent $ExpectedProfile)) + ".txt"))
+  if ([regex]::Matches($ProfileText, [regex]::Escape($Activation)).Count -ne 1) {
+    throw "mise activation must appear exactly once in $ExpectedProfile"
+  }
 }
 $SelectionText = Get-Content $Selection -Raw
 if ($SelectionText.Replace("`r`n", "`n") -ne $SelectionBefore.Replace("`r`n", "`n")) {
   throw "rerun changed the selected tool set"
 }
+$SelectionLines = $SelectionText -split "`r?`n"
 $SkillHashAfter = (Get-FileHash (Join-Path $SkillRoots[0] "$Skill\SKILL.md") -Algorithm SHA256).Hash
 if ($SkillHashAfter -ne $SkillHashBefore) { throw "rerun changed the installed skill" }
 $Manifest = Join-Path $(if ($env:LOOM_REPO_DIR) { $env:LOOM_REPO_DIR } else { $Workspace }) "manifest\loom.toml"
@@ -160,12 +205,12 @@ foreach ($Line in $ManifestLines) {
   if ($Line.StartsWith("# core:begin")) { $InsideCore = $true; continue }
   if ($Line.StartsWith("# core:end")) { $InsideCore = $false; continue }
   if ($InsideCore -and $Line -match '^[^#\s].*=') {
-    if (-not ($SelectionText -split "`r?`n").Contains($Line)) { throw "selection changed exact core pin: $Line" }
+    if (-not $SelectionLines.Contains($Line)) { throw "selection changed exact core pin: $Line" }
   }
 }
 if ($env:LOOM_E2E_TOKEI -ne "skip") {
   $TokeiPin = $ManifestLines | Where-Object { $_ -match '^"aqua:XAMPPRocky/tokei"' } | Select-Object -First 1
-  if (-not ($SelectionText -split "`r?`n").Contains($TokeiPin)) { throw "selection changed the exact Tokei pin" }
+  if (-not $SelectionLines.Contains($TokeiPin)) { throw "selection changed the exact Tokei pin" }
   if (-not (Select-String -Quiet -Path (Join-Path $EvidenceDir "tokei-version.txt") -SimpleMatch 'tokei 12.1.2')) {
     throw "Tokei version did not match its exact pin"
   }

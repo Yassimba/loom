@@ -647,13 +647,13 @@ fn render_gallery() {
 }
 
 #[test]
-fn setup_starts_with_the_recommended_group() {
+fn setup_starts_with_everything() {
     let mut model = model(ready());
     model.mode = crate::app::SelectionMode::Setup;
     let wizard = Wizard::new(model);
 
-    assert_eq!(group_titles(&wizard)[0], "Recommended");
-    assert_eq!(choose(&wizard).groups[0].rows, [Row::Resource(3)]);
+    assert_eq!(group_titles(&wizard)[0], "Everything");
+    assert!(choose(&wizard).groups[0].everything);
 }
 
 #[test]

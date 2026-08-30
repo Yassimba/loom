@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 This run is a **briefing**. Apply starts on a later turn, when the user names an item (`npx skills update <name>`, or `loom update` then mise for a TUI).
 
-Write the briefing in the writing-clearly-and-concisely **register**.
+Write the briefing in the write-simply **register**.
 
 ## 1. Inventory
 

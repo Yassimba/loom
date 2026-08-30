@@ -1,5 +1,6 @@
 pub mod app;
 mod catalog;
+mod fs_tx;
 pub mod init;
 mod install;
 mod jsonc;

@@ -64,7 +64,7 @@ Done when every listed figure has a `.py`, an `.html`, and an `.svg`, the parent
 
 ## 6. Write the walkthrough
 
-Write `ai-docs/explanations/<feature-slug>/walkthrough.md` in the `writing-clearly-and-concisely` register, sized by relevant files: 1–3 files, 150–300 words; 4–10, 300–600; 11+, 500–900. The figures carry the structure; the prose carries anchors and the facts no figure can.
+Write `ai-docs/explanations/<feature-slug>/walkthrough.md` in the `write-simply` register, sized by relevant files: 1–3 files, 150–300 words; 4–10, 300–600; 11+, 500–900. The figures carry the structure; the prose carries anchors and the facts no figure can.
 
 Open the document with the whole path in one sentence. Sections in order: **Context** (what starts the feature, what it produces, the scope, three lines at most; in diff mode, the range and two lines on what changed), one section per rung drawn in ladder order, **What changed** (diff mode: each diff figure with its text list), **Result** (the most important fact, one short paragraph).
 

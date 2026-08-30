@@ -397,11 +397,12 @@ impl Wizard {
             let destination = self.skill_destination();
             let unchanged_destination = destination.scope == self.model.skill_destination.scope
                 && destination.agents == self.model.skill_destination.agents;
+            let trees = destination.trees();
             return (unchanged_destination && self.model.installed[index])
-                || destination
-                    .trees()
-                    .iter()
-                    .any(|tree| crate::skills::skill_present_in(tree, &resource.install_target));
+                || (!trees.is_empty()
+                    && trees.iter().all(|tree| {
+                        crate::skills::skill_present_in(tree, &resource.install_target)
+                    }));
         }
         self.model.installed[index]
     }
@@ -1190,37 +1191,10 @@ impl Wizard {
     }
 }
 
-/// The Choose columns: Recommended for first setup, Everything, then skills
-/// by category, tools, Pi packages, Herdr plugins, and settings by group.
+/// The Choose columns: Everything, then skills by category, tools, Pi
+/// packages, Herdr plugins, and settings by group.
 fn choose_groups(model: &Model) -> Vec<Group> {
     let mut groups = Vec::new();
-    if model.mode == crate::app::SelectionMode::Setup {
-        let recommended = [
-            "brainstorming",
-            "tdd",
-            "diagnosing-bugs",
-            "code-review",
-            "commit",
-            "writing-clearly-and-concisely",
-        ];
-        let rows = model
-            .resources
-            .iter()
-            .enumerate()
-            .filter(|(_, resource)| {
-                resource.kind == ResourceKind::Skill
-                    && recommended.contains(&resource.install_target.as_str())
-            })
-            .map(|(index, _)| Row::Resource(index))
-            .collect::<Vec<_>>();
-        if !rows.is_empty() {
-            groups.push(Group {
-                title: "Recommended".into(),
-                rows,
-                everything: false,
-            });
-        }
-    }
     if !model.resources.is_empty() {
         groups.push(Group {
             title: "Everything".into(),

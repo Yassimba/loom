@@ -31,6 +31,34 @@ function Get-Url([string]$Url, [string]$OutFile) {
   }
 }
 
+function Restore-AtomicPath([string]$Path) {
+  $Parent = Split-Path -Parent $Path
+  $Name = Split-Path -Leaf $Path
+  $Backup = Join-Path $Parent ".$Name.loom-old"
+  if (-not (Test-Path $Path) -and (Test-Path $Backup)) {
+    Move-Item -LiteralPath $Backup -Destination $Path
+  } elseif (Test-Path $Path) {
+    Remove-Item -LiteralPath $Backup -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Set-AtomicLines([string]$Path, [string[]]$Lines) {
+  $Parent = Split-Path -Parent $Path
+  New-Item -ItemType Directory -Path $Parent -Force | Out-Null
+  $Name = Split-Path -Leaf $Path
+  $Incoming = Join-Path $Parent ".$Name.loom-new"
+  $Backup = Join-Path $Parent ".$Name.loom-old"
+  Remove-Item -LiteralPath $Incoming -Force -ErrorAction SilentlyContinue
+  $Text = ($Lines -join [Environment]::NewLine) + [Environment]::NewLine
+  [System.IO.File]::WriteAllText($Incoming, $Text, [System.Text.UTF8Encoding]::new($false))
+  if (Test-Path $Path) {
+    [System.IO.File]::Replace($Incoming, $Path, $Backup)
+    Remove-Item -LiteralPath $Backup -Force -ErrorAction SilentlyContinue
+  } else {
+    Move-Item -LiteralPath $Incoming -Destination $Path
+  }
+}
+
 function Install-MiseRelease {
   $Headers = @{
     Accept = "application/vnd.github+json"
@@ -83,6 +111,18 @@ function Install-MiseRelease {
 $MiseInstalledByLoom = $false
 $MiseInstallMethod = ""
 $MisePathAdded = $false
+$PendingMise = Join-Path $HOME ".config\loom\bootstrap-mise-pending.json"
+Restore-AtomicPath $PendingMise
+if ((Get-Command mise -ErrorAction SilentlyContinue) -and (Test-Path $PendingMise)) {
+  try {
+    $Pending = Get-Content $PendingMise -Raw | ConvertFrom-Json
+    $MiseInstalledByLoom = $true
+    $MiseInstallMethod = [string]$Pending.manager
+    $MisePathAdded = [bool]$Pending.pathAdded
+  } catch {
+    throw "$Name`: could not read pending mise ownership from $PendingMise`: $($_.Exception.Message)"
+  }
+}
 if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   $MiseInstalledByLoom = $true
   Write-Host "$Name`: installing mise (https://mise.jdx.dev)..."
@@ -98,7 +138,6 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   if (-not $installed) {
     Install-MiseRelease
     $MiseInstallMethod = "direct"
-    $installed = $true
   }
   # The nested PowerShell of the README one-liner keeps its pre-install PATH.
   # Pull in the paths that WinGet or Scoop just persisted for future shells.
@@ -120,6 +159,13 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
     if (Test-Path $dir) { $env:Path = "$env:Path".TrimEnd(';') + ";" + $dir }
   }
 }
+if ($MiseInstalledByLoom) {
+  $PendingJson = ConvertTo-Json -Compress @{
+    manager = $MiseInstallMethod
+    pathAdded = $MisePathAdded
+  }
+  Set-AtomicLines $PendingMise @($PendingJson)
+}
 if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   throw "$Name`: mise is installed but not on PATH yet; open a new terminal and rerun this installer"
 }
@@ -127,8 +173,8 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
 # 2. Refresh the required core block - node and the Loom CLI - while keeping
 #    any optional tools already chosen through the wizard. This also repairs
 #    selections left incomplete by an interrupted or older bootstrap.
-New-Item -ItemType Directory -Path $ConfD -Force | Out-Null
 $Selection = Join-Path $ConfD "loom.toml"
+Restore-AtomicPath $Selection
 $TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
 try {
   Get-Url $ManifestUrl $TmpManifest
@@ -160,10 +206,9 @@ try {
     }
     if ($skippingCore) { throw "$Name`: existing selection has an incomplete core block" }
     if (-not $inserted) { throw "$Name`: existing selection is missing its [tools] table" }
-    $updated | Set-Content -Path $Selection
+    Set-AtomicLines $Selection @($updated)
   } else {
-    @("# Managed by Loom: the selected tools from the published manifest.", "", "[tools]") + $core |
-      Set-Content -Path $Selection
+    Set-AtomicLines $Selection @(@("# Managed by Loom: the selected tools from the published manifest.", "", "[tools]") + $core)
   }
   Write-Host "$Name`: core tools synced to $Selection"
 } finally {
@@ -180,20 +225,25 @@ $MiseExe = $MiseCommand.Replace("'", "''")
 $MiseDir = (Split-Path -Parent $MiseCommand).Replace("'", "''")
 $Activation = "`$env:Path = '$MiseDir;' + `$env:Path; (& '$MiseExe' activate pwsh) | Out-String | Invoke-Expression"
 (& $MiseCommand activate pwsh) | Out-String | Invoke-Expression
+$Documents = if ($env:LOOM_E2E_DOCUMENTS_DIR) {
+  $env:LOOM_E2E_DOCUMENTS_DIR
+} else {
+  [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+}
+if (-not $Documents) { $Documents = Join-Path $HOME "Documents" }
 $Profiles = @(
   [string]$PROFILE,
-  (Join-Path $HOME "Documents\WindowsPowerShell\profile.ps1"),
-  (Join-Path $HOME "Documents\PowerShell\profile.ps1")
+  (Join-Path $Documents "WindowsPowerShell\profile.ps1"),
+  (Join-Path $Documents "PowerShell\profile.ps1")
 ) | Select-Object -Unique
 $ChangedProfiles = @()
 foreach ($ProfilePath in $Profiles) {
-  $ProfileDirectory = Split-Path -Parent $ProfilePath
-  if ($ProfileDirectory) {
-    New-Item -ItemType Directory -Path $ProfileDirectory -Force | Out-Null
-  }
+  Restore-AtomicPath $ProfilePath
   $ProfileContent = if (Test-Path $ProfilePath) { [string](Get-Content $ProfilePath -Raw) } else { "" }
   if (-not $ProfileContent.Contains($Activation)) {
-    Add-Content -Path $ProfilePath -Value $Activation
+    $ExistingProfile = $ProfileContent.TrimEnd("`r", "`n")
+    $ProfileLines = if ($ExistingProfile) { @($ExistingProfile, $Activation) } else { @($Activation) }
+    Set-AtomicLines $ProfilePath $ProfileLines
     $ChangedProfiles += $ProfilePath
   }
 }
@@ -220,4 +270,8 @@ if ($env:LOOM_E2E_LOOM_BIN) {
 } else {
   mise -C $HOME exec -- loom setup @SetupArgs
 }
-exit $LASTEXITCODE
+$SetupExit = $LASTEXITCODE
+if ($SetupExit -eq 0) {
+  Remove-Item -LiteralPath $PendingMise -Force -ErrorAction SilentlyContinue
+}
+exit $SetupExit

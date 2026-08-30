@@ -239,6 +239,34 @@ function formatStatsLeft(context: FooterContext, theme: FooterTheme): string {
   return parts.join(" ");
 }
 
+function sanitizeStatus(status: string): string {
+  return status
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+function formatDirectoryContext(status: string): string {
+  const names = sanitizeStatus(status)
+    .replace(/^added dirs /, "")
+    .split(", ");
+  return `context ${names.map((name) => `+${name}`).join(" ")}`;
+}
+
+function remainingStatusLines(
+  statuses: ReadonlyMap<string, string>,
+  width: number,
+  theme: FooterTheme,
+): string[] {
+  const remaining = [...statuses.entries()].filter(([key]) => key !== "pi-add-dir");
+  if (remaining.length === 0) return [];
+  const text = remaining
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, status]) => sanitizeStatus(status))
+    .join(" ");
+  return [truncateToWidth(text, width, theme.fg("dim", "..."))];
+}
+
 function formatWorkingDirectory(context: FooterContext, footerData: FooterData): string {
   let directory = context.sessionManager.getCwd();
   const home = process.env.HOME || process.env.USERPROFILE;
@@ -246,7 +274,11 @@ function formatWorkingDirectory(context: FooterContext, footerData: FooterData):
   const branch = footerData.getGitBranch();
   if (branch) directory = `${directory} (${branch})`;
   const sessionName = context.sessionManager.getSessionName();
-  return sessionName ? `${directory} • ${sessionName}` : directory;
+  if (sessionName) directory = `${directory} • ${sessionName}`;
+  const addedDirectories = footerData.getExtensionStatuses().get("pi-add-dir");
+  return addedDirectories
+    ? `${directory} • ${formatDirectoryContext(addedDirectories)}`
+    : directory;
 }
 
 // The stats line is dim-wrapped as a whole; carve the colored fast label out
@@ -306,6 +338,7 @@ export class FastFooter implements Component {
     let rightSide = model?.reasoning
       ? `${modelLabel} • ${thinkingLevel === "off" ? "thinking off" : thinkingLevel}`
       : modelLabel;
+    const statuses = footerData.getExtensionStatuses();
 
     const statsLeft = truncateToWidth(formatStatsLeft(context, theme), renderWidth, "...");
     const leftWidth = visibleWidth(statsLeft);
@@ -329,19 +362,6 @@ export class FastFooter implements Component {
       theme.fg("dim", statsLeft) + dimPreservingFastLabel(theme, statsLine.slice(statsLeft.length)),
     ];
 
-    const statuses = footerData.getExtensionStatuses();
-    if (statuses.size > 0) {
-      const text = [...statuses.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([, status]) =>
-          status
-            .replace(/[\r\n\t]/g, " ")
-            .replace(/ +/g, " ")
-            .trim(),
-        )
-        .join(" ");
-      lines.push(truncateToWidth(text, renderWidth, theme.fg("dim", "...")));
-    }
-    return lines;
+    return [...lines, ...remainingStatusLines(statuses, renderWidth, theme)];
   }
 }

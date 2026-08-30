@@ -63,7 +63,7 @@ Note: the global `merge` skill is not a rename of `resolving-merge-conflicts`
 
 Use Conventional Commits. [release-please](https://github.com/googleapis/release-please)
 (`release.yml`, config in `release-please-config.json`) keeps one release PR
-per changed component — `cli/loom`, `cli/loom-teams`, `plugins/openai-fast` —
+per changed component — `cli/loom`, `cli/loom-teams`, `plugins/openai-fast`, `plugins/pi-add-dir` —
 with the version bump and changelog. Merging it tags `<component>-vX.Y.Z`,
 uploads the binaries, then moves the `manifest/loom.toml` pin to the new tag
 and publishes to npm. A skill
@@ -99,3 +99,12 @@ at its stated path and the graph must stay acyclic. On this machine the agent
 trees are symlinked into the repo (`sync-skills.sh link`); `loom update`
 never writes through those symlinks, so keep using `pull` before `link` for
 divergences.
+
+<!-- loom:section:project-setup hash:267500200da2cf72 -->
+
+## Project setup
+
+- Issue workflow: `ai-docs/agents/issue-tracker.md`
+- Domain documentation: `ai-docs/agents/domain.md`
+- Editor links: `ai-docs/agents/editor.md`
+<!-- /loom:section:project-setup -->

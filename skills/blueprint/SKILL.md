@@ -79,7 +79,7 @@ Then run a prose gate over every authored artifact — `brief.md`, the `changes.
 
 1. Invoke the `stop-the-slop` skill in **Improve** stance. These are reference documents: no AI patterns, every fact kept.
 2. Check the result against the `i-have-adhd` rules: each overview leads with its point, lists are numbered and capped at five, and no sentence asks the reader to hold off-screen state.
-3. Hold the register of `writing-clearly-and-concisely`: ASD-STE100 Simplified Technical English. Replace each jargon word with the plain term, or define it in bold at first use when the reviewer needs it to search the code.
+3. Hold the register of `write-simply`: ASD-STE100 Simplified Technical English. Replace each jargon word with the plain term, or define it in bold at first use when the reviewer needs it to search the code.
 
 A sentence that fails any check is fixed and re-checked before validation runs.
 

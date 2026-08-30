@@ -6,7 +6,7 @@ const CONTEXT_FILES = ["AGENTS.md", "CLAUDE.md"] as const;
 
 export function footerStatus(directories: string[]): string | undefined {
   if (directories.length === 0) return undefined;
-  return `dirs ${directories.map((directory) => basename(directory)).join(", ")}`;
+  return `added dirs ${directories.map((directory) => basename(directory)).join(", ")}`;
 }
 
 function expandHome(input: string): string {

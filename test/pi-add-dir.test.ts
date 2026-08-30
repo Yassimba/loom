@@ -137,10 +137,10 @@ test("nested dot-dot immediately completes directories at any parent depth", asy
   }
 });
 
-test("footer status is a short dirs line without decoration", () => {
+test("footer status clearly labels added directories", () => {
   assert.equal(footerStatus([]), undefined);
-  assert.equal(footerStatus(["/tmp/turbine"]), "dirs turbine");
-  assert.equal(footerStatus(["/tmp/turbine", "/tmp/loom"]), "dirs turbine, loom");
+  assert.equal(footerStatus(["/tmp/turbine"]), "added dirs turbine");
+  assert.equal(footerStatus(["/tmp/turbine", "/tmp/loom"]), "added dirs turbine, loom");
 });
 
 test("matchAddedDirectory accepts a basename or a real path", async () => {

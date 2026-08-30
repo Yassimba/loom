@@ -18,7 +18,7 @@ Every docstring is read by a first-time reader: someone with the source in front
 - **State the rule, not the citation.** No "ADR-0019", "per the RFC", "as the design doc says", plan/PRD titles, or issue IDs. The decision may well _live_ in an ADR — that is correct, and it is exactly why the docstring must not point at it: the reader cannot open ADR-0019 from the source. Write the rule the code follows, in plain terms. Bad: `the stable ADR-0019 token path`. Good: `the stable token path; sibling ids are independent, so an unrelated add or delete never renumbers a node`. The only names a docstring may carry are code symbols the reader can resolve in the same codebase (a class, a function, a config key).
 - **Gloss project jargon at first use.** The first time a domain term appears in a file, give it a one-line gloss — `a "ksub" (kabelsubgroep) is a bundle of cable segments owned by one transformer` — then use it freely; the reader can grep back to the definition.
 
-**Register:** invoke the `writing-clearly-and-concisely` skill (via the Skill tool) — every docstring and comment follows its register. Mood still follows the dialect.
+**Register:** invoke the `write-simply` skill (via the Skill tool) — every docstring and comment follows its register. Mood still follows the dialect.
 
 ## Public vs internal
 
@@ -72,7 +72,7 @@ If a comment exists only to decode a cryptic name or untangle a confusing line, 
 
 ## Workflow
 
-1. Invoke the `writing-clearly-and-concisely` skill (via the Skill tool) — every docstring and comment is prose under its rules; Strunk's composition rules and the AI-pattern catalogue live there, not duplicated here.
+1. Invoke the `write-simply` skill (via the Skill tool) — every docstring and comment is prose under its rules; Strunk's composition rules and the AI-pattern catalogue live there, not duplicated here.
 2. Detect the language; read its reference above (or pick the dominant convention).
 3. Read the file end-to-end — the bodies, not just the existing docs; mark which symbols are public vs internal.
 4. Write in source order — public symbols first in long files, then internal.

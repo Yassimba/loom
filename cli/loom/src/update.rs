@@ -284,13 +284,23 @@ fn update_installed_skills(system: &dyn System, catalog: &Catalog) -> Lane {
                 format!("{total} refreshed across {} trees", reports.len()),
             );
             for report in reports {
-                let skipped = if report.skipped_symlinks.is_empty() {
+                let mut notes = Vec::new();
+                if report.skipped_existing > 0 {
+                    notes.push(format!(
+                        "{} unowned or modified, preserved",
+                        report.skipped_existing
+                    ));
+                }
+                if report.skipped_symlinks > 0 {
+                    notes.push(format!("{} symlinked, left alone", report.skipped_symlinks));
+                }
+                let detail = if notes.is_empty() {
                     String::new()
                 } else {
-                    format!(" · {} symlinked, left alone", report.skipped_symlinks.len())
+                    format!(" · {}", notes.join(" · "))
                 };
                 lane.notes.push(format!(
-                    "{}  {}{skipped}",
+                    "{}  {}{detail}",
                     tidy_path(&report.tree, &home),
                     report.installed
                 ));

@@ -1,6 +1,6 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
 skills:
-  - writing-clearly-and-concisely
+  - write-simply
   - stop-the-slop
   - i-have-adhd
   - diagram-design
