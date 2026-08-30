@@ -55,7 +55,7 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 # forges
 gh = "2.98.0"
 glab = "1.112.0"
-"github:rcieri/glab-tui" = "v0.8.3"
+"github:rcieri/glab-tui" = "v0.9.0"
 
 # hygiene & navigation
 gitleaks = "8.30.1"
