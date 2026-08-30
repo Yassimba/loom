@@ -251,6 +251,20 @@ struct InitFeatures {
     codegraph: bool,
 }
 
+fn has_project_selection(options: &InitOptions) -> bool {
+    options.python == Some(true)
+        || options.rust == Some(true)
+        || options.adhd == Some(true)
+        || options.tracker.is_some()
+        || options.domain.is_some()
+        || options.editor.is_some()
+        || options.coding_standards == Some(true)
+}
+
+fn has_explicit_selection(options: &InitOptions) -> bool {
+    has_project_selection(options) || options.codegraph == Some(true)
+}
+
 fn choose_features(
     project: &Path,
     beads_tools_installed: bool,
@@ -259,6 +273,26 @@ fn choose_features(
     options: &InitOptions,
     mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
 ) -> Result<InitFeatures> {
+    if has_explicit_selection(options) {
+        if options.tracker == Some(Tracker::Beads) && !beads_tools_installed {
+            anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
+        }
+        if options.codegraph == Some(true) && !codegraph_installed {
+            anyhow::bail!("CodeGraph is not installed; run `loom add --tool codegraph`");
+        }
+        return Ok(InitFeatures {
+            project_instructions: has_project_selection(options),
+            python: options.python.unwrap_or(false),
+            rust: options.rust.unwrap_or(false),
+            adhd: options.adhd.unwrap_or(false),
+            tracker: options.tracker,
+            domain: options.domain,
+            editor: options.editor,
+            coding_standards: options.coding_standards.unwrap_or(false),
+            codegraph: options.codegraph.unwrap_or(false),
+        });
+    }
+
     let (python_default, rust_default) = detect(project);
     let project_instructions = ask(
         "Set up project agent instructions?",
@@ -450,17 +484,19 @@ fn ignore_agent_docs(project: &Path) -> Result<&'static str> {
 }
 
 fn setup_codegraph(system: &dyn System) -> Result<()> {
-    let result = system
-        .run(&CommandSpec::new(
-            "codegraph",
-            ["install", "--yes", "--init"],
-        ))
-        .context("could not start CodeGraph setup")?;
-    if !result.success {
-        anyhow::bail!(
-            "CodeGraph setup failed: {}",
-            crate::install::command_failure_message(&result)
-        );
+    for command in [
+        CommandSpec::new("codegraph", ["install", "--yes", "--location", "local"]),
+        CommandSpec::new("codegraph", ["init"]),
+    ] {
+        let result = system
+            .run(&command)
+            .context("could not start CodeGraph setup")?;
+        if !result.success {
+            anyhow::bail!(
+                "CodeGraph setup failed: {}",
+                crate::install::command_failure_message(&result)
+            );
+        }
     }
     Ok(())
 }
@@ -1027,7 +1063,7 @@ mod tests {
     }
 
     #[test]
-    fn codegraph_setup_delegates_to_upstreams_one_shot_command() {
+    fn codegraph_setup_uses_current_install_and_init_commands() {
         let system = RecordingSystem {
             commands: Mutex::new(Vec::new()),
         };
@@ -1036,10 +1072,10 @@ mod tests {
 
         assert_eq!(
             *system.commands.lock().unwrap(),
-            [CommandSpec::new(
-                "codegraph",
-                ["install", "--yes", "--init"]
-            )]
+            [
+                CommandSpec::new("codegraph", ["install", "--yes", "--location", "local"]),
+                CommandSpec::new("codegraph", ["init"]),
+            ]
         );
     }
 
@@ -1067,6 +1103,47 @@ mod tests {
         options.yes = false;
         options.python = Some(false);
         assert!(init_has_consent(&options, false));
+    }
+
+    #[test]
+    fn explicit_tracker_selects_only_tracker_setup() {
+        let options = InitOptions {
+            python: None,
+            rust: None,
+            adhd: None,
+            tracker: Some(Tracker::Beads),
+            domain: None,
+            editor: None,
+            coding_standards: None,
+            codegraph: None,
+            yes: false,
+            force: false,
+        };
+
+        let selected = choose_features(
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+            true,
+            true,
+            Editor::Cursor,
+            &options,
+            |prompt, _, _| panic!("explicit init should not prompt for {prompt}"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            selected,
+            InitFeatures {
+                project_instructions: true,
+                python: false,
+                rust: false,
+                adhd: false,
+                tracker: Some(Tracker::Beads),
+                domain: None,
+                editor: None,
+                coding_standards: false,
+                codegraph: false,
+            }
+        );
     }
 
     #[test]

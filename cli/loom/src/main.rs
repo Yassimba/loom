@@ -34,7 +34,7 @@ enum Command {
     },
     /// Show installed agents, integrations, and runtime health
     Status,
-    /// Make this repository ready for coding agents
+    /// Make this repository ready; feature flags select only the named capabilities
     Init {
         /// Include the Python section (--no-python to exclude)
         #[arg(long, overrides_with = "no_python")]
@@ -70,7 +70,7 @@ enum Command {
         codegraph: bool,
         #[arg(long, hide = true)]
         no_codegraph: bool,
-        /// Accept detection defaults without prompting
+        /// Run without prompts; with no feature flags, accept detection defaults
         #[arg(long)]
         yes: bool,
         /// Rewrite Loom-managed project files from scratch
