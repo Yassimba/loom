@@ -83,7 +83,7 @@ rust = { version = "1.98.0", os = ["macos"] }
 "github:Dicklesworthstone/beads_viewer" = "v0.21.2"
 
 # python toolchain
-uv = "0.12.5"
+uv = "0.12.6"
 
 # skill tooling (browser automation, diagram/slide export)
 "npm:agent-browser" = "0.35.1"
