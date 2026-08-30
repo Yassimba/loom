@@ -8,7 +8,7 @@ review the diff OR the codebase (depending on context) for unnecessary complexit
 concise per finding: location, what to cut, what replaces it. The diff's best outcome is getting shorter.
 If the happy path is 95% of runtime behavior, it should be approximately 95% of the code readers see.
 
-Validate all possible code that can be reused is reused AND hunt for code that can be replaced with stdlib or functionality of existing dependencies instead of hand rolled
+Validate that there are no duplicate codepaths and it reuses existing functionality WITHOUT creating small unneeded wrappers AND hunt for code that can be replaced with stdlib or functionality of existing dependencies instead of hand rolled
 
 ## Format
 

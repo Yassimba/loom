@@ -30,14 +30,6 @@
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
     },
     {
-      "name": "pi-sandbox",
-      "version": "0.6.5",
-      "label": "sandbox",
-      "description": "Prompt before Pi reads or writes outside approved paths, and sandbox shell filesystem and network access on macOS/Linux. By carderne.",
-      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path.",
-      "windowsSupport": "wsl"
-    },
-    {
       "name": "pi-subagents",
       "version": "0.58.0",
       "label": "subagents",

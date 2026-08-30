@@ -110,7 +110,6 @@ fn model(status: PrerequisiteStatus) -> Model {
             zed_settings: "/tmp/zed-settings.json".into(),
             zed_keymap: "/tmp/zed-keymap.json".into(),
             pi_fff_config: "/tmp/pi-fff.json".into(),
-            pi_sandbox_config: "/tmp/pi-sandbox.json".into(),
         },
         status,
         platform: Platform::Unix,

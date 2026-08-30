@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "resources": [
     {
+      "id": "pi-package:@yassimba/pi-add-dir",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "add-dir",
+      "description": "Add another directory to this Pi session. The next turn sees its path and root AGENTS.md / CLAUDE.md.",
+      "installTarget": "@yassimba/pi-add-dir",
+      "nextAction": "In Pi, run /add-dir with a path."
+    },
+    {
       "id": "pi-package:@gotgenes/pi-anthropic-auth",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -80,17 +89,6 @@
       "installTarget": "pi-rewind-hook",
       "version": "1.8.6",
       "nextAction": "Branch to an earlier Pi message to see files rewind."
-    },
-    {
-      "id": "pi-package:pi-sandbox",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "sandbox",
-      "description": "Prompt before Pi reads or writes outside approved paths, and sandbox shell filesystem and network access on macOS/Linux. By carderne.",
-      "installTarget": "pi-sandbox",
-      "version": "0.6.5",
-      "nextAction": "Run /sandbox in Pi to inspect the policy or /sandbox-allow to grant another path.",
-      "windowsWsl": true
     },
     {
       "id": "pi-package:pi-subagents",
@@ -444,7 +442,7 @@
       "kind": "skill",
       "group": "Architecture",
       "label": "explain-code-flow",
-      "description": "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose, opened in Plannotator for annotation. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions.",
+      "description": "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions.",
       "installTarget": "explain-code-flow",
       "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
       "dependencies": ["writing-clearly-and-concisely", "diagram-design", "plannotator"]
@@ -835,9 +833,9 @@
       "kind": "herdr-plugin",
       "group": "Herdr plugins",
       "label": "Annotate",
-      "description": "Comment on terminal selections and copy annotations as agent context (plannotator/herdr-annotate). Needs Bun on PATH.",
+      "description": "Annotate terminal selections, review documents and agent replies, and send feedback directly to the agent (plannotator/herdr-annotate). Needs Bun on PATH.",
       "installTarget": "plannotator/herdr-annotate",
-      "nextAction": "Add the `annotate.*` key bindings from github.com/plannotator/herdr-annotate to ~/.config/herdr/config.toml, then `herdr config check`.",
+      "nextAction": "Run `herdr server reload-config`, then use your Herdr prefix with `A`, `O`, or `Shift+O`.",
       "windowsWsl": true
     },
     {

@@ -1,11 +1,11 @@
 ---
 name: explain-code-flow
-description: "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose, opened in Plannotator for annotation. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions."
+description: "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions."
 ---
 
 # Explain Code Flow
 
-Explain one feature from system shape down to runtime detail. Every drawn edge has source evidence; every figure proves one fact; the reader annotates the result in Plannotator.
+Explain one feature from system shape down to runtime detail. Every drawn edge has source evidence; every figure proves one fact. The run ends in chat with the Result paragraph and the walkthrough path.
 
 **Diff mode** applies when the user names a git range, branch, or PR, or asks what changed: draw the feature as it is now, then a colored diff of each figure the change touches. Diff mode's rules live in [`references/diagram-diff.md`](references/diagram-diff.md); load it at step 1.
 
@@ -56,11 +56,11 @@ Done when the figure list is appended to `brief.md`: for each, the file name, th
 
 Figures are Python scripts over [`scripts/draw.py`](scripts/draw.py), a drawing kit whose primitives already satisfy diagram-design's default profile (palette, fonts, 4px grid, masked labels, orthogonal connectors, paint order). Check the project's `.diagram-design` marker: absent or `profile: default` uses the kit as is; any other profile means the kit's palette does not apply, so load diagram-design's `references/profiles.md` and pass the resolved tokens to the worker to override `draw.py`'s constants.
 
-Spawn one drawing worker per figure, all in the same message so they run in parallel: a worker's time is dominated by planning one figure's coordinates (about 100 s at any effort level), so five sequential figures cost 7 minutes and five parallel ones cost 2. Keep the session's effort level; medium saves 18% and loses activation bars and clean fragment headers. Its inputs are exactly: `brief.md`, `scripts/draw.py` (the docstring is the API), `scripts/example-figure.py` (the shape of a figure script), and [`references/authoring-invariants.md`](references/authoring-invariants.md). It reads nothing from diagram-design. For each figure it writes `diagrams/<rung>-<name>.py` calling `write()`, which emits the `.html` and the standalone `.svg`, then runs `scripts/check-figures.sh diagrams/` once and fixes every failure it reports. It reports per figure: checks passed, node and arrow counts, and what it cut from the brief. It does not view the PNGs. Tell it: the check script finishes in about two seconds, so a Bash call that times out means the shell hung, not that a check failed; re-run the same command once in the background rather than decomposing the checks. Drawing figures yourself is the fallback for a single-figure walkthrough.
+Spawn one drawing worker per figure, all in the same message so they run in parallel: a worker's time is dominated by planning one figure's coordinates (about 100 s at any effort level), so five sequential figures cost 7 minutes and five parallel ones cost 2. Keep the session's effort level; medium saves 18% and loses activation bars and clean fragment headers. Its inputs are exactly: `brief.md`, `scripts/draw.py` (the docstring is the API), `scripts/example-figure.py` (the shape of a figure script), and [`references/authoring-invariants.md`](references/authoring-invariants.md). It reads nothing from diagram-design. For each figure it writes `diagrams/<rung>-<name>.py` calling `write()`, which emits the `.html` and the standalone `.svg`, then returns node and arrow counts and what it cut from the brief. The parent runs `scripts/check-figures.sh diagrams/` once after every listed stem has a `.py`, `.html`, and `.svg`. Those three files mean the figure is drawn: continue even if the worker is still running. Drawing figures yourself is the fallback for a single-figure walkthrough.
 
-`check-figures.sh` also rasterized every figure into `diagrams/png/`. View each PNG once, the checks cannot see text collisions or a label crowding an edge, and fix what you find in the figure script, re-run the check, and stop.
+`check-figures.sh` also rasterizes every figure into `diagrams/png/`. View each PNG once, the checks cannot see text collisions or a label crowding an edge, and fix what you find in the figure script, re-run the check, and stop.
 
-Done when every listed figure has a `.py`, an `.html`, and an `.svg`, the check exits 0, and every PNG was viewed.
+Done when every listed figure has a `.py`, an `.html`, and an `.svg`, the parent check exits 0, and every PNG was viewed.
 
 ## 6. Write the walkthrough
 
@@ -72,10 +72,8 @@ Each rung section: one bold sentence stating the figure's fact, the figure embed
 
 Done when architecture and spine form one path, each call flow appears once, and every figure in `diagrams/` appears once.
 
-## 7. Open for annotation
+## 7. Deliver
 
-Run `python3 scripts/check-anchors.py <repo-root> walkthrough.md --quiet` (exit 0 or fix), then build `walkthrough.html` with `python3 scripts/build-html.py walkthrough.md`, which inlines every SVG per [`references/annotation-build.md`](references/annotation-build.md). Run `plannotator annotate walkthrough.html` in the background without a timeout; it blocks until the reader submits. Plannotator renders SVG only on its raw-HTML surface, so the `.md` stays the repo artifact and the `.html` is the one the reader opens. The reader annotates figures and prose and asks questions through Ask AI. Address the returned annotations in the same conversation, rebuilding the `.html` after any change; the `plannotator` skill holds the stdout contract.
+Run `python3 scripts/check-anchors.py <repo-root> walkthrough.md --quiet` (exit 0 or fix), then build `walkthrough.html` with `python3 scripts/build-html.py walkthrough.md`, which inlines every SVG per [`references/annotation-build.md`](references/annotation-build.md). Reply with the Result paragraph and the `walkthrough.md` path. When the user asks to annotate, follow that same reference.
 
-In chat, give the result paragraph and the walkthrough path.
-
-Done when the annotations are addressed or the reader closed the session.
+Done when the Result paragraph and the walkthrough path are in chat.

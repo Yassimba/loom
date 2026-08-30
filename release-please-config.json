@@ -14,6 +14,10 @@
     "plugins/openai-fast": {
       "release-type": "node",
       "component": "openai-fast"
+    },
+    "plugins/pi-add-dir": {
+      "release-type": "node",
+      "component": "pi-add-dir"
     }
   }
 }

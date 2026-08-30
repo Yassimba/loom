@@ -4,9 +4,9 @@
     {
       "id": "annotate",
       "label": "Annotate",
-      "description": "Comment on terminal selections and copy annotations as agent context (plannotator/herdr-annotate). Needs Bun on PATH.",
+      "description": "Annotate terminal selections, review documents and agent replies, and send feedback directly to the agent (plannotator/herdr-annotate). Needs Bun on PATH.",
       "installTarget": "plannotator/herdr-annotate",
-      "nextAction": "Add the `annotate.*` key bindings from github.com/plannotator/herdr-annotate to ~/.config/herdr/config.toml, then `herdr config check`."
+      "nextAction": "Run `herdr server reload-config`, then use your Herdr prefix with `A`, `O`, or `Shift+O`."
     }
   ]
 }

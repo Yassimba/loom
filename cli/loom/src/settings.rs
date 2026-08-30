@@ -31,10 +31,7 @@ pub enum SettingChange {
     /// for the same command already exists.
     HerdrKeyCommands(Vec<KeyCommand>),
     /// Set (or subset-merge into) a top-level key in Zed's settings.json.
-    ZedValue {
-        key: String,
-        value: Json,
-    },
+    ZedValue { key: String, value: Json },
     /// Bind keys in one `context` block of Zed's keymap.json by appending a
     /// block at the end (a later block wins in Zed). A key the user already
     /// bound anywhere in that context is left alone.
@@ -45,7 +42,6 @@ pub enum SettingChange {
     /// Create a JSON config with curated defaults, but never replace an
     /// existing file.
     PiFffDefaults(Json),
-    PiSandboxDefaults(Json),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,7 +67,6 @@ pub struct SettingsPaths {
     pub zed_settings: PathBuf,
     pub zed_keymap: PathBuf,
     pub pi_fff_config: PathBuf,
-    pub pi_sandbox_config: PathBuf,
 }
 
 impl SettingsPaths {
@@ -113,7 +108,6 @@ impl SettingsPaths {
             zed_settings: zed_dir.join("settings.json"),
             zed_keymap: zed_dir.join("keymap.json"),
             pi_fff_config: pi_agent_dir.join("pi-fff.json"),
-            pi_sandbox_config: pi_agent_dir.join("sandbox.json"),
         })
     }
 }
@@ -134,6 +128,45 @@ fn home_config_dir() -> Result<PathBuf> {
 
 pub fn curated_settings() -> Vec<SettingSpec> {
     vec![
+        SettingSpec {
+            id: "herdr:annotate-keybindings".into(),
+            group: "Herdr".into(),
+            label: "Annotate keybindings".into(),
+            description: "Bind terminal annotations, document review, and agent-reply review.".into(),
+            related_resource: Some("herdr-plugin:annotate".into()),
+            change: SettingChange::HerdrKeyCommands(vec![
+                KeyCommand {
+                    key: "prefix+a".into(),
+                    kind: "plugin_action".into(),
+                    command: "annotate.capture".into(),
+                    description: Some("Annotate selected terminal text".into()),
+                },
+                KeyCommand {
+                    key: "prefix+shift+a".into(),
+                    kind: "plugin_action".into(),
+                    command: "annotate.copy-context".into(),
+                    description: Some("Copy annotations as context".into()),
+                },
+                KeyCommand {
+                    key: "prefix+m".into(),
+                    kind: "plugin_action".into(),
+                    command: "annotate.manage".into(),
+                    description: Some("Manage annotations".into()),
+                },
+                KeyCommand {
+                    key: "prefix+o".into(),
+                    kind: "plugin_action".into(),
+                    command: "annotate.open".into(),
+                    description: Some("Review documents in this folder".into()),
+                },
+                KeyCommand {
+                    key: "prefix+shift+o".into(),
+                    kind: "plugin_action".into(),
+                    command: "annotate.last".into(),
+                    description: Some("Review the agent's last reply".into()),
+                },
+            ]),
+        },
         SettingSpec {
             id: "zed:zoomed-padding".into(),
             group: "Zed".into(),
@@ -169,27 +202,6 @@ pub fn curated_settings() -> Vec<SettingSpec> {
                 "mode": "override"
             })),
         },
-        SettingSpec {
-            id: "pi:sandbox-defaults".into(),
-            group: "Pi".into(),
-            label: "Repo-only sandbox defaults".into(),
-            description: "Create a macOS/Linux Pi sandbox policy: repo-only file access, protected secrets, and GitHub-only shell networking. Existing sandbox settings are never replaced.".into(),
-            related_resource: Some("pi-package:pi-sandbox".into()),
-            change: SettingChange::PiSandboxDefaults(json!({
-                "enabled": true,
-                "permissionPromptTimeoutSeconds": 600,
-                "network": {
-                    "allowedDomains": ["github.com", "*.github.com"],
-                    "deniedDomains": []
-                },
-                "filesystem": {
-                    "denyRead": ["/Users", "/home"],
-                    "allowRead": ["."],
-                    "allowWrite": [".", "/tmp"],
-                    "denyWrite": [".pi/sandbox.json", ".env", ".env.*", "*.pem", "*.key"]
-                }
-            })),
-        },
     ]
 }
 
@@ -200,7 +212,6 @@ impl SettingSpec {
             SettingChange::ZedValue { .. } => &paths.zed_settings,
             SettingChange::ZedKeymap { .. } => &paths.zed_keymap,
             SettingChange::PiFffDefaults(_) => &paths.pi_fff_config,
-            SettingChange::PiSandboxDefaults(_) => &paths.pi_sandbox_config,
         }
     }
 
@@ -227,9 +238,6 @@ impl SettingSpec {
                 .collect(),
             SettingChange::PiFffDefaults(_) => {
                 vec!["create override config if missing".into()]
-            }
-            SettingChange::PiSandboxDefaults(_) => {
-                vec!["create recommended policy if missing".into()]
             }
         }
     }
@@ -259,7 +267,7 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
                     .all(|binding| zed_keymap_binds(&document, context, &binding.key))
             })
             .unwrap_or(false),
-        SettingChange::PiFffDefaults(_) | SettingChange::PiSandboxDefaults(_) => true,
+        SettingChange::PiFffDefaults(_) => true,
     };
     if applied {
         SettingState::Applied
@@ -272,9 +280,7 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
 pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> {
     let path = spec.target_path(paths);
     let defaults = match &spec.change {
-        SettingChange::PiFffDefaults(defaults) | SettingChange::PiSandboxDefaults(defaults) => {
-            Some(defaults)
-        }
+        SettingChange::PiFffDefaults(defaults) => Some(defaults),
         _ => None,
     };
     if let Some(defaults) = defaults {
@@ -300,7 +306,7 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
             SettingChange::HerdrKeyCommands(_) => String::new(),
             SettingChange::ZedValue { .. } => "{}\n".into(),
             SettingChange::ZedKeymap { .. } => "[]\n".into(),
-            SettingChange::PiFffDefaults(_) | SettingChange::PiSandboxDefaults(_) => unreachable!(),
+            SettingChange::PiFffDefaults(_) => unreachable!(),
         },
         Err(error) => {
             return Err(error).with_context(|| format!("could not read {}", path.display()))
@@ -312,7 +318,7 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
         SettingChange::ZedKeymap { context, bindings } => {
             apply_zed_keymap(&existing, context, bindings)?
         }
-        SettingChange::PiFffDefaults(_) | SettingChange::PiSandboxDefaults(_) => unreachable!(),
+        SettingChange::PiFffDefaults(_) => unreachable!(),
     };
     let Some(updated) = updated else {
         return Ok(false);
@@ -482,6 +488,24 @@ mod tests {
     }
 
     #[test]
+    fn annotate_setting_includes_full_plugin_bindings() {
+        let setting = curated_settings()
+            .into_iter()
+            .find(|setting| setting.id == "herdr:annotate-keybindings")
+            .unwrap();
+        let SettingChange::HerdrKeyCommands(commands) = setting.change else {
+            panic!("annotate setting must add Herdr key commands");
+        };
+        assert_eq!(commands.len(), 5);
+        assert!(commands
+            .iter()
+            .any(|command| command.command == "annotate.open"));
+        assert!(commands
+            .iter()
+            .any(|command| command.command == "annotate.last"));
+    }
+
+    #[test]
     fn herdr_binding_is_appended_once() {
         let base = "[theme]\nname = \"catppuccin\"\n\n[keys]\nprefix = \"alt+space\"\n";
         let updated = apply_herdr_bindings(base, &reviewr_binding())
@@ -623,38 +647,19 @@ mod tests {
     #[test]
     fn pi_defaults_create_once_and_preserve_existing_files() {
         let root = std::env::temp_dir().join(format!(
-            "loom-pi-sandbox-{}-{}",
+            "loom-pi-fff-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos()
         ));
-        let sandbox = root.join("agent/sandbox.json");
         let paths = SettingsPaths {
             herdr_config: root.join("herdr.toml"),
             zed_settings: root.join("zed-settings.json"),
             zed_keymap: root.join("zed-keymap.json"),
             pi_fff_config: root.join("agent/pi-fff.json"),
-            pi_sandbox_config: sandbox.clone(),
         };
-        let spec = curated_settings()
-            .into_iter()
-            .find(|setting| setting.id == "pi:sandbox-defaults")
-            .unwrap();
-
-        assert!(apply_setting(&spec, &paths).unwrap());
-        let created: Json = serde_json::from_str(&fs::read_to_string(&sandbox).unwrap()).unwrap();
-        assert_eq!(created["filesystem"]["allowRead"], json!(["."]));
-        assert_eq!(
-            created["network"]["allowedDomains"],
-            json!(["github.com", "*.github.com"])
-        );
-
-        fs::write(&sandbox, "custom policy\n").unwrap();
-        assert!(!apply_setting(&spec, &paths).unwrap());
-        assert_eq!(fs::read_to_string(&sandbox).unwrap(), "custom policy\n");
-
         let fff = curated_settings()
             .into_iter()
             .find(|setting| setting.id == "pi:fff-override")
