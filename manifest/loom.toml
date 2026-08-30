@@ -53,7 +53,7 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 "github:Yassimba/plannotator" = "v0.27.9-loom.1"
 
 # forges
-gh = "2.97.0"
+gh = "2.98.0"
 glab = "1.112.0"
 "github:rcieri/glab-tui" = "v0.8.3"
 
