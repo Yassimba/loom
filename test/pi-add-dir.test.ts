@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { realpathSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
@@ -13,6 +13,11 @@ import piAddDir, {
   matchAddedDirectory,
   shouldSubmitAddDirPath,
 } from "../plugins/pi-add-dir/src/index.ts";
+import {
+  directoryConfigPath,
+  loadDirectories,
+  saveDirectories,
+} from "../plugins/pi-add-dir/src/storage.ts";
 
 test("dot-dot immediately completes sibling directories before the trailing slash", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
@@ -53,6 +58,7 @@ test("a second forced Tab still uses add-dir command completion", async () => {
   type FakeContext = {
     cwd: string;
     sessionManager: { getBranch: () => never[] };
+    isProjectTrusted: () => boolean;
     ui: {
       setStatus: () => void;
       setEditorComponent: (factory: unknown) => void;
@@ -81,6 +87,7 @@ test("a second forced Tab still uses add-dir command completion", async () => {
       {
         cwd: root,
         sessionManager: { getBranch: () => [] },
+        isProjectTrusted: () => false,
         ui: {
           setStatus() {},
           setEditorComponent() {},
@@ -158,4 +165,75 @@ test("rm-dir completion lists only added directories", () => {
   assert.equal(items.length, 1);
   assert.equal(items[0]?.value, "/tmp/turbine");
   assert.equal(items[0]?.label, "turbine");
+});
+
+test("project directories persist outside the session", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
+  try {
+    assert.deepEqual(saveDirectories("project", root, ["/tmp/turbine"]), { ok: true });
+    assert.deepEqual(loadDirectories("project", root), { directories: ["/tmp/turbine"] });
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test("saving refuses to replace malformed directory config", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
+  const path = directoryConfigPath("project", root);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, "not json", "utf8");
+  try {
+    const result = saveDirectories("project", root, ["/tmp/turbine"]);
+    assert.equal(result.ok, false);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test("global scope warns that instructions affect every project", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
+  const external = join(root, "external");
+  await mkdir(external);
+  let addDir: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+  let scopePrompt: { title: string; options: string[] } | undefined;
+  let confirmation: { title: string; message: string } | undefined;
+  const pi = {
+    on() {},
+    appendEntry() {},
+    exec: async () => ({ code: 0, stdout: "", stderr: "" }),
+    registerCommand(name: string, command: { handler: typeof addDir }) {
+      if (name === "add-dir") addDir = command.handler;
+    },
+  };
+  piAddDir(pi as unknown as ExtensionAPI);
+
+  try {
+    assert(addDir);
+    await addDir(external, {
+      cwd: root,
+      hasUI: true,
+      isProjectTrusted: () => true,
+      ui: {
+        async select(title: string, options: string[]) {
+          scopePrompt = { title, options };
+          return "All projects (global)";
+        },
+        async confirm(title: string, message: string) {
+          confirmation = { title, message };
+          return false;
+        },
+        notify() {},
+      },
+    });
+    assert.equal(scopePrompt?.title, "Add directory for:");
+    assert.deepEqual(scopePrompt?.options, [
+      "This session",
+      "This project",
+      "All projects (global)",
+    ]);
+    assert.equal(confirmation?.title, "Add directory globally?");
+    assert.match(confirmation?.message ?? "", /instructions will be added to every project/);
+  } finally {
+    await rm(root, { recursive: true });
+  }
 });
