@@ -6,7 +6,7 @@
       "kind": "pi-package",
       "group": "Pi packages",
       "label": "add-dir",
-      "description": "Add another directory to this Pi session. The next turn sees its path and root AGENTS.md / CLAUDE.md.",
+      "description": "Add directory paths and root instructions to Pi's system prompt by session, project, or global scope.",
       "installTarget": "@yassimba/pi-add-dir",
       "nextAction": "In Pi, run /add-dir with a path."
     },
