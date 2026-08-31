@@ -9,5 +9,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["plugins/*/src/**/*.ts", "test/**/*.ts"]
+  "include": ["plugins/*/src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["test/code-diagram.test.ts", "test/code-diagram-routing.test.ts"]
 }

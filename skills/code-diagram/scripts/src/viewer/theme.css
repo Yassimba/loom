@@ -1,0 +1,607 @@
+/* Diagram Design's default light visual language, scoped to Code Diagram surfaces. */
+:is(
+  .diagram-design-sequence,
+  .diagram-design-tree,
+  .diagram-design-db-schema,
+  .diagram-design-architecture
+) {
+  --dd-paper: #f5f5f5;
+  --dd-paper-2: #ececec;
+  --dd-ink: #2d3142;
+  --dd-muted: #4f5d75;
+  --dd-soft: #7a8399;
+  --dd-rule: rgb(45 49 66 / 12%);
+  --dd-rule-solid: #bfc0c0;
+  --dd-accent: #eb6c36;
+  --dd-accent-tint: rgb(235 108 54 / 8%);
+  --dd-link: #2e5aa8;
+  --font-sans: "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --bg: var(--dd-paper);
+  --bg-2: var(--dd-paper-2);
+  --surface: #fff;
+  --ink: var(--dd-ink);
+  --ink-soft: var(--dd-muted);
+  --ink-faint: var(--dd-soft);
+  --rule: var(--dd-rule);
+  --rule-soft: var(--dd-rule-solid);
+  --accent: var(--dd-accent);
+  --selection: var(--dd-accent);
+  --edge-muted: var(--dd-muted);
+  --rpc: var(--dd-link);
+  --rpc-wash: rgb(46 90 168 / 8%);
+  --map-canvas: var(--dd-paper);
+  --map-panel-1: rgb(45 49 66 / 2%);
+  --map-panel-2: rgb(45 49 66 / 2%);
+  --map-card: #fff;
+  --map-line-1: rgb(45 49 66 / 20%);
+  --map-line-2: var(--dd-rule-solid);
+  --map-card-line: var(--dd-ink);
+  --map-edge: var(--dd-muted);
+  --map-active-fill: var(--dd-accent-tint);
+  --map-changed: var(--dd-accent);
+  --map-added: var(--dd-link);
+  --map-removed: var(--dd-soft);
+  --map-pos: var(--dd-link);
+  --map-neg: var(--dd-soft);
+  --map-badge-bg: rgb(45 49 66 / 5%);
+  --map-chip: var(--dd-paper);
+  --map-storage-detail: var(--dd-muted);
+  --map-storage-fill-detail: rgb(45 49 66 / 5%);
+  --map-storage-border: var(--dd-muted);
+  color: var(--dd-ink);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  background-color: var(--dd-paper);
+  color-scheme: light;
+}
+
+/* Sequence — actor boxes, dashed lifelines, activation bars, and masked labels. */
+.diagram-design-sequence,
+.diagram-design-sequence .sequence-diagram-body,
+.diagram-design-sequence .react-flow,
+.diagram-design-sequence .react-flow__renderer,
+.diagram-design-sequence .react-flow__pane {
+  background: var(--dd-paper) !important;
+}
+
+.diagram-design-sequence .sequence-participant-comment-target {
+  min-width: min(144px, calc(100% - 16px));
+  margin-top: 24px;
+}
+
+.diagram-design-sequence .sequence-participant-label {
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--dd-ink);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--dd-ink);
+  font: 600 12px/16px var(--font-sans);
+}
+
+.diagram-design-sequence .sequence-lifeline {
+  top: 72px;
+  bottom: 16px;
+  border-left: 1px dashed rgb(45 49 66 / 22%);
+}
+
+.diagram-design-sequence .sequence-message {
+  stroke-width: 1.2;
+}
+
+.diagram-design-sequence .sequence-message-dot {
+  width: 8px;
+  height: 20px;
+  border: 0.8px solid var(--dd-muted);
+  border-radius: 0;
+  background: rgb(45 49 66 / 6%);
+}
+
+.diagram-design-sequence .sequence-message-label {
+  max-width: calc(var(--sequence-lane-width, 176px) - 12px);
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--dd-paper);
+  color: var(--dd-muted);
+  font: 500 8px/12px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.diagram-design-sequence .sequence-message-label:hover,
+.diagram-design-sequence .sequence-message-label:focus-visible,
+.diagram-design-sequence .sequence-message-label.active {
+  color: var(--dd-accent);
+  outline: 0;
+}
+
+.diagram-design-sequence :focus-visible {
+  outline: 1.2px solid var(--dd-accent);
+  outline-offset: 2px;
+}
+
+/* Call-stack diff — the Tree grammar, with unified-diff state kept explicit. */
+.diagram-design-tree {
+  overflow: hidden;
+  border: 0.8px solid var(--dd-rule-solid);
+  border-radius: 8px;
+  background: var(--dd-paper);
+  color: var(--dd-ink);
+  font-family: var(--font-sans);
+}
+
+.diagram-design-tree .call-stack-hunk {
+  min-height: 28px;
+  padding: 6px 12px;
+  border-bottom: 0.8px solid var(--dd-rule);
+  background: rgb(45 49 66 / 2%);
+  color: var(--dd-muted);
+  font: 500 8px/12px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagram-design-tree .call-stack-hunk-counts {
+  gap: 6px;
+}
+
+.diagram-design-tree :is(.call-stack-count-added, .call-stack-count-removed) {
+  min-width: 24px;
+  padding: 1px 4px;
+  border: 0.8px solid rgb(45 49 66 / 30%);
+  border-radius: 2px;
+  background: transparent;
+  text-align: center;
+}
+
+.diagram-design-tree .call-stack-count-added {
+  border-color: rgb(235 108 54 / 50%);
+  color: var(--dd-accent);
+}
+
+.diagram-design-tree .call-stack-count-removed {
+  color: var(--dd-muted);
+}
+
+.diagram-design-tree .call-stack-body {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  background: var(--dd-paper);
+  font: 400 12px/16px var(--font-sans);
+}
+
+.diagram-design-tree .call-stack-row {
+  min-height: 40px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--dd-ink);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--dd-ink);
+  box-shadow: none;
+}
+
+.diagram-design-tree .call-stack-row:hover,
+.diagram-design-tree .call-stack-row:focus-visible {
+  border-color: var(--dd-accent);
+  outline: 0;
+}
+
+.diagram-design-tree .call-stack-row:hover .call-stack-name,
+.diagram-design-tree .call-stack-row:focus-visible .call-stack-name {
+  text-decoration: none;
+}
+
+.diagram-design-tree .call-stack-gutter {
+  width: 22px;
+  color: var(--dd-muted);
+  font: 500 10px/12px var(--font-mono);
+}
+
+.diagram-design-tree .call-stack-tree {
+  color: var(--dd-muted);
+  font: 400 10px/12px var(--font-mono);
+}
+
+.diagram-design-tree .call-stack-name {
+  color: var(--dd-ink);
+  font: 600 12px/16px var(--font-sans);
+}
+
+.diagram-design-tree .call-stack-asserted {
+  padding-left: 8px;
+  border: 0;
+  color: var(--dd-muted);
+  font: 400 9px/12px var(--font-mono);
+}
+
+.diagram-design-tree .call-stack-loc {
+  color: var(--dd-muted);
+  font: 400 9px/12px var(--font-mono);
+  opacity: 1;
+}
+
+.diagram-design-tree .call-stack-added {
+  border-color: var(--dd-accent);
+  background: var(--dd-accent-tint);
+}
+
+.diagram-design-tree .call-stack-added :is(.call-stack-gutter, .call-stack-name) {
+  color: var(--dd-accent);
+}
+
+.diagram-design-tree .call-stack-removed {
+  border-color: var(--dd-soft);
+  border-style: dashed;
+  background: rgb(45 49 66 / 3%);
+  opacity: 0.72;
+}
+
+.diagram-design-tree .call-stack-removed .call-stack-name {
+  color: var(--dd-muted);
+  text-decoration: line-through;
+}
+
+.diagram-design-tree ::selection,
+.diagram-design-sequence ::selection,
+.diagram-design-db-schema ::selection,
+.diagram-design-architecture ::selection {
+  background: rgb(235 108 54 / 22%);
+  color: var(--dd-ink);
+}
+
+/* Software map — Architecture zones and standard component boxes. */
+.diagram-design-architecture,
+.diagram-design-architecture .software-map-frame,
+.diagram-design-architecture .software-map-body,
+.diagram-design-architecture .software-map-canvas,
+.diagram-design-architecture .software-map-c4-canvas,
+.diagram-design-architecture .software-map-c4-canvas .react-flow,
+.diagram-design-architecture .software-map-c4-canvas .react-flow__renderer,
+.diagram-design-architecture .software-map-c4-canvas .react-flow__pane {
+  background: var(--dd-paper) !important;
+}
+
+.diagram-design-architecture .software-map-c4-group-shell,
+.diagram-design-architecture .software-map-c4-group-shell--softwareSystem {
+  padding: 16px !important;
+  border: 0.8px dashed rgb(45 49 66 / 20%) !important;
+  border-radius: 8px !important;
+  background: rgb(45 49 66 / 2%) !important;
+  box-shadow: none !important;
+  animation: none;
+}
+
+.diagram-design-architecture .software-map-c4-group-shell:hover,
+.diagram-design-architecture .software-map-c4-group-shell:focus-visible {
+  border-color: var(--dd-muted) !important;
+  background: rgb(45 49 66 / 4%) !important;
+  outline: 0;
+}
+
+.diagram-design-architecture .software-map-c4-group-shell.selected,
+.diagram-design-architecture .software-map-c4-group-shell.selected.software-map-c4-group-shell--added,
+.diagram-design-architecture .software-map-c4-group-shell.selected.software-map-c4-group-shell--removed,
+.diagram-design-architecture .software-map-c4-group-shell.selected.software-map-c4-group-shell--modified {
+  border: 1.2px solid var(--dd-accent) !important;
+  background: rgb(235 108 54 / 3%) !important;
+}
+
+.diagram-design-architecture .software-map-c4-group-shell--added {
+  border-color: var(--dd-link) !important;
+}
+
+.diagram-design-architecture .software-map-c4-group-shell--removed {
+  border-color: var(--dd-soft) !important;
+  opacity: 0.7;
+}
+
+.diagram-design-architecture .software-map-c4-group-shell--modified {
+  border-color: var(--dd-accent) !important;
+}
+
+.diagram-design-architecture .software-map-c4-group-title,
+.diagram-design-architecture .software-map-c4-group-shell--softwareSystem .software-map-c4-group-title {
+  top: 16px !important;
+  right: 16px !important;
+  left: 16px !important;
+  gap: 8px;
+  align-items: center;
+}
+
+.diagram-design-architecture .software-map-c4-group-title span,
+.diagram-design-architecture .software-map-node-type {
+  padding: 2px 4px;
+  border: 0.8px solid rgb(45 49 66 / 30%);
+  border-radius: 2px;
+  color: var(--dd-muted) !important;
+  font: 500 7px/10px var(--font-mono) !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+}
+
+.diagram-design-architecture .software-map-c4-group-title strong,
+.diagram-design-architecture .software-map-c4-group-shell--softwareSystem .software-map-c4-group-title strong {
+  color: var(--dd-ink) !important;
+  font: 600 12px/16px var(--font-sans) !important;
+}
+
+.diagram-design-architecture .software-map-node,
+.diagram-design-architecture .software-map-c4-node-shell > .software-map-node,
+.diagram-design-architecture .software-map-c4-node-shell > .software-map-node--codeElement,
+.diagram-design-architecture .software-map-c4-node-shell > .software-map-node--dataStore,
+.diagram-design-architecture .software-map-node--codeElement,
+.diagram-design-architecture .software-map-node--dataStore {
+  box-sizing: border-box;
+  min-height: 64px;
+  padding: 12px !important;
+  border: 1px solid var(--dd-ink) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  animation: none;
+}
+
+.diagram-design-architecture .software-map-node--person {
+  border-color: var(--dd-soft) !important;
+  background: rgb(79 93 117 / 10%) !important;
+}
+
+.diagram-design-architecture .software-map-node--codeElement {
+  border-width: 0.8px !important;
+  border-color: var(--dd-rule-solid) !important;
+  background: rgb(45 49 66 / 2%) !important;
+}
+
+.diagram-design-architecture .software-map-node.boundary {
+  border-color: rgb(235 108 54 / 50%) !important;
+  border-style: dashed !important;
+  background: rgb(235 108 54 / 5%) !important;
+}
+
+.diagram-design-architecture .software-map-node--dataStore,
+.diagram-design-architecture .software-map-node--dataStoreCollection {
+  border-color: var(--dd-muted) !important;
+  background: rgb(45 49 66 / 5%) !important;
+}
+
+.diagram-design-architecture .software-map-node:hover,
+.diagram-design-architecture .software-map-node:focus-visible {
+  border-color: var(--dd-muted) !important;
+  background: #fff !important;
+  outline: 0;
+}
+
+.diagram-design-architecture .software-map-node.selected,
+.diagram-design-architecture .software-map-node.selected.software-map-node--added,
+.diagram-design-architecture .software-map-node.selected.software-map-node--removed,
+.diagram-design-architecture .software-map-node.selected.software-map-node--modified {
+  border: 1.2px solid var(--dd-accent) !important;
+  background: var(--dd-accent-tint) !important;
+}
+
+.diagram-design-architecture .software-map-node.software-map-node--added {
+  border-color: var(--dd-link) !important;
+}
+
+.diagram-design-architecture .software-map-node.software-map-node--removed {
+  border-color: var(--dd-soft) !important;
+  border-style: dashed !important;
+  opacity: 0.7;
+}
+
+.diagram-design-architecture .software-map-node.software-map-node--modified {
+  border-color: var(--dd-accent) !important;
+}
+
+.diagram-design-architecture .software-map-node h4,
+.diagram-design-architecture .software-map-node-label--world,
+.diagram-design-architecture .software-map-code-element-head code {
+  color: var(--dd-ink) !important;
+  font: 600 12px/16px var(--font-sans) !important;
+}
+
+.diagram-design-architecture .software-map-node p {
+  color: var(--dd-muted) !important;
+  font: 400 9px/13px var(--font-mono) !important;
+}
+
+.diagram-design-architecture .software-map-node-meta span,
+.diagram-design-architecture .software-map-node-meta code {
+  color: var(--dd-soft) !important;
+  font: 400 8px/12px var(--font-mono) !important;
+}
+
+.diagram-design-architecture .software-map-change-badge {
+  gap: 4px !important;
+  padding: 1px 4px !important;
+  border: 0.8px solid rgb(45 49 66 / 30%) !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  font: 500 8px/10px var(--font-mono) !important;
+}
+
+.diagram-design-architecture .software-map-c4-canvas .react-flow__edge-path,
+.diagram-design-architecture .software-map-c4-canvas .react-flow__edge.selected .react-flow__edge-path,
+.diagram-design-architecture .software-map-c4-edge--operation-active .react-flow__edge-path {
+  stroke: var(--dd-muted) !important;
+  stroke-width: 1.2px !important;
+}
+
+.diagram-design-architecture .software-map-c4-edge--call .react-flow__edge-path,
+.diagram-design-architecture .software-map-c4-edge--semantic-http .react-flow__edge-path,
+.diagram-design-architecture .software-map-c4-edge--semantic-published .react-flow__edge-path {
+  stroke: var(--dd-link) !important;
+}
+
+.diagram-design-architecture .software-map-c4-edge--semantic-primary .react-flow__edge-path {
+  stroke: var(--dd-accent) !important;
+}
+
+.diagram-design-architecture
+  :is(
+    .software-map-c4-edge--semantic-async,
+    .software-map-c4-edge--semantic-return,
+    .software-map-c4-edge--semantic-optional,
+    .software-map-c4-edge--semantic-forbidden
+  )
+  .react-flow__edge-path {
+  stroke: var(--dd-muted) !important;
+  stroke-dasharray: 5 4 !important;
+}
+
+.diagram-design-architecture .software-map-c4-edge-stop {
+  pointer-events: none;
+}
+
+.diagram-design-architecture .software-map-c4-edge-stop circle {
+  fill: var(--dd-paper);
+  stroke: var(--dd-muted);
+  stroke-width: 1px;
+}
+
+.diagram-design-architecture .software-map-c4-edge-stop path {
+  fill: none;
+  stroke: var(--dd-muted);
+  stroke-width: 1.2px;
+}
+
+.diagram-design-architecture .software-map-c4-canvas .software-map-c4-edge--selected-node .react-flow__edge-path {
+  stroke: var(--dd-accent) !important;
+}
+
+.diagram-design-architecture .software-map-c4-edge-label,
+.diagram-design-architecture .software-map-c4-edge-label--active {
+  max-width: 132px;
+  padding: 2px 6px !important;
+  border: 0 !important;
+  border-radius: 2px !important;
+  background: var(--dd-paper) !important;
+  color: var(--dd-muted) !important;
+  font: 400 8px/12px var(--font-mono) !important;
+  letter-spacing: 0.06em;
+}
+
+.diagram-design-architecture .software-map-c4-edge-label--selected-node {
+  color: var(--dd-accent) !important;
+}
+
+.diagram-design-architecture .software-map-c4-edge-endpoint {
+  width: 6px !important;
+  height: 6px !important;
+  border: 1px solid var(--dd-muted) !important;
+  border-radius: 50% !important;
+  background: var(--dd-paper) !important;
+}
+
+.diagram-design-architecture .software-map-legend {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 52px;
+  padding: 12px 16px;
+  border-top: 0.8px solid var(--dd-rule);
+  background: var(--dd-paper);
+  color: var(--dd-muted);
+}
+
+.diagram-design-architecture .software-map-legend-title {
+  flex: 0 0 auto;
+  font: 500 8px/12px var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.diagram-design-architecture .software-map-legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.diagram-design-architecture .software-map-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 9px/12px var(--font-sans);
+}
+
+.diagram-design-architecture .software-map-legend-arrow {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 10px;
+  color: var(--dd-muted);
+}
+
+.diagram-design-architecture .software-map-legend-arrow::before {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  left: 0;
+  border-top: 1.2px solid currentcolor;
+  content: "";
+}
+
+.diagram-design-architecture .software-map-legend-arrow::after {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid currentcolor;
+  content: "";
+}
+
+.diagram-design-architecture
+  :is(
+    .software-map-legend-arrow--call,
+    .software-map-legend-arrow--http,
+    .software-map-legend-arrow--published
+  ) {
+  color: var(--dd-link);
+}
+
+.diagram-design-architecture .software-map-legend-arrow--primary {
+  color: var(--dd-accent);
+}
+
+.diagram-design-architecture
+  :is(
+    .software-map-legend-arrow--async,
+    .software-map-legend-arrow--return,
+    .software-map-legend-arrow--optional,
+    .software-map-legend-arrow--forbidden
+  )::before {
+  border-top-style: dashed;
+}
+
+.diagram-design-architecture .software-map-legend-arrow--async::after {
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  border: 0;
+  border-top: 1.2px solid currentcolor;
+  border-right: 1.2px solid currentcolor;
+  transform: rotate(45deg);
+}
+
+.diagram-design-architecture .software-map-legend-arrow--forbidden::after {
+  top: -1px;
+  right: -1px;
+  border: 0;
+  color: var(--dd-muted);
+  content: "×";
+  font: 500 13px/13px var(--font-mono);
+}
+
+.diagram-design-architecture :focus-visible {
+  outline: 1.2px solid var(--dd-accent);
+  outline-offset: 2px;
+}

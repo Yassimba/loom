@@ -15,7 +15,7 @@
     "catalog:generate": "node scripts/generate-setup-catalog.mjs",
     "catalog:check": "node scripts/generate-setup-catalog.mjs --check",
     "check:rust": "cargo fmt --manifest-path cli/loom/Cargo.toml -- --check && cargo clippy --manifest-path cli/loom/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path cli/loom/Cargo.toml",
-    "test": "node --experimental-strip-types --test test/*.test.mjs test/*.test.ts",
+    "test": "node --import tsx --test test/*.test.mjs test/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.code-diagram.json",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

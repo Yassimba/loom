@@ -1,11 +1,11 @@
 ---
 name: code-diagram
-description: "Generate a strict Review-style walkthrough with SequenceDiagram, CallStackDiff, DatabaseLens, and SoftwareMap as one source-bound offline HTML file. Use for runtime order, stack changes, durable-store behavior, or repository architecture that needs clickable exact source evidence."
+description: "Generate SequenceDiagram, CallStackDiff, DatabaseLens, and SoftwareMap as one source-bound, diagram-only offline HTML file. Use for runtime order, stack changes, durable-store behavior, or repository architecture that needs clickable exact source evidence."
 ---
 
 # Code Diagram
 
-Author `review.mdx` plus typed `data.ts`. Optionally add typed `software-map.ts`; SoftwareMap is a separate Review artifact, not an MDX component. `check` and `build` use the same strict compiler path.
+Author `review.mdx` plus typed `data.ts`. Optionally add typed `software-map.ts`; SoftwareMap is a separate Review artifact, not an MDX component. `check` and `build` use the same strict compiler path. The builder uses MDX to declare diagram order but omits its prose from the output.
 
 ## Author typed data
 
@@ -74,7 +74,7 @@ export default defineSoftwareMap({
 });
 ```
 
-Element IDs become stable dot paths. Relationships must reference existing paths. Missing `software-map.ts` simply omits the map; an invalid artifact fails `check`.
+Element IDs become stable dot paths. Relationships must reference existing paths. Semantic relationships may set `semanticKind` to `dependency`, `http`, `async`, `return`, `optional`, `primary`, `forbidden`, `published`, or `foreign-key`. These values drive the arrow's stroke, dash pattern, marker, stop treatment, and generated legend; use `primary` for at most two focal flows. Missing `software-map.ts` simply omits the map; an invalid artifact fails `check`.
 
 ## Check and build
 
@@ -88,8 +88,10 @@ node --import tsx <skill>/scripts/code-diagram.ts build review.mdx \
 
 The checker type-checks both authored TypeScript files, compiles MDX, validates strict props/grammar/map structure, resolves dirty-head or pinned-base source, and verifies CallStackDiff `-`/`+` claims against `git diff HEAD`.
 
-The output embeds MDX, CSS, JavaScript, compiled models, and exact source lines. Source-linked clicks dispatch `code-diagram:open-source` on `window` with `{ sources, title }`; the host owns the editor UI. Map selections include every source range under the selected node. Removed map elements read source from the pinned base.
+The output embeds CSS, JavaScript, compiled models, and exact source lines. It contains only transparent diagram roots: no prose, document card, tour, comment control, sidebar, fullscreen portal, minimap, or toolbar. Its presentation follows Diagram Design's default light grammars: SequenceDiagram → Sequence, CallStackDiff → Tree with explicit diff states, DatabaseLens → Database schema, and SoftwareMap → Architecture. DatabaseLens combines every use case into one reviewable canvas instead of hiding them behind a selector or duplicating shared stores.
 
-The file loads from `file://` with a deny-by-default CSP and no server, external asset, network request, comments, telemetry, or session persistence. Executable authored HTML is rejected before output.
+Source-linked clicks dispatch `code-diagram:open-source` on `window` with `{ sources, title }`; the embedding host owns source display. Map selections include every source range under the selected node. Removed map elements read source from the pinned base.
 
-See `examples/loom-installer/` for all four surfaces in one document.
+The file loads from `file://` with a deny-by-default CSP and no server, external asset, network request, telemetry, or session persistence. Executable authored HTML is rejected before output.
+
+See `examples/loom-installer/` for all four surfaces in one diagram bundle.

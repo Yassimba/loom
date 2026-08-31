@@ -1,0 +1,236 @@
+.diagram-design-db-schema {
+  --selection-shadow: transparent;
+  --rpc-wash: var(--dd-accent-tint);
+  --map-line-2: var(--dd-muted);
+}
+
+.diagram-design-db-schema .software-map-frame,
+.diagram-design-db-schema .software-map-body,
+.diagram-design-db-schema .software-map-canvas,
+.diagram-design-db-schema .software-map-c4-canvas,
+.diagram-design-db-schema .software-map-c4-canvas .react-flow,
+.diagram-design-db-schema .software-map-c4-canvas .react-flow__renderer,
+.diagram-design-db-schema .software-map-c4-canvas .react-flow__pane {
+  background: var(--dd-paper) !important;
+}
+
+.diagram-design-db-schema .software-map-c4-group-shell {
+  padding: 16px !important;
+  border: 0.8px dashed rgb(45 49 66 / 20%) !important;
+  border-radius: 8px !important;
+  background: rgb(45 49 66 / 2%) !important;
+  box-shadow: none !important;
+  animation: none;
+}
+
+.diagram-design-db-schema .software-map-c4-group-shell:hover,
+.diagram-design-db-schema .software-map-c4-group-shell:focus-visible {
+  border-color: var(--dd-muted) !important;
+  background: rgb(45 49 66 / 4%) !important;
+  outline: 2px solid transparent;
+}
+
+.diagram-design-db-schema .software-map-c4-group-shell.selected {
+  border: 1.2px solid var(--dd-accent) !important;
+  background: rgb(235 108 54 / 3%) !important;
+}
+
+.diagram-design-db-schema .software-map-c4-group-title {
+  top: 16px !important;
+  right: 16px !important;
+  left: 16px !important;
+  gap: 8px;
+  align-items: center;
+}
+
+.diagram-design-db-schema .software-map-c4-group-title span,
+.diagram-design-db-schema .software-map-node-type {
+  padding: 2px 4px;
+  border: 0.8px solid rgb(45 49 66 / 30%);
+  border-radius: 2px;
+  color: var(--dd-muted) !important;
+  font: 500 8px/10px var(--font-mono) !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+}
+
+.diagram-design-db-schema .software-map-c4-group-title strong {
+  color: var(--dd-ink) !important;
+  font: 600 12px/16px var(--font-sans) !important;
+}
+
+.diagram-design-db-schema .software-map-node,
+.diagram-design-db-schema .software-map-c4-node-shell > .software-map-node,
+.diagram-design-db-schema .software-map-c4-node-shell > .software-map-node--dataStore,
+.diagram-design-db-schema .software-map-node--dataStore {
+  min-height: 72px;
+  padding: 12px !important;
+  border: 1px solid var(--dd-ink) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  animation: none;
+}
+
+.diagram-design-db-schema .software-map-node--dataStoreCollection {
+  min-height: 0 !important;
+}
+
+.diagram-design-db-schema .software-map-node:hover,
+.diagram-design-db-schema .software-map-node:focus-visible {
+  border-color: var(--dd-muted) !important;
+  background: #fff !important;
+  outline: 2px solid transparent;
+}
+
+.diagram-design-db-schema .software-map-node.selected {
+  border: 1.2px solid var(--dd-accent) !important;
+  background: #fff !important;
+}
+
+.diagram-design-db-schema .software-map-node h4,
+.diagram-design-db-schema .software-map-node-label--world {
+  color: var(--dd-ink) !important;
+  font: 600 12px/16px var(--font-sans) !important;
+}
+
+.diagram-design-db-schema .software-map-node p {
+  color: var(--dd-muted) !important;
+  font: 400 11px/16px var(--font-sans) !important;
+}
+
+.diagram-design-db-schema .software-map-data-store-schema {
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-section {
+  border: 1px solid var(--dd-rule-solid);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-section-header {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dd-rule);
+  background: rgb(45 49 66 / 4%);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-section-header span {
+  padding: 2px 4px;
+  border: 0.8px solid rgb(45 49 66 / 35%);
+  border-radius: 2px;
+  color: var(--dd-muted);
+  font: 500 8px/10px var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-section-header strong {
+  color: var(--dd-ink);
+  font: 600 12px/16px var(--font-sans);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-key {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dd-rule);
+  background: #fff;
+  color: var(--dd-muted);
+  font: 400 9px/16px var(--font-mono);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row {
+  grid-template-columns: minmax(0, 1fr) minmax(64px, auto);
+  gap: 8px;
+  height: 24px;
+  padding: 0 8px 0 calc(8px + var(--software-map-schema-row-depth, 0) * 16px);
+  border-bottom: 1px solid var(--dd-rule);
+  background: #fff;
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row:nth-child(even) {
+  background: rgb(45 49 66 / 2%);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row--active {
+  outline: 1.2px solid var(--dd-accent);
+  outline-offset: -1px;
+  background: var(--dd-accent-tint);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row--primary {
+  background-image: none;
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row-name {
+  color: var(--dd-ink);
+  font: 400 12px/16px var(--font-sans);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row-type {
+  color: var(--dd-muted);
+  font: 400 9px/12px var(--font-mono);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row-name strong {
+  margin-right: 4px;
+  padding: 1px 3px;
+  border: 0.8px solid rgb(45 49 66 / 35%);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--dd-ink);
+  font: 500 8px/10px var(--font-mono);
+}
+
+.diagram-design-db-schema .software-map-data-store-schema-row-name strong.foreign-key {
+  border-color: var(--dd-muted);
+  background: transparent;
+  color: var(--dd-muted);
+}
+
+.diagram-design-db-schema .software-map-c4-canvas .react-flow__edge-path,
+.diagram-design-db-schema .software-map-c4-canvas .react-flow__edge.selected .react-flow__edge-path,
+.diagram-design-db-schema .software-map-c4-edge--operation-active .react-flow__edge-path {
+  stroke: var(--dd-muted) !important;
+  stroke-width: 1.2px !important;
+}
+
+.diagram-design-db-schema .software-map-c4-canvas .software-map-c4-edge--selected-node .react-flow__edge-path {
+  stroke: var(--dd-accent) !important;
+}
+
+.diagram-design-db-schema .software-map-c4-edge-label,
+.diagram-design-db-schema .software-map-c4-edge-label--active {
+  max-width: 132px;
+  padding: 2px 6px !important;
+  border: 0 !important;
+  border-radius: 2px !important;
+  background: var(--dd-paper) !important;
+  color: var(--dd-muted) !important;
+  font: 400 8px/12px var(--font-mono) !important;
+  letter-spacing: 0.06em;
+}
+
+.diagram-design-db-schema .software-map-c4-edge-label--selected-node {
+  color: var(--dd-accent) !important;
+}
+
+.diagram-design-db-schema .software-map-c4-edge-endpoint {
+  width: 6px !important;
+  height: 6px !important;
+  border: 1px solid var(--dd-muted) !important;
+  border-radius: 50% !important;
+  background: var(--dd-paper) !important;
+}
+
+.diagram-design-db-schema :focus-visible {
+  outline: 1.2px solid var(--dd-accent);
+  outline-offset: 2px;
+}
+
+.diagram-design-db-schema ::selection {
+  background: rgb(235 108 54 / 22%);
+  color: var(--dd-ink);
+}

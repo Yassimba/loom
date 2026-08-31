@@ -1,10 +1,20 @@
-import { actors, anchors, baseStack, bootstrapMessages, headStack, stores } from "./data.ts";
+import {
+  actors,
+  anchors,
+  baseStack,
+  bootstrapMessages,
+  headStack,
+  stores,
+} from "./data.ts";
 
 # How Loom installs a curated agent environment
 
-A one-line shell bootstrap crosses three boundaries: the machine's runtime manager, Loom's typed planner, and the durable files shared by every supported agent. Each diagram below shows the same installation from a different angle; click nodes, rows, relationship labels, and tour steps to inspect the exact source.
+A one-line shell bootstrap crosses three boundaries: the machine's runtime manager, Loom's typed planner, and the durable files shared by every supported agent. Each diagram below shows the same installation from a different angle; click messages, nodes, rows, and relationship labels to send exact source ranges to the embedding host.
 
-<SequenceDiagram label="Bootstrap, plan, and execute" messages={bootstrapMessages} />
+<SequenceDiagram
+  label="Bootstrap, plan, and execute"
+  messages={bootstrapMessages}
+/>
 
 ## The current installer stack
 
@@ -15,21 +25,68 @@ The stack view follows setup from argument parsing into selector resolution and 
 ## Files Loom treats as durable documents
 
 <DatabaseLens title="Installer writes and reads" stores={stores} height={540}>
-  <DbUseCase id="bootstrap" label="Bootstrap core tools" summary="Refresh exact pins and activate the shell">
-    <DbWrite from={actors.shell} to={stores.miseSelection.documents.loomToml.selection.core} label="write core pins" anchor={anchors.syncCore} />
-    <DbWrite from={actors.shell} to={stores.shellProfile.documents.activation} label="append activation" anchor={anchors.persistShell} />
+  <DbUseCase
+    id="bootstrap"
+    label="Bootstrap core tools"
+    summary="Refresh exact pins and activate the shell"
+  >
+    <DbWrite
+      from={actors.shell}
+      to={stores.miseSelection.documents.loomToml.selection.core}
+      label="write core pins"
+      anchor={anchors.syncCore}
+    />
+    <DbWrite
+      from={actors.shell}
+      to={stores.shellProfile.documents.activation}
+      label="append activation"
+      anchor={anchors.persistShell}
+    />
   </DbUseCase>
-  <DbUseCase id="setup" label="Plan selected capabilities" summary="Read selection, expand dependencies, and copy skills">
-    <DbRead from={stores.miseSelection.documents.loomToml.selection.optional} to={actors.wizard} label="read optional tools" anchor={anchors.select} />
-    <DbWrite from={actors.executor} to={stores.skillTrees.documents.skills.skill.markdown} label="write skill files" anchor={anchors.dependencies} />
+  <DbUseCase
+    id="setup"
+    label="Plan selected capabilities"
+    summary="Read selection, expand dependencies, and copy skills"
+  >
+    <DbRead
+      from={stores.miseSelection.documents.loomToml.selection.optional}
+      to={actors.wizard}
+      label="read optional tools"
+      anchor={anchors.select}
+    />
+    <DbWrite
+      from={actors.executor}
+      to={stores.skillTrees.documents.skills.skill.markdown}
+      label="write skill files"
+      anchor={anchors.dependencies}
+    />
   </DbUseCase>
-  <DbUseCase id="ledger" label="Record the installation" summary="Keep one run record and a row for every installed resource">
-    <DbWrite from={actors.cli} to={stores.installLedger.tables.runs.id} label="create run" anchor={anchors.parseCli} />
-    <DbWrite from={actors.executor} to={stores.installLedger.tables.installedResources.status} label="record installed resource" anchor={anchors.dependencies} />
-    <DbRead from={stores.installLedger.tables.installedResources.runId} to={actors.cli} label="summarize completed run" anchor={anchors.catalog} />
+  <DbUseCase
+    id="ledger"
+    label="Record the installation"
+    summary="Keep one run record and a row for every installed resource"
+  >
+    <DbWrite
+      from={actors.cli}
+      to={stores.installLedger.tables.runs.id}
+      label="create run"
+      anchor={anchors.parseCli}
+    />
+    <DbWrite
+      from={actors.executor}
+      to={stores.installLedger.tables.installedResources.status}
+      label="record installed resource"
+      anchor={anchors.dependencies}
+    />
+    <DbRead
+      from={stores.installLedger.tables.installedResources.runId}
+      to={actors.cli}
+      label="summarize completed run"
+      anchor={anchors.catalog}
+    />
   </DbUseCase>
 </DatabaseLens>
 
 ## Repository-wide architecture
 
-The architecture map joins bootstrap scripts, the Rust planner, mise, filesystem-backed documents, and the relational install ledger. Expand groups to reach code elements, select any parent to browse all descendant ranges, and use the fullscreen control for the standalone pan-and-zoom canvas.
+The architecture map joins bootstrap scripts, the Rust planner, mise, filesystem-backed documents, and the relational install ledger. Expand groups to reach code elements and select any parent to emit all descendant ranges.

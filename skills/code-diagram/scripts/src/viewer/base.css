@@ -1,0 +1,40 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+}
+
+.code-diagram-page {
+  display: grid;
+  gap: 24px;
+  width: 100%;
+}
+
+[data-code-diagram-kind] {
+  min-width: 0;
+}
+
+.sequence-diagram,
+.database-lens,
+.software-map,
+.call-stack-diff {
+  width: 100%;
+  margin: 0;
+}
+
+.database-lens {
+  display: grid;
+  gap: 24px;
+}
+
+.sequence-message-handle {
+  width: 1px;
+  height: 1px;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+}

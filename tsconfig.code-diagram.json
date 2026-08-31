@@ -8,10 +8,10 @@
     "types": ["node", "react", "react-dom"],
     "paths": {
       "virtual:progressive-review-authoring": [
-        "./skills/code-diagram/scripts/src/virtual-authoring.ts"
+        "./skills/code-diagram/scripts/src/authoring/virtual.ts"
       ],
       "@dev.fast/progressive-review/software-map-model": [
-        "./skills/code-diagram/scripts/src/software-map-model.ts"
+        "./skills/code-diagram/scripts/src/diagrams/software-map/model.ts"
       ]
     }
   },
@@ -20,6 +20,7 @@
     "skills/code-diagram/scripts/**/*.tsx",
     "skills/code-diagram/fixtures/data.ts",
     "skills/code-diagram/examples/**/*.ts",
-    "test/code-diagram.test.ts"
+    "test/code-diagram.test.ts",
+    "test/code-diagram-routing.test.ts"
   ]
 }

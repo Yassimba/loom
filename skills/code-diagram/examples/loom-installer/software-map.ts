@@ -91,18 +91,32 @@ export default defineSoftwareMap({
         },
       },
       relationships: [
-        { kind: "semantic", from: "bootstrap", to: "mise", label: "installs pins through" },
-        { kind: "call", from: "bootstrap", to: "cli" },
-
-        { kind: "semantic", from: "cli.wizard", to: "cli.executor", label: "builds selection" },
         {
           kind: "semantic",
+          semanticKind: "dependency",
+          from: "bootstrap",
+          to: "mise",
+          label: "installs pins through",
+        },
+        { kind: "call", from: "bootstrap", to: "cli" },
+
+        {
+          kind: "semantic",
+          semanticKind: "dependency",
+          from: "cli.wizard",
+          to: "cli.executor",
+          label: "builds selection",
+        },
+        {
+          kind: "semantic",
+          semanticKind: "dependency",
           from: "cli.executor",
           to: "files",
           label: "persists configuration and skills",
         },
         {
           kind: "semantic",
+          semanticKind: "dependency",
           from: "cli.executor",
           to: "ledger",
           label: "records each result",
@@ -113,6 +127,7 @@ export default defineSoftwareMap({
   relationships: [
     {
       kind: "semantic",
+      semanticKind: "dependency",
       from: "loom.cli.catalog.load",
       to: "loom.cli.wizard",
       label: "offers resources",

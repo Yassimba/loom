@@ -1,12 +1,36 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
+import React from "react";
+
+import { defineActors, defineAnchors } from "../skills/code-diagram/scripts/src/authoring/core.ts";
+import {
+  defineSoftwareActors,
+  defineSoftwareStores,
+} from "../skills/code-diagram/scripts/src/authoring/session.ts";
+import { calls } from "../skills/code-diagram/scripts/src/diagrams/call-stack-diff/authoring.ts";
+import {
+  callStackBrowserSchema,
+  diffCallStacks,
+} from "../skills/code-diagram/scripts/src/diagrams/call-stack-diff/model.ts";
+import { defineStores } from "../skills/code-diagram/scripts/src/diagrams/database-lens/authoring.ts";
+import {
+  type CapturedDatabaseLens,
+  compileDatabaseLens,
+  createDatabaseLensComponents,
+} from "../skills/code-diagram/scripts/src/diagrams/database-lens/model.ts";
+import { defineSoftwareMap } from "../skills/code-diagram/scripts/src/diagrams/software-map/model.ts";
+import {
+  collapseInlineC4Node,
+  projectInlineC4,
+} from "../skills/code-diagram/scripts/src/diagrams/software-map/projection.ts";
+import { patchChangedLines } from "../skills/code-diagram/scripts/src/document/diff.ts";
+import { createSurfaceRegistry } from "../skills/code-diagram/scripts/src/document/registry.ts";
 
 const root = process.cwd();
 const cli = path.join(root, "skills/code-diagram/scripts/code-diagram.ts");
@@ -17,6 +41,14 @@ function run(args: string[]) {
     cwd: root,
     encoding: "utf8",
   });
+}
+
+async function waitFor(check: () => boolean | Promise<boolean>, message: string) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await check()) return;
+    await delay(50);
+  }
+  assert.fail(message);
 }
 
 function writeReview(dir: string, data: string, mdx: string): string {
@@ -50,11 +82,72 @@ test("code-diagram builds Review's review.mdx + data.ts surface into one offline
   assert.match(html, /^<!doctype html>/);
   assert.match(html, /Content-Security-Policy/);
   assert.match(html, /Submit and process/);
+  assert.doesNotMatch(html, /A caller submits an input/);
   assert.match(html, /const request = normalize\(input\)/);
   assert.match(html, /data-code-diagram-index="0"/);
+  const shell = html.match(/<body>(.*?)<script>/s)?.[1] ?? "";
+  assert.doesNotMatch(shell, /<article|code-diagram-revision|<h1|<p/i);
+  assert.equal(shell.match(/data-code-diagram-kind=/g)?.length, 1);
   assert.doesNotMatch(html, /<script\s+[^>]*src=/i);
   assert.doesNotMatch(html, /<link\s+[^>]*href=/i);
-  assert.doesNotMatch(html, /\/Users\/yassin\/projects\/personal\/review/);
+  assert.doesNotMatch(html, /__CODE_DIAGRAM_LIBAVOID_WASM_URL__/);
+  assert.equal(html.includes(root), false, "generated HTML leaked the repository path");
+});
+
+test("each registered surface builds alone with only its required browser assets", () => {
+  const cases = [
+    {
+      kind: "sequence",
+      data: `import { defineActors, defineAnchors } from "virtual:progressive-review-authoring";
+export const actors = defineActors({ a: { label: "A" }, b: { label: "B" } });
+export const anchors = defineAnchors({ call: { title: "Call", peek: { file: "skills/code-diagram/fixtures/source.ts", fromLine: 1, toLine: 1 } } });
+export const messages = [{ from: actors.a, to: actors.b, label: "call", anchor: anchors.call }];`,
+      mdx: `import { messages } from "./data";\n\n# Sequence only\n\n<SequenceDiagram label="Only" messages={messages} />`,
+      libavoid: false,
+    },
+    {
+      kind: "call-stack-diff",
+      data: `import { defineAnchors } from "virtual:progressive-review-authoring";
+export const anchors = defineAnchors({ a: { title: "A", peek: { file: "skills/code-diagram/fixtures/source.ts", fromLine: 1, toLine: 1 } }, b: { title: "B", peek: { file: "skills/code-diagram/fixtures/source.ts", fromLine: 1, toLine: 1 } } });
+export const base = [anchors.a]; export const head = [anchors.a];`,
+      mdx: `import { base, head } from "./data";\n\n# Stack only\n\n<CallStackDiff base={base} head={head} />`,
+      libavoid: false,
+    },
+    {
+      kind: "database-lens",
+      data: `import { defineActors, defineAnchors, defineStores } from "virtual:progressive-review-authoring";
+export const actors = defineActors({ app: { label: "App" } });
+export const anchors = defineAnchors({ read: { title: "Read", peek: { file: "skills/code-diagram/fixtures/source.ts", fromLine: 1, toLine: 1 } } });
+export const stores = defineStores({ db: { kind: "relational", label: "DB", tables: { users: { schema: { id: { type: "number" } } } } } });`,
+      mdx: `import { actors, anchors, stores } from "./data";\n\n# Database only\n\n<DatabaseLens stores={stores}><DbUseCase id="read" label="Read"><DbRead from={stores.db.tables.users.id} to={actors.app} label="read" anchor={anchors.read} /></DbUseCase></DatabaseLens>`,
+      libavoid: true,
+    },
+    {
+      kind: "software-map",
+      data: "export {};",
+      mdx: "# Software map only",
+      artifact: `import { defineSoftwareMap } from "@dev.fast/progressive-review/software-map-model";\nexport default defineSoftwareMap({ systems: { app: { label: "App" } } });`,
+      libavoid: true,
+    },
+  ] as const;
+
+  for (const surface of cases) {
+    const dir = mkdtempSync(path.join(tmpdir(), `code-diagram-${surface.kind}-`));
+    const review = writeReview(dir, surface.data, surface.mdx);
+    if ("artifact" in surface) writeFileSync(path.join(dir, "software-map.ts"), surface.artifact);
+    const output = path.join(dir, "out.html");
+    const built = run(["build", review, "--repo", root, "--out", output]);
+    assert.equal(built.status, 0, `${surface.kind}: ${built.stderr}`);
+    const html = readFileSync(output, "utf8");
+    const shell = html.match(/<body>(.*?)<script>/s)?.[1] ?? "";
+    assert.equal(shell.match(/data-code-diagram-kind=/g)?.length, 1, surface.kind);
+    assert.match(shell, new RegExp(`data-code-diagram-kind="${surface.kind}"`));
+    assert.equal(
+      html.includes("__CODE_DIAGRAM_LIBAVOID_WASM_URL__"),
+      surface.libavoid,
+      `${surface.kind} assets`,
+    );
+  }
 });
 
 test("code-diagram rejects unsupported Review components and stale anchors", () => {
@@ -106,70 +199,71 @@ export const actors = defineActors({ broken: { label: 42 } });
 });
 
 test("registry and Review model ports cover all four surfaces", () => {
-  const evalResult = spawnSync(
-    process.execPath,
-    [
-      "--import",
-      "tsx",
-      "--input-type=module",
-      "-e",
-      `
-    import assert from "node:assert/strict";
-    import { calls, createReviewDefinitionSession } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/authoring.ts"))};
-    import { diffCallStacks, patchChangedLines } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/call-stack-diff.ts"))};
-    import { createSurfaceRegistry } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/diagram-registry.ts"))};
-    import { defineSoftwareMap } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/software-map-model.ts"))};
-    import { projectInlineC4, collapseInlineC4Node } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/software-map-c4-projection.ts"))};
-    import { layoutInlineC4 } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/software-map-c4-layout.ts"))};
-    const registry = createSurfaceRegistry(${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/software-map-model.ts"))});
-    assert.deepEqual(registry.map((surface) => surface.kind), ["sequence", "call-stack-diff", "database-lens", "software-map"]);
-    const session = createReviewDefinitionSession({});
-    const anchors = session.defineAnchors({ parent: { title: "Parent", peek: { file: "parent.ts", fromLine: 1, toLine: 1 } }, child: { title: "Child", peek: { file: "child.ts", fromLine: 1, toLine: 1 } } });
-    const assertion = calls(anchors.parent, anchors.child, "queue");
-    assert.equal(assertion.parent, anchors.parent); assert.equal(assertion.child, anchors.child);
-    assert.deepEqual(diffCallStacks([anchors.parent], [anchors.child]).map((row) => row.change), ["removed", "added"]);
-    const lines = patchChangedLines("@@ -3,1 +3,1 @@\\n-old\\n+new"); assert.deepEqual([...lines.deleted], [3]); assert.deepEqual([...lines.added], [3]);
-    const map = defineSoftwareMap({ systems: { loom: { containers: { cli: { components: { planner: {} } } } } } }); assert.ok(map.elementsByPath.has("loom.cli.planner"));
-    const mapped = defineSoftwareMap({ systems: { app: { dataStores: { db: { kind: "database", tables: { users: { schema: { id: { type: "text", pk: true } } } } } } } } });
-    const mappedActors = session.defineSoftwareActors(mapped, { app: "app" }); assert.equal(mappedActors.app.softwareMapPath, "app");
-    const mappedStores = session.defineSoftwareStores(mapped, { db: { path: "app.db" } }); assert.equal(mappedStores.db.tables.users.id.__kind, undefined); assert.equal(mappedStores.db.softwareMapPath, "app.db");
-    const projection = projectInlineC4({ model: map, expandedNodeIds: new Set(["loom", "loom.cli"]) });
-    assert.deepEqual(projection.nodes.map((node) => node.id), ["loom", "loom.cli", "loom.cli.planner"]);
-    const layout = layoutInlineC4({ nodes: projection.nodes, relationships: projection.relationships, expandedIds: projection.expandedNodeIds });
-    assert.equal(layout.nodeBboxes.size, 3); assert.ok(layout.groupBboxes.has("loom"));
-    assert.deepEqual([...collapseInlineC4Node(new Set(["loom", "loom.cli"]), "loom")], []);
-  `,
-    ],
-    { cwd: root, encoding: "utf8" },
+  const modelSource = path.join(
+    root,
+    "skills/code-diagram/scripts/src/diagrams/software-map/model.ts",
   );
-  assert.equal(evalResult.status, 0, evalResult.stderr);
-});
-
-test("vendored renderers are byte-identical to the pinned Review sources", () => {
-  const expected = new Map([
-    ["diagrams.tsx", "7e4af3b9327e9fca14f50618bc8fbc39282b3f2509b36a2aa3ce7a55c9ca46f4"],
-    ["call-stack-diff.tsx", "0cf34de0737999b1c8211d33ba201b1f3f143dfc641d2857fbf45118a6f1f3c5"],
-    ["database-lens.tsx", "746dde967df63dd716c7001fe2e1bc67084fd103dae9edf422c1b89ea858dbcc"],
-    [
-      "software-map/SoftwareMap.tsx",
-      "22d5f5eca647c2a2e2e8ff6e88f79946076cba234773bbdef4cbaef3211debc4",
-    ],
-    [
-      "software-map/c4-projection.ts",
-      "da8dfa3285fe1afbd3b982b8f30b839e9f40fbc763c5667aff63297c50e37479",
-    ],
-    [
-      "software-map/c4-layout.ts",
-      "0799902bdead82123dbdd947ae49813579794da3496ac4573780d9090a1080b8",
-    ],
-  ]);
-  const runtime = path.join(root, "skills/code-diagram/scripts/src/review-runtime/app/src");
-  for (const [file, hash] of expected) {
-    const actual = createHash("sha256")
-      .update(readFileSync(path.join(runtime, file)))
-      .digest("hex");
-    assert.equal(actual, hash, file);
-  }
+  const registry = createSurfaceRegistry(modelSource);
+  assert.deepEqual(
+    registry.map((surface) => surface.kind),
+    ["sequence", "call-stack-diff", "database-lens", "software-map"],
+  );
+  const anchors = defineAnchors({
+    parent: { title: "Parent", peek: { file: "parent.ts", fromLine: 1, toLine: 1 } },
+    child: { title: "Child", peek: { file: "child.ts", fromLine: 1, toLine: 1 } },
+  });
+  const assertion = calls(anchors.parent, anchors.child, "queue");
+  assert.equal(assertion.parent, anchors.parent);
+  assert.equal(assertion.child, anchors.child);
+  assert.deepEqual(
+    diffCallStacks([anchors.parent], [anchors.child]).map((row) => row.change),
+    ["removed", "added"],
+  );
+  assert.throws(() =>
+    callStackBrowserSchema.parse({
+      rows: [
+        {
+          entry: { bogus: true },
+          change: "added",
+          depth: 0,
+          source: { file: "source.ts", fromLine: 1, toLine: 1, lines: [] },
+        },
+      ],
+    }),
+  );
+  const lines = patchChangedLines("@@ -3,1 +3,1 @@\n-old\n+new");
+  assert.deepEqual([...lines.deleted], [3]);
+  assert.deepEqual([...lines.added], [3]);
+  const map = defineSoftwareMap({
+    systems: { loom: { containers: { cli: { components: { planner: {} } } } } },
+  });
+  assert.ok(map.elementsByPath.has("loom.cli.planner"));
+  const mapped = defineSoftwareMap({
+    systems: {
+      app: {
+        dataStores: {
+          db: {
+            kind: "database",
+            tables: { users: { schema: { id: { type: "text", pk: true } } } },
+          },
+        },
+      },
+    },
+  });
+  const mappedActors = defineSoftwareActors(mapped, { app: "app" });
+  assert.equal(mappedActors.app.softwareMapPath, "app");
+  const mappedStores = defineSoftwareStores(mapped, { db: { path: "app.db" } });
+  assert.equal(mappedStores.db.tables.users.id.__kind, undefined);
+  assert.equal(mappedStores.db.softwareMapPath, "app.db");
+  const projection = projectInlineC4({
+    model: map,
+    expandedNodeIds: new Set(["loom", "loom.cli"]),
+  });
+  assert.deepEqual(
+    projection.nodes.map((node) => node.id),
+    ["loom", "loom.cli", "loom.cli.planner"],
+  );
+  assert.deepEqual([...collapseInlineC4Node(new Set(["loom", "loom.cli"]), "loom")], []);
 });
 
 test("complex Loom walkthrough builds every surface from MDX plus a separate map artifact", () => {
@@ -189,8 +283,7 @@ test("complex Loom walkthrough builds every surface from MDX plus a separate map
     assert.match(html, new RegExp(`data-code-diagram-kind="${kind}"`));
   assert.match(html, /Loom installer/);
   assert.match(html, /Persisted local files/);
-  assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=/i);
-  assert.doesNotMatch(html, /\/Users\/yassin\/projects\/personal\/review/);
+  assert.match(html, /__CODE_DIAGRAM_LIBAVOID_WASM_URL__/);
 });
 
 test("base evidence reads a deleted file from the invocation-pinned HEAD", () => {
@@ -228,6 +321,45 @@ export const base = [anchors.same]; export const head = [];
   const checked = run(["check", review, "--repo", dir]);
   assert.notEqual(checked.status, 0);
   assert.match(checked.stderr, /CALL_STACK_EVIDENCE_INVALID/);
+});
+
+test("SoftwareMap accepts only the Diagram Design relationship semantics", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "code-diagram-map-semantics-"));
+  const review = writeReview(dir, "export {};\n", "# Relationship semantics\n");
+  const semanticKinds = [
+    "dependency",
+    "http",
+    "async",
+    "return",
+    "optional",
+    "primary",
+    "forbidden",
+    "published",
+    "foreign-key",
+  ];
+  const systems = Object.fromEntries(["source", ...semanticKinds].map((id) => [id, { label: id }]));
+  const mapSource = (
+    semanticKind: string,
+  ) => `import { defineSoftwareMap } from "@dev.fast/progressive-review/software-map-model";
+export default defineSoftwareMap(${JSON.stringify({
+    systems,
+    relationships:
+      semanticKind === "all"
+        ? semanticKinds.map((kind) => ({
+            kind: "semantic",
+            semanticKind: kind,
+            from: "source",
+            to: kind,
+          }))
+        : [{ kind: "semantic", semanticKind, from: "source", to: "dependency" }],
+  })});\n`;
+  writeFileSync(path.join(dir, "software-map.ts"), mapSource("all"));
+  const valid = run(["check", review, "--repo", dir]);
+  assert.equal(valid.status, 0, valid.stderr);
+  writeFileSync(path.join(dir, "software-map.ts"), mapSource("magic"));
+  const invalid = run(["check", review, "--repo", dir]);
+  assert.notEqual(invalid.status, 0);
+  assert.match(invalid.stderr, /magic|semanticKind/i);
 });
 
 test("invalid adjacent SoftwareMap artifacts fail check", () => {
@@ -325,76 +457,76 @@ export default defineSoftwareMap({ systems: { app: { containers: { api: { compon
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("DatabaseLens browser model preserves exact schemas and tour evidence", () => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      "--import",
-      "tsx",
-      "--input-type=module",
-      "-e",
-      `
-import assert from "node:assert/strict";
-import React from "react";
-import { createReviewDefinitionSession } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/authoring.ts"))};
-import { createDatabaseLensComponents, compileDatabaseLens } from ${JSON.stringify(path.join(root, "skills/code-diagram/scripts/src/database-lens-model.ts"))};
-const session = createReviewDefinitionSession({});
-const stores = session.defineStores({ mixed: { kind: "relational", label: "Mixed", tables: { users: { schema: { id: { type: "text", pk: true }, profile: { type: "object", example: { name: "Ada" }, schema: { name: { type: "text" } } } } } }, documents: { audit: { schema: { actor_id: { type: "text", fk: "users.id" } } } } } });
-const actors = session.defineActors({ api: { label: "API" } });
-const anchors = session.defineAnchors({ read: { title: "Read", peek: { file: "source.ts", fromLine: 1, toLine: 1 } } });
-let captured;
-const components = createDatabaseLensComponents((model) => { captured = model; return React.createElement("div"); });
-components.DatabaseLens({ stores, children: React.createElement(components.DbUseCase, { id: "read", label: "Read", children: React.createElement(components.DbRead, { from: stores.mixed.tables.users.profile.name, to: actors.api, label: "read", anchor: anchors.read }) }) });
-assert.deepEqual(captured.stores[0].collections.map((collection) => collection.kind), ["tables", "documents"]);
-assert.deepEqual(captured.stores[0].collections[0].schema.profile, { type: "object", example: { name: "Ada" }, schema: { name: { type: "text" } } });
-const compiled = await compileDatabaseLens(captured, { resolveRange: async () => ({ file: "source.ts", fromLine: 1, toLine: 1, lines: [{ number: 1, text: "source" }] }), changedLines: () => null });
-assert.equal(compiled.useCases[0].operations[0].anchor.peek.resolution.source.lines[0].text, "source");
-`,
-    ],
-    { cwd: root, encoding: "utf8" },
+test("DatabaseLens browser model preserves exact schemas and source evidence", async () => {
+  const stores = defineStores({
+    mixed: {
+      kind: "relational",
+      label: "Mixed",
+      tables: {
+        users: {
+          schema: {
+            id: { type: "text", pk: true },
+            profile: {
+              type: "object",
+              example: { name: "Ada" },
+              schema: { name: { type: "text" } },
+            },
+          },
+        },
+      },
+      documents: {
+        audit: { schema: { actor_id: { type: "text", fk: "users.id" } } },
+      },
+    },
+  });
+  const actors = defineActors({ api: { label: "API" } });
+  const anchors = defineAnchors({
+    read: { title: "Read", peek: { file: "source.ts", fromLine: 1, toLine: 1 } },
+  });
+  let captured: CapturedDatabaseLens | undefined;
+  const components = createDatabaseLensComponents((model) => {
+    captured = model;
+    return React.createElement("div");
+  });
+  components.DatabaseLens({
+    stores,
+    children: React.createElement(
+      components.DbUseCase,
+      { id: "read", label: "Read" },
+      React.createElement(components.DbRead, {
+        from: stores.mixed.tables.users.profile.name,
+        to: actors.api,
+        label: "read",
+        anchor: anchors.read,
+      }),
+    ),
+  });
+  assert.ok(captured);
+  assert.deepEqual(
+    captured.stores[0].collections.map((collection) => collection.kind),
+    ["tables", "documents"],
   );
-  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(captured.stores[0].collections[0].schema.profile, {
+    type: "object",
+    example: { name: "Ada" },
+    schema: { name: { type: "text" } },
+  });
+  const compiled = await compileDatabaseLens(captured, {
+    resolveRange: async () => ({
+      file: "source.ts",
+      fromLine: 1,
+      toLine: 1,
+      lines: [{ number: 1, text: "source" }],
+    }),
+    changedLines: () => null,
+  });
+  assert.equal(
+    compiled.useCases[0].operations[0].anchor.peek.resolution.source.lines[0].text,
+    "source",
+  );
 });
 
-test("generated all-surface HTML mounts in headless Chrome", { timeout: 30_000 }, (t) => {
-  const candidates = [
-    process.env.CHROME_BIN,
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ].filter((candidate): candidate is string => Boolean(candidate));
-  const chrome = candidates.find(existsSync);
-  if (!chrome) return t.skip("Chrome executable is not installed");
-  const dir = mkdtempSync(path.join(tmpdir(), "code-diagram-browser-"));
-  const output = path.join(dir, "review.html");
-  const example = path.join(root, "skills/code-diagram/examples/loom-installer/review.mdx");
-  const built = run(["build", example, "--repo", root, "--out", output]);
-  assert.equal(built.status, 0, built.stderr);
-  const browser = spawnSync(
-    chrome,
-    [
-      "--headless=new",
-      "--disable-gpu",
-      "--no-sandbox",
-      "--allow-file-access-from-files",
-      "--virtual-time-budget=8000",
-      "--dump-dom",
-      pathToFileURL(output).href,
-    ],
-    { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
-  );
-  assert.equal(browser.status, 0, browser.stderr);
-  assert.match(browser.stdout, /class="sequence-diagram/);
-  assert.match(browser.stdout, /class="call-stack-diff/);
-  assert.match(browser.stdout, /class="database-lens/);
-  assert.match(browser.stdout, /class="software-map(?:\s|")/);
-  assert.match(browser.stdout, /class="software-map-c4-canvas/);
-  assert.match(browser.stdout, />Install mise</);
-  assert.match(browser.stdout, />Embedded catalog</);
-  assert.doesNotMatch(browser.stdout, /<p>Source evidence unavailable\.<\/p>/);
-});
-
-test("all-surface browser interactions keep tours, map expansion, and multi-range evidence", {
+test("all-surface browser output contains only interactive diagrams and source events", {
   timeout: 45_000,
 }, async (t) => {
   const candidates = [
@@ -427,8 +559,7 @@ test("all-surface browser interactions keep tours, map expansion, and multi-rang
   let socket: WebSocket | undefined;
   try {
     const portFile = path.join(profile, "DevToolsActivePort");
-    for (let attempt = 0; attempt < 100 && !existsSync(portFile); attempt += 1) await delay(50);
-    assert.ok(existsSync(portFile), "Chrome did not publish a DevTools port");
+    await waitFor(() => existsSync(portFile), "Chrome did not publish a DevTools port");
     const port = readFileSync(portFile, "utf8").split(/\r?\n/)[0];
     let page: { webSocketDebuggerUrl?: string } | undefined;
     for (let attempt = 0; attempt < 100 && !page?.webSocketDebuggerUrl; attempt += 1) {
@@ -503,53 +634,74 @@ test("all-surface browser interactions keep tours, map expansion, and multi-rang
 window.addEventListener("code-diagram:open-source", (event) => {
   globalThis.__codeDiagramSourceEvents.push(event.detail);
 });`);
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (await evaluate("document.querySelectorAll('[data-code-diagram-kind] > *').length === 4"))
-        break;
-      await delay(50);
-    }
-    assert.equal(
-      await evaluate("document.querySelectorAll('[data-code-diagram-kind] > *').length"),
-      4,
-    );
-    await evaluate("document.querySelector('.sequence-diagram .diagram-tour-button').click()");
-    await delay(100);
-    assert.equal(
-      await evaluate("Boolean(document.querySelector('.diagram-tour-overlay .code-peek-file'))"),
-      true,
-    );
-    await evaluate(
-      "document.querySelector('.diagram-tour-overlay [aria-label=\"Next step\"]').click()",
+    await waitFor(
+      async () =>
+        (await evaluate("document.querySelectorAll('[data-code-diagram-kind] > *').length")) === 4,
+      "Diagrams did not mount",
     );
     assert.equal(
-      await evaluate(
-        "document.querySelector('.diagram-tour-overlay .tour-pill-count').textContent",
-      ),
-      "2/7",
-    );
-    await evaluate("document.querySelector('[aria-label=\"Close guided tour\"]').click()");
-    await evaluate("document.querySelector('.database-lens .diagram-tour-button').click()");
-    await delay(100);
-    assert.equal(
-      await evaluate("Boolean(document.querySelector('.diagram-tour-overlay .code-peek-file'))"),
+      await evaluate(`[
+        ".review-document",
+        ".diagram-header",
+        ".diagram-tour-overlay",
+        ".comment-button",
+        ".comment-hover-button",
+        "[aria-label='Comment']",
+        ".software-map-header",
+        ".software-map-hotkeys-tab",
+        ".react-flow__controls",
+      ].every((selector) => !document.querySelector(selector))`),
       true,
     );
     assert.equal(
-      await evaluate(
-        "Boolean([...document.querySelectorAll('.diagram-tour-overlay p')].find((node) => node.textContent === 'Source evidence unavailable.'))",
-      ),
-      false,
+      await evaluate(`Boolean(
+        document.querySelector('.sequence-diagram[data-diagram-design-type="sequence"] .sequence-message-dot')
+        && document.querySelector('.call-stack-diff[data-diagram-design-type="tree"] .call-stack-row')
+      )`),
+      true,
     );
-    await evaluate(
-      "document.querySelector('.diagram-tour-overlay [aria-label=\"Next step\"]').click()",
+    await evaluate("document.querySelector('.sequence-message-dot').click()");
+    assert.equal(
+      await evaluate("globalThis.__codeDiagramSourceEvents.at(-1).sources[0].file"),
+      "install.sh",
+    );
+    await waitFor(
+      async () =>
+        Boolean(
+          await evaluate(
+            "Boolean(document.querySelector('.database-lens .software-map-c4-edge-label--button'))",
+          ),
+        ),
+      "Database lens did not finish layout",
     );
     assert.equal(
-      await evaluate(
-        "document.querySelector('.diagram-tour-overlay .tour-pill-count').textContent",
-      ),
-      "2/2",
+      await evaluate(`Boolean(
+        document.querySelector('.database-lens[data-diagram-design-type="database-schema"] .software-map-data-store-schema-row')
+      )`),
+      true,
     );
-    await evaluate("document.querySelector('[aria-label=\"Close guided tour\"]').click()");
+    assert.equal(
+      await evaluate(`(() => {
+        const rows = [...document.querySelectorAll('.database-lens .software-map-data-store-schema-row')];
+        const headers = [...document.querySelectorAll('.database-lens .software-map-data-store-schema-section-header')];
+        const separated = (element) => {
+          const [left, right] = element.children;
+          if (!left || !right) return false;
+          const leftBox = left.getBoundingClientRect();
+          const rightBox = right.getBoundingClientRect();
+          return rightBox.left - leftBox.right >= 1 && rightBox.right <= element.getBoundingClientRect().right;
+        };
+        return rows.length > 0 && headers.length > 0 && rows.every(separated) && headers.every(separated);
+      })()`),
+      true,
+    );
+    await evaluate(
+      "document.querySelector('.database-lens .software-map-c4-edge-label--button').click()",
+    );
+    assert.equal(
+      await evaluate("globalThis.__codeDiagramSourceEvents.at(-1).sources[0].file"),
+      "install.sh",
+    );
     await evaluate("document.querySelector('.call-stack-diff .call-stack-row').click()");
     assert.equal(
       await evaluate("globalThis.__codeDiagramSourceEvents.at(-1).sources[0].file"),
@@ -559,35 +711,42 @@ window.addEventListener("code-diagram:open-source", (event) => {
       await evaluate("Boolean(document.querySelector('.code-diagram-source-panel'))"),
       false,
     );
-    await evaluate(
-      "document.querySelector('.software-map [aria-label=\"Expand software map\"]').click()",
+    await waitFor(
+      async () =>
+        Boolean(
+          await evaluate(
+            "Boolean([...document.querySelectorAll('.software-map-c4-edge-label--button')].find((node) => node.textContent.includes('offers resources')))",
+          ),
+        ),
+      "Software map did not finish layout",
     );
-    await delay(100);
     assert.equal(
-      await evaluate("document.querySelectorAll('.software-map > .software-map-frame').length"),
-      1,
-    );
-    assert.equal(
-      await evaluate(
-        "Boolean(document.querySelector('.software-map-overlay .software-map-frame'))",
-      ),
+      await evaluate(`(() => {
+        const map = document.querySelector('.software-map[data-diagram-design-type="architecture"]');
+        const legend = map?.querySelector('.software-map-legend');
+        return Boolean(
+          map?.querySelector('.software-map-c4-edge-label')
+          && legend?.textContent.includes('Call')
+          && legend.textContent.includes('Dependency')
+          && legend.textContent.includes('Foreign key')
+        );
+      })()`),
       true,
     );
     assert.equal(
-      await evaluate("document.querySelector('.software-map-overlay').getAttribute('role')"),
-      "dialog",
-    );
-    assert.equal(
-      await evaluate("Boolean(document.activeElement.closest('.software-map-overlay'))"),
+      await evaluate(`(() => {
+        const root = document.querySelector('.software-map');
+        const labels = [...root.querySelectorAll('.software-map-c4-edge-label')];
+        const nodes = [...root.querySelectorAll('.software-map-node')];
+        const overlaps = (left, right) =>
+          Math.min(left.right, right.right) - Math.max(left.left, right.left) > 0
+          && Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top) > 0;
+        return labels.length > 0 && labels.every((label) => {
+          const labelBox = label.getBoundingClientRect();
+          return nodes.every((node) => !overlaps(labelBox, node.getBoundingClientRect()));
+        });
+      })()`),
       true,
-    );
-    await evaluate(
-      "document.querySelector('[aria-label=\"Close expanded software map\"]').click()",
-    );
-    assert.equal(await evaluate("Boolean(document.querySelector('.software-map-overlay'))"), false);
-    assert.equal(
-      await evaluate("document.querySelectorAll('.software-map > .software-map-frame').length"),
-      1,
     );
     await evaluate(
       "[...document.querySelectorAll('.software-map-c4-edge-label--button')].find((node) => node.textContent.includes('offers resources')).click()",
