@@ -38,7 +38,7 @@
     },
     {
       "name": "pi-web-access",
-      "version": "0.26.0",
+      "version": "0.27.0",
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "nextAction": "Ask Pi to search the web."
