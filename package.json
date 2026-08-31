@@ -30,7 +30,7 @@
     "@earendil-works/pi-coding-agent": "0.84.4",
     "@earendil-works/pi-tui": "0.84.3",
     "@types/node": "26.4.0",
-    "fallow": "3.19.0",
+    "fallow": "3.20.0",
     "typescript": "7.0.2",
     "yaml": "2.9.0"
   }
