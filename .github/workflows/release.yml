@@ -23,8 +23,7 @@ jobs:
     outputs:
       binaries: ${{ steps.binaries.outputs.matrix }}
       released: ${{ steps.release.outputs.releases_created }}
-      npm: ${{ steps.release.outputs['plugins/openai-fast--release_created'] }}
-      npm_sha: ${{ steps.release.outputs['plugins/openai-fast--sha'] }}
+      npm_packages: ${{ steps.npm_packages.outputs.matrix }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
@@ -46,6 +45,20 @@ jobs:
                 {target: "x86_64-pc-windows-msvc", os: "windows-latest"},
                 {target: "aarch64-pc-windows-msvc", os: "windows-latest"}
               ) | . + $crate]' <<<"$OUTPUTS")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - id: npm_packages
+        name: Expand released npm packages into a matrix
+        env:
+          OUTPUTS: ${{ toJSON(steps.release.outputs) }}
+        run: |
+          matrix=$(jq -c '
+            . as $outputs
+            | [to_entries[]
+                | select(.key | test("^plugins/.*--release_created$"))
+                | select(.value == "true" or .value == true)
+                | .key | sub("--release_created$"; "") as $path
+                | {path: $path, sha: $outputs["\($path)--sha"]}]
+          ' <<<"$OUTPUTS")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   binaries:
@@ -74,22 +87,26 @@ jobs:
 
   npm:
     needs: release-please
-    if: needs.release-please.outputs.npm == 'true'
+    if: needs.release-please.outputs.npm_packages != '[]'
+    name: npm · ${{ matrix.path }}
     permissions:
       contents: read
       id-token: write
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.release-please.outputs.npm_packages) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.release-please.outputs.npm_sha }}
+          ref: ${{ matrix.sha }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
-      - run: npm publish ./plugins/openai-fast --access public --provenance
+      - run: npm publish ./${{ matrix.path }} --access public --provenance
 
   # Only after every asset is up: point the published manifest at the new
   # tags, so `loom update` and fresh installs never see a release without

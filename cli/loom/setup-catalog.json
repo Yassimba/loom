@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "resources": [
     {
+      "id": "pi-package:@yassimba/pi-skill-autocomplete",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "$ skill autocomplete",
+      "description": "Autocomplete Pi skills with $ anywhere in the editor.",
+      "installTarget": "@yassimba/pi-skill-autocomplete",
+      "nextAction": "In Pi, type $ anywhere in a message."
+    },
+    {
       "id": "pi-package:@yassimba/pi-add-dir",
       "kind": "pi-package",
       "group": "Pi packages",

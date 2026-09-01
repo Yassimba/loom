@@ -255,15 +255,17 @@ npx skills add Yassimba/loom
 
 ### Install Pi packages
 
-Loom includes two Pi packages from this repository:
+Loom includes three Pi packages from this repository:
 
 ```bash
 pi install npm:@yassimba/pi-openai-fast
 pi install npm:@yassimba/pi-add-dir
+pi install npm:@yassimba/pi-skill-autocomplete
 ```
 
 - [`openai-fast`](plugins/openai-fast/) adds `/fast`, which requests the priority service tier for supported models.
 - [`add-dir`](plugins/pi-add-dir/) adds another directory and its root instructions to the current Pi session.
+- [`skill-autocomplete`](plugins/skill-autocomplete/) adds `$` skill completion anywhere in the editor.
 
 The setup menu also offers fixed versions of Feynman, FFF search, autoresearch, MCP support, subagents, web access, chat, rewind, and Anthropic sign-in. See [`manifest/pi-packages.json`](manifest/pi-packages.json) for the current package names and versions.
 
