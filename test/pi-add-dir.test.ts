@@ -170,8 +170,12 @@ test("rm-dir completion lists only added directories", () => {
 test("project directories persist outside the session", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
   try {
-    assert.deepEqual(saveDirectories("project", root, ["/tmp/turbine"]), { ok: true });
-    assert.deepEqual(loadDirectories("project", root), { directories: ["/tmp/turbine"] });
+    const config = {
+      directories: ["/tmp/turbine"],
+      orientations: { "/tmp/turbine": "A data-contract quality tool." },
+    };
+    assert.deepEqual(saveDirectories("project", root, config), { ok: true });
+    assert.deepEqual(loadDirectories("project", root), config);
   } finally {
     await rm(root, { recursive: true });
   }
@@ -183,14 +187,73 @@ test("saving refuses to replace malformed directory config", async () => {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, "not json", "utf8");
   try {
-    const result = saveDirectories("project", root, ["/tmp/turbine"]);
+    const result = saveDirectories("project", root, {
+      directories: ["/tmp/turbine"],
+      orientations: { "/tmp/turbine": "A data-contract quality tool." },
+    });
     assert.equal(result.ok, false);
   } finally {
     await rm(root, { recursive: true });
   }
 });
 
-test("global scope warns that instructions affect every project", async () => {
+test("project orientation routing seam excludes full instruction contents from agent context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
+  const external = join(root, "skills-project");
+  await mkdir(external);
+  await writeFile(join(external, "README.md"), "# Skills\n\nShared agent skills.", "utf8");
+  await writeFile(join(external, "AGENTS.md"), "SECRET FULL INSTRUCTIONS", "utf8");
+  let addDir: ((args: string, ctx: unknown) => Promise<void>) | undefined;
+  let beforeAgentStart:
+    | ((event: { systemPrompt: string }) => Promise<{ systemPrompt: string } | undefined>)
+    | undefined;
+  const pi = {
+    on(name: string, handler: unknown) {
+      if (name === "before_agent_start") {
+        beforeAgentStart = handler as typeof beforeAgentStart;
+      }
+    },
+    appendEntry() {},
+    exec: async () => ({ code: 0, stdout: "", stderr: "" }),
+    registerCommand(name: string, command: { handler: typeof addDir }) {
+      if (name === "add-dir") addDir = command.handler;
+    },
+  };
+  piAddDir(pi as unknown as ExtensionAPI);
+
+  try {
+    assert(addDir);
+    await addDir(external, {
+      cwd: root,
+      hasUI: true,
+      isProjectTrusted: () => true,
+      model: {},
+      modelRegistry: {
+        async complete() {
+          return {
+            content: [{ type: "text", text: "A hub for shared agent skills." }],
+          };
+        },
+      },
+      ui: {
+        async select() {
+          return "This session";
+        },
+        notify() {},
+        setStatus() {},
+      },
+    });
+    assert(beforeAgentStart);
+    const result = await beforeAgentStart({ systemPrompt: "base" });
+    assert.match(result?.systemPrompt ?? "", /Orientation: A hub for shared agent skills\./);
+    assert.match(result?.systemPrompt ?? "", /Instructions available: AGENTS\.md/);
+    assert.doesNotMatch(result?.systemPrompt ?? "", /SECRET FULL INSTRUCTIONS/);
+  } finally {
+    await rm(root, { recursive: true });
+  }
+});
+
+test("global scope warns that the orientation affects every project", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-add-dir-"));
   const external = join(root, "external");
   await mkdir(external);
@@ -232,7 +295,7 @@ test("global scope warns that instructions affect every project", async () => {
       "All projects (global)",
     ]);
     assert.equal(confirmation?.title, "Add directory globally?");
-    assert.match(confirmation?.message ?? "", /instructions will be added to every project/);
+    assert.match(confirmation?.message ?? "", /orientation will be added to every project/);
   } finally {
     await rm(root, { recursive: true });
   }

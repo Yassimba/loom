@@ -1,8 +1,11 @@
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 
-const CONTEXT_FILES = ["AGENTS.md", "CLAUDE.md"] as const;
+const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md"] as const;
+const ORIENTATION_FILES = ["README.md", "package.json"] as const;
+const MAX_ORIENTATION_SOURCE_LENGTH = 12_000;
+const MAX_ORIENTATION_LENGTH = 400;
 
 export function footerStatus(directories: string[]): string | undefined {
   if (directories.length === 0) return undefined;
@@ -110,16 +113,32 @@ export function matchAddedDirectory(
   return matches.length === 1 ? matches[0] : undefined;
 }
 
-export function readContext(directory: string): string {
+export function readOrientationSource(directory: string): string {
   const sections: string[] = [];
-  for (const filename of CONTEXT_FILES) {
+  for (const filename of ORIENTATION_FILES) {
     try {
-      sections.push(
-        `### ${filename} from ${directory}\n\n${readFileSync(join(directory, filename), "utf8")}`,
-      );
+      sections.push(`${filename}:\n${readFileSync(join(directory, filename), "utf8")}`);
     } catch {}
   }
-  return sections.join("\n\n");
+  return sections.join("\n\n").slice(0, MAX_ORIENTATION_SOURCE_LENGTH);
+}
+
+export function normalizeOrientation(value: string): string | undefined {
+  const orientation = value.replaceAll(/\s+/g, " ").trim();
+  return orientation ? orientation.slice(0, MAX_ORIENTATION_LENGTH) : undefined;
+}
+
+export function externalDirectoryContext(directory: string, orientation: string): string {
+  const instructionFiles = INSTRUCTION_FILES.filter((filename) =>
+    existsSync(join(directory, filename)),
+  );
+  const instructions =
+    instructionFiles.length > 0
+      ? `Instructions available: ${instructionFiles.join(", ")}. Read and follow them before operating in this directory.`
+      : undefined;
+  return [`## External directory: ${directory}`, `Orientation: ${orientation}`, instructions]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function parseDirCommand(
