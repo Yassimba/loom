@@ -10,7 +10,7 @@
     },
     {
       "name": "@ff-labs/pi-fff",
-      "version": "0.10.5",
+      "version": "0.10.6",
       "label": "fff",
       "description": "FFF-powered fuzzy file and content search with frecency ranking, git-aware results, and fast @-mention autocomplete. By dmtrKovalenko.",
       "nextAction": "Run /reload in Pi, then /fff-health to inspect the index."
