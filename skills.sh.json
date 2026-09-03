@@ -50,14 +50,9 @@
       "skills": ["impeccable"]
     },
     {
-      "title": "Diagrams",
-      "description": "Turn systems and data into pictures — draw.io, Mermaid, and diagram-design editorial diagrams.",
-      "skills": ["mermaid-skill", "diagram-design"]
-    },
-    {
-      "title": "Presentations",
-      "description": "Build self-contained browser slide decks.",
-      "skills": ["frontend-slides"]
+      "title": "Diagrams and slides",
+      "description": "Turn systems and data into diagrams and build self-contained browser slide decks.",
+      "skills": ["mermaid-skill", "diagram-design", "frontend-slides"]
     },
     {
       "title": "Observability",

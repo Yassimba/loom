@@ -693,7 +693,7 @@
     {
       "id": "skill:mermaid-skill",
       "kind": "skill",
-      "group": "Diagrams",
+      "group": "Diagrams and slides",
       "label": "mermaid-skill",
       "description": "Generate Mermaid diagrams as code (.mmd) and export to PNG/SVG/PDF with mmdc. Use when the user wants a diagram — flowchart, sequence, class, ER, state, gantt, git graph, architecture, timeline, mindmap — proactively when explaining a system with 3+ components, a runtime flow, a schema, or a lifecycle, and when another skill (e.g. show-me) needs a diagram authored or exported to an image.",
       "installTarget": "mermaid-skill",
@@ -703,7 +703,7 @@
     {
       "id": "skill:diagram-design",
       "kind": "skill",
-      "group": "Diagrams",
+      "group": "Diagrams and slides",
       "label": "diagram-design",
       "description": "Create or redraw polished architecture, process, data, UML, statistical, roadmap, and other diagrams as self-contained HTML/SVG/PNG. Use when a visual explains structure, flow, state, hierarchy, time, comparison, or causality better than prose.",
       "installTarget": "diagram-design",
@@ -713,7 +713,7 @@
     {
       "id": "skill:frontend-slides",
       "kind": "skill",
-      "group": "Presentations",
+      "group": "Diagrams and slides",
       "label": "frontend-slides",
       "description": "Build a self-contained HTML slide deck that runs in the browser. Use when the user wants a presentation, slides for a talk or a pitch, a PPT/PPTX converted to web, or an existing HTML deck improved.",
       "installTarget": "frontend-slides",
