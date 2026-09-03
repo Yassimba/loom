@@ -17,7 +17,7 @@
     },
     {
       "name": "pi-autoresearch",
-      "version": "1.6.2",
+      "version": "1.7.0",
       "label": "autoresearch",
       "description": "Run autonomous optimization loops: change code, benchmark it, keep improvements, and revert regressions. By davebcn87.",
       "nextAction": "Run /autoresearch with an optimization target in Pi."
