@@ -291,6 +291,9 @@ fn filtered_and_empty_profiles_use_only_resources_in_the_model() {
 fn choose_renders_profiles_mixed_kinds_and_required_tools() {
     let mut model = model(ready());
     model.resources[3].dependencies = vec!["gh".into()];
+    model.profiles[0]
+        .resources
+        .extend([model.resources[0].id.clone(), model.resources[2].id.clone()]);
     let mut wizard = Wizard::new(model);
     go_to_group(&mut wizard, "Engineer");
     press(
@@ -307,8 +310,10 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
 
     assert!(output.contains("Profiles"));
     assert!(output.contains("Capabilities"));
-    assert!(output.contains("Skill"));
-    assert!(output.contains("Tool"));
+    assert!(output.contains("Skills"));
+    assert!(output.contains("Tools"));
+    assert!(output.contains("Pi packages"));
+    assert!(output.contains("Herdr plugins"));
     assert!(output.contains("needed by tdd"));
     assert!(output.contains("Build software"), "{output}");
 }
@@ -493,10 +498,9 @@ fn settings_precheck_follows_the_related_plugin_and_respects_touches() {
     assert!(!wizard.setting_on[0]);
     // Toggling the plugin off and on again does not override the user's no.
     go_to(&mut wizard, Row::Resource(2));
-    press(
-        &mut wizard,
-        &[KeyCode::Char(' '), KeyCode::Up, KeyCode::Char(' ')],
-    );
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    go_to(&mut wizard, Row::Resource(2));
+    press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(wizard.selected[2]);
     assert!(!wizard.setting_on[0]);
 }

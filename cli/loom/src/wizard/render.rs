@@ -503,9 +503,23 @@ impl Wizard {
             .min(32);
         let description_width =
             (items_area.width as usize).saturating_sub(2 + 5 + 13 + label_width + 1);
+        let sectioned = !searching
+            && self.model.purpose == super::state::WizardPurpose::Install
+            && !self.model.profiles.is_empty();
         let items = rows
             .iter()
-            .map(|row| self.choose_row_item(row, label_width, description_width))
+            .enumerate()
+            .map(|(index, row)| {
+                let starts_section =
+                    index == 0 || self.row_kind(&rows[index - 1]) != self.row_kind(row);
+                self.choose_row_item(
+                    row,
+                    label_width,
+                    description_width,
+                    sectioned,
+                    starts_section,
+                )
+            })
             .collect::<Vec<_>>();
         let offset = list_offset(rows.len(), items_area.height.saturating_sub(2), cursor);
         let items_focused = stage.focus == Pane::Items || searching;
@@ -645,7 +659,26 @@ impl Wizard {
         }
     }
 
-    fn choose_row_item(&self, row: &Row, label_width: usize, room: usize) -> ListItem<'_> {
+    fn row_section(&self, row: &Row) -> &'static str {
+        match row {
+            Row::Resource(index) => match self.model.resources[*index].kind {
+                ResourceKind::Skill => "Skills",
+                ResourceKind::Tool => "Tools",
+                ResourceKind::PiPackage => "Pi packages",
+                ResourceKind::HerdrPlugin => "Herdr plugins",
+            },
+            Row::Setting(_) => "Settings",
+        }
+    }
+
+    fn choose_row_item(
+        &self,
+        row: &Row,
+        label_width: usize,
+        room: usize,
+        sectioned: bool,
+        starts_section: bool,
+    ) -> ListItem<'_> {
         let label = pad(self.row_label(row), label_width);
         let (mark, mark_style, dim_label, note) = match row {
             Row::Resource(index) => {
@@ -697,9 +730,18 @@ impl Wizard {
                 }
             }
         };
+        let (kind, kind_style) = if sectioned {
+            if starts_section {
+                (self.row_section(row), Style::new().fg(ACCENT).bold())
+            } else {
+                ("│", Style::new().dim())
+            }
+        } else {
+            (self.row_kind(row), Style::new().dim())
+        };
         ListItem::new(Line::from(vec![
             Span::styled(format!(" {mark} "), mark_style),
-            Span::styled(format!("{:<12} ", self.row_kind(row)), Style::new().dim()),
+            Span::styled(format!("{kind:<12} "), kind_style),
             Span::styled(
                 format!("{label} "),
                 if dim_label {

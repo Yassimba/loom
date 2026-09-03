@@ -1231,9 +1231,13 @@ fn choose_groups(model: &Model) -> Vec<Group> {
 }
 
 fn profile_groups(model: &Model) -> Vec<Group> {
-    let all_rows = (0..model.resources.len())
+    let mut all_rows = (0..model.resources.len())
         .map(Row::Resource)
         .collect::<Vec<_>>();
+    all_rows.sort_by_key(|row| match row {
+        Row::Resource(index) => capability_kind_rank(&model.resources[*index].kind),
+        Row::Setting(_) => unreachable!("profile groups contain resources only"),
+    });
     let mut groups = Vec::new();
     for profile in &model.profiles {
         let direct = profile
@@ -1253,7 +1257,7 @@ fn profile_groups(model: &Model) -> Vec<Group> {
             .iter()
             .map(|index| model.resources[*index].clone())
             .collect();
-        let rows = crate::expand_skill_dependencies(&model.resources, selected)
+        let mut rows = crate::expand_skill_dependencies(&model.resources, selected)
             .iter()
             .filter_map(|resource| {
                 model
@@ -1262,7 +1266,11 @@ fn profile_groups(model: &Model) -> Vec<Group> {
                     .position(|candidate| candidate.id == resource.id)
                     .map(Row::Resource)
             })
-            .collect();
+            .collect::<Vec<_>>();
+        rows.sort_by_key(|row| match row {
+            Row::Resource(index) => capability_kind_rank(&model.resources[*index].kind),
+            Row::Setting(_) => unreachable!("profile groups contain resources only"),
+        });
         groups.push(Group {
             title: profile.label.clone(),
             description: profile.description.clone(),
@@ -1279,6 +1287,15 @@ fn profile_groups(model: &Model) -> Vec<Group> {
         everything: true,
     });
     groups
+}
+
+fn capability_kind_rank(kind: &ResourceKind) -> u8 {
+    match kind {
+        ResourceKind::Skill => 0,
+        ResourceKind::Tool => 1,
+        ResourceKind::PiPackage => 2,
+        ResourceKind::HerdrPlugin => 3,
+    }
 }
 
 fn resource_groups(model: &Model) -> Vec<Group> {
