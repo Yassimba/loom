@@ -1120,7 +1120,7 @@
     {
       "id": "tool:qmd",
       "kind": "tool",
-      "group": "Tools",
+      "group": "Wiki",
       "label": "qmd",
       "description": "On-device Markdown search with BM25, vector search, and LLM reranking.",
       "installTarget": "npm:@tobilu/qmd",
@@ -1296,7 +1296,7 @@
     {
       "id": "tool:confluence-markdown-exporter",
       "kind": "tool",
-      "group": "Tools",
+      "group": "Wiki",
       "label": "confluence-markdown-exporter",
       "description": "Export Confluence pages, descendants, spaces, or organisations to Markdown.",
       "installTarget": "pipx:confluence-markdown-exporter",
