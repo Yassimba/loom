@@ -45,14 +45,9 @@
       ]
     },
     {
-      "title": "Design",
-      "description": "Shape, critique, and polish frontend interfaces with strong visual direction and production checks.",
-      "skills": ["impeccable"]
-    },
-    {
       "title": "Diagrams and slides",
-      "description": "Turn systems and data into diagrams and build self-contained browser slide decks.",
-      "skills": ["mermaid-skill", "diagram-design", "frontend-slides"]
+      "description": "Design and polish interfaces, turn systems and data into diagrams, and build self-contained browser slide decks.",
+      "skills": ["impeccable", "mermaid-skill", "diagram-design", "frontend-slides"]
     },
     {
       "title": "Observability",
