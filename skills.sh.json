@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "Coding",
-      "description": "The development loop — planning, TDD, debugging, review, release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
+      "description": "The development loop — planning, architecture, TDD, debugging, review, and release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
         "bdd",
         "blueprint",
@@ -33,13 +33,7 @@
         "to-tickets",
         "update-docstrings",
         "wayfinder",
-        "whats-next"
-      ]
-    },
-    {
-      "title": "Architecture",
-      "description": "Design and understand the shape of a system: deep modules, domain language, and guided walkthroughs of unfamiliar code.",
-      "skills": [
+        "whats-next",
         "calldiff",
         "codebase-design",
         "domain-modeling",

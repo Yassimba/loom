@@ -603,7 +603,7 @@
     {
       "id": "skill:calldiff",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "calldiff",
       "description": "Diff call stacks across git commits — like git diff, but for who-calls-whom. Shows which callees appeared, disappeared, or moved under an entrypoint across 22 languages (diff, tree, and reach). Use for agentic code review when call flow changed and line diffs bury the shape of the change.",
       "installTarget": "calldiff",
@@ -613,7 +613,7 @@
     {
       "id": "skill:codebase-design",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "codebase-design",
       "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
       "installTarget": "codebase-design",
@@ -623,7 +623,7 @@
     {
       "id": "skill:domain-modeling",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "domain-modeling",
       "description": "Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.",
       "installTarget": "domain-modeling",
@@ -633,7 +633,7 @@
     {
       "id": "skill:explain-code-flow",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "explain-code-flow",
       "description": "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions.",
       "installTarget": "explain-code-flow",
@@ -643,7 +643,7 @@
     {
       "id": "skill:improve-codebase-architecture",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "improve-codebase-architecture",
       "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
       "installTarget": "improve-codebase-architecture",
@@ -653,7 +653,7 @@
     {
       "id": "skill:literate-programming",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "literate-programming",
       "description": "Transform a codebase into a literate program — a .lit.md essay that weaves prose, diagrams, and named chunks and tangles back to source. Use when the user asks for a literate program, .lit.md, weave, tangle, or wants the system written as a narrative that can regenerate the files.",
       "installTarget": "literate-programming",
@@ -663,7 +663,7 @@
     {
       "id": "skill:show-me",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "show-me",
       "description": "Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (ASCII box diagram), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.",
       "installTarget": "show-me",
@@ -673,7 +673,7 @@
     {
       "id": "skill:system-atlas",
       "kind": "skill",
-      "group": "Architecture",
+      "group": "Coding",
       "label": "system-atlas",
       "description": "Build a one-page HTML atlas of a multi-repository product, hundreds of layered diagrams with plain-language captions and a glossary, from parallel code exploration.",
       "installTarget": "system-atlas",
