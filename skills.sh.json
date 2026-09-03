@@ -71,6 +71,11 @@
       "skills": ["dd-apm", "dd-debugger", "dd-docs", "dd-logs", "dd-monitors", "dd-pup"]
     },
     {
+      "title": "Wiki",
+      "description": "Bring external knowledge into local Markdown and search it without losing source boundaries.",
+      "skills": ["confluence-export", "qmd"]
+    },
+    {
       "title": "General",
       "description": "Interviewing, teaching, writing, and note-taking — skills for the work around the code.",
       "skills": [

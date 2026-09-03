@@ -47,6 +47,9 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 # local semantic code index for coding agents
 "npm:@colbymchenry/codegraph" = "1.6.0"
 
+# local hybrid search for Markdown knowledge bases
+"npm:@tobilu/qmd" = "2.8.3"
+
 # code review TUI (annotate diffs, export to GitHub or clipboard)
 "github:agavra/tuicr" = "v0.23.1"
 
@@ -72,6 +75,9 @@ rust = { version = "1.97.1", os = ["macos"] }
 
 # observability
 "github:DataDog/pup" = "v1.10.5"
+
+# export Confluence pages and spaces to Markdown
+"pipx:confluence-markdown-exporter" = "5.4.0"
 
 # export Confluence pages and spaces to Markdown
 "pipx:confluence-markdown-exporter" = "5.4.0"

@@ -781,6 +781,26 @@
       "dependencies": ["github:DataDog/pup"]
     },
     {
+      "id": "skill:confluence-export",
+      "kind": "skill",
+      "group": "Wiki",
+      "label": "confluence-export",
+      "description": "Export or refresh a Confluence page, subtree, space, or organisation as Markdown with cme. Use for Confluence backups, migrations, local mirrors, or staging source pages in an Obsidian vault.",
+      "installTarget": "confluence-export",
+      "nextAction": "Ask your coding agent to use the confluence-export skill.",
+      "dependencies": ["pipx:confluence-markdown-exporter"]
+    },
+    {
+      "id": "skill:qmd",
+      "kind": "skill",
+      "group": "Wiki",
+      "label": "qmd",
+      "description": "Search local markdown knowledge bases, notes, docs, and wikis with QMD. Use when users ask to find notes, retrieve documents, inspect a wiki, answer from indexed markdown, or set up QMD access.",
+      "installTarget": "qmd",
+      "nextAction": "Ask your coding agent to use the qmd skill.",
+      "dependencies": ["npm:@tobilu/qmd"]
+    },
+    {
       "id": "skill:explain-simply",
       "kind": "skill",
       "group": "General",
@@ -1095,6 +1115,17 @@
       "installTarget": "npm:@colbymchenry/codegraph",
       "nextAction": "Run `loom init` in a project to wire agents and build its index.",
       "bin": "codegraph",
+      "companions": []
+    },
+    {
+      "id": "tool:qmd",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "qmd",
+      "description": "On-device Markdown search with BM25, vector search, and LLM reranking.",
+      "installTarget": "npm:@tobilu/qmd",
+      "nextAction": "Run `qmd collection add ~/notes --name notes`, then `qmd embed`.",
+      "bin": "qmd",
       "companions": []
     },
     {
