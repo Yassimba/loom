@@ -140,6 +140,13 @@
       "nextAction": "Run `pup auth login` once."
     },
     {
+      "key": "pipx:confluence-markdown-exporter",
+      "label": "confluence-markdown-exporter",
+      "bin": "cme",
+      "description": "Export Confluence pages, descendants, spaces, or organisations to Markdown.",
+      "nextAction": "Run `cme config edit auth.confluence` to configure authentication."
+    },
+    {
       "key": "github:Yassimba/plannotator",
       "label": "plannotator",
       "description": "Browser-based plan and code review for coding agents, with figure-led Guided Reviews: one document, a code peek, and in-app guides drawn by the changeset-walkthrough skill. The plannotator skills drive it.",

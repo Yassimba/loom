@@ -288,11 +288,18 @@ impl Wizard {
 
     fn render_help(&self, frame: &mut Frame) {
         let key = |text: &'static str| Span::styled(text, Style::new().fg(ACCENT).bold());
+        let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
+            && !self.model.profiles.is_empty();
+        let (left, set) = if profile_mode {
+            ("profiles", "profile")
+        } else {
+            ("groups", "group")
+        };
         let lines = vec![
             Line::from(vec![key("↑ ↓        "), Span::raw("move (j/k work too)")]),
             Line::from(vec![
                 key("← →        "),
-                Span::raw("groups column ⇄ items column (tab too)"),
+                Span::raw(format!("{left} column ⇄ items column (tab too)")),
             ]),
             Line::from(vec![key("home end   "), Span::raw("top / bottom")]),
             Line::from(""),
@@ -300,7 +307,7 @@ impl Wizard {
             Line::from(vec![
                 Span::raw("           "),
                 Span::styled(
-                    "in the groups column: picks the whole group (or Everything)",
+                    format!("in the {left} column: picks the whole {set} (or Everything)"),
                     Style::new().dim(),
                 ),
             ]),
@@ -433,10 +440,13 @@ impl Wizard {
         );
         let groups_focused = stage.focus == Pane::Groups && !searching;
         if groups_area.width > 0 {
-            let title = if narrow {
-                " Groups · → items "
-            } else {
-                " Groups "
+            let profiles = self.model.purpose == super::state::WizardPurpose::Install
+                && !self.model.profiles.is_empty();
+            let title = match (narrow, profiles) {
+                (true, true) => " Profiles · → capabilities ",
+                (false, true) => " Profiles ",
+                (true, false) => " Groups · → items ",
+                (false, false) => " Groups ",
             };
             frame.render_stateful_widget(
                 List::new(groups)
@@ -463,15 +473,18 @@ impl Wizard {
             }
             None => {
                 let group = stage.group();
-                let counts = self.item_counts(&self.group_items(group));
+                let counts = self.item_counts(&group.items());
+                let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
+                    && !self.model.profiles.is_empty();
+                let prefix = if profile_mode { "Capabilities · " } else { "" };
                 let title = if counts.available + counts.picked == 0 {
                     format!(
-                        " {} · {} installed · {} required · {} unavailable ",
+                        " {prefix}{} · {} installed · {} required · {} unavailable ",
                         group.title, counts.installed, counts.required, counts.unavailable
                     )
                 } else {
                     format!(
-                        " {} · {}/{} picked ",
+                        " {prefix}{} · {}/{} picked ",
                         group.title,
                         counts.picked,
                         counts.available + counts.picked
@@ -488,21 +501,23 @@ impl Wizard {
             .max()
             .unwrap_or(0)
             .min(32);
-        let description_width = (items_area.width as usize).saturating_sub(2 + 5 + label_width + 1);
-        let items = if !searching && stage.group().everything {
-            vec![ListItem::new(Line::styled(
-                "  space picks or clears the whole catalog; ↓ for the groups.",
-                Style::new().dim(),
-            ))]
-        } else {
-            rows.iter()
-                .map(|row| self.choose_row_item(row, label_width, description_width))
-                .collect::<Vec<_>>()
-        };
+        let description_width =
+            (items_area.width as usize).saturating_sub(2 + 5 + 13 + label_width + 1);
+        let items = rows
+            .iter()
+            .map(|row| self.choose_row_item(row, label_width, description_width))
+            .collect::<Vec<_>>();
         let offset = list_offset(rows.len(), items_area.height.saturating_sub(2), cursor);
         let items_focused = stage.focus == Pane::Items || searching;
         let title = if narrow && !searching {
-            format!("{title}· ← groups ")
+            let left = if self.model.purpose == super::state::WizardPurpose::Install
+                && !self.model.profiles.is_empty()
+            {
+                "profiles"
+            } else {
+                "groups"
+            };
+            format!("{title}· ← {left} ")
         } else {
             title
         };
@@ -524,7 +539,7 @@ impl Wizard {
                 "No matches. Backspace widens, esc cancels.",
                 Style::new().dim(),
             )],
-            (_, _) if !searching && (stage.focus == Pane::Groups || stage.group().everything) => {
+            (_, _) if !searching && stage.focus == Pane::Groups => {
                 self.group_details(stage.group())
             }
             (_, Some(row)) => self.row_details(row),
@@ -618,6 +633,18 @@ impl Wizard {
         }
     }
 
+    fn row_kind(&self, row: &Row) -> &'static str {
+        match row {
+            Row::Resource(index) => match self.model.resources[*index].kind {
+                ResourceKind::Skill => "Skill",
+                ResourceKind::Tool => "Tool",
+                ResourceKind::PiPackage => "Pi package",
+                ResourceKind::HerdrPlugin => "Herdr plugin",
+            },
+            Row::Setting(_) => "Setting",
+        }
+    }
+
     fn choose_row_item(&self, row: &Row, label_width: usize, room: usize) -> ListItem<'_> {
         let label = pad(self.row_label(row), label_width);
         let (mark, mark_style, dim_label, note) = match row {
@@ -672,6 +699,7 @@ impl Wizard {
         };
         ListItem::new(Line::from(vec![
             Span::styled(format!(" {mark} "), mark_style),
+            Span::styled(format!("{:<12} ", self.row_kind(row)), Style::new().dim()),
             Span::styled(
                 format!("{label} "),
                 if dim_label {
@@ -685,9 +713,11 @@ impl Wizard {
     }
 
     fn group_details(&self, group: &Group) -> Vec<Line<'_>> {
-        let items = self.group_items(group);
+        let items = group.items();
         let mut lines = vec![
             Line::styled(group.title.clone(), Style::new().bold().fg(ACCENT)),
+            Line::from(""),
+            Line::from(group.description.clone()),
             Line::from(""),
         ];
         if group.everything {

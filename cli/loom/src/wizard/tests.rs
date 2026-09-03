@@ -3,7 +3,8 @@ use crate::settings::{
     KeyCommand, SettingChange, SettingSpec, SettingState, SettingsPaths, ZedKeybinding,
 };
 use crate::{
-    Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
+    Platform, PrerequisiteStatus, Profile, Resource, ResourceKind, SkillAgent, SkillDestination,
+    SkillScope,
 };
 use pretty_assertions::assert_eq;
 use ratatui::backend::TestBackend;
@@ -103,6 +104,28 @@ fn model(status: PrerequisiteStatus) -> Model {
         purpose: WizardPurpose::Install,
         uninstall_dependencies: std::collections::BTreeMap::new(),
         resources: catalog(),
+        profiles: vec![
+            Profile {
+                id: "engineer".into(),
+                label: "Engineer".into(),
+                description: "Build software".into(),
+                resources: vec![
+                    "Coding:tdd".into(),
+                    "Coding:refactor".into(),
+                    "Tools:gh".into(),
+                ],
+            },
+            Profile {
+                id: "data-engineer".into(),
+                label: "Data Engineer".into(),
+                description: "Build data systems".into(),
+                resources: vec![
+                    "Coding:tdd".into(),
+                    "Diagrams:mermaid".into(),
+                    "Tools:gh".into(),
+                ],
+            },
+        ],
         installed: vec![false; catalog().len()],
         setting_states: vec![SettingState::NotApplied; settings.len()],
         settings,
@@ -139,6 +162,20 @@ fn press(wizard: &mut Wizard, codes: &[KeyCode]) -> Option<Action> {
         action = wizard.handle_key(key(code));
     }
     action
+}
+
+fn screen(wizard: &mut Wizard, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    let buffer = terminal.backend().buffer();
+    let mut out = String::new();
+    for y in 0..buffer.area.height {
+        for x in 0..buffer.area.width {
+            out.push_str(buffer[(x, y)].symbol());
+        }
+        out.push('\n');
+    }
+    out
 }
 
 fn choose(wizard: &Wizard) -> &ChooseStage {
@@ -205,25 +242,75 @@ fn title(wizard: &Wizard) -> &'static str {
 }
 
 #[test]
-fn choose_lists_bundles_then_groups_in_catalog_order() {
+fn choose_lists_profiles_then_settings_in_catalog_order() {
     let wizard = wizard();
     assert_eq!(
         group_titles(&wizard),
         [
+            "Engineer",
+            "Data Engineer",
             "Everything",
-            "Skills · Coding",
-            "Skills · Diagrams",
-            "Tools",
-            "Pi packages",
-            "Herdr plugins",
             "Settings · Herdr keybinds",
             "Settings · Zed",
         ]
     );
-    assert!(choose(&wizard).groups[0].everything);
-    // The cursor starts in the items column of the first real group.
+    assert!(choose(&wizard).groups[2].everything);
+    assert_eq!(choose(&wizard).groups[2].rows.len(), catalog().len());
+    // Start in the first role profile, not the catch-all list.
     assert_eq!(choose(&wizard).focus, Pane::Items);
+    assert_eq!(choose(&wizard).group().title, "Engineer");
     assert_eq!(current_row(&wizard), Row::Resource(3));
+}
+
+#[test]
+fn filtered_and_empty_profiles_use_only_resources_in_the_model() {
+    let mut model = model(ready());
+    model.resources.truncate(1);
+    model.profiles = vec![
+        Profile {
+            id: "empty".into(),
+            label: "Empty after filtering".into(),
+            description: "No resources on this platform".into(),
+            resources: vec!["missing".into()],
+        },
+        Profile {
+            id: "available".into(),
+            label: "Available here".into(),
+            description: "One resource on this platform".into(),
+            resources: vec![model.resources[0].id.clone(), "missing".into()],
+        },
+    ];
+    model.settings.clear();
+    let wizard = Wizard::new(model);
+
+    assert_eq!(group_titles(&wizard), ["Available here", "Everything"]);
+    assert_eq!(choose(&wizard).groups[0].rows, [Row::Resource(0)]);
+}
+
+#[test]
+fn choose_renders_profiles_mixed_kinds_and_required_tools() {
+    let mut model = model(ready());
+    model.resources[3].dependencies = vec!["gh".into()];
+    let mut wizard = Wizard::new(model);
+    go_to_group(&mut wizard, "Engineer");
+    press(
+        &mut wizard,
+        &[
+            KeyCode::Right,
+            KeyCode::Home,
+            KeyCode::Char(' '),
+            KeyCode::Left,
+        ],
+    );
+
+    let output = screen(&mut wizard, 160, 28);
+
+    assert!(output.contains("Profiles"));
+    assert!(output.contains("Capabilities"));
+    assert!(output.contains("Skill"));
+    assert!(output.contains("Tool"));
+    assert!(output.contains("needed by tdd"));
+    assert!(output.contains("Build software"), "{output}");
 }
 
 #[test]
@@ -262,15 +349,25 @@ fn space_picks_and_steps_down() {
 }
 
 #[test]
-fn space_in_the_groups_column_toggles_the_whole_group() {
-    let mut wizard = wizard();
-    go_to_group(&mut wizard, "Skills · Coding");
+fn space_on_a_profile_toggles_only_its_direct_members() {
+    let mut model = model(ready());
+    model.resources[3].dependencies = vec!["mermaid".into()];
+    let mut wizard = Wizard::new(model);
+    go_to_group(&mut wizard, "Engineer");
+
     press(&mut wizard, &[KeyCode::Char(' ')]);
-    assert_eq!(&wizard.selected[3..6], [true, true, false]);
-    // The cursor stays on the group so a second space clears it.
+
+    assert_eq!(
+        wizard.selected,
+        [false, false, false, true, true, false, true],
+        "the visible dependency stays required instead of becoming a direct pick"
+    );
+    assert_eq!(wizard.required_note(5).as_deref(), Some("tdd"));
+    assert!(choose(&wizard).group().rows.contains(&Row::Resource(5)));
+    // The cursor stays on the profile so a second space clears it.
     assert_eq!(choose(&wizard).focus, Pane::Groups);
     press(&mut wizard, &[KeyCode::Char(' ')]);
-    assert_eq!(&wizard.selected[3..6], [false, false, false]);
+    assert!(wizard.selected.iter().all(|on| !*on));
 }
 
 #[test]
@@ -279,11 +376,11 @@ fn arrows_move_between_columns_and_down_changes_the_group() {
     press(&mut wizard, &[KeyCode::Left]);
     assert_eq!(choose(&wizard).focus, Pane::Groups);
     press(&mut wizard, &[KeyCode::Down]);
-    assert_eq!(choose(&wizard).group().title, "Skills · Diagrams");
-    assert_eq!(cursor(&wizard), 0, "a new group starts at its first row");
+    assert_eq!(choose(&wizard).group().title, "Data Engineer");
+    assert_eq!(cursor(&wizard), 0, "a new profile starts at its first row");
     press(&mut wizard, &[KeyCode::Right]);
     assert_eq!(choose(&wizard).focus, Pane::Items);
-    assert_eq!(current_row(&wizard), Row::Resource(5));
+    assert_eq!(current_row(&wizard), Row::Resource(3));
     press(&mut wizard, &[KeyCode::Tab]);
     assert_eq!(choose(&wizard).focus, Pane::Groups);
 }
@@ -312,10 +409,7 @@ fn installed_resources_show_but_cannot_be_picked() {
     go_to(&mut wizard, Row::Resource(0));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(!wizard.selected[0]);
-    go_to_group(&mut wizard, "Pi packages");
-    let actionable = wizard.actionable(&choose(&wizard).group().items());
-    assert_eq!(actionable.len(), 1);
-    assert!(actionable.iter().all(|item| !wizard.item_on(*item)));
+    assert_eq!(wizard.item_state(Item::Resource(0)), ItemState::Installed);
 }
 
 #[test]
@@ -333,16 +427,49 @@ fn the_probe_drops_picks_it_proves_redundant() {
 #[test]
 fn dependencies_lock_as_needed_and_cannot_be_deselected() {
     let mut model = model(ready());
-    model.resources[3].dependencies = vec!["refactor".into()];
+    model.resources[3].dependencies = vec!["mermaid".into()];
     let mut wizard = Wizard::new(model);
     go_to(&mut wizard, Row::Resource(3));
     press(&mut wizard, &[KeyCode::Char(' ')]);
-    assert_eq!(wizard.required_note(4).as_deref(), Some("tdd"));
-    assert!(wizard.item_on(Item::Resource(4)));
-    go_to(&mut wizard, Row::Resource(4));
+    assert_eq!(wizard.required_note(5).as_deref(), Some("tdd"));
+    assert!(wizard.item_on(Item::Resource(5)));
+    go_to(&mut wizard, Row::Resource(5));
     press(&mut wizard, &[KeyCode::Char(' ')]);
-    assert!(!wizard.selected[4], "locked rows do not flip");
-    assert!(wizard.required_note(4).is_some());
+    assert!(!wizard.selected[5], "locked rows do not flip");
+    assert!(wizard.required_note(5).is_some());
+}
+
+#[test]
+fn search_returns_an_overlapping_capability_once() {
+    let mut wizard = wizard();
+    wizard.search = Some("gh".into());
+
+    assert_eq!(wizard.search_matches().len(), 1);
+    assert_eq!(
+        wizard.search_row(wizard.search_matches()[0]),
+        Row::Resource(6)
+    );
+}
+
+#[test]
+fn uninstall_keeps_ownership_groups_instead_of_role_profiles() {
+    let mut model = model(ready());
+    model.purpose = WizardPurpose::Uninstall;
+    let wizard = Wizard::new(model);
+
+    assert_eq!(
+        group_titles(&wizard),
+        [
+            "Everything",
+            "Skills · Coding",
+            "Skills · Diagrams",
+            "Tools",
+            "Pi packages",
+            "Herdr plugins",
+            "Settings · Herdr keybinds",
+            "Settings · Zed",
+        ]
+    );
 }
 
 #[test]
@@ -544,7 +671,7 @@ fn search_filters_picks_and_lands_the_cursor() {
     press(&mut wizard, &[KeyCode::Up, KeyCode::Enter]);
     assert!(wizard.search.is_none());
     assert_eq!(current_row(&wizard), Row::Resource(5));
-    assert_eq!(choose(&wizard).group().title, "Skills · Diagrams");
+    assert_eq!(choose(&wizard).group().title, "Data Engineer");
 }
 
 #[test]
@@ -567,17 +694,17 @@ fn clicking_a_row_toggles_it() {
     let mut wizard = wizard();
     let mut terminal = Terminal::new(TestBackend::new(110, 30)).unwrap();
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
-    // Click the Tools group, then its first row.
+    // Click the Engineer profile, then its first capability.
     let (groups, _) = wizard.hits.groups.unwrap();
-    let tools = group_titles(&wizard)
+    let engineer = group_titles(&wizard)
         .iter()
-        .position(|title| title == "Tools")
+        .position(|title| title == "Engineer")
         .unwrap() as u16;
-    wizard.handle_click(groups.x + 3, groups.y + 1 + tools);
+    wizard.handle_click(groups.x + 3, groups.y + 1 + engineer);
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
     let (area, _) = wizard.hits.list.unwrap();
     wizard.handle_click(area.x + 3, area.y + 1);
-    assert!(wizard.selected[6]);
+    assert!(wizard.selected[3]);
 }
 
 #[test]
@@ -647,13 +774,13 @@ fn render_gallery() {
 }
 
 #[test]
-fn setup_starts_with_everything() {
+fn setup_starts_in_the_first_role_profile() {
     let mut model = model(ready());
     model.mode = crate::app::SelectionMode::Setup;
     let wizard = Wizard::new(model);
 
-    assert_eq!(group_titles(&wizard)[0], "Everything");
-    assert!(choose(&wizard).groups[0].everything);
+    assert_eq!(choose(&wizard).group().title, "Engineer");
+    assert_eq!(choose(&wizard).focus, Pane::Items);
 }
 
 #[test]
@@ -667,11 +794,17 @@ fn wiki_group_routes_to_the_vault_workflow_with_optional_feynman() {
     feynman.install_target = "@companion-ai/feynman".into();
     feynman.dependencies = vec!["core-target".into()];
     model.resources = vec![obsidian, core, feynman];
+    model.profiles = vec![Profile {
+        id: "knowledge-wiki".into(),
+        label: "Knowledge & Wiki".into(),
+        description: "Set up a Vault".into(),
+        resources: vec!["Wiki:Obsidian".into(), "Wiki:feynman".into()],
+    }];
     model.installed = vec![false; 3];
     let mut wizard = Wizard::new(model);
 
-    assert_eq!(group_titles(&wizard)[1], "Wiki");
-    go_to_group(&mut wizard, "Wiki");
+    assert_eq!(group_titles(&wizard)[0], "Knowledge & Wiki");
+    go_to_group(&mut wizard, "Knowledge & Wiki");
     press(&mut wizard, &[KeyCode::Char(' '), KeyCode::Enter]);
     assert_eq!(title(&wizard), "Review");
     assert!(matches!(
@@ -857,6 +990,37 @@ fn where_scope_options_fit_a_standard_terminal() {
         .collect::<String>();
 
     assert!(text.contains("(•) Global    ( ) Project"));
+}
+
+#[test]
+fn profile_choose_renders_in_plain_terminal_modes() {
+    let executable = std::env::current_exe().unwrap();
+    for (name, value) in [("NO_COLOR", "1"), ("TERM", "dumb")] {
+        let mut command = std::process::Command::new(&executable);
+        command.args([
+            "--ignored",
+            "--exact",
+            "wizard::tests::profile_choose_plain_terminal_child",
+        ]);
+        command.env_remove("NO_COLOR").env("TERM", "xterm");
+        command.env(name, value);
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{name} child failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+#[ignore = "run in isolated subprocess by profile_choose_renders_in_plain_terminal_modes"]
+fn profile_choose_plain_terminal_child() {
+    let mut wizard = wizard();
+    let output = screen(&mut wizard, 104, 24);
+    assert!(output.contains("Profiles"));
+    assert!(output.contains("Capabilities"));
 }
 
 #[test]

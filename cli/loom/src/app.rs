@@ -324,6 +324,7 @@ fn run_interactive(
         purpose: crate::wizard::WizardPurpose::Install,
         uninstall_dependencies: BTreeMap::new(),
         resources,
+        profiles: catalog.profiles.clone(),
         installed,
         settings: settings.clone(),
         setting_states,
@@ -916,6 +917,7 @@ mod tests {
         std::fs::write(tree.join("already-there/SKILL.md"), "installed").unwrap();
         let catalog = Catalog {
             schema_version: 1,
+            profiles: Vec::new(),
             resources: vec![skill],
         };
         let selectors = Selectors {
@@ -1069,6 +1071,7 @@ mod tests {
         };
         let catalog = Catalog {
             schema_version: 1,
+            profiles: Vec::new(),
             resources: vec![package],
         };
         let selectors = Selectors {

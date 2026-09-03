@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { buildSetupCatalog } from "../scripts/catalog-lib.mjs";
+import { buildSetupCatalog, buildSetupCatalogDocument } from "../scripts/catalog-lib.mjs";
 
 async function createCatalogFixture() {
   const repoRoot = await mkdtemp(join(tmpdir(), "pi-catalog-test-"));
@@ -86,8 +86,40 @@ async function createCatalogFixture() {
       ],
     }),
   );
+  await writeFile(
+    join(repoRoot, "manifest", "profiles.json"),
+    JSON.stringify({
+      profiles: [
+        {
+          id: "engineer",
+          label: "Engineer",
+          description: "Build and review software.",
+          resources: ["skill:reviewed", "tool:gh"],
+        },
+      ],
+    }),
+  );
   return repoRoot;
 }
+
+test("the setup catalog carries ordered profiles with exact resource ids", async () => {
+  const repoRoot = await createCatalogFixture();
+
+  const catalog = await buildSetupCatalogDocument(repoRoot);
+
+  assert.deepEqual(catalog.profiles, [
+    {
+      id: "engineer",
+      label: "Engineer",
+      description: "Build and review software.",
+      resources: ["skill:reviewed", "tool:gh"],
+    },
+  ]);
+  assert.equal(
+    catalog.resources.some(({ id }) => id === "skill:reviewed"),
+    true,
+  );
+});
 
 test("the setup catalog combines opted-in extensions with reviewed skills", async () => {
   const repoRoot = await createCatalogFixture();
@@ -156,6 +188,48 @@ test("the setup catalog combines opted-in extensions with reviewed skills", asyn
       companions: [],
     },
   ]);
+});
+
+test("profile validation rejects ambiguous or stale presets", async (t) => {
+  const cases = [
+    {
+      name: "duplicate ids",
+      profiles: [
+        { id: "same", label: "One", description: "One", resources: ["tool:gh"] },
+        { id: "same", label: "Two", description: "Two", resources: ["tool:gh"] },
+      ],
+      error: /duplicate profile ids: same/,
+    },
+    {
+      name: "duplicate labels",
+      profiles: [
+        { id: "one", label: "Same", description: "One", resources: ["tool:gh"] },
+        { id: "two", label: "Same", description: "Two", resources: ["tool:gh"] },
+      ],
+      error: /duplicate profile labels: Same/,
+    },
+    {
+      name: "empty resources",
+      profiles: [{ id: "empty", label: "Empty", description: "Empty", resources: [] }],
+      error: /every profile needs a non-empty/,
+    },
+    {
+      name: "unknown resources",
+      profiles: [{ id: "stale", label: "Stale", description: "Stale", resources: ["tool:gone"] }],
+      error: /profile stale has unknown resources: tool:gone/,
+    },
+  ];
+
+  for (const example of cases) {
+    await t.test(example.name, async () => {
+      const repoRoot = await createCatalogFixture();
+      await writeFile(
+        join(repoRoot, "manifest", "profiles.json"),
+        JSON.stringify({ profiles: example.profiles }),
+      );
+      await assert.rejects(buildSetupCatalogDocument(repoRoot), example.error);
+    });
+  }
 });
 
 test("external Pi packages accept an exact Git commit source", async () => {

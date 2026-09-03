@@ -213,6 +213,7 @@ fn uninstall_wizard_selection(
             uninstall_dependencies: dependencies,
             installed: vec![false; resources.len()],
             resources,
+            profiles: Vec::new(),
             settings: Vec::new(),
             setting_states: Vec::new(),
             zed_present: false,

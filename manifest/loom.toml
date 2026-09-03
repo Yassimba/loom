@@ -73,6 +73,9 @@ rust = { version = "1.97.1", os = ["macos"] }
 # observability
 "github:DataDog/pup" = "v1.10.5"
 
+# export Confluence pages and spaces to Markdown
+"pipx:confluence-markdown-exporter" = "5.4.0"
+
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
 # release with assets). macOS arm64 has no asset, so it builds via cargo.
 "aqua:XAMPPRocky/tokei" = { version = "12.1.2", os = ["linux", "windows"] }

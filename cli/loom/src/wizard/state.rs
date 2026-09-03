@@ -1,6 +1,6 @@
 //! The wizard's state machine: four stages (Choose → Where → Review →
-//! Install), one flat grouped selection list, key and mouse handling, and
-//! install progress. Everything here is terminal-free so the whole flow is
+//! Install), overlapping role profiles over one selection, key and mouse
+//! handling, and install progress. Everything here is terminal-free so the whole flow is
 //! unit-testable; rendering lives in `render.rs`.
 
 use crate::settings::{SettingSpec, SettingState, SettingsPaths};
@@ -11,7 +11,7 @@ use crate::{
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -29,6 +29,7 @@ pub struct Model {
     /// Uninstall uses ownership IDs and their exact dependency edges.
     pub uninstall_dependencies: BTreeMap<String, Vec<String>>,
     pub resources: Vec<Resource>,
+    pub profiles: Vec<crate::Profile>,
     /// Per-resource flag: already present on this machine (plugin listed by
     /// `herdr plugin list`, package listed by `pi list`, skill in an agent
     /// tree).
@@ -65,7 +66,7 @@ pub enum Action {
 }
 
 /// One selectable thing under a group header.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum Item {
     Resource(usize),
     Setting(usize),
@@ -97,18 +98,24 @@ impl Row {
     }
 }
 
-/// A column-one entry: a titled set of rows. "Everything" has no rows of
-/// its own; it stands for every resource at once.
+/// A column-one entry. Visible rows can include dependencies, while bulk
+/// rows contain only the capabilities selected by Space on the profile.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Group {
     pub title: String,
+    pub description: String,
     pub rows: Vec<Row>,
+    pub bulk_rows: Vec<Row>,
     pub everything: bool,
 }
 
 impl Group {
     pub fn items(&self) -> Vec<Item> {
         self.rows.iter().map(Row::item).collect()
+    }
+
+    pub fn bulk_items(&self) -> Vec<Item> {
+        self.bulk_rows.iter().map(Row::item).collect()
     }
 }
 
@@ -132,7 +139,8 @@ impl ChooseStage {
         // Start on the first real group, in the item column.
         let group_cursor = groups
             .iter()
-            .position(|group| !group.rows.is_empty())
+            .position(|group| !group.everything && !group.rows.is_empty())
+            .or_else(|| groups.iter().position(|group| !group.rows.is_empty()))
             .unwrap_or(0);
         Self {
             groups,
@@ -451,13 +459,7 @@ impl Wizard {
     /// The items a group stands for: its rows, or every resource for the
     /// "Everything" group.
     pub(crate) fn group_items(&self, group: &Group) -> Vec<Item> {
-        if group.everything {
-            (0..self.model.resources.len())
-                .map(Item::Resource)
-                .collect()
-        } else {
-            group.items()
-        }
+        group.bulk_items()
     }
 
     pub(crate) fn item_state(&self, item: Item) -> ItemState {
@@ -1052,11 +1054,16 @@ impl Wizard {
                 }
             }
         }
-        // Stable sort: equal scores keep catalog order.
+        // Stable sort: equal scores keep profile and row order. Overlapping
+        // profiles share one item, so search keeps its first occurrence.
         scored.sort_by_key(|entry| std::cmp::Reverse(entry.0));
+        let mut seen = HashSet::new();
         scored
             .into_iter()
-            .map(|(_, group, row)| (group, row))
+            .filter_map(|(_, group, row)| {
+                let item = stage.groups[group].rows[row].item();
+                seen.insert(item).then_some((group, row))
+            })
             .collect()
     }
 
@@ -1191,22 +1198,111 @@ impl Wizard {
     }
 }
 
-/// The Choose columns: Everything, then skills by category, tools, Pi
-/// packages, Herdr plugins, and settings by group.
+/// The install chooser starts with overlapping role profiles. Uninstall and
+/// profile-less fixtures keep the ownership and resource-kind groups.
 fn choose_groups(model: &Model) -> Vec<Group> {
+    let mut groups = if model.purpose == WizardPurpose::Install && !model.profiles.is_empty() {
+        profile_groups(model)
+    } else {
+        resource_groups(model)
+    };
+    let mut seen: Vec<&str> = Vec::new();
+    for spec in &model.settings {
+        if seen.contains(&spec.group.as_str()) {
+            continue;
+        }
+        seen.push(&spec.group);
+        let rows = model
+            .settings
+            .iter()
+            .enumerate()
+            .filter(|(_, other)| other.group == spec.group)
+            .map(|(index, _)| Row::Setting(index))
+            .collect::<Vec<_>>();
+        groups.push(Group {
+            title: format!("Settings · {}", spec.group),
+            description: spec.description.clone(),
+            bulk_rows: rows.clone(),
+            rows,
+            everything: false,
+        });
+    }
+    groups
+}
+
+fn profile_groups(model: &Model) -> Vec<Group> {
+    let all_rows = (0..model.resources.len())
+        .map(Row::Resource)
+        .collect::<Vec<_>>();
+    let mut groups = Vec::new();
+    for profile in &model.profiles {
+        let direct = profile
+            .resources
+            .iter()
+            .filter_map(|id| {
+                model
+                    .resources
+                    .iter()
+                    .position(|resource| &resource.id == id)
+            })
+            .collect::<Vec<_>>();
+        if direct.is_empty() {
+            continue;
+        }
+        let selected = direct
+            .iter()
+            .map(|index| model.resources[*index].clone())
+            .collect();
+        let rows = crate::expand_skill_dependencies(&model.resources, selected)
+            .iter()
+            .filter_map(|resource| {
+                model
+                    .resources
+                    .iter()
+                    .position(|candidate| candidate.id == resource.id)
+                    .map(Row::Resource)
+            })
+            .collect();
+        groups.push(Group {
+            title: profile.label.clone(),
+            description: profile.description.clone(),
+            rows,
+            bulk_rows: direct.into_iter().map(Row::Resource).collect(),
+            everything: false,
+        });
+    }
+    groups.push(Group {
+        title: "Everything".into(),
+        description: "Every capability available on this platform.".into(),
+        rows: all_rows.clone(),
+        bulk_rows: all_rows,
+        everything: true,
+    });
+    groups
+}
+
+fn resource_groups(model: &Model) -> Vec<Group> {
     let mut groups = Vec::new();
     if !model.resources.is_empty() {
+        let rows = (0..model.resources.len())
+            .map(Row::Resource)
+            .collect::<Vec<_>>();
         groups.push(Group {
             title: "Everything".into(),
-            rows: Vec::new(),
+            description: "Every available resource.".into(),
+            rows: rows.clone(),
+            bulk_rows: rows,
             everything: true,
         });
     }
     let mut push_group = |title: String, items: Vec<usize>| {
         if !items.is_empty() {
+            let rows = items.into_iter().map(Row::Resource).collect::<Vec<_>>();
             groups.push(Group {
+                description: title.clone(),
                 title,
-                rows: items.into_iter().map(Row::Resource).collect(),
+                bulk_rows: rows.clone(),
+                rows,
                 everything: false,
             });
         }
@@ -1232,24 +1328,6 @@ fn choose_groups(model: &Model) -> Vec<Group> {
                 resource.kind == kind && resource.group != "Wiki"
             }),
         );
-    }
-    let mut seen: Vec<&str> = Vec::new();
-    for spec in &model.settings {
-        if seen.contains(&spec.group.as_str()) {
-            continue;
-        }
-        seen.push(&spec.group);
-        groups.push(Group {
-            title: format!("Settings · {}", spec.group),
-            everything: false,
-            rows: model
-                .settings
-                .iter()
-                .enumerate()
-                .filter(|(_, other)| other.group == spec.group)
-                .map(|(index, _)| Row::Setting(index))
-                .collect(),
-        });
     }
     groups
 }

@@ -17,7 +17,7 @@ pub mod update;
 pub mod wiki;
 pub mod wizard;
 
-pub use catalog::{Catalog, Resource, ResourceKind};
+pub use catalog::{Catalog, Profile, Resource, ResourceKind};
 pub use install::{
     build_install_plan, execute_install_plan, execute_install_plan_with,
     execute_install_plan_with_control, CommandSpec, InstallFailure, InstallPlan, InstallReport,
