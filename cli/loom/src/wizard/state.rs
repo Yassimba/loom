@@ -98,18 +98,16 @@ impl Row {
     }
 }
 
-/// A column-one entry. Visible rows can include dependencies, while bulk
-/// rows contain only the capabilities selected by Space on the profile.
+/// One capability type inside a profile. Visible rows include dependency
+/// closure; bulk rows contain only direct members of this type.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct Group {
+pub(crate) struct KindGroup {
     pub title: String,
-    pub description: String,
     pub rows: Vec<Row>,
     pub bulk_rows: Vec<Row>,
-    pub everything: bool,
 }
 
-impl Group {
+impl KindGroup {
     pub fn items(&self) -> Vec<Item> {
         self.rows.iter().map(Row::item).collect()
     }
@@ -119,17 +117,36 @@ impl Group {
     }
 }
 
+/// A profile or legacy uninstall group.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Group {
+    pub title: String,
+    pub description: String,
+    pub rows: Vec<Row>,
+    pub bulk_rows: Vec<Row>,
+    pub kinds: Vec<KindGroup>,
+    pub everything: bool,
+}
+
+impl Group {
+    pub fn bulk_items(&self) -> Vec<Item> {
+        self.bulk_rows.iter().map(Row::item).collect()
+    }
+}
+
 /// Which column has the cursor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Pane {
     Groups,
+    Kinds,
     Items,
 }
 
-/// Three columns: groups, the focused group's rows, details.
+/// Profiles, capability types, capabilities, and an overview pane.
 pub(crate) struct ChooseStage {
     pub groups: Vec<Group>,
     pub group_cursor: usize,
+    pub kind_cursor: usize,
     pub item_cursor: usize,
     pub focus: Pane,
 }
@@ -145,8 +162,9 @@ impl ChooseStage {
         Self {
             groups,
             group_cursor,
+            kind_cursor: 0,
             item_cursor: 0,
-            focus: Pane::Items,
+            focus: Pane::Groups,
         }
     }
 
@@ -154,18 +172,27 @@ impl ChooseStage {
         &self.groups[self.group_cursor]
     }
 
+    pub fn kind(&self) -> &KindGroup {
+        &self.group().kinds[self.kind_cursor]
+    }
+
     pub fn row(&self) -> Option<&Row> {
-        self.group().rows.get(self.item_cursor)
+        self.kind().rows.get(self.item_cursor)
     }
 
     fn step(&mut self, delta: isize) {
         match self.focus {
             Pane::Groups => {
                 self.group_cursor = clamp_step(self.group_cursor, delta, self.groups.len());
+                self.kind_cursor = 0;
+                self.item_cursor = 0;
+            }
+            Pane::Kinds => {
+                self.kind_cursor = clamp_step(self.kind_cursor, delta, self.group().kinds.len());
                 self.item_cursor = 0;
             }
             Pane::Items => {
-                self.item_cursor = clamp_step(self.item_cursor, delta, self.group().rows.len());
+                self.item_cursor = clamp_step(self.item_cursor, delta, self.kind().rows.len());
             }
         }
     }
@@ -265,6 +292,8 @@ pub(crate) struct HitMap {
     pub list: Option<(Rect, usize)>,
     /// (area, first-visible-row) of the Choose groups column.
     pub groups: Option<(Rect, usize)>,
+    /// (area, first-visible-row) of the profile capability-type column.
+    pub kinds: Option<(Rect, usize)>,
 }
 
 pub struct Wizard {
@@ -865,6 +894,8 @@ impl Wizard {
             return None;
         }
 
+        let profile_lanes =
+            self.model.purpose == WizardPurpose::Install && !self.model.profiles.is_empty();
         match &mut self.stages[self.stage_index] {
             Stage::Choose(stage) => match key.code {
                 KeyCode::Up | KeyCode::Char('k') => stage.step(-1),
@@ -873,18 +904,43 @@ impl Wizard {
                 KeyCode::PageDown => stage.step(10),
                 KeyCode::Home => stage.step(isize::MIN / 2),
                 KeyCode::End => stage.step(isize::MAX / 2),
-                KeyCode::Left | KeyCode::Char('h') => stage.focus = Pane::Groups,
-                KeyCode::Right | KeyCode::Char('l') => stage.focus = Pane::Items,
+                KeyCode::Left | KeyCode::Char('h') => {
+                    stage.focus = match (profile_lanes, stage.focus) {
+                        (true, Pane::Items) => Pane::Kinds,
+                        _ => Pane::Groups,
+                    }
+                }
+                KeyCode::Right | KeyCode::Char('l') => {
+                    stage.focus = match (profile_lanes, stage.focus) {
+                        (true, Pane::Groups) => Pane::Kinds,
+                        _ => Pane::Items,
+                    }
+                }
                 KeyCode::Tab | KeyCode::BackTab => {
-                    stage.focus = match stage.focus {
-                        Pane::Groups => Pane::Items,
-                        Pane::Items => Pane::Groups,
+                    stage.focus = if profile_lanes {
+                        match (key.code, stage.focus) {
+                            (KeyCode::BackTab, Pane::Groups) => Pane::Items,
+                            (KeyCode::BackTab, Pane::Kinds) => Pane::Groups,
+                            (KeyCode::BackTab, Pane::Items) => Pane::Kinds,
+                            (_, Pane::Groups) => Pane::Kinds,
+                            (_, Pane::Kinds) => Pane::Items,
+                            (_, Pane::Items) => Pane::Groups,
+                        }
+                    } else {
+                        match stage.focus {
+                            Pane::Groups => Pane::Items,
+                            Pane::Kinds | Pane::Items => Pane::Groups,
+                        }
                     }
                 }
                 KeyCode::Char(' ') => match stage.focus {
                     Pane::Groups => {
                         let group = stage.group().clone();
                         let items = self.group_items(&group);
+                        self.toggle_group(&items);
+                    }
+                    Pane::Kinds => {
+                        let items = stage.kind().bulk_items();
                         self.toggle_group(&items);
                     }
                     Pane::Items => {
@@ -1054,9 +1110,15 @@ impl Wizard {
                 }
             }
         }
-        // Stable sort: equal scores keep profile and row order. Overlapping
-        // profiles share one item, so search keeps its first occurrence.
-        scored.sort_by_key(|entry| std::cmp::Reverse(entry.0));
+        // Equal scores keep catalog order even though settings now appear
+        // inside every profile. Overlapping profiles still keep one hit.
+        scored.sort_by_key(|(score, group, row)| {
+            let rank = match stage.groups[*group].rows[*row].item() {
+                Item::Resource(index) => index,
+                Item::Setting(index) => self.model.resources.len() + index,
+            };
+            (std::cmp::Reverse(*score), rank)
+        });
         let mut seen = HashSet::new();
         scored
             .into_iter()
@@ -1124,7 +1186,23 @@ impl Wizard {
         self.search = None;
         if let (Some((group, row)), Stage::Choose(stage)) = (hit, &mut self.stages[CHOOSE]) {
             stage.group_cursor = group;
-            stage.item_cursor = row;
+            let target = stage.groups[group].rows[row].clone();
+            if let Some((kind, item)) =
+                stage.groups[group]
+                    .kinds
+                    .iter()
+                    .enumerate()
+                    .find_map(|(kind, section)| {
+                        section
+                            .rows
+                            .iter()
+                            .position(|candidate| candidate == &target)
+                            .map(|item| (kind, item))
+                    })
+            {
+                stage.kind_cursor = kind;
+                stage.item_cursor = item;
+            }
             stage.focus = Pane::Items;
         }
     }
@@ -1149,6 +1227,20 @@ impl Wizard {
                     if index < stage.groups.len() {
                         stage.focus = Pane::Groups;
                         stage.group_cursor = index;
+                        stage.kind_cursor = 0;
+                        stage.item_cursor = 0;
+                    }
+                }
+                return None;
+            }
+        }
+        if let Some((area, offset)) = self.hits.kinds {
+            if contains(area, column, row) {
+                let index = offset + row.saturating_sub(area.y + 1) as usize;
+                if let Stage::Choose(stage) = &mut self.stages[self.stage_index] {
+                    if index < stage.group().kinds.len() {
+                        stage.focus = Pane::Kinds;
+                        stage.kind_cursor = index;
                         stage.item_cursor = 0;
                     }
                 }
@@ -1175,7 +1267,7 @@ impl Wizard {
         }
         match &mut self.stages[self.stage_index] {
             Stage::Choose(stage) => {
-                if let Some(row) = stage.group().rows.get(index).cloned() {
+                if let Some(row) = stage.kind().rows.get(index).cloned() {
                     stage.focus = Pane::Items;
                     stage.item_cursor = index;
                     self.activate_row(&row);
@@ -1201,11 +1293,11 @@ impl Wizard {
 /// The install chooser starts with overlapping role profiles. Uninstall and
 /// profile-less fixtures keep the ownership and resource-kind groups.
 fn choose_groups(model: &Model) -> Vec<Group> {
-    let mut groups = if model.purpose == WizardPurpose::Install && !model.profiles.is_empty() {
-        profile_groups(model)
-    } else {
-        resource_groups(model)
-    };
+    if model.purpose == WizardPurpose::Install && !model.profiles.is_empty() {
+        return profile_groups(model);
+    }
+
+    let mut groups = resource_groups(model);
     let mut seen: Vec<&str> = Vec::new();
     for spec in &model.settings {
         if seen.contains(&spec.group.as_str()) {
@@ -1223,6 +1315,11 @@ fn choose_groups(model: &Model) -> Vec<Group> {
             title: format!("Settings · {}", spec.group),
             description: spec.description.clone(),
             bulk_rows: rows.clone(),
+            kinds: vec![KindGroup {
+                title: "Settings".into(),
+                bulk_rows: rows.clone(),
+                rows: rows.clone(),
+            }],
             rows,
             everything: false,
         });
@@ -1231,13 +1328,9 @@ fn choose_groups(model: &Model) -> Vec<Group> {
 }
 
 fn profile_groups(model: &Model) -> Vec<Group> {
-    let mut all_rows = (0..model.resources.len())
+    let all_resources = (0..model.resources.len())
         .map(Row::Resource)
         .collect::<Vec<_>>();
-    all_rows.sort_by_key(|row| match row {
-        Row::Resource(index) => capability_kind_rank(&model.resources[*index].kind),
-        Row::Setting(_) => unreachable!("profile groups contain resources only"),
-    });
     let mut groups = Vec::new();
     for profile in &model.profiles {
         let direct = profile
@@ -1249,15 +1342,19 @@ fn profile_groups(model: &Model) -> Vec<Group> {
                     .iter()
                     .position(|resource| &resource.id == id)
             })
+            .map(Row::Resource)
             .collect::<Vec<_>>();
         if direct.is_empty() {
             continue;
         }
         let selected = direct
             .iter()
-            .map(|index| model.resources[*index].clone())
+            .filter_map(|row| match row {
+                Row::Resource(index) => Some(model.resources[*index].clone()),
+                Row::Setting(_) => None,
+            })
             .collect();
-        let mut rows = crate::expand_skill_dependencies(&model.resources, selected)
+        let rows = crate::expand_skill_dependencies(&model.resources, selected)
             .iter()
             .filter_map(|resource| {
                 model
@@ -1267,35 +1364,78 @@ fn profile_groups(model: &Model) -> Vec<Group> {
                     .map(Row::Resource)
             })
             .collect::<Vec<_>>();
-        rows.sort_by_key(|row| match row {
-            Row::Resource(index) => capability_kind_rank(&model.resources[*index].kind),
-            Row::Setting(_) => unreachable!("profile groups contain resources only"),
-        });
+        let kinds = profile_kinds(model, &rows, &direct);
+        let visible_rows = kinds
+            .iter()
+            .flat_map(|kind| kind.rows.iter().cloned())
+            .collect();
         groups.push(Group {
             title: profile.label.clone(),
             description: profile.description.clone(),
-            rows,
-            bulk_rows: direct.into_iter().map(Row::Resource).collect(),
+            rows: visible_rows,
+            bulk_rows: direct,
+            kinds,
             everything: false,
         });
     }
+    let kinds = profile_kinds(model, &all_resources, &all_resources);
+    let rows = kinds
+        .iter()
+        .flat_map(|kind| kind.rows.iter().cloned())
+        .collect();
     groups.push(Group {
         title: "Everything".into(),
         description: "Every capability available on this platform.".into(),
-        rows: all_rows.clone(),
-        bulk_rows: all_rows,
+        rows,
+        bulk_rows: all_resources,
+        kinds,
         everything: true,
     });
     groups
 }
 
-fn capability_kind_rank(kind: &ResourceKind) -> u8 {
-    match kind {
-        ResourceKind::Skill => 0,
-        ResourceKind::Tool => 1,
-        ResourceKind::PiPackage => 2,
-        ResourceKind::HerdrPlugin => 3,
+fn profile_kinds(model: &Model, rows: &[Row], bulk_rows: &[Row]) -> Vec<KindGroup> {
+    let mut kinds = Vec::new();
+    for (kind, title) in [
+        (ResourceKind::Skill, "Skills"),
+        (ResourceKind::Tool, "Tools"),
+        (ResourceKind::PiPackage, "Pi packages"),
+        (ResourceKind::HerdrPlugin, "Herdr plugins"),
+    ] {
+        let visible = rows
+            .iter()
+            .filter(
+                |row| matches!(row, Row::Resource(index) if model.resources[*index].kind == kind),
+            )
+            .cloned()
+            .collect::<Vec<_>>();
+        if visible.is_empty() {
+            continue;
+        }
+        let direct = bulk_rows
+            .iter()
+            .filter(
+                |row| matches!(row, Row::Resource(index) if model.resources[*index].kind == kind),
+            )
+            .cloned()
+            .collect();
+        kinds.push(KindGroup {
+            title: title.into(),
+            rows: visible,
+            bulk_rows: direct,
+        });
     }
+    if !model.settings.is_empty() {
+        let settings = (0..model.settings.len())
+            .map(Row::Setting)
+            .collect::<Vec<_>>();
+        kinds.push(KindGroup {
+            title: "Settings".into(),
+            rows: settings.clone(),
+            bulk_rows: settings,
+        });
+    }
+    kinds
 }
 
 fn resource_groups(model: &Model) -> Vec<Group> {
@@ -1308,7 +1448,12 @@ fn resource_groups(model: &Model) -> Vec<Group> {
             title: "Everything".into(),
             description: "Every available resource.".into(),
             rows: rows.clone(),
-            bulk_rows: rows,
+            bulk_rows: rows.clone(),
+            kinds: vec![KindGroup {
+                title: "Items".into(),
+                rows: rows.clone(),
+                bulk_rows: rows,
+            }],
             everything: true,
         });
     }
@@ -1319,6 +1464,11 @@ fn resource_groups(model: &Model) -> Vec<Group> {
                 description: title.clone(),
                 title,
                 bulk_rows: rows.clone(),
+                kinds: vec![KindGroup {
+                    title: "Items".into(),
+                    rows: rows.clone(),
+                    bulk_rows: rows.clone(),
+                }],
                 rows,
                 everything: false,
             });

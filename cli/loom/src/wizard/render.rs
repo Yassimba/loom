@@ -62,8 +62,9 @@ impl Wizard {
         self.render_header(frame, header);
         let list = match &self.stages[self.stage_index] {
             Stage::Choose(stage) => {
-                let (groups, items) = self.render_choose(frame, body, stage);
+                let (groups, kinds, items) = self.render_choose(frame, body, stage);
                 self.hits.groups = groups;
+                self.hits.kinds = kinds;
                 items
             }
             Stage::Where(stage) => self.render_where(frame, body, stage),
@@ -290,16 +291,16 @@ impl Wizard {
         let key = |text: &'static str| Span::styled(text, Style::new().fg(ACCENT).bold());
         let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
             && !self.model.profiles.is_empty();
-        let (left, set) = if profile_mode {
-            ("profiles", "profile")
+        let (columns, left, set) = if profile_mode {
+            ("profiles ⇄ types ⇄ capabilities", "profiles", "profile")
         } else {
-            ("groups", "group")
+            ("groups ⇄ items", "groups", "group")
         };
         let lines = vec![
             Line::from(vec![key("↑ ↓        "), Span::raw("move (j/k work too)")]),
             Line::from(vec![
                 key("← →        "),
-                Span::raw(format!("{left} column ⇄ items column (tab too)")),
+                Span::raw(format!("{columns} (tab too)")),
             ]),
             Line::from(vec![key("home end   "), Span::raw("top / bottom")]),
             Line::from(""),
@@ -308,6 +309,17 @@ impl Wizard {
                 Span::raw("           "),
                 Span::styled(
                     format!("in the {left} column: picks the whole {set} (or Everything)"),
+                    Style::new().dim(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::raw("           "),
+                Span::styled(
+                    if profile_mode {
+                        "in the types column: picks that capability type"
+                    } else {
+                        ""
+                    },
                     Style::new().dim(),
                 ),
             ]),
@@ -394,36 +406,53 @@ impl Wizard {
         frame: &mut Frame,
         area: Rect,
         stage: &ChooseStage,
-    ) -> (ListHit, ListHit) {
+    ) -> (ListHit, ListHit, ListHit) {
         let searching = self.search.is_some();
-        // Column one is as wide as its longest title plus marks and a count,
-        // never more than a third of the screen. Under 70 columns there is
-        // no room for three columns: show the focused one alone.
+        let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
+            && !self.model.profiles.is_empty();
+        // Profiles and types stay compact; capabilities get the flexible lane.
+        // A small terminal shows only the focused lane.
         let widest = stage
             .groups
             .iter()
             .map(|group| group.title.width())
             .max()
             .unwrap_or(0) as u16;
-        let max_groups = (area.width / 3).max(1);
+        let max_groups = (area.width / if profile_mode { 4 } else { 3 }).max(1);
         let groups_width = (widest + 14).clamp(24.min(max_groups), max_groups);
-        let narrow = area.width < 70;
-        let [groups_area, items_area, details_area] = if narrow {
-            let show_groups = stage.focus == Pane::Groups && !searching;
+        let kinds_width = stage
+            .groups
+            .iter()
+            .flat_map(|group| &group.kinds)
+            .map(|kind| kind.title.width())
+            .max()
+            .unwrap_or(0) as u16
+            + 12;
+        let narrow = area.width < if profile_mode { 90 } else { 70 };
+        let [groups_area, kinds_area, items_area, details_area] = if narrow {
             let [only] = Layout::horizontal([Constraint::Min(1)]).areas(area);
             let empty = Rect::new(area.x, area.y, 0, 0);
-            if show_groups {
-                [only, empty, empty]
-            } else {
-                [empty, only, empty]
+            match (searching, stage.focus) {
+                (true, _) | (false, Pane::Items) => [empty, empty, only, empty],
+                (false, Pane::Kinds) => [empty, only, empty, empty],
+                (false, Pane::Groups) => [only, empty, empty, empty],
             }
-        } else {
+        } else if profile_mode {
             Layout::horizontal([
+                Constraint::Length(groups_width),
+                Constraint::Length(kinds_width),
+                Constraint::Min(26),
+                Constraint::Percentage(30),
+            ])
+            .areas(area)
+        } else {
+            let [groups, items, details] = Layout::horizontal([
                 Constraint::Length(groups_width),
                 Constraint::Min(30),
                 Constraint::Percentage(34),
             ])
-            .areas(area)
+            .areas(area);
+            [groups, Rect::default(), items, details]
         };
 
         // Column one: every group with its state.
@@ -440,10 +469,8 @@ impl Wizard {
         );
         let groups_focused = stage.focus == Pane::Groups && !searching;
         if groups_area.width > 0 {
-            let profiles = self.model.purpose == super::state::WizardPurpose::Install
-                && !self.model.profiles.is_empty();
-            let title = match (narrow, profiles) {
-                (true, true) => " Profiles · → capabilities ",
+            let title = match (narrow, profile_mode) {
+                (true, true) => " Profiles · → types ",
                 (false, true) => " Profiles ",
                 (true, false) => " Groups · → items ",
                 (false, false) => " Groups ",
@@ -459,7 +486,37 @@ impl Wizard {
             );
         }
 
-        // Column two: the focused group's rows, or the search hits.
+        // Column two: capability types within the focused profile.
+        let kinds = stage
+            .group()
+            .kinds
+            .iter()
+            .map(|kind| self.kind_item(kind, kinds_area.width.saturating_sub(2) as usize))
+            .collect::<Vec<_>>();
+        let kind_offset = list_offset(
+            kinds.len(),
+            kinds_area.height.saturating_sub(2),
+            stage.kind_cursor,
+        );
+        let kinds_focused = stage.focus == Pane::Kinds && !searching;
+        if kinds_area.width > 0 {
+            let title = if narrow {
+                " Types · ← profiles · → capabilities "
+            } else {
+                " Types "
+            };
+            frame.render_stateful_widget(
+                List::new(kinds)
+                    .block(bordered(title, kinds_focused))
+                    .highlight_style(highlight(kinds_focused)),
+                kinds_area,
+                &mut ListState::default()
+                    .with_selected(Some(stage.kind_cursor))
+                    .with_offset(kind_offset),
+            );
+        }
+
+        // Column three: the focused type's capabilities, or search hits.
         let (rows, cursor, title): (Vec<Row>, usize, String) = match &self.search {
             Some(query) => {
                 let matches = self.search_matches();
@@ -472,25 +529,28 @@ impl Wizard {
                 )
             }
             None => {
-                let group = stage.group();
-                let counts = self.item_counts(&group.items());
+                let kind = stage.kind();
+                let counts = self.item_counts(&kind.items());
                 let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
                     && !self.model.profiles.is_empty();
-                let prefix = if profile_mode { "Capabilities · " } else { "" };
+                let prefix = if profile_mode {
+                    format!("Capabilities · {} · ", kind.title)
+                } else {
+                    String::new()
+                };
                 let title = if counts.available + counts.picked == 0 {
                     format!(
-                        " {prefix}{} · {} installed · {} required · {} unavailable ",
-                        group.title, counts.installed, counts.required, counts.unavailable
+                        " {prefix}{} installed · {} required · {} unavailable ",
+                        counts.installed, counts.required, counts.unavailable
                     )
                 } else {
                     format!(
-                        " {prefix}{} · {}/{} picked ",
-                        group.title,
+                        " {prefix}{}/{} picked ",
                         counts.picked,
                         counts.available + counts.picked
                     )
                 };
-                (group.rows.clone(), stage.item_cursor, title)
+                (kind.rows.clone(), stage.item_cursor, title)
             }
         };
         // Label column from the widest label on screen; the description
@@ -501,36 +561,18 @@ impl Wizard {
             .max()
             .unwrap_or(0)
             .min(32);
+        let show_kind = !profile_mode || searching;
+        let kind_width = if show_kind { 13 } else { 0 };
         let description_width =
-            (items_area.width as usize).saturating_sub(2 + 5 + 13 + label_width + 1);
-        let sectioned = !searching
-            && self.model.purpose == super::state::WizardPurpose::Install
-            && !self.model.profiles.is_empty();
+            (items_area.width as usize).saturating_sub(2 + 5 + kind_width + label_width + 1);
         let items = rows
             .iter()
-            .enumerate()
-            .map(|(index, row)| {
-                let starts_section =
-                    index == 0 || self.row_kind(&rows[index - 1]) != self.row_kind(row);
-                self.choose_row_item(
-                    row,
-                    label_width,
-                    description_width,
-                    sectioned,
-                    starts_section,
-                )
-            })
+            .map(|row| self.choose_row_item(row, label_width, description_width, show_kind))
             .collect::<Vec<_>>();
         let offset = list_offset(rows.len(), items_area.height.saturating_sub(2), cursor);
         let items_focused = stage.focus == Pane::Items || searching;
         let title = if narrow && !searching {
-            let left = if self.model.purpose == super::state::WizardPurpose::Install
-                && !self.model.profiles.is_empty()
-            {
-                "profiles"
-            } else {
-                "groups"
-            };
+            let left = if profile_mode { "types" } else { "groups" };
             format!("{title}· ← {left} ")
         } else {
             title
@@ -556,19 +598,29 @@ impl Wizard {
             (_, _) if !searching && stage.focus == Pane::Groups => {
                 self.group_details(stage.group())
             }
+            (_, _) if !searching && stage.focus == Pane::Kinds => self.kind_details(stage.kind()),
             (_, Some(row)) => self.row_details(row),
             (_, None) => Vec::new(),
         };
         if details_area.width > 0 {
             frame.render_widget(
-                Paragraph::new(details)
-                    .wrap(Wrap { trim: true })
-                    .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
+                Paragraph::new(details).wrap(Wrap { trim: true }).block(
+                    bordered(
+                        if profile_mode {
+                            " Overview "
+                        } else {
+                            " Details "
+                        },
+                        false,
+                    )
+                    .padding(Padding::horizontal(1)),
+                ),
                 details_area,
             );
         }
         (
             (groups_area.width > 0).then_some((groups_area, group_offset)),
+            (kinds_area.width > 0).then_some((kinds_area, kind_offset)),
             (items_area.width > 0).then_some((items_area, offset)),
         )
     }
@@ -588,11 +640,23 @@ impl Wizard {
     }
 
     fn group_item(&self, group: &Group, width: usize) -> ListItem<'_> {
-        let items = self.group_items(group);
+        self.selection_group_item(&group.title, &self.group_items(group), width)
+    }
+
+    fn kind_item(&self, kind: &super::state::KindGroup, width: usize) -> ListItem<'_> {
+        self.selection_group_item(&kind.title, &kind.bulk_items(), width)
+    }
+
+    fn selection_group_item(
+        &self,
+        title: &str,
+        items: &[super::state::Item],
+        width: usize,
+    ) -> ListItem<'_> {
         let (mark, mark_style, count) = if items.is_empty() {
             ("   ", Style::new(), String::new())
         } else {
-            let counts = self.item_counts(&items);
+            let counts = self.item_counts(items);
             let actionable = counts.available + counts.picked;
             let (mark, style) = if actionable == 0 && counts.required == 0 {
                 (" ✓ ", Style::new().fg(OK).dim())
@@ -623,7 +687,7 @@ impl Wizard {
         // Title, then at least one space, then the count flush right;
         // a title that cannot fit is cut with an ellipsis.
         let room = width.saturating_sub(5 + count.width() + 2);
-        let title = cut(&group.title, room);
+        let title = cut(title, room);
         let fill = room.saturating_sub(title.width()) + 1;
         ListItem::new(Line::from(vec![
             Span::styled(format!(" {mark} "), mark_style),
@@ -659,25 +723,12 @@ impl Wizard {
         }
     }
 
-    fn row_section(&self, row: &Row) -> &'static str {
-        match row {
-            Row::Resource(index) => match self.model.resources[*index].kind {
-                ResourceKind::Skill => "Skills",
-                ResourceKind::Tool => "Tools",
-                ResourceKind::PiPackage => "Pi packages",
-                ResourceKind::HerdrPlugin => "Herdr plugins",
-            },
-            Row::Setting(_) => "Settings",
-        }
-    }
-
     fn choose_row_item(
         &self,
         row: &Row,
         label_width: usize,
         room: usize,
-        sectioned: bool,
-        starts_section: bool,
+        show_kind: bool,
     ) -> ListItem<'_> {
         let label = pad(self.row_label(row), label_width);
         let (mark, mark_style, dim_label, note) = match row {
@@ -730,18 +781,11 @@ impl Wizard {
                 }
             }
         };
-        let (kind, kind_style) = if sectioned {
-            if starts_section {
-                (self.row_section(row), Style::new().fg(ACCENT).bold())
-            } else {
-                ("│", Style::new().dim())
-            }
-        } else {
-            (self.row_kind(row), Style::new().dim())
-        };
-        ListItem::new(Line::from(vec![
-            Span::styled(format!(" {mark} "), mark_style),
-            Span::styled(format!("{kind:<12} "), kind_style),
+        let kind = show_kind
+            .then(|| Span::styled(format!("{:<12} ", self.row_kind(row)), Style::new().dim()));
+        let mut spans = vec![Span::styled(format!(" {mark} "), mark_style)];
+        spans.extend(kind);
+        spans.extend([
             Span::styled(
                 format!("{label} "),
                 if dim_label {
@@ -751,11 +795,33 @@ impl Wizard {
                 },
             ),
             Span::styled(cut(&note, room), Style::new().dim()),
-        ]))
+        ]);
+        ListItem::new(Line::from(spans))
+    }
+
+    fn kind_details(&self, kind: &super::state::KindGroup) -> Vec<Line<'_>> {
+        let counts = self.item_counts(&kind.items());
+        vec![
+            Line::styled(kind.title.clone(), Style::new().bold().fg(ACCENT)),
+            Line::from(""),
+            Line::from(format!(
+                "{} picked · {} available · {} required · {} installed · {} unavailable.",
+                counts.picked,
+                counts.available,
+                counts.required,
+                counts.installed,
+                counts.unavailable
+            )),
+            Line::from(""),
+            Line::styled(
+                "space picks or clears this capability type.",
+                Style::new().dim(),
+            ),
+        ]
     }
 
     fn group_details(&self, group: &Group) -> Vec<Line<'_>> {
-        let items = group.items();
+        let items = self.group_items(group);
         let mut lines = vec![
             Line::styled(group.title.clone(), Style::new().bold().fg(ACCENT)),
             Line::from(""),
@@ -769,8 +835,15 @@ impl Wizard {
                 counts.picked, counts.required, counts.installed, counts.unavailable
             )));
             lines.push(Line::from(""));
+            let suffix = if self.model.purpose == super::state::WizardPurpose::Install
+                && !self.model.profiles.is_empty()
+            {
+                "type"
+            } else {
+                "group"
+            };
             lines.push(Line::styled(
-                "space picks everything not yet installed, or clears it all; then trim by group.",
+                format!("space picks every capability, or clears them all; then trim by {suffix}."),
                 Style::new().dim(),
             ));
         } else {
@@ -785,11 +858,14 @@ impl Wizard {
                 counts.unavailable
             )));
             lines.push(Line::from(""));
+            let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
+                && !self.model.profiles.is_empty();
             lines.push(Line::styled(
-                if actionable == 0 {
-                    "→ opens the group"
-                } else {
-                    "space picks or clears available items · → opens it"
+                match (profile_mode, actionable == 0) {
+                    (true, true) => "→ opens the profile's types",
+                    (true, false) => "space picks or clears this profile · → opens its types",
+                    (false, true) => "→ opens the group",
+                    (false, false) => "space picks or clears available items · → opens it",
                 },
                 Style::new().dim(),
             ));

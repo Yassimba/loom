@@ -207,21 +207,27 @@ fn cursor(wizard: &Wizard) -> usize {
 
 /// Park the Choose cursor on a row, using only the keys a user has.
 fn go_to(wizard: &mut Wizard, row: Row) {
-    let (group, index) = choose(wizard)
+    let (group, kind, index) = choose(wizard)
         .groups
         .iter()
         .enumerate()
         .find_map(|(g, candidate)| {
-            candidate
-                .rows
-                .iter()
-                .position(|r| *r == row)
-                .map(|i| (g, i))
+            candidate.kinds.iter().enumerate().find_map(|(k, section)| {
+                section
+                    .rows
+                    .iter()
+                    .position(|r| *r == row)
+                    .map(|i| (g, k, i))
+            })
         })
         .unwrap();
-    press(wizard, &[KeyCode::Left, KeyCode::Home]);
+    press(wizard, &[KeyCode::Left, KeyCode::Left, KeyCode::Home]);
     press(wizard, &vec![KeyCode::Down; group]);
     press(wizard, &[KeyCode::Right, KeyCode::Home]);
+    if !wizard.model.profiles.is_empty() && wizard.model.purpose == WizardPurpose::Install {
+        press(wizard, &vec![KeyCode::Down; kind]);
+        press(wizard, &[KeyCode::Right, KeyCode::Home]);
+    }
     press(wizard, &vec![KeyCode::Down; index]);
     assert_eq!(current_row(wizard), row);
 }
@@ -232,7 +238,7 @@ fn go_to_group(wizard: &mut Wizard, title: &str) {
         .iter()
         .position(|candidate| candidate == title)
         .unwrap();
-    press(wizard, &[KeyCode::Left, KeyCode::Home]);
+    press(wizard, &[KeyCode::Left, KeyCode::Left, KeyCode::Home]);
     press(wizard, &vec![KeyCode::Down; group]);
     assert_eq!(choose(wizard).group().title, title);
 }
@@ -246,18 +252,20 @@ fn choose_lists_profiles_then_settings_in_catalog_order() {
     let wizard = wizard();
     assert_eq!(
         group_titles(&wizard),
-        [
-            "Engineer",
-            "Data Engineer",
-            "Everything",
-            "Settings · Herdr keybinds",
-            "Settings · Zed",
-        ]
+        ["Engineer", "Data Engineer", "Everything"]
     );
     assert!(choose(&wizard).groups[2].everything);
-    assert_eq!(choose(&wizard).groups[2].rows.len(), catalog().len());
-    // Start in the first role profile, not the catch-all list.
-    assert_eq!(choose(&wizard).focus, Pane::Items);
+    assert_eq!(choose(&wizard).groups[2].bulk_rows.len(), catalog().len());
+    assert_eq!(
+        choose(&wizard).groups[0]
+            .kinds
+            .iter()
+            .map(|kind| kind.title.as_str())
+            .collect::<Vec<_>>(),
+        ["Skills", "Tools", "Settings"]
+    );
+    // Start in the first role profile, ready to move left-to-right.
+    assert_eq!(choose(&wizard).focus, Pane::Groups);
     assert_eq!(choose(&wizard).group().title, "Engineer");
     assert_eq!(current_row(&wizard), Row::Resource(3));
 }
@@ -295,27 +303,29 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
         .resources
         .extend([model.resources[0].id.clone(), model.resources[2].id.clone()]);
     let mut wizard = Wizard::new(model);
-    go_to_group(&mut wizard, "Engineer");
+    go_to(&mut wizard, Row::Resource(3));
     press(
         &mut wizard,
-        &[
-            KeyCode::Right,
-            KeyCode::Home,
-            KeyCode::Char(' '),
-            KeyCode::Left,
-        ],
+        &[KeyCode::Char(' '), KeyCode::Left, KeyCode::Left],
     );
 
+    let profile_output = screen(&mut wizard, 160, 28);
+    assert!(
+        profile_output.contains("Build software"),
+        "{profile_output}"
+    );
+    assert!(profile_output.contains("Skills"));
+    assert!(profile_output.contains("Tools"));
+    assert!(profile_output.contains("Pi packages"));
+    assert!(profile_output.contains("Herdr plugins"));
+    go_to(&mut wizard, Row::Resource(6));
     let output = screen(&mut wizard, 160, 28);
 
     assert!(output.contains("Profiles"));
     assert!(output.contains("Capabilities"));
     assert!(output.contains("Skills"));
     assert!(output.contains("Tools"));
-    assert!(output.contains("Pi packages"));
-    assert!(output.contains("Herdr plugins"));
-    assert!(output.contains("needed by tdd"));
-    assert!(output.contains("Build software"), "{output}");
+    assert!(output.contains("needed by tdd"), "{output}");
 }
 
 #[test]
@@ -376,6 +386,24 @@ fn space_on_a_profile_toggles_only_its_direct_members() {
 }
 
 #[test]
+fn space_on_a_type_toggles_only_direct_capabilities_of_that_type() {
+    let mut model = model(ready());
+    model.resources[3].dependencies = vec!["mermaid".into()];
+    let mut wizard = Wizard::new(model);
+
+    press(&mut wizard, &[KeyCode::Right, KeyCode::Char(' ')]);
+
+    assert_eq!(choose(&wizard).focus, Pane::Kinds);
+    assert_eq!(choose(&wizard).kind().title, "Skills");
+    assert!(wizard.selected[3]);
+    assert!(wizard.selected[4]);
+    assert!(!wizard.selected[5]);
+    assert_eq!(wizard.required_note(5).as_deref(), Some("tdd"));
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(wizard.selected.iter().all(|on| !*on));
+}
+
+#[test]
 fn arrows_move_between_columns_and_down_changes_the_group() {
     let mut wizard = wizard();
     press(&mut wizard, &[KeyCode::Left]);
@@ -383,6 +411,9 @@ fn arrows_move_between_columns_and_down_changes_the_group() {
     press(&mut wizard, &[KeyCode::Down]);
     assert_eq!(choose(&wizard).group().title, "Data Engineer");
     assert_eq!(cursor(&wizard), 0, "a new profile starts at its first row");
+    press(&mut wizard, &[KeyCode::Right]);
+    assert_eq!(choose(&wizard).focus, Pane::Kinds);
+    assert_eq!(choose(&wizard).kind().title, "Skills");
     press(&mut wizard, &[KeyCode::Right]);
     assert_eq!(choose(&wizard).focus, Pane::Items);
     assert_eq!(current_row(&wizard), Row::Resource(3));
@@ -694,11 +725,10 @@ fn search_ranks_the_closest_label_first() {
 }
 
 #[test]
-fn clicking_a_row_toggles_it() {
+fn clicking_a_type_then_a_row_toggles_that_capability() {
     let mut wizard = wizard();
     let mut terminal = Terminal::new(TestBackend::new(110, 30)).unwrap();
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
-    // Click the Engineer profile, then its first capability.
     let (groups, _) = wizard.hits.groups.unwrap();
     let engineer = group_titles(&wizard)
         .iter()
@@ -706,9 +736,15 @@ fn clicking_a_row_toggles_it() {
         .unwrap() as u16;
     wizard.handle_click(groups.x + 3, groups.y + 1 + engineer);
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
+
+    let (kinds, _) = wizard.hits.kinds.unwrap();
+    wizard.handle_click(kinds.x + 3, kinds.y + 2); // Tools
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    assert_eq!(choose(&wizard).kind().title, "Tools");
+
     let (area, _) = wizard.hits.list.unwrap();
     wizard.handle_click(area.x + 3, area.y + 1);
-    assert!(wizard.selected[3]);
+    assert!(wizard.selected[6]);
 }
 
 #[test]
@@ -784,7 +820,7 @@ fn setup_starts_in_the_first_role_profile() {
     let wizard = Wizard::new(model);
 
     assert_eq!(choose(&wizard).group().title, "Engineer");
-    assert_eq!(choose(&wizard).focus, Pane::Items);
+    assert_eq!(choose(&wizard).focus, Pane::Groups);
 }
 
 #[test]
@@ -1037,11 +1073,16 @@ fn narrow_terminals_render_one_column_without_panicking() {
         terminal.draw(|frame| wizard.draw(frame)).unwrap();
         press(&mut wizard, &[KeyCode::Right]);
     }
-    // Under 70 columns only the focused column is on screen and clickable.
+    // Under 90 columns only the focused lane is on screen and clickable.
     let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    press(&mut wizard, &[KeyCode::Left]);
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
-    assert!(wizard.hits.groups.is_none());
-    assert!(wizard.hits.list.is_some());
+    assert!(wizard.hits.groups.is_some());
+    assert!(wizard.hits.kinds.is_none());
+    assert!(wizard.hits.list.is_none());
+    press(&mut wizard, &[KeyCode::Right]);
+    terminal.draw(|frame| wizard.draw(frame)).unwrap();
+    assert!(wizard.hits.kinds.is_some());
 }
 
 #[test]
