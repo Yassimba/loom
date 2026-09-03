@@ -310,10 +310,10 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
     );
 
     let profile_output = screen(&mut wizard, 160, 28);
-    assert!(
-        profile_output.contains("Build software"),
-        "{profile_output}"
-    );
+    assert!(profile_output.contains("Profiles"));
+    assert!(profile_output.contains("Types"));
+    assert!(profile_output.contains("Capabilities"));
+    assert!(!profile_output.contains("Overview"));
     assert!(profile_output.contains("Skills"));
     assert!(profile_output.contains("Tools"));
     assert!(profile_output.contains("Pi packages"));
@@ -321,11 +321,18 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
     go_to(&mut wizard, Row::Resource(6));
     let output = screen(&mut wizard, 160, 28);
 
-    assert!(output.contains("Profiles"));
+    assert!(!output.contains("Profiles"));
+    assert!(output.contains("Types"));
     assert!(output.contains("Capabilities"));
+    assert!(output.contains("Overview"));
     assert!(output.contains("Skills"));
     assert!(output.contains("Tools"));
     assert!(output.contains("needed by tdd"), "{output}");
+
+    press(&mut wizard, &[KeyCode::Left]);
+    let restored = screen(&mut wizard, 160, 28);
+    assert!(restored.contains("Profiles"));
+    assert!(!restored.contains("Overview"));
 }
 
 #[test]
@@ -1060,7 +1067,9 @@ fn profile_choose_plain_terminal_child() {
     let mut wizard = wizard();
     let output = screen(&mut wizard, 104, 24);
     assert!(output.contains("Profiles"));
+    assert!(output.contains("Types"));
     assert!(output.contains("Capabilities"));
+    assert!(!output.contains("Overview"));
 }
 
 #[test]
@@ -1073,7 +1082,7 @@ fn narrow_terminals_render_one_column_without_panicking() {
         terminal.draw(|frame| wizard.draw(frame)).unwrap();
         press(&mut wizard, &[KeyCode::Right]);
     }
-    // Under 90 columns only the focused lane is on screen and clickable.
+    // Under 70 columns only the focused lane is on screen and clickable.
     let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
     press(&mut wizard, &[KeyCode::Left]);
     terminal.draw(|frame| wizard.draw(frame)).unwrap();

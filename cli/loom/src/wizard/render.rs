@@ -410,15 +410,16 @@ impl Wizard {
         let searching = self.search.is_some();
         let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
             && !self.model.profiles.is_empty();
-        // Profiles and types stay compact; capabilities get the flexible lane.
-        // A small terminal shows only the focused lane.
+        // Like Yazi's Miller columns, profile mode shows a three-pane window
+        // over four hierarchy levels. Entering capabilities slides the window
+        // from Profiles | Types | Capabilities to Types | Capabilities | Overview.
         let widest = stage
             .groups
             .iter()
             .map(|group| group.title.width())
             .max()
             .unwrap_or(0) as u16;
-        let max_groups = (area.width / if profile_mode { 4 } else { 3 }).max(1);
+        let max_groups = (area.width / 3).max(1);
         let groups_width = (widest + 14).clamp(24.min(max_groups), max_groups);
         let kinds_width = stage
             .groups
@@ -428,7 +429,8 @@ impl Wizard {
             .max()
             .unwrap_or(0) as u16
             + 12;
-        let narrow = area.width < if profile_mode { 90 } else { 70 };
+        let narrow = area.width < 70;
+        let deep = profile_mode && (searching || stage.focus == Pane::Items);
         let [groups_area, kinds_area, items_area, details_area] = if narrow {
             let [only] = Layout::horizontal([Constraint::Min(1)]).areas(area);
             let empty = Rect::new(area.x, area.y, 0, 0);
@@ -437,14 +439,22 @@ impl Wizard {
                 (false, Pane::Kinds) => [empty, only, empty, empty],
                 (false, Pane::Groups) => [only, empty, empty, empty],
             }
+        } else if deep {
+            let [kinds, items, details] = Layout::horizontal([
+                Constraint::Length(kinds_width),
+                Constraint::Min(30),
+                Constraint::Percentage(34),
+            ])
+            .areas(area);
+            [Rect::default(), kinds, items, details]
         } else if profile_mode {
-            Layout::horizontal([
+            let [groups, kinds, items] = Layout::horizontal([
                 Constraint::Length(groups_width),
                 Constraint::Length(kinds_width),
-                Constraint::Min(26),
-                Constraint::Percentage(30),
+                Constraint::Min(30),
             ])
-            .areas(area)
+            .areas(area);
+            [groups, kinds, items, Rect::default()]
         } else {
             let [groups, items, details] = Layout::horizontal([
                 Constraint::Length(groups_width),
