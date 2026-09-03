@@ -1,16 +1,55 @@
 ---
 name: confluence-export
-description: Export or refresh a Confluence page, subtree, space, or organisation as Markdown with cme. Use for Confluence backups, migrations, local mirrors, or staging source pages in an Obsidian vault.
+description: Search Confluence through its REST API, then export or refresh a page, subtree, space, or organisation as Markdown with cme. Use for finding Confluence pages, backups, migrations, local mirrors, or staging source pages in an Obsidian vault.
 requires_bin: cme
 command: cme
 ---
 
-# Export Confluence
+# Search and Export Confluence
 
-Export the smallest requested Confluence scope to Markdown. A page, subtree, space,
-and organisation are progressively broader scopes.
+Search before export when the user does not have a page URL. Export the smallest
+requested scope to Markdown. A page, subtree, space, and organisation are progressively
+broader scopes.
 
-## 1. Set the boundary
+## 1. Prepare access
+
+Check `cme version`. If it is missing, offer:
+
+```sh
+loom add --tool confluence-markdown-exporter --dry-run
+```
+
+Show the install command without `--dry-run` and obtain confirmation before running it.
+
+Authentication is interactive. Ask the user to run this in their own terminal; tokens
+stay out of chat and command history:
+
+```sh
+cme config edit auth.confluence
+```
+
+Use `cme <command> --help` as the current option reference. This step is complete when
+`cme` is available and the user confirms that authentication is configured.
+
+## 2. Search
+
+When the user gives search terms instead of a URL, run the bundled helper:
+
+```sh
+python3 <skill-directory>/scripts/search.py "integration guidelines"
+```
+
+Use `--space KEY` to limit the search to one space. Use `--site URL` only when the cme
+configuration contains several Confluence instances. The helper reads the credential
+file reported by `cme config path`, sends an official CQL content-search request, and
+prints page ids, titles, spaces, update times, and URLs as JSON. It never prints the
+username or token.
+
+Show the matching titles and URLs. Ask the user which result and scope to export when
+more than one reasonable match remains. This step is complete when one source URL is
+selected or when the user only requested search results.
+
+## 3. Set the export boundary
 
 Collect the Confluence URL and choose one command:
 
@@ -32,28 +71,7 @@ as private as every page in scope. Confirm the destination before every export a
 obtain explicit confirmation for subtree, space, or organisation scope. This step is
 complete when scope, dedicated destination, and access boundary are explicit.
 
-## 2. Prepare access
-
-Check `cme version`. If it is missing, offer:
-
-```sh
-loom add --tool confluence-markdown-exporter --dry-run
-```
-
-Show the install command without `--dry-run` and obtain confirmation before running it.
-
-Authentication is interactive. Ask the user to run this in their own terminal; tokens
-stay out of chat and command history:
-
-```sh
-cme config edit auth.confluence
-```
-
-Use `cme <command> --help` as the current option reference. This step is complete when
-`cme` is available and the user confirms that authentication was configured; the first
-export request verifies the credentials.
-
-## 3. Export
+## 4. Export
 
 For a plain Markdown export, set the destination for the selected scope command:
 
@@ -83,7 +101,7 @@ and cleans up files for deleted or moved pages. This step is complete when `cme`
 successfully and its summary has been captured. Continue to verification after any
 non-zero exit or reported failure, but treat the export as incomplete.
 
-## 4. Verify and hand off
+## 5. Verify and hand off
 
 Read the export summary and report:
 

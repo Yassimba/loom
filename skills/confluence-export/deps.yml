@@ -1,3 +1,4 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
 tools:
   - confluence-markdown-exporter
+  - python

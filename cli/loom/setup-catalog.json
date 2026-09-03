@@ -785,10 +785,10 @@
       "kind": "skill",
       "group": "Wiki",
       "label": "confluence-export",
-      "description": "Export or refresh a Confluence page, subtree, space, or organisation as Markdown with cme. Use for Confluence backups, migrations, local mirrors, or staging source pages in an Obsidian vault.",
+      "description": "Search Confluence through its REST API, then export or refresh a page, subtree, space, or organisation as Markdown with cme. Use for finding Confluence pages, backups, migrations, local mirrors, or staging source pages in an Obsidian vault.",
       "installTarget": "confluence-export",
       "nextAction": "Ask your coding agent to use the confluence-export skill.",
-      "dependencies": ["pipx:confluence-markdown-exporter"]
+      "dependencies": ["pipx:confluence-markdown-exporter", "python"]
     },
     {
       "id": "skill:qmd",
