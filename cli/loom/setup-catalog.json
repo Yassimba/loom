@@ -484,6 +484,16 @@
       "dependencies": ["write-simply"]
     },
     {
+      "id": "skill:system-atlas",
+      "kind": "skill",
+      "group": "Architecture",
+      "label": "system-atlas",
+      "description": "Build a one-page HTML atlas of a multi-repository product, hundreds of layered diagrams with plain-language captions and a glossary, from parallel code exploration.",
+      "installTarget": "system-atlas",
+      "nextAction": "Ask your coding agent to use the system-atlas skill.",
+      "dependencies": ["diagram-design"]
+    },
+    {
       "id": "skill:impeccable",
       "kind": "skill",
       "group": "Design",

@@ -140,6 +140,7 @@ If a test fails for an unclear reason, it routes the problem through `diagnosing
 | Find the cause of a bug before fixing it | [`diagnosing-bugs`](skills/diagnosing-bugs/SKILL.md) |
 | Remove code or make it simpler | [`refactor`](skills/refactor/SKILL.md) or [`ponytail`](skills/ponytail/SKILL.md) |
 | Understand how a feature works | [`explain-code-flow`](skills/explain-code-flow/SKILL.md) |
+| Understand a whole multi-repo product in one diagram page | [`system-atlas`](skills/system-atlas/SKILL.md) |
 | See how call paths changed between commits | [`calldiff`](skills/calldiff/SKILL.md) |
 | Walk through a large change in the browser | [`changeset-walkthrough`](skills/changeset-walkthrough/SKILL.md) |
 | Review a plan or diff with comments | [`plannotator`](skills/plannotator/SKILL.md) |
