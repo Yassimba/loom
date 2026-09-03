@@ -5,64 +5,26 @@ description: Create or redraw polished architecture, process, data, UML, statist
 
 # Diagram Design
 
-Create editorial diagrams as self-contained HTML with inline SVG. Load only the references selected below; do not preload the reference directory.
+Create editorial diagrams as self-contained HTML with inline SVG. Target density is 4/10: merge ideas that travel together, remove labels implied by layout, and reserve accent for one or two focal elements.
 
-## 0. Profile gate
+## 1. Select
 
-Resolve a project-root `.diagram-design` marker per [`references/profiles.md`](references/profiles.md) when one exists. Otherwise inspect [`references/style-guide.md`](references/style-guide.md): if it still has the shipped defaults (`paper #f5f5f5`, `ink #2d3142`, `accent #eb6c36`), ask once whether to use the default or onboard a brand from a URL, installed skill, local design-system folder, pasted tokens, or saved profile. For onboarding, load [`references/onboarding.md`](references/onboarding.md). A customized style or explicit default choice skips this gate later.
+1. Draw when a visual teaches more than a paragraph, table, or short Unicode sketch.
+2. Choose the obvious visual type. When the user names it, do not load the type index; when the fit is ambiguous, load [`references/type-index.md`](references/type-index.md).
+3. For behavior, enforcement, state, or risk, also load [`references/semantic-patterns.md`](references/semantic-patterns.md) and choose one primary pattern.
+4. Load exactly one selected `references/type-<name>.md`; its grammar and budget win.
+5. Use `doc-inline`, balanced detail, and mixed audience. Load [`references/output-spec.md`](references/output-spec.md) only when the user requests different output dials.
+6. State the selected type, semantic pattern, size, and omitted detail before drawing when the request leaves those choices open.
 
-## 1. Philosophy
+## 2. Compose
 
-Target density is 4/10. Merge ideas that always travel together; remove nodes, relationships, and labels already implied by layout. Accent is editorial: one or two focal elements, not a status system.
+Use borders, hierarchy, and whitespace. Build an editorial composition with one obvious reading order. Use the active profile's semantic roles rather than literal colors.
 
-## 2. When to use
+Avoid shadows, glow, 3-D effects, giant rounding, rainbow palettes, generic equal cards, blanket monospace, identical boxes for every role, and legends over the figure.
 
-Draw only when a visual teaches more than a paragraph, table, or short Unicode sketch. Prefer prose for one idea, a table for aligned attributes, and two columns for simple before/after comparisons.
+For ordinary connected nodes, load [`references/connected-layout.md`](references/connected-layout.md). Specialized connectors and geometry follow the selected type reference.
 
-## 3. Select
-
-1. Choose the obvious visual type. If ambiguous, load [`references/type-index.md`](references/type-index.md).
-2. If behavior, enforcement, state, or risk carries the meaning, also load [`references/semantic-patterns.md`](references/semantic-patterns.md) and choose one primary pattern.
-3. Load exactly one matching `references/type-<name>.md`. Its grammar and budget override generic defaults.
-4. Use `doc-inline`, balanced detail, and mixed audience unless requested otherwise. For other output dials, load [`references/output-spec.md`](references/output-spec.md).
-5. Before drawing, state type, semantic pattern if any, size, and anything omitted to meet the budget. Skip the pause when the request already fixes them.
-
-## 4. Anti-patterns
-
-Use borders, hierarchy, and whitespace. Avoid shadows, glow, 3-D effects, giant rounding, rainbow palettes, generic equal cards, blanket monospace, identical boxes for every role, and legends floating over the figure.
-
-## 5. Design system
-
-The active profile is the source of truth. Default roles are `paper`, `paper-2`, `ink`, `muted`, `soft`, `rule`, `rule-solid`, `accent`, `accent-tint`, and `link`. Use `link` for HTTP/API or external paths. Human names use Geist; technical strings use Geist Mono; page titles use Instrument Serif.
-
-| Role | Treatment |
-| --- | --- |
-| focal | accent tint + accent stroke |
-| backend/step | paper or white + ink stroke |
-| store/state | faint ink fill + muted stroke |
-| external | faint ink fill + translucent ink stroke |
-| input/user | muted tint + soft stroke |
-| optional/async | faint fill + dashed translucent stroke |
-| security/boundary | accent tint + dashed accent stroke |
-
-## 6. Connector contract
-
-Type-specific primitives such as Sankey bands, fishbone bones, and loop arcs follow their type reference. Ordinary connections obey all six rules:
-
-1. Off-axis routes use rounded orthogonal elbows (`r=8`; `r=6` only when tight). Straight lines require a shared x or y coordinate.
-2. Labels use an opaque paper mask and sit 6–10px clear of the stroke; vertical labels sit beside it.
-3. Paths never overlap. Offset parallel routes by at least 12px; unavoidable crossings use a bridge/hop.
-4. Multiple paths on one node edge use distinct attach points at least 12px apart.
-5. Route around non-endpoint nodes. An unavoidable transit behind one is dashed and keeps its label at the visible end.
-6. A label mask must not overlap a node painted after it.
-
-Draw in this order: background → zones → connectors and labels → nodes → legend. A standard node is an opaque paper mask, styled `rx=6` box, rectangular `rx=2` type tag, Geist name, and optional Geist Mono sublabel. Define default, accent, and link arrow markers when the diagram uses directed connectors. Load `references/type-architecture.md` when a selected type needs elbow, port-selection, or bridge formulas and does not define them itself.
-
-## 7. Layout and budget
-
-Use a 4px grid for coordinates, dimensions, padding, gaps, and font sizes. Allowed radii are 4, 6, and 8px; stroke widths and data-derived coordinates are exempt. Default budget: 9 nodes, 12 connectors, 2 accent elements. Over budget means overview + detail, not smaller text. Type references may set tighter or explicit larger budgets.
-
-Put legends in a separated bottom strip. Every meaningful SVG has a file-prefixed accessible name, with `title` first:
+Every meaningful SVG has a file-prefixed accessible name with `title` first:
 
 ```html
 <svg role="img" aria-labelledby="slug-title slug-desc">
@@ -72,11 +34,26 @@ Put legends in a separated bottom strip. Every meaningful SVG has a file-prefixe
 
 Decorative SVGs use `aria-hidden="true"`.
 
-## 8. Templates
+## 3. Build
 
-After selecting any type, prefer the compact renderer: load [`references/render-spec.md`](references/render-spec.md), author JSON with explicit geometry, then run `scripts/render.py`. Its universal primitives support all types; rendering convenience must never influence type selection. Keep JSON as the editable source and use handwritten SVG only when a required effect cannot be expressed.
+Prefer the compact renderer. Load [`references/render-spec.md`](references/render-spec.md), author JSON with explicit geometry, then run one build gate:
 
-Otherwise copy the nearest asset instead of writing page chrome from memory:
+```bash
+python3 <skill-dir>/scripts/build.py diagram.json \
+  --project-root <project-root> \
+  --output diagram.html \
+  --inspect diagram.png
+```
+
+The documented command is the complete renderer interface; execute it without reading its implementation or example HTML. Use renderer-native recipes in the selected type reference when a shape or route is unclear; handwritten examples are for unsupported effects. The build resolves the profile, renders, runs every installed check, and captures the inspection PNG. Inspect the PNG and fix visible defects with a targeted JSON change, then rebuild and inspect again. Once the build and inspected rendering are clean, deliver; additional assertions, greps, direct checks, repository-status checks, and speculative redesigns are redundant. Keep JSON as the editable source and HTML as the source of truth.
+
+Only when a required effect cannot be expressed by the renderer, switch to handwritten HTML and resolve the active profile with:
+
+```bash
+python3 <skill-dir>/scripts/diagram_profile.py --project-root <project-root>
+```
+
+Then copy the nearest asset instead of recreating page chrome:
 
 - minimal light: `assets/template.html`
 - minimal dark: `assets/template-dark.html`
@@ -84,28 +61,28 @@ Otherwise copy the nearest asset instead of writing page chrome from memory:
 - motion: `assets/template-motion.html`
 - terminal: `assets/template-terminal.html`
 
-Replace title, slug, description, and SVG body with the selected type's content.
+Run handwritten HTML through `scripts/check.py`, capture one rendered inspection, and fix findings before delivery.
 
-## 9. Validate
+Profile management (`save`, `load`/`switch`, `list`, `show`, `update`, `reset`, `delete`) uses [`references/profiles.md`](references/profiles.md). Generation uses the resolver and does not load that management reference.
 
-Run every output through the installed checks:
+## 4. Conditional branches
 
-```bash
-python3 <skill-dir>/scripts/check.py path/to/diagram.html
-```
+Load only the selected branch:
 
-Then inspect the rendering once. Confirm type fit, readable hierarchy, budget, connector traceability, unclipped labels, and restrained accent. Fix findings before delivery. Animated work must also preserve a complete static, print, no-JS, and reduced-motion frame.
+- motion → [`references/animation.md`](references/animation.md)
+- terminal → [`references/primitive-terminal.md`](references/primitive-terminal.md)
+- icons → [`references/primitive-icons.md`](references/primitive-icons.md)
+- callouts → [`references/primitive-annotation.md`](references/primitive-annotation.md)
+- hand-drawn styling → [`references/primitive-sketchy.md`](references/primitive-sketchy.md)
+- draw.io import → [`references/import-drawio.md`](references/import-drawio.md), then `scripts/drawio_extract.py`
+- Mermaid import → [`references/import-mermaid.md`](references/import-mermaid.md), then `scripts/mermaid_extract.py`
 
-## 10. Optional variants
+Imports preserve structure and redraw it in the selected grammar; renderer coordinates and styling are discarded.
 
-Load only when selected: motion → [`animation.md`](references/animation.md); terminal → [`primitive-terminal.md`](references/primitive-terminal.md); icons → [`primitive-icons.md`](references/primitive-icons.md); callouts → [`primitive-annotation.md`](references/primitive-annotation.md); hand-drawn styling → [`primitive-sketchy.md`](references/primitive-sketchy.md).
+## 5. Deliver
 
-## 11. Imports
+Default output is one self-contained `.html` file with embedded CSS and inline SVG. Google Fonts is the only permitted external asset. JavaScript is reserved for requested motion and uses the canonical motion controller.
 
-For draw.io, load [`references/import-drawio.md`](references/import-drawio.md) and run `<skill-dir>/scripts/drawio_extract.py`. For Mermaid, load [`references/import-mermaid.md`](references/import-mermaid.md) and run `<skill-dir>/scripts/mermaid_extract.py`. Extract structure, then redraw; discard renderer coordinates and styling. Set format, size, detail, and audience first, and report what was merged, collapsed, or dropped.
+Export only when requested. Load [`references/export.md`](references/export.md); SVG and PNG exports contain the diagram alone while HTML remains the source of truth.
 
-## 12. Output
-
-Default output is one self-contained `.html` file with embedded CSS and inline SVG; Google Fonts is the only permitted external asset. JavaScript is allowed only for requested motion and must use the canonical controller from the motion template.
-
-Export only when requested. Load [`references/export.md`](references/export.md); HTML remains the source of truth, while SVG/PNG exports contain the diagram alone.
+Done when the selected type fits, hierarchy reads clearly, labels remain unclipped, connectors are traceable, the budget and accent are restrained, the build gate passes, and the inspected rendering has no visible defect.

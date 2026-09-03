@@ -9,7 +9,9 @@ import json
 import math
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+from diagram_profile import Profile, resolve_profile
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE = SKILL_DIR / "assets" / "template.html"
@@ -27,6 +29,8 @@ ROLES = {
 }
 TONES = {"default", "accent", "link"}
 PORTS = {"left", "right", "top", "bottom"}
+CHANGE_STATES = {"same", "added", "modified", "removed", "projected"}
+CODE_BINDING_RE = re.compile(r"^(.+):([1-9]\d*)-([1-9]\d*)$")
 SUPPORTED_TYPES = {
     "architecture",
     "it-state",
@@ -49,6 +53,8 @@ SUPPORTED_TYPES = {
     "bar",
     "treemap",
     "line",
+    "slopegraph",
+    "ridgeline",
     "gantt",
     "scatter",
     "high-level",
@@ -70,13 +76,15 @@ SUPPORTED_TYPES = {
 }
 DEFAULT_TOKENS = {
     "paper": "#f5f5f5",
+    "paper-2": "#ececec",
     "ink": "#2d3142",
     "muted": "#4f5d75",
     "soft": "#7a8399",
+    "rule": "rgba(45,49,66,0.12)",
+    "rule-solid": "#bfc0c0",
     "accent": "#eb6c36",
     "accent-tint": "rgba(235,108,54,0.08)",
     "link": "#2e5aa8",
-    "rule": "rgba(45,49,66,0.12)",
 }
 
 
@@ -94,12 +102,64 @@ def number(value: object, name: str) -> float:
     return float(value)
 
 
+def code_binding(value: object) -> str | None:
+    if value is None:
+        return None
+    bindings = [value] if isinstance(value, str) else value
+    if not isinstance(bindings, list) or not bindings:
+        raise ValueError("code must be a source-range string or non-empty list")
+    result = []
+    for binding in bindings:
+        if not isinstance(binding, str) or "," in binding:
+            raise ValueError("each code binding must be one source-range string")
+        match = CODE_BINDING_RE.fullmatch(binding)
+        source = match.group(1) if match else ""
+        path = PurePosixPath(source)
+        if (
+            not match
+            or "\\" in source
+            or "?" in source
+            or "#" in source
+            or path.is_absolute()
+            or re.match(r"^[A-Za-z]:/", source)
+            or any(part in {".", ".."} for part in path.parts)
+            or int(match.group(3)) < int(match.group(2))
+        ):
+            raise ValueError(f"invalid code binding {binding!r}")
+        result.append(binding)
+    return ",".join(result)
+
+
+def metadata_attributes(item: dict) -> str:
+    binding = code_binding(item.get("code"))
+    change = item.get("change")
+    if change is not None and change not in CHANGE_STATES:
+        raise ValueError(
+            f"change must be one of {', '.join(sorted(CHANGE_STATES))}"
+        )
+    if change == "projected" and binding:
+        raise ValueError("projected elements must not have code bindings")
+    attributes = []
+    if binding:
+        attributes.append(f'data-code="{text(binding)}"')
+    if change:
+        attributes.append(f'data-change="{change}"')
+    return f" {' '.join(attributes)}" if attributes else ""
+
+
+def wrap_metadata(markup: str, item: dict) -> str:
+    attributes = metadata_attributes(item)
+    return f"<g{attributes}>\n{markup}\n</g>" if attributes else markup
+
+
 def fmt(value: float) -> str:
     return str(int(value)) if value.is_integer() else f"{value:g}"
 
 
-def tokens(spec: dict) -> dict[str, str]:
+def tokens(spec: dict, base: dict[str, str] | None = None) -> dict[str, str]:
     result = dict(DEFAULT_TOKENS)
+    if base:
+        result.update({name: value for name, value in base.items() if name in result})
     overrides = spec.get("tokens", {})
     if not isinstance(overrides, dict):
         raise ValueError("tokens must be an object")
@@ -141,16 +201,22 @@ def line_command(start: tuple[float, float], end: tuple[float, float]) -> str:
         return f"H {fmt(end[0])}"
     if start[0] == end[0]:
         return f"V {fmt(end[1])}"
-    raise ValueError(f"connector segment {start} → {end} is not orthogonal")
+    raise ValueError(
+        f"connector segment {start} → {end} is not orthogonal; "
+        f"add via [{fmt(end[0])}, {fmt(start[1])}] or "
+        f"[{fmt(start[0])}, {fmt(end[1])}]"
+    )
 
 
 def rounded_path(points: list[tuple[float, float]]) -> str:
-    for start, end in zip(points, points[1:]):
-        line_command(start, end)
-    simplified = [points[0]]
+    without_duplicates = [points[0]]
     for point in points[1:]:
-        if point == simplified[-1]:
-            raise ValueError("connector route contains a zero-length segment")
+        if point != without_duplicates[-1]:
+            without_duplicates.append(point)
+    for start, end in zip(without_duplicates, without_duplicates[1:]):
+        line_command(start, end)
+    simplified = [without_duplicates[0]]
+    for point in without_duplicates[1:]:
         if len(simplified) > 1:
             a, b = simplified[-2], simplified[-1]
             if (a[0] == b[0] == point[0]) or (a[1] == b[1] == point[1]):
@@ -230,12 +296,25 @@ def paint(value: object, palette: dict[str, str], default: str) -> str:
             return tint(palette[name], int(raw_percent))
     if isinstance(value, str) and COLOR_RE.fullmatch(value):
         return value
-    raise ValueError(f"invalid paint {value!r}")
+    allowed = ", ".join(sorted(palette))
+    raise ValueError(
+        f"invalid paint {value!r}; expected a profile token ({allowed}), "
+        "token@0..100, none, transparent, currentColor, #rgb, #rrggbb, rgb(), or rgba()"
+    )
+
+
+def primitive_paint(
+    item: dict, field: str, palette: dict[str, str], default: str
+) -> str:
+    try:
+        return paint(item.get(field), palette, default)
+    except ValueError as exc:
+        raise ValueError(f"{field}: {exc}") from exc
 
 
 def primitive_style(item: dict, palette: dict[str, str]) -> str:
-    fill = paint(item.get("fill"), palette, "none")
-    stroke = paint(item.get("stroke"), palette, "none")
+    fill = primitive_paint(item, "fill", palette, "none")
+    stroke = primitive_paint(item, "stroke", palette, "none")
     width = number(item.get("strokeWidth", 1), "primitive strokeWidth")
     attributes = [f'fill="{fill}"', f'stroke="{stroke}"', f'stroke-width="{fmt(width)}"']
     if "opacity" in item:
@@ -278,7 +357,7 @@ def points(value: object, name: str) -> str:
     return " ".join(parsed)
 
 
-def render_primitive(item: dict, palette: dict[str, str]) -> str:
+def render_primitive_body(item: dict, palette: dict[str, str]) -> str:
     if not isinstance(item, dict):
         raise ValueError("each primitive must be an object")
     kind = item.get("kind")
@@ -309,12 +388,14 @@ def render_primitive(item: dict, palette: dict[str, str]) -> str:
         family = item.get("font", "sans")
         families = {"sans": "'Geist', sans-serif", "mono": "'Geist Mono', monospace", "serif": "'Instrument Serif', serif"}
         if family not in families:
-            raise ValueError(f"unknown text font {family!r}")
+            raise ValueError(
+                f"unknown text font {family!r}; expected 'sans', 'mono', or 'serif'"
+            )
         anchor = item.get("anchor", "start")
         if anchor not in {"start", "middle", "end"}:
             raise ValueError(f"invalid text anchor {anchor!r}")
         size = number(item.get("size", 12), "text size")
-        fill = paint(item.get("fill"), palette, palette["ink"])
+        fill = primitive_paint(item, "fill", palette, palette["ink"])
         weight = text(item.get("weight", 400))
         extra = f' font-style="italic"' if item.get("italic") else ""
         if "letterSpacing" in item:
@@ -326,6 +407,12 @@ def render_primitive(item: dict, palette: dict[str, str]) -> str:
     raise ValueError(f"unknown primitive kind {kind!r}")
 
 
+def render_primitive(item: dict, palette: dict[str, str]) -> str:
+    if not isinstance(item, dict):
+        raise ValueError("each primitive must be an object")
+    return wrap_metadata(render_primitive_body(item, palette), item)
+
+
 def render_zone(zone: dict, palette: dict[str, str]) -> str:
     if not isinstance(zone, dict):
         raise ValueError("each zone must be an object")
@@ -334,13 +421,14 @@ def render_zone(zone: dict, palette: dict[str, str]) -> str:
     )
     label = text(zone.get("label", ""))
     label_width = max(40, math.ceil((len(str(zone.get("label", ""))) * 5 + 16) / 4) * 4)
-    return (
+    markup = (
         f'<rect x="{fmt(x)}" y="{fmt(y)}" width="{fmt(width)}" height="{fmt(height)}" rx="8" '
         f'fill="{tint(palette["ink"], 2)}" stroke="{palette["rule"]}" stroke-width="0.8"/>\n'
         f'<rect x="{fmt(x + 12)}" y="{fmt(y + 4)}" width="{label_width}" height="12" rx="2" fill="{palette["paper"]}"/>\n'
         f'<text x="{fmt(x + 12 + label_width / 2)}" y="{fmt(y + 13)}" fill="{palette["soft"]}" font-size="8" '
         f'font-family="\'Geist Mono\', monospace" text-anchor="middle" letter-spacing="0.12em">{label}</text>'
     )
+    return wrap_metadata(markup, zone)
 
 
 def render_node(node: dict, palette: dict[str, str]) -> str:
@@ -349,10 +437,25 @@ def render_node(node: dict, palette: dict[str, str]) -> str:
     tag = str(node.get("tag", ""))
     sublabel = str(node.get("sublabel", ""))
     center_x, center_y = x + width / 2, y + height / 2
-    lines = [
-        f'<rect x="{fmt(x)}" y="{fmt(y)}" width="{fmt(width)}" height="{fmt(height)}" rx="6" fill="{palette["paper"]}"/>',
-        f'<rect x="{fmt(x)}" y="{fmt(y)}" width="{fmt(width)}" height="{fmt(height)}" rx="6" fill="{fill}" stroke="{stroke}" stroke-width="1"{extra}/>',
-    ]
+    if node["shape"] == "diamond":
+        points = " ".join(
+            f"{fmt(point_x)},{fmt(point_y)}"
+            for point_x, point_y in (
+                (center_x, y),
+                (x + width, center_y),
+                (center_x, y + height),
+                (x, center_y),
+            )
+        )
+        lines = [
+            f'<polygon points="{points}" fill="{palette["paper"]}"/>',
+            f'<polygon points="{points}" fill="{fill}" stroke="{stroke}" stroke-width="1"{extra}/>',
+        ]
+    else:
+        lines = [
+            f'<rect x="{fmt(x)}" y="{fmt(y)}" width="{fmt(width)}" height="{fmt(height)}" rx="6" fill="{palette["paper"]}"/>',
+            f'<rect x="{fmt(x)}" y="{fmt(y)}" width="{fmt(width)}" height="{fmt(height)}" rx="6" fill="{fill}" stroke="{stroke}" stroke-width="1"{extra}/>',
+        ]
     if tag:
         tag_width = max(28, math.ceil((len(tag) * 5 + 12) / 4) * 4)
         lines.extend(
@@ -369,7 +472,7 @@ def render_node(node: dict, palette: dict[str, str]) -> str:
         lines.append(
             f'<text x="{fmt(center_x)}" y="{fmt(center_y + 16)}" fill="{palette["muted"]}" font-size="8" font-family="\'Geist Mono\', monospace" text-anchor="middle">{text(sublabel)}</text>'
         )
-    return "\n".join(lines)
+    return wrap_metadata("\n".join(lines), node)
 
 
 def render_edge(
@@ -398,7 +501,8 @@ def render_edge(
     }[tone]
     marker = {"default": "arrow", "accent": "arrow-accent", "link": "arrow-link"}[tone]
     dash = ' stroke-dasharray="5,4"' if edge.get("dashed") else ""
-    connector = f'<path d="{path}" fill="none" stroke="{color}" stroke-width="1.2" marker-end="url(#{marker})"{dash}/>'
+    metadata = metadata_attributes(edge)
+    connector = f'<path d="{path}" fill="none" stroke="{color}" stroke-width="1.2" marker-end="url(#{marker})"{dash}{metadata}/>'
     label = edge.get("label")
     if not label:
         return connector, ""
@@ -411,7 +515,7 @@ def render_edge(
         f'<rect x="{fmt(x - width / 2)}" y="{fmt(y - 10)}" width="{width}" height="12" rx="2" fill="{palette["paper"]}"/>\n'
         f'<text x="{fmt(x)}" y="{fmt(y)}" fill="{palette["soft"]}" font-size="8" font-family="\'Geist Mono\', monospace" text-anchor="middle" letter-spacing="0.06em">{text(label_text.upper())}</text>'
     )
-    return connector, markup
+    return connector, wrap_metadata(markup, edge)
 
 
 def render_legend(items: object, palette: dict[str, str], view_box: list[float]) -> str:
@@ -458,18 +562,33 @@ def normalize_nodes(raw_nodes: object) -> dict[str, dict]:
             raise ValueError(f"invalid or duplicate node id {node_id!r}")
         if role not in ROLES:
             raise ValueError(f"unknown node role {role!r}")
-        node = dict(raw, role=role)
+        shape = raw.get("shape", "rectangle")
+        if shape not in {"rectangle", "diamond"}:
+            raise ValueError(
+                f"node {node_id} shape must be 'rectangle' or 'diamond'"
+            )
+        node = dict(raw, role=role, shape=shape)
         for key in ("x", "y", "width", "height"):
             node[key] = number(raw.get(key), f"node {node_id} {key}")
         if node["width"] < 80 or node["height"] < 48:
             raise ValueError(f"node {node_id} must be at least 80x48")
-        if not str(raw.get("label", "")).strip():
+        label = str(raw.get("label", "")).strip()
+        if not label:
             raise ValueError(f"node {node_id} needs a label")
+        required_width = math.ceil(
+            sum(3.5 if char.isspace() else 6.5 if char.isupper() else 6 for char in label)
+            + 16
+        )
+        if required_width > node["width"]:
+            raise ValueError(
+                f"node {node_id} label is likely clipped; widen it to at least "
+                f"{required_width}px or shorten the label"
+            )
         result[node_id] = node
     return result
 
 
-def render(spec: dict) -> str:
+def render(spec: dict, active_profile: Profile | None = None) -> str:
     required = {"version", "type", "slug", "title", "description"}
     missing = required - spec.keys()
     if missing:
@@ -483,7 +602,7 @@ def render(spec: dict) -> str:
     slug = spec["slug"]
     if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug):
         raise ValueError("slug must be lowercase kebab-case")
-    palette = tokens(spec)
+    palette = tokens(spec, active_profile.tokens if active_profile else None)
     nodes = normalize_nodes(spec.get("nodes", []))
     edges = spec.get("edges", [])
     if not isinstance(edges, list):
@@ -501,11 +620,23 @@ def render(spec: dict) -> str:
     if not isinstance(primitives, list):
         raise ValueError("primitives must be a list")
 
-    primitives_markup = "\n".join(
-        render_primitive(item, palette) for item in primitives
-    )
+    rendered_primitives = []
+    for index, item in enumerate(primitives):
+        try:
+            rendered_primitives.append(render_primitive(item, palette))
+        except ValueError as exc:
+            raise ValueError(f"primitives[{index}].{exc}") from exc
+    primitives_markup = "\n".join(rendered_primitives)
     zones_markup = "\n".join(render_zone(zone, palette) for zone in zones)
-    rendered_edges = [render_edge(edge, nodes, palette) for edge in edges]
+    rendered_edges = []
+    edge_errors = []
+    for index, edge in enumerate(edges):
+        try:
+            rendered_edges.append(render_edge(edge, nodes, palette))
+        except ValueError as exc:
+            edge_errors.append(f"edges[{index}].{exc}")
+    if edge_errors:
+        raise ValueError("\n".join(edge_errors))
     connectors = "\n".join(item[0] for item in rendered_edges)
     labels = "\n".join(item[1] for item in rendered_edges if item[1])
     nodes_markup = "\n".join(render_node(node, palette) for node in nodes.values())
@@ -538,6 +669,22 @@ def render(spec: dict) -> str:
         template = template.replace(old, new)
     for name, default in DEFAULT_TOKENS.items():
         template = template.replace(default, palette[name])
+    if active_profile:
+        for default, selected in (
+            ("Geist Mono", active_profile.fonts["mono"]),
+            ("Instrument Serif", active_profile.fonts["serif"]),
+            ("Geist", active_profile.fonts["sans"]),
+        ):
+            template = template.replace(default, selected)
+        default_link = re.compile(
+            r'<link href="https://fonts\.googleapis\.com/css2\?[^"<>]+" rel="stylesheet">'
+        )
+        replacement = (
+            f'<link href="{html.escape(active_profile.font_href, quote=True)}" rel="stylesheet">'
+            if active_profile.font_href
+            else ""
+        )
+        template = default_link.sub(replacement, template, count=1)
     return template
 
 
@@ -545,16 +692,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("spec", type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--project-root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     try:
         spec = json.loads(args.spec.read_text(encoding="utf-8"))
-        output = render(spec)
+        active_profile = resolve_profile(args.project_root)
+        output = render(spec, active_profile)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output, encoding="utf-8")
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(args.output)
+    for warning in active_profile.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    print(f"{args.output} (profile: {active_profile.source})")
     return 0
 
 

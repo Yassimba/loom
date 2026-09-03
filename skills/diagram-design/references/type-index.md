@@ -38,7 +38,9 @@ Load this file only when the requested type is ambiguous. Once selected, load ex
 | Ranked hierarchy or conversion drop-off | Pyramid / funnel | `type-pyramid.md` |
 | Category comparison | Bar chart | `type-bar.md` |
 | Part-to-whole by area | Treemap | `type-treemap.md` |
-| Trends, slopegraph, or ridgeline | Line chart | `type-line.md` |
+| Trends across three or more ordered points | Line chart | `type-line.md` |
+| Change between exactly two comparable states | Slopegraph | `type-slopegraph.md` |
+| Comparable distributions stacked with overlap | Ridgeline | `type-ridgeline.md` |
 | Tasks and phases over time | Gantt | `type-gantt.md` |
 | Distribution or correlation | Scatter / bubble | `type-scatter.md` |
 | End-to-end data stack on a cluster | High-level | `type-high-level.md` |

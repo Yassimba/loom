@@ -6,12 +6,12 @@ Animation explains a complete static diagram; it never supplies missing meaning.
 
 Choose one mode per figure with `data-motion-mode="none|reveal|step|loop"`.
 
-| Mode | Behavior | Controls / implementation | Use |
-|---|---|---|---|
-| `none` | Complete stable figure | No JavaScript | Default, print, screenshot, export, reduced-motion fallback with playback controls unavailable |
-| `reveal` | One deterministic autoplay run ending complete | CSS-only for ≤5s; otherwise use the scoped controller | Short ordered explanation; never auto-replay |
-| `step` | Paused semantic states | Minimal inline JS for Play, Pause, Replay, Previous, Next | Teaching, comparison, policy traces |
-| `loop` | One decorative token repeats without changing meaning | CSS-only default | Quiet flow hint; ≥3s cycle |
+| Mode     | Behavior                                              | Controls / implementation                                 | Use                                                                                            |
+| -------- | ----------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `none`   | Complete stable figure                                | No JavaScript                                             | Default, print, screenshot, export, reduced-motion fallback with playback controls unavailable |
+| `reveal` | One deterministic autoplay run ending complete        | CSS-only for ≤5s; otherwise use the scoped controller     | Short ordered explanation; never auto-replay                                                   |
+| `step`   | Paused semantic states                                | Minimal inline JS for Play, Pause, Replay, Previous, Next | Teaching, comparison, policy traces                                                            |
+| `loop`   | One decorative token repeats without changing meaning | CSS-only default                                          | Quiet flow hint; ≥3s cycle                                                                     |
 
 Only `loop` repeats. Queue state, typing, field values, policy outcomes, containment, and audit entries use `reveal` or `step` and finish complete.
 
@@ -32,16 +32,16 @@ Only `loop` repeats. Queue state, typing, field values, policy outcomes, contain
 
 Every primitive has text, count, symbol, pattern, or outline in addition to color.
 
-| Primitive | Mechanism | Static / reduced-motion result | Limit |
-|---|---|---|---|
-| **Path draw** | Decorative duplicate path with `pathLength="1"` and animated dash offset | Base labeled connector remains visible | ≤2 paths; one active |
-| **Staggered reveal** (stage reveal) | `data-motion-item` + opacity/translate ≤8px | All stages visible | ≤8 steps, 12 items |
-| **Queue counter** (queue accumulation) | Stable slots; item reveal plus visible numeric count | Final queue and count visible | ≤5 items; no reorder |
-| **Typing / field population** | Full accessible string; clipped decorative overlay or labeled row reveal | Complete text/fields visible once | ≤32 typed chars or 6 fields |
-| **Policy evaluation** (rule evaluation) | Ordered rule rows with text statuses and a current-row outline | Every state and outcome visible | 3–6 rules; 2 traces |
-| **Flow token** | `aria-hidden` token on a fixed path | Token hidden; connector remains | One token; loop ≥3s |
-| **Containment** | Reveal children, then persistent labeled boundary | Children and boundary visible | One boundary transition |
-| **Audit append** | Chronological rows revealed; stable timestamp/sequence | Complete ordered log visible | ≤5 appended rows |
+| Primitive                               | Mechanism                                                                | Static / reduced-motion result         | Limit                       |
+| --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- | --------------------------- |
+| **Path draw**                           | Decorative duplicate path with `pathLength="1"` and animated dash offset | Base labeled connector remains visible | ≤2 paths; one active        |
+| **Staggered reveal** (stage reveal)     | `data-motion-item` + opacity/translate ≤8px                              | All stages visible                     | ≤8 steps, 12 items          |
+| **Queue counter** (queue accumulation)  | Stable slots; item reveal plus visible numeric count                     | Final queue and count visible          | ≤5 items; no reorder        |
+| **Typing / field population**           | Full accessible string; clipped decorative overlay or labeled row reveal | Complete text/fields visible once      | ≤32 typed chars or 6 fields |
+| **Policy evaluation** (rule evaluation) | Ordered rule rows with text statuses and a current-row outline           | Every state and outcome visible        | 3–6 rules; 2 traces         |
+| **Flow token**                          | `aria-hidden` token on a fixed path                                      | Token hidden; connector remains        | One token; loop ≥3s         |
+| **Containment**                         | Reveal children, then persistent labeled boundary                        | Children and boundary visible          | One boundary transition     |
+| **Audit append**                        | Chronological rows revealed; stable timestamp/sequence                   | Complete ordered log visible           | ≤5 appended rows            |
 
 Do not animate layout coordinates, connector routes, `viewBox`, node dimensions, or semantic text. Avoid zoom, parallax, bounce, shake, glow, particles, and indefinite blinking.
 
@@ -51,34 +51,52 @@ Do not animate layout coordinates, connector routes, `viewBox`, node dimensions,
   --motion-step: 480ms;
   --motion-hold: 720ms;
   --motion-total: 3600ms; /* five steps × hold; set this per diagram */
-  --motion-ease: cubic-bezier(.2,.8,.2,1);
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .motion-ready [data-motion-item] {
-  opacity: .12;
+  opacity: 0.12;
   transform: translateY(8px);
-  transition: opacity var(--motion-step) var(--motion-ease),
-              transform var(--motion-step) var(--motion-ease);
+  transition:
+    opacity var(--motion-step) var(--motion-ease),
+    transform var(--motion-step) var(--motion-ease);
 }
 .motion-ready [data-motion-item].is-visible,
 .motion-ready[data-frame="end"] [data-motion-item] {
   opacity: 1;
   transform: none;
 }
-[data-motion-controls][hidden] { display: none !important; }
+[data-motion-controls][hidden] {
+  display: none !important;
+}
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
-  [data-motion-item] { opacity: 1 !important; transform: none !important; }
-  [data-motion-decorative] { display: none !important; }
-  [data-motion-controls] { display: none !important; }
+  [data-motion-item] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  [data-motion-decorative] {
+    display: none !important;
+  }
+  [data-motion-controls] {
+    display: none !important;
+  }
 }
 @media print {
-  [data-motion-controls], [data-motion-decorative] { display: none !important; }
-  [data-motion-item] { opacity: 1 !important; transform: none !important; }
+  [data-motion-controls],
+  [data-motion-decorative] {
+    display: none !important;
+  }
+  [data-motion-item] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 ```
 
