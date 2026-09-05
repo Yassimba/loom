@@ -345,11 +345,23 @@ fn exclusion_settings(path: &Path) -> Result<Value, String> {
     Ok(value)
 }
 
+fn same_exclusion(value: &Value, entry: &str) -> bool {
+    value.as_str().is_some_and(|value| {
+        value == entry
+            || value
+                .strip_prefix('-')
+                .zip(entry.strip_prefix('-'))
+                .is_some_and(|(left, right)| {
+                    crate::ownership::same_path(Path::new(left), Path::new(right))
+                })
+    })
+}
+
 pub(crate) fn exclusion_present(path: &Path, entry: &str) -> Result<bool, String> {
     Ok(exclusion_settings(path)?
         .get("skills")
         .and_then(Value::as_array)
-        .is_some_and(|entries| entries.iter().any(|value| value == entry)))
+        .is_some_and(|entries| entries.iter().any(|value| same_exclusion(value, entry))))
 }
 
 pub(crate) fn remove_exclusion(path: &Path, entry: &str) -> Result<(), String> {
@@ -358,7 +370,7 @@ pub(crate) fn remove_exclusion(path: &Path, entry: &str) -> Result<(), String> {
         return Ok(());
     };
     let previous = entries.len();
-    entries.retain(|value| value != entry);
+    entries.retain(|value| !same_exclusion(value, entry));
     if entries.len() != previous {
         crate::fs_tx::atomic_write(
             path,
@@ -499,7 +511,7 @@ pub(crate) fn exclude_shared(
                 .or_insert_with(|| serde_json::json!([]))
                 .as_array_mut()
                 .unwrap();
-            if entries.iter().any(|value| value == &entry) {
+            if entries.iter().any(|value| same_exclusion(value, &entry)) {
                 continue;
             } // Preexisting exclusions remain user-owned.
             if entries
@@ -542,6 +554,22 @@ pub(crate) fn exclude_shared(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn exclusions_match_equivalent_paths() {
+        let root = std::env::temp_dir().join(format!("loom-exclusion-path-{}", std::process::id()));
+        let skill = root.join("skills/ponytail/SKILL.md");
+        fs::create_dir_all(skill.parent().unwrap()).unwrap();
+        fs::write(&skill, "# skill").unwrap();
+        let equivalent = root.join("skills/../skills/ponytail/SKILL.md");
+
+        assert!(same_exclusion(
+            &Value::String(format!("-{}", equivalent.display())),
+            &format!("-{}", skill.display())
+        ));
+
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn provides_requires_enabled_registered_files_in_the_correct_scope() {

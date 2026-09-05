@@ -411,7 +411,6 @@ repos:
       - id: terraform_checkov
         args:
           - --args=--quiet
-          - --args=--skip-check CKV_AWS_*
 ```
 
 **Setup**

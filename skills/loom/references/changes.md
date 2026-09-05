@@ -32,16 +32,27 @@ Done when every requested item has a verified result or is explicitly incomplete
 
 Explain that the bootstrap installs Loom and opens setup. Show the platform's command and get confirmation before running it.
 
-macOS/Linux:
+macOS/Linux: download the installer, show it to the user, then get confirmation before running it.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh
+curl -fsSLo /tmp/loom-install.sh https://raw.githubusercontent.com/Yassimba/loom/main/install.sh
+less /tmp/loom-install.sh
 ```
 
-Native Windows:
+```bash
+sh /tmp/loom-install.sh
+```
+
+Native Windows: download the installer, show it to the user, then get confirmation before running it.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
+$installer = Join-Path $env:TEMP "loom-install.ps1"
+Invoke-WebRequest https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 -OutFile $installer
+Get-Content $installer
+```
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File $installer
 ```
 
 Return to **Inspect** when `loom --version` succeeds. If bootstrap fails, report its error and diagnose it before retrying.

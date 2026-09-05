@@ -1,0 +1,5 @@
+version: 2
+rules:
+  - id: "P1"
+    path: "references/oss-python.md"
+    reason: "Reviewed dependency guidance; 'does not override system data' describes zoneinfo behavior and does not override agent instructions."
