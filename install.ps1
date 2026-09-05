@@ -268,7 +268,7 @@ Write-Host ""
 if ($env:LOOM_E2E_LOOM_BIN) {
   & $env:LOOM_E2E_LOOM_BIN setup @SetupArgs
 } else {
-  mise -C $HOME exec -- loom setup @SetupArgs
+  & $MiseCommand -C $HOME exec -- loom setup @SetupArgs
 }
 $SetupExit = $LASTEXITCODE
 if ($SetupExit -eq 0) {

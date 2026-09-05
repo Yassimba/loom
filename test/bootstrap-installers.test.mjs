@@ -84,7 +84,7 @@ test("bootstraps forward explicit setup selectors", async () => {
   const [unix, windows] = await Promise.all([unixInstaller, windowsInstaller]);
 
   assert.match(unix, /mise -C "\$HOME" exec -- loom setup "\$@"/);
-  assert.match(windows, /mise -C \$HOME exec -- loom setup @SetupArgs/);
+  assert.match(windows, /& \$MiseCommand -C \$HOME exec -- loom setup @SetupArgs/);
 });
 
 test("bootstrap CI handoff can exercise the checked-out Loom binary", async () => {
