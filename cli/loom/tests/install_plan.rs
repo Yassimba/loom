@@ -155,7 +155,7 @@ fn skill_selection_expands_to_its_dependency_closure() {
         skill_with_deps("skill:unrelated", "unrelated", &[]),
     ];
 
-    let expanded = expand_skill_dependencies(&catalog, vec![catalog[0].clone()]);
+    let expanded = expand_skill_dependencies(&catalog, vec![catalog[0].clone()], &[]);
     let plan = build_install_plan(
         &expanded,
         PrerequisiteStatus {

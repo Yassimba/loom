@@ -121,8 +121,11 @@ pub fn install_selected(
         );
     }
 
-    let resources =
-        expand_skill_dependencies(&catalog.resources, resolve_selectors(catalog, selectors)?);
+    let resources = expand_skill_dependencies(
+        &catalog.resources,
+        resolve_selectors(catalog, selectors)?,
+        &destination.agents,
+    );
     if resources.iter().any(|resource| resource.group == "Wiki") {
         let feynman = resources
             .iter()

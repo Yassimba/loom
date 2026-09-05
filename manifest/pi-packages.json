@@ -2,6 +2,13 @@
   "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: npm packages use an exact version and Git packages use an exact commit. Users get new versions only when a pin change lands on main; Renovate proposes npm bumps and the catalog-autofix workflow regenerates the embedded catalog. First-party packages still live in plugins/ workspaces.",
   "packages": [
     {
+      "name": "@plannotator/pi-extension",
+      "version": "0.27.12",
+      "label": "plannotator",
+      "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
+      "nextAction": "Run /reload in Pi, then /plannotator-plan-mode to write and review a plan, or /plannotator-review to review code."
+    },
+    {
       "name": "@companion-ai/feynman",
       "version": "0.3.47",
       "label": "feynman",

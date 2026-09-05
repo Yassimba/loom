@@ -389,7 +389,11 @@ impl Wizard {
         if self.model.purpose == WizardPurpose::Uninstall {
             self.selection()
         } else {
-            crate::expand_skill_dependencies(&self.model.resources, self.selection())
+            crate::expand_skill_dependencies(
+                &self.model.resources,
+                self.selection(),
+                &self.selected_agents(),
+            )
         }
     }
 
@@ -642,6 +646,7 @@ impl Wizard {
             let expanded = crate::expand_skill_dependencies(
                 &self.model.resources,
                 vec![self.model.resources[parent_index].clone()],
+                &self.selected_agents(),
             );
             if expanded.iter().any(|resource| &resource.id == target) {
                 return Some(self.model.resources[parent_index].label.clone());
@@ -1353,16 +1358,20 @@ fn profile_groups(model: &Model) -> Vec<Group> {
                 Row::Setting(_) => None,
             })
             .collect();
-        let rows = crate::expand_skill_dependencies(&model.resources, selected)
-            .iter()
-            .filter_map(|resource| {
-                model
-                    .resources
-                    .iter()
-                    .position(|candidate| candidate.id == resource.id)
-                    .map(Row::Resource)
-            })
-            .collect::<Vec<_>>();
+        let rows = crate::expand_skill_dependencies(
+            &model.resources,
+            selected,
+            &model.skill_destination.agents,
+        )
+        .iter()
+        .filter_map(|resource| {
+            model
+                .resources
+                .iter()
+                .position(|candidate| candidate.id == resource.id)
+                .map(Row::Resource)
+        })
+        .collect::<Vec<_>>();
         let kinds = profile_kinds(model, &rows, &direct);
         let visible_rows = kinds
             .iter()
