@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-add-dir",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Add another directory to Pi context with a short model-generated project orientation.",
   "license": "MIT",
   "type": "module",

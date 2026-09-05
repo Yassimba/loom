@@ -25,7 +25,7 @@ Loom is the only installer:
 
 2. Use `loom setup`, `loom add`, `loom init`, `loom wiki`, `loom update`, or `loom status` for the requested boundary. Read `--help` for current selectors and flags instead of guessing them.
 
-3. Bare `setup` and `add` need a real terminal. When acting for the user, pass explicit selectors and preview with `--dry-run`.
+3. `setup`, `add`, and `update` need a real terminal unless `--yes` is passed. When acting non-interactively, pass `--yes`; also pass explicit selectors and preview setup/add with `--dry-run`.
 
 4. For repository defaults, offer `loom init --yes`. Use explicit choices only when the user supplied them.
 

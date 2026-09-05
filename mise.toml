@@ -4,8 +4,8 @@
 # updates.
 
 [tools]
-node = "24.19.0"
-rust = "1.97.1"
+node = "24.20.0"
+rust = "1.98.0"
 
 [tasks.test]
 description = "JS test suite"

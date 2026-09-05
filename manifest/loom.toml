@@ -17,8 +17,8 @@
 
 [tools]
 # core:begin — always installed; everything the setup itself needs
-node = "24.19.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.18.1", tag_regex = "^loom-v" }
+node = "24.20.0"
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.19.1", tag_regex = "^loom-v" }
 # core:end
 
 # claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
@@ -54,7 +54,7 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 "npm:@tobilu/qmd" = "2.8.3"
 
 # code review TUI (annotate diffs, export to GitHub or clipboard)
-"github:agavra/tuicr" = "v0.23.1"
+"github:agavra/tuicr" = "v0.24.0"
 
 # browser-based plan and code review for coding agents
 "github:backnotprop/plannotator" = "v0.27.12"
@@ -62,7 +62,7 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 # forges
 gh = "2.98.0"
 glab = "1.112.0"
-"github:rcieri/glab-tui" = "v0.8.3"
+"github:rcieri/glab-tui" = "v0.9.0"
 
 # hygiene & navigation
 gitleaks = "8.30.1"
@@ -74,10 +74,10 @@ zoxide = "0.10.0"
 "cargo:envex" = { version = "0.6.2", os = ["macos"] }
 # Cargo fallbacks for envx and tokei need a toolchain; companion metadata
 # pulls this in only with those tools, and only on macOS.
-rust = { version = "1.97.1", os = ["macos"] }
+rust = { version = "1.98.0", os = ["macos"] }
 
 # observability
-"github:DataDog/pup" = "v1.10.5"
+"github:DataDog/pup" = "v1.16.0"
 
 # export Confluence pages and spaces to Markdown
 "pipx:confluence-markdown-exporter" = "5.4.0"
@@ -85,16 +85,16 @@ rust = { version = "1.97.1", os = ["macos"] }
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
 # release with assets). macOS arm64 has no asset, so it builds via cargo.
 "aqua:XAMPPRocky/tokei" = { version = "12.1.2", os = ["linux", "windows"] }
-"cargo:tokei" = { version = "12.1.2", os = ["macos"] }
+"cargo:tokei" = { version = "14.0.0", os = ["macos"] }
 "github:zdyxry/tokui" = "0.12.0"
 
 # issue tracking for agents (beads: br is the tracker, bv the TUI viewer)
-"github:Dicklesworthstone/beads_rust" = "v0.2.22"
-"github:Dicklesworthstone/beads_viewer" = "v0.19.0"
+"github:Dicklesworthstone/beads_rust" = "v0.5.7"
+"github:Dicklesworthstone/beads_viewer" = "v0.23.0"
 
 # python toolchain
-uv = "0.12.5"
+uv = "0.12.7"
 
 # skill tooling (browser automation, diagram/slide export)
-"npm:agent-browser" = "0.35.1"
+"npm:agent-browser" = "0.36.0"
 "npm:@mermaid-js/mermaid-cli" = "11.16.0"

@@ -216,7 +216,7 @@
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "installTarget": "@gotgenes/pi-anthropic-auth",
-      "version": "2.0.6",
+      "version": "2.0.8",
       "nextAction": "Run /model in Pi and pick a Claude model."
     },
     {
@@ -226,7 +226,7 @@
       "label": "autoresearch",
       "description": "Run autonomous optimization loops: change code, benchmark it, keep improvements, and revert regressions. By davebcn87.",
       "installTarget": "pi-autoresearch",
-      "version": "1.6.2",
+      "version": "1.7.0",
       "nextAction": "Run /autoresearch with an optimization target in Pi."
     },
     {
@@ -260,7 +260,7 @@
       "label": "fff",
       "description": "FFF-powered fuzzy file and content search with frecency ranking, git-aware results, and fast @-mention autocomplete. By dmtrKovalenko.",
       "installTarget": "@ff-labs/pi-fff",
-      "version": "0.10.5",
+      "version": "0.10.6",
       "nextAction": "Run /reload in Pi, then /fff-health to inspect the index."
     },
     {
@@ -280,7 +280,7 @@
       "label": "mcp-adapter",
       "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
       "installTarget": "pi-mcp-adapter",
-      "version": "2.31.0",
+      "version": "2.32.1",
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
     },
     {
@@ -329,7 +329,7 @@
       "label": "subagents",
       "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
       "installTarget": "pi-subagents",
-      "version": "0.58.0",
+      "version": "0.65.1",
       "nextAction": "Ask Pi to delegate a task to a subagent."
     },
     {
@@ -339,7 +339,7 @@
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "installTarget": "pi-web-access",
-      "version": "0.26.0",
+      "version": "0.28.0",
       "nextAction": "Ask Pi to search the web."
     },
     {
