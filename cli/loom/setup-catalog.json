@@ -97,7 +97,7 @@
       "label": "subagents",
       "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
       "installTarget": "pi-subagents",
-      "version": "0.58.0",
+      "version": "0.65.1",
       "nextAction": "Ask Pi to delegate a task to a subagent."
     },
     {

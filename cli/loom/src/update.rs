@@ -327,10 +327,10 @@ mod tests {
 
         assert!(commands
             .iter()
-            .any(|command| command == "pi install npm:pi-subagents@0.58.0"));
+            .any(|command| command == "pi install npm:pi-subagents@0.65.1"));
         assert!(commands
             .iter()
-            .any(|command| command == "pi install -l npm:pi-subagents@0.58.0"));
+            .any(|command| command == "pi install -l npm:pi-subagents@0.65.1"));
         assert!(commands.iter().any(|command| {
             command.starts_with("pi install -l git:github.com/earendil-works/pi-chat@")
         }));
