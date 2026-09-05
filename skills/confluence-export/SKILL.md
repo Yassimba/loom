@@ -53,12 +53,12 @@ selected or when the user only requested search results.
 
 Collect the Confluence URL and choose one command:
 
-| Scope | Command |
-| --- | --- |
-| Page | `cme pages <page-url>` |
+| Scope                | Command                                 |
+| -------------------- | --------------------------------------- |
+| Page                 | `cme pages <page-url>`                  |
 | Page and descendants | `cme pages-with-descendants <page-url>` |
-| Space | `cme spaces <space-url>` |
-| Organisation | `cme orgs <base-url>` |
+| Space                | `cme spaces <space-url>`                |
+| Organisation         | `cme orgs <base-url>`                   |
 
 For a wiki export, resolve the selected vault and stage under
 `<vault>/inbox/confluence/<space>/`. Keep exported source material out of

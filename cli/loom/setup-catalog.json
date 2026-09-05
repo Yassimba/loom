@@ -427,14 +427,11 @@
       "kind": "skill",
       "group": "Coding",
       "label": "code-review",
-      "description": "Review a change against repository standards and its originating spec, using atlas context and optional visual overlays.",
+      "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
       "installTarget": "code-review",
       "nextAction": "Ask your coding agent to use the code-review skill.",
       "dependencies": [
-        "loom",
-        "system-atlas",
-        "diagram-design",
-        "mermaid-skill"
+        "loom"
       ]
     },
     {
@@ -680,13 +677,14 @@
       "kind": "skill",
       "group": "Coding",
       "label": "wayfinder",
-      "description": "Plan a huge chunk of work — more than one agent session can hold — as a shared map of investigation tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.",
+      "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.",
       "installTarget": "wayfinder",
       "nextAction": "Ask your coding agent to use the wayfinder skill.",
       "dependencies": [
         "domain-modeling",
         "grilling",
         "prototype",
+        "research",
         "loom"
       ]
     },
@@ -729,7 +727,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "domain-modeling",
-      "description": "Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.",
+      "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR.",
       "installTarget": "domain-modeling",
       "nextAction": "Ask your coding agent to use the domain-modeling skill.",
       "dependencies": []
@@ -976,7 +974,7 @@
       "kind": "skill",
       "group": "General",
       "label": "grilling",
-      "description": "Grill the user relentlessly about a plan or design. Use when the user wants to stress-test a plan before building, or uses any 'grill' trigger phrases.",
+      "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.",
       "installTarget": "grilling",
       "nextAction": "Ask your coding agent to use the grilling skill.",
       "dependencies": []

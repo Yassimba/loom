@@ -194,6 +194,8 @@ loom wiki
 
 Create makes a new Vault. Adopt requires an existing directory with `.obsidian/`. Loom shows the exact `claude-obsidian` changed paths and applies only the reviewed plan hash. Obsidian is optional: Loom can open its official download page, but never runs Homebrew, Winget, Snap, Flatpak, or another OS package manager.
 
+Wiki setup also installs QMD, registers the Vault's Markdown files, and builds search embeddings. Each Vault gets a separate named index; setup prints its `qmd --index ... query "your question"` command. The first embedding run may download a model. Repair and `loom update` refresh the index and embeddings. This is a snapshot, not a file watcher; rerun repair after editing notes to refresh search. Unregistering a Vault leaves its QMD index intact.
+
 Wiki skills are available only inside the Vault. Loom keeps exact-pinned Python and `claude-obsidian` product code outside it, then writes project-local Pi state below ignored `.pi/`. Optional Feynman is also installed there, not globally.
 
 ```bash

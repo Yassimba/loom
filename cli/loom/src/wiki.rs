@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 pub const PRODUCT_KEY: &str = "github:AgriciDaniel/claude-obsidian";
 pub const PYTHON_KEY: &str = "python";
+const QMD_KEY: &str = "npm:@tobilu/qmd";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WikiOperation {
@@ -522,6 +523,48 @@ fn install_packages(
     Ok(())
 }
 
+fn qmd_index(vault: &Path) -> String {
+    format!(
+        "loom-wiki-{}",
+        &sha256(vault.as_os_str().as_encoded_bytes())[..16]
+    )
+}
+
+fn setup_qmd(system: &dyn System, vault: &Path) -> Result<()> {
+    let index = qmd_index(vault);
+    let command = |args: &[&str]| {
+        CommandSpec::new(
+            "qmd",
+            ["--index", index.as_str()]
+                .into_iter()
+                .chain(args.iter().copied()),
+        )
+        .in_dir(vault)
+    };
+    let exists = system.run(&command(&["collection", "show", "vault"]))?;
+    if !exists.success {
+        run_checked(
+            system,
+            &command(&[
+                "collection",
+                "add",
+                ".",
+                "--name",
+                "vault",
+                "--mask",
+                "**/*.md",
+            ]),
+        )?;
+    }
+    run_checked(system, &command(&["update"]))?;
+    println!(
+        "Building QMD embeddings for {} (the first run may download a model)...",
+        vault.display()
+    );
+    run_checked(system, &command(&["embed"]))?;
+    Ok(())
+}
+
 fn offer_global_feynman_migration(system: &dyn System, vault: &Path, yes: bool) -> Result<()> {
     if yes {
         return Ok(()); // scripted setup never removes an existing global package
@@ -705,6 +748,7 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
             PYTHON_KEY.into(),
             crate::manifest::PI_TOOL_KEY.into(),
             PRODUCT_KEY.into(),
+            QMD_KEY.into(),
         ],
     )
     .map_err(anyhow::Error::msg)?;
@@ -730,6 +774,7 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
         return Ok(true);
     }
     install_packages(system, &product, &vault, feynman)?;
+    setup_qmd(system, &vault)?;
     let mut registry = WikiRegistry::load(&home)?;
     registry.register(vault.clone(), feynman);
     registry.save(&home)?;
@@ -744,6 +789,10 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
         }
     }
     println!("Wiki ready. Run: cd {} && pi", vault.display());
+    println!(
+        "Search: qmd --index {} query \"your question\"",
+        qmd_index(&vault)
+    );
     if !request.yes
         && matches!(
             request.operation,
@@ -852,6 +901,12 @@ pub fn update_registered(system: &(dyn System + Sync)) -> bool {
             return false;
         }
     };
+    if !registry.vaults.is_empty() && !system.command_exists("qmd") {
+        if let Err(error) = manifest::sync_selected(system, &[QMD_KEY.into()]) {
+            println!("  ✗ Wiki search — {error}");
+            return false;
+        }
+    }
     let mut healthy = true;
     for record in registry.vaults {
         if !record.path.is_dir() {
@@ -862,7 +917,9 @@ pub fn update_registered(system: &(dyn System + Sync)) -> bool {
             healthy = false;
             continue;
         }
-        match install_packages(system, &product, &record.path, record.feynman) {
+        match install_packages(system, &product, &record.path, record.feynman)
+            .and_then(|()| setup_qmd(system, &record.path))
+        {
             Ok(()) => println!("  ✓ Wiki {} — refreshed", record.path.display()),
             Err(error) => {
                 println!("  ✗ Wiki {} — {error}", record.path.display());
@@ -1263,7 +1320,7 @@ mod tests {
     }
     impl System for FakeSystem {
         fn command_exists(&self, name: &str) -> bool {
-            name == "pi" || name == "mise" || name == "python"
+            name == "pi" || name == "mise" || name == "python" || name == "qmd"
         }
         fn refresh_path(&self) {}
         fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
@@ -1293,6 +1350,74 @@ mod tests {
         fn current_dir(&self) -> Option<PathBuf> {
             Some(self.home.clone())
         }
+    }
+
+    #[test]
+    fn qmd_setup_is_repeatable_and_keeps_vault_indexes_separate() {
+        #[derive(Default)]
+        struct QmdSystem {
+            collections: Mutex<std::collections::BTreeSet<String>>,
+            commands: Mutex<Vec<CommandSpec>>,
+            fail_embed: bool,
+        }
+        impl System for QmdSystem {
+            fn command_exists(&self, _: &str) -> bool {
+                true
+            }
+            fn refresh_path(&self) {}
+            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
+                self.commands.lock().unwrap().push(command.clone());
+                assert_eq!(command.program, "qmd");
+                assert_eq!(command.args[0], "--index");
+                let mut collections = self.collections.lock().unwrap();
+                let success = match command.args[2].as_str() {
+                    "collection" if command.args[3] == "show" => {
+                        collections.contains(&command.args[1])
+                    }
+                    "collection" => {
+                        assert_eq!(
+                            &command.args[3..],
+                            &["add", ".", "--name", "vault", "--mask", "**/*.md"]
+                        );
+                        assert!(collections.insert(command.args[1].clone()));
+                        true
+                    }
+                    "update" => true,
+                    "embed" => !self.fail_embed,
+                    _ => panic!("unexpected QMD command"),
+                };
+                Ok(CommandResult {
+                    success,
+                    stdout: String::new(),
+                    stderr: "embedding failed".into(),
+                })
+            }
+        }
+        let system = QmdSystem::default();
+        let first = Path::new("/one/My Vault");
+        let second = Path::new("/two/My Vault");
+        setup_qmd(&system, first).unwrap();
+        setup_qmd(&system, first).unwrap();
+        setup_qmd(&system, second).unwrap();
+        assert_eq!(system.collections.lock().unwrap().len(), 2);
+        let commands = system.commands.lock().unwrap();
+        assert_eq!(commands.iter().filter(|c| c.args[2] == "embed").count(), 3);
+        assert!(commands
+            .iter()
+            .take(7)
+            .all(|c| c.cwd.as_deref() == Some(first)));
+        assert!(commands
+            .iter()
+            .skip(7)
+            .all(|c| c.cwd.as_deref() == Some(second)));
+        let failing = QmdSystem {
+            fail_embed: true,
+            ..Default::default()
+        };
+        assert!(setup_qmd(&failing, first)
+            .unwrap_err()
+            .to_string()
+            .contains("embedding failed"));
     }
 
     #[test]
