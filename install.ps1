@@ -257,7 +257,7 @@ if ($ChangedProfiles.Count -gt 0) {
 # bootstrap and manifest path intact.
 $env:LOOM_BOOTSTRAP = "1"
 $env:LOOM_BOOTSTRAP_MISE_INSTALLED = if ($MiseInstalledByLoom) { "1" } else { "0" }
-$env:LOOM_BOOTSTRAP_MISE_ROOT = [string](mise data dir)
+$env:LOOM_BOOTSTRAP_MISE_ROOT = if ($env:MISE_DATA_DIR) { $env:MISE_DATA_DIR } elseif ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME "mise" } else { Join-Path $env:LOCALAPPDATA "mise" }
 $env:LOOM_BOOTSTRAP_MISE_EXECUTABLE = $MiseCommand
 $env:LOOM_BOOTSTRAP_MISE_MANAGER = $MiseInstallMethod
 $env:LOOM_BOOTSTRAP_MISE_PATH_ADDED = if ($MisePathAdded) { "1" } else { "0" }

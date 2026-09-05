@@ -41,7 +41,6 @@ test("the Unix bootstrap persists mise activation exactly once", async () => {
     `#!/bin/sh
 if [ "$1" = "-C" ]; then shift 2; fi
 case "$1" in
-  data) [ "$2" = "dir" ] && printf '%s\\n' "$HOME/.local/share/mise" || exit 64 ;;
   install) exit 0 ;;
   exec) printf '%s\\n' "$@" > "$HOME/mise-exec-args" ;;
   *) exit 64 ;;
@@ -97,28 +96,31 @@ esac
   }
 });
 
-test("the Unix bootstrap stops when mise cannot report its data directory", async () => {
-  const { root, home, env } = await unixFixture(
+test("the Unix bootstrap honors mise data directory overrides", async () => {
+  const { root, home, bin, env } = await unixFixture(
     "mise-data",
-    `#!/bin/sh
-if [ "$1" = "data" ] && [ "$2" = "dir" ]; then exit 73; fi
-if [ "$1" = "-C" ]; then exit 0; fi
-exit 64
-`,
+    '#!/bin/sh\n[ "$1" = "-C" ] || exit 64\n',
     'node = "24.19.0"',
+    { "loom-root": '#!/bin/sh\nprintf "%s" "$LOOM_BOOTSTRAP_MISE_ROOT" > "$HOME/mise-root"\n' },
   );
-
   try {
-    const result = spawnSync(
-      "sh",
-      [join(repoRoot, "install.sh"), "--skill", "tdd", "--agent", "agents", "--yes"],
-      {
+    for (const [data, xdg, expected] of [
+      ["", "", join(home, ".local/share/mise")],
+      ["", join(home, "xdg data"), join(home, "xdg data/mise")],
+      [join(home, "custom mise"), join(home, "xdg"), join(home, "custom mise")],
+    ]) {
+      const result = spawnSync("sh", [join(repoRoot, "install.sh"), "--yes"], {
         encoding: "utf8",
-        env: { ...env, LOOM_E2E_LOOM_BIN: join(home, "e2e-loom-must-not-run") },
-      },
-    );
-
-    assert.equal(result.status, 73, result.stderr || result.stdout);
+        env: {
+          ...env,
+          MISE_DATA_DIR: data,
+          XDG_DATA_HOME: xdg,
+          LOOM_E2E_LOOM_BIN: join(bin, "loom-root"),
+        },
+      });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.equal(await readFile(join(home, "mise-root"), "utf8"), expected);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -128,7 +130,6 @@ test("the Unix bootstrap keeps its new-shell guidance when setup fails", async (
   const { root, bin, env } = await unixFixture(
     "setup-failure",
     `#!/bin/sh
-if [ "$1" = "data" ] && [ "$2" = "dir" ]; then echo "$HOME/.local/share/mise"; exit 0; fi
 if [ "$1" = "-C" ]; then exit 0; fi
 exit 64
 `,

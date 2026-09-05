@@ -1328,7 +1328,7 @@ mod tests {
             let stdout = if command.program == "mise"
                 && command.args.first().map(String::as_str) == Some("where")
             {
-                "/product/claude-obsidian\n".into()
+                format!("{}\n", self.home.join("product/claude-obsidian").display())
             } else if command.program == "pi"
                 && command.args.first().map(String::as_str) == Some("list")
             {
@@ -1723,7 +1723,11 @@ mod tests {
             &system,
         )
         .unwrap_err();
-        assert!(error.to_string().contains("not registered"));
+        assert!(error.to_string().contains(if cfg!(windows) {
+            "WSL2"
+        } else {
+            "not registered"
+        }));
         assert!(system.commands.into_inner().unwrap().is_empty());
         fs::remove_dir_all(home).unwrap();
     }

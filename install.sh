@@ -115,7 +115,7 @@ finish() {
 run_loom_setup() {
   export LOOM_BOOTSTRAP=1
   export LOOM_BOOTSTRAP_MISE_INSTALLED="$mise_installed"
-  LOOM_BOOTSTRAP_MISE_ROOT="$(mise data dir)" || return $?
+  LOOM_BOOTSTRAP_MISE_ROOT="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
   export LOOM_BOOTSTRAP_MISE_ROOT
   export LOOM_BOOTSTRAP_MISE_EXECUTABLE="$mise_bin"
   export LOOM_BOOTSTRAP_MISE_MANAGER="direct"
