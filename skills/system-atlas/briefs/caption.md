@@ -1,6 +1,6 @@
 # Caption rewrite brief
 
-You rewrite the `intro` and every diagram `caption` in ONE manifest.json of the <PRODUCT> System Atlas. The reader is a smart developer who is NEW to <PRODUCT>, to its domain terms, and to most of its cloud tooling. They want to read the page top to bottom and come away understanding how the technology works. Text supports the diagrams; it never replaces them.
+You write the `intro` and every diagram `caption` in ONE manifest.json of the <PRODUCT> System Atlas. The reader is a smart developer who is NEW to <PRODUCT>, to its domain terms, and to most of its cloud tooling. They want to read the page top to bottom and come away understanding how the technology works. Text supports the diagrams; it never replaces them.
 
 ## Voice (mandatory)
 
@@ -9,7 +9,7 @@ Simplified Technical English plus Zinsser: clarity, simplicity, brevity, humanit
 - The same word for the same thing every time.
 - No em dashes, no parentheses, no semicolons, no rhetorical questions, no "note that", no "it is worth noting", no "leverage/robust/seamless/delve".
 - Do not narrate the diagram's layout ("read left to right", "the top row shows") unless the reading order is not obvious.
-- Explain every acronym or jargon term the FIRST time it appears in this section, in a short clause. The orchestrator gives you a TERMS list of domain and tooling words for this product; explain each on first use in your section. If a term is explained in the notes file, use that meaning. If unsure what a term means, say what the code does with it instead of guessing.
+- Explain every acronym or jargon term the FIRST time it appears in this section, in a short clause. The orchestrator gives you a TERMS list; explain each on first use. Use the meaning recorded in the topic. If unsure, say what the code does with it instead of guessing.
 
 ## Caption shape (50 to 110 words, three paragraphs separated by a blank line)
 
@@ -25,8 +25,8 @@ Intro (50 to 100 words, two paragraphs): what this repository or layer does in <
 
 ## Facts
 
-Keep every fact the old caption had unless it is wrong. Verify against NOTES (given to you) and, when needed, the repo source. Do not invent. Titles stay as they are unless jargon-heavy; you may make a title plainer but keep it short.
+When revising, keep every correct fact. Verify against topic records (given to you) and, when needed, the repo source. Do not invent. Titles stay as they are unless jargon-heavy; you may make a title plainer but keep it short.
 
 ## Output
 
-Overwrite the manifest.json in place (same structure, same file names, same order, same levels). Keep valid JSON. Reply with only: the section id and the number of captions rewritten.
+Write the manifest.json in place (same structure, same file names, same order, same levels). Keep valid JSON. Reply with only: the section id and the number of captions rewritten.

@@ -330,18 +330,15 @@
       "kind": "skill",
       "group": "Coding",
       "label": "blueprint",
-      "description": "Design non-trivial code changes before implementation as zoomable, code-bound Plannotator Markdown plans with a projected structural diff, data in/out flow, implementation ledger, and approval gate. Use before substantial implementation or when asked for a design or plan.",
+      "description": "Plan substantial code changes using atlas context and small projected overlays, with Mermaid fallback and Plannotator approval.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
       "dependencies": [
-        "write-simply",
-        "stop-the-slop",
-        "i-have-adhd",
         "diagram-design",
         "plannotator",
         "explain-code-flow",
-        "calldiff",
-        "npm:calldiff"
+        "system-atlas",
+        "mermaid-skill"
       ]
     },
     {
@@ -401,11 +398,14 @@
       "kind": "skill",
       "group": "Coding",
       "label": "code-review",
-      "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
+      "description": "Review a change against repository standards and its originating spec, using atlas context and optional visual overlays.",
       "installTarget": "code-review",
       "nextAction": "Ask your coding agent to use the code-review skill.",
       "dependencies": [
-        "loom"
+        "loom",
+        "system-atlas",
+        "diagram-design",
+        "mermaid-skill"
       ]
     },
     {
@@ -698,13 +698,14 @@
       "kind": "skill",
       "group": "Coding",
       "label": "explain-code-flow",
-      "description": "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions.",
+      "description": "Explain a feature from system context to runtime detail, reusing atlas figures and facts. For a revision range, overlay the changed flow; use Mermaid when atlas coverage is missing.",
       "installTarget": "explain-code-flow",
       "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
       "dependencies": [
-        "write-simply",
         "diagram-design",
-        "plannotator"
+        "plannotator",
+        "system-atlas",
+        "mermaid-skill"
       ]
     },
     {
@@ -748,7 +749,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "system-atlas",
-      "description": "Build a one-page HTML atlas of a multi-repository product, hundreds of layered diagrams with plain-language captions and a glossary, from parallel code exploration.",
+      "description": "Build a detailed, searchable, code-bound product atlas; refresh it incrementally from pinned Git commits.",
       "installTarget": "system-atlas",
       "nextAction": "Ask your coding agent to use the system-atlas skill.",
       "dependencies": [

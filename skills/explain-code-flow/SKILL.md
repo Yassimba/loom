@@ -1,79 +1,63 @@
 ---
 name: explain-code-flow
-description: "Architecture walkthrough of one feature: layered diagrams (overview → structure → runtime data spine → zooms) and anchored prose. Use for a big-picture explanation or end-to-end flow of a feature, ER/class/sequence diagrams of it, or a colored diff of how its flow changed between two revisions."
+description: "Explain a feature from system context to runtime detail, reusing atlas figures and facts. For a revision range, overlay the changed flow; use Mermaid when atlas coverage is missing."
 ---
 
 # Explain Code Flow
 
-Explain one feature from system shape down to runtime detail. Every drawn edge has source evidence; every figure proves one fact. The run ends in chat with the Result paragraph and the walkthrough path.
+Explain the live entry, the values that travel, and the final result. Reuse the
+atlas's actual figures as focused views: keep their element IDs and layout,
+then highlight the path or patch verified drift. Reusing its theme or viewer
+alone is not diagram reuse. Inspect the local delta and missing facts.
 
-**Diff mode** applies when the user names a git range, branch, or PR, or asks what changed: draw the feature as it is now, then a colored diff of each figure the change touches. Diff mode's rules live in [`references/diagram-diff.md`](references/diagram-diff.md); load it at step 1.
+## 1. Pin and retrieve
 
-## 1. Set the scope
+Name the feature boundary, entry point, and target revision (working tree by
+default). For a diff, capture both revisions. Follow
+[the shared atlas consumer procedure](../system-atlas/references/consume.md).
+Confirm production code actually reaches the feature; show a composition gap
+when it does not.
 
-Find the feature, its live entry point, and its final result or effect. Confirm production code assembles and reaches it; when nothing does, the walkthrough shows that composition gap. In diff mode, pin `from` and `to` (`to` defaults to the working tree).
+Done when retrieved topic IDs and pins, the target, relevant drift, and gaps
+are explicit. Keep new evidence in the walkthrough, not a separate brief.
 
-Done when the feature boundary, the source area, and any revisions are pinned.
+## 2. Explain the path
 
-## 2. Map the evidence
+Select the smallest set of atlas figures that covers the requested questions.
+Use the same figure with different highlights when it already contains the
+needed detail. Cover context and the runtime spine; add another view only for
+a distinct question. "More detail" first means a closer explanation of the
+existing nodes, edges, values and branches.
 
-When the repo has a `.codegraph/` index, query it first, once, for the call graph and the signatures: name the entry, the central types, and the final-result function. Its output is capped, so it elides lines inside long files; read what it leaves open with exact `sed -n 'a,bp'` ranges rather than a second wide query. Otherwise spawn one relentless Explore worker with [`references/repository-evidence.md`](references/repository-evidence.md): its inspection order and its Deliverables section are the worker's whole contract. In diff mode, also have it compute the change as `diagram-diff.md` describes.
+Highlight the path directly in a copy of the atlas SVG. For a revision comparison, follow
+[references/diagram-diff.md](references/diagram-diff.md). Missing figures use
+`mermaid-skill`; they do not require Diagram Design.
+Keep exact identifiers and source references beside each figure. A missing
+revision pin requires source verification, not a new layout. Before drawing a
+new figure, name the closest atlas figure and the specific detail it cannot
+show with an overlay or an adjacent explanation.
 
-An anchor is only ever copied from a `grep -n` or `sed -n` result line, never typed from memory of a range: `grep -n "fn confirm_review" src/wizard/state.rs` → `state.rs:552`. Write the map to `ai-docs/explanations/<feature-slug>/brief.md` (evidence first, figure list appended in step 4); it is the drawing worker's whole input, so keep it to what a figure needs: entry chain, the types and functions that appear as nodes with one anchor each, threads and channels, externals. Field lists and per-branch key handling belong in the walkthrough, not the brief; every kilobyte here costs the writer about four seconds.
+Done when the entry-to-result path is complete and every new claim has source
+evidence or an explicit uncertainty.
 
-Shell note: zsh expands a bare `=====` separator as a command; quote separator echoes (`echo '-----'`).
+## 3. Deliver
 
-Done when the map reaches from the live entry to the final result, every entity and state named appears in source, every anchor came from a grep or sed line, and any composition gap is identified.
+Write `ai-docs/explanations/<feature>/walkthrough.md`: the whole path in one
+sentence, baseline and target, selected figures with short explanations, then
+the result. Link to the matching atlas topics/sections. Explain real values,
+decisions, side effects, and failures, not only function names. Keep changed
+items searchable as text. Source-check new/current references with
+`scripts/check-anchors.py`; historical references are checked against their
+named Git revisions.
 
-## 3. Verify
+Export selected atlas SVGs and Mermaid SVGs for embedding. Build
+`walkthrough.html` with `scripts/build-html.py`; the existing
+[annotation build](references/annotation-build.md) handles inlining. Inspect
+changed/new figures once. Reply with the result and walkthrough path.
 
-Do not reread what the worker read. Run `python3 scripts/check-anchors.py <repo-root> brief.md`: it resolves every `file:line` and prints the source line beside it. Scan the list once; an anchor whose printed line does not carry the claimed symbol is drift, fix it from a fresh `grep -n`. Open a file only where the map is contradictory or an edge lacks an anchor; draw that edge only once anchored, otherwise label it an assumption.
-
-Done when the check exits 0 and every printed line supports its claim.
-
-## 4. Choose the figures
-
-Choose from the top of this ladder down; the type per rung is fixed here, so diagram-design's SKILL.md is not loaded. Each rung is one figure proving one fact, inside the budget in [`references/content-brief-by-type.md`](references/content-brief-by-type.md).
-
-| Rung | Job | Type | Draw when |
-| --- | --- | --- | --- |
-| 1. Overview | live entry, major components, externals, final result, composition gap | Architecture | always |
-| 2. Layers | layers and dependency direction | Layer stack | the feature crosses layers |
-| 3. Structure | central types and how they relate | ER (entities, cardinality), Database schema (real tables), UML class (protocols, inheritance, operations) | three or more central types |
-| 4. Spine | real values in, the functions that transform them, values out; loops, fan-in, decisions, I/O, state changes | Sequence (call order is the point) or Data flow (custody and shape is the point) | always |
-| 5. Lifecycle | states, guarded transitions, terminal outcomes | State machine | the feature owns a state field or status enum |
-| 6. Zooms | one dense stage of the spine expanded | Flowchart, Sequence, or Data flow | a stage hides a decision tree or a loop |
-
-Add any other diagram-design type when it proves a fact prose cannot: Dependency graph for fan-in, Swimlane for handoffs between processes, Deployment when the feature spans hosts.
-
-The Draw-when column qualifies a rung; your judgment admits it. For each qualifying rung, ask what the reader would misunderstand without it: a real answer admits the figure, no answer skips it. Effort never decides in either direction. Four figures is the usual size; a Layers or Structure figure that only restates the Overview and the prose is skipped.
-
-Per-figure content rules: [`references/authoring-invariants.md`](references/authoring-invariants.md) and [`references/content-brief-by-type.md`](references/content-brief-by-type.md).
-
-Done when the figure list is appended to `brief.md`: for each, the file name, the type, the nodes, and the one fact it proves (diff variants included).
-
-## 5. Draw and export
-
-Figures are Python scripts over [`scripts/draw.py`](scripts/draw.py), a drawing kit whose primitives already satisfy diagram-design's default profile (palette, fonts, 4px grid, masked labels, orthogonal connectors, paint order). Check the project's `.diagram-design` marker: absent or `profile: default` uses the kit as is; any other profile means the kit's palette does not apply, so load diagram-design's `references/profiles.md` and pass the resolved tokens to the worker to override `draw.py`'s constants.
-
-Spawn one drawing worker per figure, all in the same message so they run in parallel: a worker's time is dominated by planning one figure's coordinates (about 100 s at any effort level), so five sequential figures cost 7 minutes and five parallel ones cost 2. Keep the session's effort level; medium saves 18% and loses activation bars and clean fragment headers. Its inputs are exactly: `brief.md`, `scripts/draw.py` (the docstring is the API), `scripts/example-figure.py` (the shape of a figure script), and [`references/authoring-invariants.md`](references/authoring-invariants.md). It reads nothing from diagram-design. For each figure it writes `diagrams/<rung>-<name>.py` calling `write()`, which emits the `.html` and the standalone `.svg`, then returns node and arrow counts and what it cut from the brief. The parent runs `scripts/check-figures.sh diagrams/` once after every listed stem has a `.py`, `.html`, and `.svg`. Those three files mean the figure is drawn: continue even if the worker is still running. Drawing figures yourself is the fallback for a single-figure walkthrough.
-
-`check-figures.sh` also rasterizes every figure into `diagrams/png/`. View each PNG once, the checks cannot see text collisions or a label crowding an edge, and fix what you find in the figure script, re-run the check, and stop.
-
-Done when every listed figure has a `.py`, an `.html`, and an `.svg`, the parent check exits 0, and every PNG was viewed.
-
-## 6. Write the walkthrough
-
-Write `ai-docs/explanations/<feature-slug>/walkthrough.md` in the `write-simply` register, sized by relevant files: 1–3 files, 150–300 words; 4–10, 300–600; 11+, 500–900. The figures carry the structure; the prose carries anchors and the facts no figure can.
-
-Open the document with the whole path in one sentence. Sections in order: **Context** (what starts the feature, what it produces, the scope, three lines at most; in diff mode, the range and two lines on what changed), one section per rung drawn in ladder order, **What changed** (diff mode: each diff figure with its text list), **Result** (the most important fact, one short paragraph).
-
-Each rung section: one bold sentence stating the figure's fact, the figure embedded as `![caption](diagrams/<file>.svg)`, then at most five anchored facts. Rung 3 lists three to seven central types with anchors, grouped by layer for a large feature. Rung 4 is a numbered list of hops: per hop, the function, the value in, the value out. Anchor every structural claim with `file:line`; keep identifiers exact. When the user asks about private functions or reuse, list non-test call sites apart from test call sites.
-
-Done when architecture and spine form one path, each call flow appears once, and every figure in `diagrams/` appears once.
-
-## 7. Deliver
-
-Run `python3 scripts/check-anchors.py <repo-root> walkthrough.md --quiet` (exit 0 or fix), then build `walkthrough.html` with `python3 scripts/build-html.py walkthrough.md`, which inlines every SVG per [`references/annotation-build.md`](references/annotation-build.md). Reply with the Result paragraph and the `walkthrough.md` path. When the user asks to annotate, follow that same reference.
-
-Done when the Result paragraph and the walkthrough path are in chat.
+Done when the focused walkthrough is readable without opening the full atlas,
+its references identify the right revisions, and it links back to deeper detail.
+Record figure provenance: atlas figure ID/path and unchanged, overlaid, or new
+(with the coverage gap). Use the existing exporter; author only the selection,
+small overlay patches and prose. Reuse views locally; delegate only independent
+missing-code investigation when delegation is authorized.

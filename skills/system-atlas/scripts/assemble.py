@@ -11,6 +11,9 @@ import html
 import json
 import re
 import sys
+from urllib.parse import quote
+
+from atlas import git, search_index, topics
 from pathlib import Path
 
 ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent
@@ -18,6 +21,9 @@ DIAG = ROOT / "diagrams"
 OUT = ROOT / "atlas.html"
 HERE = Path(__file__).parent
 CFG = json.loads((ROOT / "atlas.json").read_text()) if (ROOT / "atlas.json").exists() else {}
+TOPICS = topics(ROOT) if (ROOT / "topics").is_dir() else {}
+SEARCH = {row["id"]: row for row in search_index(ROOT)} if TOPICS else {}
+REPOS = {repo["id"]: repo for repo in CFG.get("repositories", [])}
 TITLE = CFG.get("title", "System Atlas")
 EYEBROW = CFG.get("eyebrow", "")
 INTRO = CFG.get("intro", "")
@@ -140,15 +146,55 @@ def para(text: str, lead: bool = False, terms: bool = True) -> str:
 
 # ---------- figures ----------
 def figure(sid, d, p, idx, total):
-    fid = f"{sid}-{Path(d['file']).stem}"
+    fid = d.get("id") or f"{sid}-{Path(d['file']).stem}"
     lvl = d.get("level", 2)
     return (
-        f'<figure id="{fid}" class="l{lvl}" data-index="{idx}">'
+        f'<figure id="{html.escape(fid, quote=True)}" class="l{lvl}" data-index="{idx}" data-repo="{html.escape(d.get("repo", ""), quote=True)}" data-source-links="{html.escape(json.dumps(figure_links(d)), quote=True)}">'
         f'<div class="eyebrow">{html.escape(d.get("type", ""))} · {LEVEL_NAME.get(lvl, "deep dive")} · figure {idx} of {total}</div>'
         f'<h3>{html.escape(d["title"])}</h3>'
         f'<div class="svgwrap" role="region" tabindex="0" aria-label="{html.escape(d["title"], quote=True)} diagram. Scroll horizontally to see all content.">{svg_of(p, fid)}</div>'
         f'<figcaption>{para(d.get("caption", ""), lead=True)}</figcaption></figure>'
     ), fid, lvl
+
+
+def source_link(source):
+    repo = REPOS[source["repo"]]
+    if repo.get("github"):
+        return f"{repo['github'].rstrip('/')}/blob/{repo['commit']}/{quote(source['path'])}#L{source['start']}-L{source['end']}"
+    path = (ROOT / repo["path"] / source["path"]).resolve()
+    pinned = git((ROOT / repo["path"]).resolve(), "show", f"{repo['commit']}:{source['path']}").splitlines()
+    start, end = source["start"] - 1, source["end"]
+    if path.is_file() and path.read_text().splitlines()[start:end] == pinned[start:end]:
+        return f"cursor://file/{quote(str(path), safe='/')}:{source['start']}"
+    return None  # Historical ranges must not jump into different current code.
+
+
+def figure_links(figure_row):
+    links, ambiguous = {}, set()
+    for topic in TOPICS.values():
+        if not any(item["id"] == figure_row.get("id") for item in topic.get("figures", [])):
+            continue
+        for source in topic["sources"]:
+            key = f"{source['repo']}:{source['path']}:{source['start']}-{source['end']}"
+            href = source_link(source)
+            if key in links and links[key] != href:
+                ambiguous.add(key)
+            links[key] = href
+    return {key: href for key, href in links.items() if href and key not in ambiguous}
+
+
+def topic_html(topic):
+    title = html.escape(topic["title"])
+    facts = "".join(f'<li>{html.escape(fact["text"])}</li>' for fact in topic["facts"])
+    sources = []
+    for source in topic["sources"]:
+        repo = REPOS[source["repo"]]
+        label = html.escape(f"{source['repo']}@{repo['commit'][:12]} {source['path']}:{source['start']}-{source['end']}")
+        href = source_link(source)
+        sources.append(f'<li><a href="{html.escape(href, quote=True)}">{label}</a></li>' if href else f'<li>{label} (historical source)</li>')
+    return (f'<details class="atlas-topic" id="topic-{topic["id"]}"><summary>{title}</summary>'
+            f'{para(topic["summary"])}<ul>{facts}</ul><h4>Sources at the atlas baseline</h4>'
+            f'<ul>{"".join(sources)}</ul></details>')
 
 
 def main():
@@ -162,6 +208,12 @@ def main():
         legend.append(f'<a href="#{sid}" style="--h:{hue}"><i></i>{html.escape(re.split(r":| - | — ", s["title"])[0])}</a>')
         toc.append(f'<li style="--h:{hue}"><a href="#{sid}">{html.escape(s["title"])}</a><ol>')
         body.append(f'<section id="{sid}" style="--h:{hue}"><h2>{html.escape(s["title"])}</h2>{para(s.get("intro", ""))}')
+        for topic in TOPICS.values():
+            if topic["section"] != sid:
+                continue
+            search_text = html.escape(SEARCH[topic["id"]]["text"], quote=True)
+            toc.append(f'<li class="l2" data-search="{search_text}"><a href="#topic-{topic["id"]}">{html.escape(topic["title"])}</a></li>')
+            body.append(topic_html(topic))
 
         main_items, ops_items = [], []
         for d in s["diagrams"]:
@@ -211,8 +263,8 @@ def main():
 
     nav_css = ((ROOT / "nav.css") if (ROOT / "nav.css").exists() else (HERE / "nav.css")).read_text()
     nav_js = ((ROOT / "nav.js") if (ROOT / "nav.js").exists() else (HERE / "nav.js")).read_text()
-    extra_css = ""  # page CSS lives in nav.css
-    extra_js = ""  # page JS lives in nav.js
+    extra_css = ".atlas-topic{margin:1rem 0;scroll-margin-top:4rem}.atlas-topic ul{padding-left:1.5rem;margin:.75rem 0}.atlas-topic h4{margin-top:1rem}.svgwrap a:focus-visible{outline:2px solid var(--accent)}"
+    extra_js = (HERE / "topics.js").read_text() if TOPICS else ""
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(TITLE)}</title>

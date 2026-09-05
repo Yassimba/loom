@@ -1,5 +1,6 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
-  - write-simply
   - diagram-design
   - plannotator
+  - system-atlas
+  - mermaid-skill
