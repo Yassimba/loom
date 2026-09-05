@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-loom",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Loom branding and a startup notice for published Loom updates in Pi.",
   "license": "MIT",
   "type": "module",
