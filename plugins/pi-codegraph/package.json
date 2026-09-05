@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-codegraph",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Front-load relevant CodeGraph context into Pi prompts.",
   "license": "MIT",
   "type": "module",

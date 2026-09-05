@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/Yassimba/loom/compare/openai-fast-v1.1.0...openai-fast-v1.2.0) (2026-09-05)
+
+
+### Features
+
+* expand setup, wiki search, and Pi integrations ([3d6cc3f](https://github.com/Yassimba/loom/commit/3d6cc3f3641bd4879613f911d33a3fcedb544d43))
+* harden setup and agent workflows ([61694ac](https://github.com/Yassimba/loom/commit/61694acaf860c35a3dd6bbbc7afbad4e7552bfb9))
+
 ## [1.1.0](https://github.com/Yassimba/loom/compare/openai-fast-v1.0.0...openai-fast-v1.1.0) (2026-08-28)
 
 
