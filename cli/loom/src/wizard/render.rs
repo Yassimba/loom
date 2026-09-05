@@ -9,7 +9,7 @@ use super::state::{
 use crate::settings::SettingSpec;
 use crate::{ResourceKind, SkillAgent};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Block, BorderType, Clear, Gauge, List, ListItem, ListState, Padding, Paragraph, Wrap,
