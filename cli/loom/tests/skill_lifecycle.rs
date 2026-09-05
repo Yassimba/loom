@@ -108,10 +108,15 @@ fn bundled_skills_command_lists_enabled_packages_and_keeps_reconcile_stdout_empt
     assert!(String::from_utf8_lossy(&reconciled.stdout)
         .trim()
         .is_empty());
-    assert!(
-        std::fs::read_to_string(home.join(".pi/agent/settings.json"))
+    let settings: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(home.join(".pi/agent/settings.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(settings["skills"].as_array().unwrap().iter().any(|entry| {
+        std::path::Path::new(entry.as_str().unwrap().strip_prefix('-').unwrap())
+            .canonicalize()
             .unwrap()
-            .contains(".agents/skills/ponytail/SKILL.md")
-    );
+            == shared.join("SKILL.md").canonicalize().unwrap()
+    }));
     std::fs::remove_dir_all(home).unwrap();
 }
