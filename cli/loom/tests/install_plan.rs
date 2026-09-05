@@ -1,7 +1,7 @@
 use loom::{
     build_install_plan as build_plan, expand_skill_dependencies, CommandSpec, InstallPlan,
-    NodeStatus, Platform, PrerequisiteStatus, Resource, ResourceKind, Runtime, SkillAgent,
-    SkillDestination, SkillScope, StepAction, VerificationSpec,
+    Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
+    StepAction, VerificationSpec,
 };
 use pretty_assertions::assert_eq;
 
@@ -16,11 +16,10 @@ fn skill_destination() -> SkillDestination {
 
 fn build_install_plan(
     resources: &[Resource],
-    runtimes: &[Runtime],
     status: PrerequisiteStatus,
     platform: Platform,
 ) -> anyhow::Result<InstallPlan> {
-    build_plan(resources, runtimes, status, platform, &skill_destination())
+    build_plan(resources, status, platform, &skill_destination())
 }
 
 fn resource(kind: ResourceKind, id: &str, target: &str) -> Resource {
@@ -66,12 +65,10 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
     let status = PrerequisiteStatus {
         pi: true,
         herdr: true,
-        npm: true,
         mise: false,
-        node: NodeStatus::Supported,
     };
 
-    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
     assert!(plan.prerequisites.is_empty());
     assert_eq!(
@@ -108,11 +105,11 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
             // Skills are verified inside the copy: each tree must end up
             // with <skill>/SKILL.md.
             None,
-            Some(VerificationSpec::Command {
+            Some(VerificationSpec {
                 command: CommandSpec::new("pi", ["list"]),
                 needle: Some("@yassimba/pi-openai-fast".into()),
             }),
-            Some(VerificationSpec::Command {
+            Some(VerificationSpec {
                 command: CommandSpec::new("herdr", ["plugin", "list"]),
                 needle: Some("yassin.jumplist".into()),
             }),
@@ -129,12 +126,10 @@ fn git_pi_package_uses_its_exact_source() {
     let status = PrerequisiteStatus {
         pi: true,
         herdr: true,
-        npm: true,
         mise: false,
-        node: NodeStatus::Supported,
     };
 
-    let plan = build_install_plan(&[chat], &[], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&[chat], status, Platform::Unix).unwrap();
 
     assert_eq!(
         plan.resources[0].action,
@@ -160,13 +155,10 @@ fn skill_selection_expands_to_its_dependency_closure() {
     let expanded = expand_skill_dependencies(&catalog, vec![catalog[0].clone()]);
     let plan = build_install_plan(
         &expanded,
-        &[],
         PrerequisiteStatus {
             pi: true,
             herdr: true,
-            npm: true,
             mise: false,
-            node: NodeStatus::Supported,
         },
         Platform::Unix,
     )
@@ -194,12 +186,10 @@ fn missing_foundations_are_installed_before_selected_resources() {
     let status = PrerequisiteStatus {
         pi: true,
         herdr: false,
-        npm: true,
         mise: false,
-        node: NodeStatus::Supported,
     };
 
-    let plan = build_install_plan(&resources, &[], status, Platform::Windows).unwrap();
+    let plan = build_install_plan(&resources, status, Platform::Windows).unwrap();
 
     assert_eq!(
         plan.prerequisites
@@ -214,7 +204,7 @@ fn missing_foundations_are_installed_before_selected_resources() {
 }
 
 #[test]
-fn selecting_a_pi_package_without_pi_or_npm_uses_the_pinned_mise_runtime() {
+fn selecting_a_pi_package_without_pi_uses_the_pinned_mise_runtime() {
     let resources = vec![resource(
         ResourceKind::PiPackage,
         "pi-package:@yassimba/pi-openai-fast",
@@ -223,12 +213,10 @@ fn selecting_a_pi_package_without_pi_or_npm_uses_the_pinned_mise_runtime() {
     let status = PrerequisiteStatus {
         pi: false,
         herdr: true,
-        npm: false,
         mise: false,
-        node: NodeStatus::Supported,
     };
 
-    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
     assert_eq!(
         plan.prerequisites
@@ -243,78 +231,7 @@ fn selecting_a_pi_package_without_pi_or_npm_uses_the_pinned_mise_runtime() {
 }
 
 #[test]
-fn explicitly_requested_runtimes_are_installed_without_dependent_resources() {
-    let status = PrerequisiteStatus {
-        pi: false,
-        herdr: false,
-        npm: true,
-        mise: false,
-        node: NodeStatus::Supported,
-    };
-
-    let plan =
-        build_install_plan(&[], &[Runtime::Herdr, Runtime::Pi], status, Platform::Unix).unwrap();
-
-    assert!(plan.resources.is_empty());
-    assert_eq!(
-        plan.prerequisites
-            .iter()
-            .map(|step| step.action.display())
-            .collect::<Vec<_>>(),
-        vec![
-            "sh -c curl -fsSL https://mise.run | sh",
-            "add to the mise selection and install: npm:@earendil-works/pi-coding-agent, herdr",
-        ]
-    );
-}
-
-#[test]
-fn an_already_installed_runtime_request_is_a_no_op() {
-    let plan = build_install_plan(
-        &[],
-        &[Runtime::Herdr],
-        PrerequisiteStatus {
-            pi: true,
-            herdr: true,
-            npm: true,
-            mise: false,
-            node: NodeStatus::Supported,
-        },
-        Platform::Unix,
-    )
-    .unwrap();
-
-    assert!(plan.prerequisites.is_empty());
-    assert!(plan.resources.is_empty());
-}
-
-#[test]
-fn an_outdated_node_is_replaced_by_the_pinned_mise_runtime() {
-    let resources = vec![resource(
-        ResourceKind::PiPackage,
-        "pi-package:@yassimba/pi-openai-fast",
-        "@yassimba/pi-openai-fast",
-    )];
-    let status = PrerequisiteStatus {
-        pi: false,
-        herdr: true,
-        npm: true,
-        mise: false,
-        node: NodeStatus::TooOld(16, 3, 0),
-    };
-
-    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
-
-    assert!(plan.prerequisites.iter().any(|step| {
-        step.action
-            .display()
-            .contains("npm:@earendil-works/pi-coding-agent")
-    }));
-}
-
-#[test]
-fn an_installed_pi_does_not_care_about_node() {
-    // Pi already on PATH means npm never runs; an old Node must not block.
+fn an_installed_pi_needs_no_runtime_install() {
     let resources = vec![resource(
         ResourceKind::PiPackage,
         "pi-package:@yassimba/pi-openai-fast",
@@ -323,12 +240,10 @@ fn an_installed_pi_does_not_care_about_node() {
     let status = PrerequisiteStatus {
         pi: true,
         herdr: true,
-        npm: false,
         mise: false,
-        node: NodeStatus::Missing,
     };
 
-    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
     assert_eq!(plan.resources.len(), 1);
 }
@@ -344,16 +259,14 @@ fn selected_tools_sync_through_mise_before_resources() {
         ),
     ];
     // Pi is missing but mise is present: Pi rides along as a manifest tool
-    // instead of a global npm install, and an old Node must not block it.
+    // instead of a global npm install.
     let status = PrerequisiteStatus {
         pi: false,
         herdr: true,
-        npm: false,
         mise: true,
-        node: NodeStatus::Missing,
     };
 
-    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
     assert_eq!(plan.prerequisites.len(), 1);
     let step = &plan.prerequisites[0];
@@ -378,12 +291,10 @@ fn tools_without_mise_get_a_mise_prerequisite() {
     let status = PrerequisiteStatus {
         pi: true,
         herdr: true,
-        npm: true,
         mise: false,
-        node: NodeStatus::Supported,
     };
 
-    let plan = build_install_plan(&resources, &[], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
     assert_eq!(plan.prerequisites.len(), 2);
     assert_eq!(plan.prerequisites[0].manager, "mise");
@@ -404,12 +315,10 @@ fn tool_companions_join_the_mise_sync() {
     let status = PrerequisiteStatus {
         pi: true,
         herdr: true,
-        npm: true,
         mise: true,
-        node: NodeStatus::Supported,
     };
 
-    let plan = build_install_plan(&[envx], &[], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&[envx], status, Platform::Unix).unwrap();
 
     assert_eq!(
         plan.prerequisites[0].action,

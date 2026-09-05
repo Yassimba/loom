@@ -123,7 +123,13 @@ manifest="${LOOM_REPO_DIR:-$workspace}/manifest/loom.toml"
 awk '/^# core:begin/{inside=1; next} /^# core:end/{inside=0} inside && /^[^#[:space:]].*=/{print}' "$manifest" |
   while IFS= read -r pin; do grep -Fqx "$pin" "$selection"; done
 grep -Fxf <(grep -E '^"(aqua:XAMPPRocky/tokei|cargo:tokei)"' "$manifest") "$selection" >/dev/null
-loom_version=$(awk -F'"' '/^version = /{print $2; exit}' "${LOOM_REPO_DIR:-$workspace}/cli/loom/Cargo.toml")
+if [[ ${LOOM_E2E_PUBLISHED:-false} == true ]]; then
+  loom_tag=$(awk -F'"' '$2 == "github:Yassimba/loom[exe=loom]" {print $4; exit}' "$manifest")
+  [[ $loom_tag == loom-v* ]] || { echo "missing published Loom pin" >&2; exit 1; }
+  loom_version=${loom_tag#loom-v}
+else
+  loom_version=$(awk -F'"' '/^version = /{print $2; exit}' "${LOOM_REPO_DIR:-$workspace}/cli/loom/Cargo.toml")
+fi
 grep -Fqx "loom $loom_version" "$evidence_dir/loom-version.txt"
 grep -Fq 'tokei 12.1.2' "$evidence_dir/tokei-version.txt"
 grep -Fq 'loom setup' "$evidence_dir/rerun-stdout.txt"

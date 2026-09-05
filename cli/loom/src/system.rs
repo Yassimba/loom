@@ -124,21 +124,12 @@ fn command_for(path: &OsStr, spec: &CommandSpec) -> Command {
     #[cfg(unix)]
     // Put every managed command in its own process group. Cancelling the
     // wrapper shell must also terminate package-manager and pipeline children.
-    unsafe {
-        command.pre_exec(|| {
-            if setpgid(0, 0) == 0 {
-                Ok(())
-            } else {
-                Err(std::io::Error::last_os_error())
-            }
-        });
-    }
+    command.process_group(0);
     command
 }
 
 #[cfg(unix)]
 unsafe extern "C" {
-    fn setpgid(pid: i32, pgid: i32) -> i32;
     fn kill(pid: i32, signal: i32) -> i32;
 }
 

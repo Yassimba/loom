@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use inquire::Confirm;
-use loom::app::{install_selected, load_catalog, SelectionMode, Selectors};
+use loom::app::{install_selected, SelectionMode, Selectors};
 use loom::init::{run_init, sync_projects, DomainLayout, Editor, InitOptions, Tracker};
 use loom::status::run_status;
 use loom::ui::{Mark, Out};
@@ -211,7 +211,7 @@ fn completion_command(catalog: &Catalog) -> clap::Command {
 
 /// Print shell completions with each catalog selector value.
 fn print_completions(shell: clap_complete::Shell) -> Result<()> {
-    let catalog = load_catalog()?;
+    let catalog = Catalog::embedded()?;
     let mut command = completion_command(&catalog);
     clap_complete::generate(shell, &mut command, "loom", &mut std::io::stdout());
     Ok(())
@@ -223,7 +223,7 @@ fn run_selection(
     offer_wsl: bool,
     system: &RealSystem,
 ) -> Result<bool> {
-    let catalog = load_catalog()?;
+    let catalog = Catalog::embedded()?;
     let selectors = Selectors {
         skills: args.skills,
         pi_packages: args.pi_packages,
@@ -244,7 +244,7 @@ fn run_selection(
 }
 
 fn run_uninstall(args: UninstallArgs, system: &RealSystem) -> Result<bool> {
-    let catalog = load_catalog()?;
+    let catalog = Catalog::embedded()?;
     let selectors = Selectors {
         skills: args.skills,
         pi_packages: args.pi_packages,
@@ -428,7 +428,7 @@ fn main() -> Result<()> {
                 println!("Cancelled; no changes made.");
                 true
             } else {
-                let updated = run_updates(&system, &load_catalog()?);
+                let updated = run_updates(&system, &Catalog::embedded()?);
                 let wikis_updated = loom::wiki::update_registered(&system);
                 updated && wikis_updated
             }

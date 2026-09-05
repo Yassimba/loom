@@ -543,8 +543,9 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         return Ok(true);
     }
     // Templates come from the published repo, so init output is publish-gated.
-    let staging = home.join(".cache").join("loom").join("init-staging");
-    let repo_root = skills::fetch_repo(system, &staging)
+    let repository = skills::Repository::default();
+    let repo_root = repository
+        .get(system, &std::sync::atomic::AtomicBool::new(false))
         .map_err(anyhow::Error::msg)
         .context("could not fetch the templates")?;
     let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
@@ -589,9 +590,7 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
             chosen.push((section.name, content));
         }
     }
-    let _ = fs::remove_dir_all(&staging);
 
-    let mut ok = true;
     let agents_path = project.join("AGENTS.md");
     let existing = fs::read_to_string(&agents_path).ok();
     let (agents, outcome) = render_agents(existing.as_deref(), &base, &chosen, options.force);
@@ -699,26 +698,11 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
     }
 
-    match register_project(&home, &project) {
-        Ok(()) => out.row(
-            Mark::Ok,
-            "Sync",
-            "registered; `loom update` refreshes the templates",
-        ),
-        Err(error) => {
-            ok = false;
-            out.row(
-                Mark::Bad,
-                "Sync",
-                format!("could not register the project: {error}"),
-            );
-        }
-    }
-    out.verdict(ok, if ok { "Done" } else { "Done with problems" });
+    out.verdict(true, "Done");
     if existing.is_none() {
         out.next("open AGENTS.md and fill in the project section");
     }
-    Ok(ok)
+    Ok(true)
 }
 
 /// What happened to each managed fence during a render.
@@ -835,14 +819,6 @@ fn read_registry(home: &Path) -> Vec<String> {
     projects
 }
 
-fn write_registry(_home: &Path, _projects: &[String]) -> Result<()> {
-    Ok(())
-}
-
-fn register_project(_home: &Path, _project: &Path) -> Result<()> {
-    Ok(())
-}
-
 /// The outcome of a sync: one summary line plus one note per project.
 pub struct SyncReport {
     pub ok: bool,
@@ -865,6 +841,13 @@ impl SyncReport {
 /// nothing outside a fence is touched, and no new sections are added —
 /// section choices stay with `init` in the project.
 pub fn sync_projects(system: &dyn System) -> SyncReport {
+    sync_projects_from(system, &skills::Repository::default())
+}
+
+pub(crate) fn sync_projects_from(
+    system: &dyn System,
+    repository: &skills::Repository,
+) -> SyncReport {
     let Some(home) = system.home_dir() else {
         return SyncReport::failed("home directory is unavailable");
     };
@@ -877,19 +860,19 @@ pub fn sync_projects(system: &dyn System) -> SyncReport {
         };
     }
 
-    let staging = home.join(".cache").join("loom").join("sync-staging");
-    let templates = skills::fetch_repo(system, &staging).and_then(|repo_root| {
-        let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
-            .map_err(|error| format!("template missing: {BASE_TEMPLATE}: {error}"))?;
-        let mut sections = Vec::new();
-        for section in &SECTIONS {
-            let content = fs::read_to_string(repo_root.join(section.template))
-                .map_err(|error| format!("template missing: {}: {error}", section.template))?;
-            sections.push((section.name, content));
-        }
-        Ok((base, sections))
-    });
-    let _ = fs::remove_dir_all(&staging);
+    let templates = repository
+        .get(system, &std::sync::atomic::AtomicBool::new(false))
+        .and_then(|repo_root| {
+            let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
+                .map_err(|error| format!("template missing: {BASE_TEMPLATE}: {error}"))?;
+            let mut sections = Vec::new();
+            for section in &SECTIONS {
+                let content = fs::read_to_string(repo_root.join(section.template))
+                    .map_err(|error| format!("template missing: {}: {error}", section.template))?;
+                sections.push((section.name, content));
+            }
+            Ok((base, sections))
+        });
     let (base, sections) = match templates {
         Ok(templates) => templates,
         Err(message) => return SyncReport::failed(message),
@@ -902,7 +885,7 @@ pub fn sync_projects(system: &dyn System) -> SyncReport {
         let agents_path = Path::new(project).join("AGENTS.md");
         let shown = tidy_path(Path::new(project), &home);
         let Ok(existing) = fs::read_to_string(&agents_path) else {
-            notes.push(format!("{shown}  gone, unregistered"));
+            notes.push(format!("{shown}  missing; skipped"));
             continue;
         };
         surviving.push(project.clone());
@@ -934,9 +917,6 @@ pub fn sync_projects(system: &dyn System) -> SyncReport {
             changes.push("current".into());
         }
         notes.push(format!("{shown}  {}", changes.join(" · ")));
-    }
-    if surviving.len() != projects.len() {
-        let _ = write_registry(&home, &surviving);
     }
     SyncReport {
         ok,

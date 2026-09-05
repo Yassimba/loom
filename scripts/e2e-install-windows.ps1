@@ -215,10 +215,15 @@ if ($env:LOOM_E2E_TOKEI -ne "skip") {
     throw "Tokei version did not match its exact pin"
   }
 }
-$Cargo = Get-Content (Join-Path $(if ($env:LOOM_REPO_DIR) { $env:LOOM_REPO_DIR } else { $Workspace }) "cli\loom\Cargo.toml")
-$LoomVersion = ([regex]::Match(($Cargo -join "`n"), '(?m)^version = "([^"]+)"')).Groups[1].Value
+if ($env:LOOM_E2E_PUBLISHED -eq "true") {
+  $LoomVersion = ([regex]::Match(($ManifestLines -join "`n"), '(?m)^"github:Yassimba/loom\[exe=loom\]" = \{ version = "loom-v([^"]+)"')).Groups[1].Value
+  if (-not $LoomVersion) { throw "missing published Loom pin" }
+} else {
+  $Cargo = Get-Content (Join-Path $Workspace "cli\loom\Cargo.toml")
+  $LoomVersion = ([regex]::Match(($Cargo -join "`n"), '(?m)^version = "([^"]+)"')).Groups[1].Value
+}
 if (-not (Select-String -Quiet -Path (Join-Path $EvidenceDir "loom-version.txt") -SimpleMatch "loom $LoomVersion")) {
-  throw "loom version did not match the checked-out binary"
+  throw "loom version did not match the expected candidate or published pin"
 }
 if (-not (Select-String -Quiet -Path $RerunLog -Pattern 'loom setup')) { throw "rerun omitted setup output" }
 if (-not (Select-String -Quiet -Path $RerunLog -SimpleMatch 'Everything selected is already set up; no changes made')) {

@@ -226,9 +226,7 @@ fn uninstall_wizard_selection(
             status: crate::PrerequisiteStatus {
                 pi: true,
                 herdr: true,
-                npm: true,
                 mise: true,
-                node: crate::NodeStatus::Supported,
             },
             platform: if cfg!(windows) {
                 crate::Platform::Windows

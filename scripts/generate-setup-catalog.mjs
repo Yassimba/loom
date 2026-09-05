@@ -8,31 +8,9 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "..");
 const outputPath = join(repoRoot, "cli", "loom", "setup-catalog.json");
 
-export function renderSetupCatalog(catalog) {
-  const expanded = `${JSON.stringify(catalog, null, 2)}\n`;
-  return collapseShortStringArrays(expanded);
-}
-
-// Biome formats short arrays inline (lineWidth 100); JSON.stringify always
-// expands them. Collapse string-only arrays that fit, so the generated file
-// passes the repo formatter untouched.
-function collapseShortStringArrays(json) {
-  return json.replace(
-    /^([ ]*)("[^"]+": )\[\n((?:[ ]*"(?:[^"\\]|\\.)*",?\n)+)[ ]*\](,?)$/gm,
-    (match, indent, key, body, comma) => {
-      const items = body
-        .split("\n")
-        .map((line) => line.trim().replace(/,$/, ""))
-        .filter(Boolean);
-      const inline = `${indent}${key}[${items.join(", ")}]${comma}`;
-      return inline.length <= 100 ? inline : match;
-    },
-  );
-}
-
 async function generate({ check }) {
   const catalog = await buildSetupCatalogDocument(repoRoot);
-  const content = renderSetupCatalog(catalog);
+  const content = `${JSON.stringify(catalog, null, 2)}\n`;
   if (check) {
     let current = "";
     try {

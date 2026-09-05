@@ -475,7 +475,7 @@ fn prune_stale_core_sources(vault: &Path, stale: &[String]) -> Result<()> {
 }
 
 fn feynman_spec() -> Result<String> {
-    crate::app::load_catalog()?
+    crate::Catalog::embedded()?
         .resources
         .into_iter()
         .find(|resource| resource.install_target == "@companion-ai/feynman")

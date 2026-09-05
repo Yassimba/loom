@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const unixInstaller = readFile(join(repoRoot, "install.sh"), "utf8");
@@ -98,4 +101,57 @@ test("bootstraps install only the Loom selection, not the current project", asyn
 
   assert.match(unix, /mise -C "\$HOME" install --yes/);
   assert.match(windows, /mise -C \$HOME install --yes/);
+});
+
+test("release smoke selects published binaries at the pin commit", async () => {
+  const release = parse(await readFile(join(repoRoot, ".github/workflows/release.yml"), "utf8"));
+  const smoke = parse(await readFile(join(repoRoot, ".github/workflows/full-install.yml"), "utf8"));
+  assert.equal(release.jobs["full-install"].with.published, true);
+  assert.equal(release.jobs["full-install"].with.checkout_ref, `\${{ needs.pin.outputs.sha }}`);
+  for (const platform of ["unix", "windows"]) {
+    const steps = smoke.jobs[platform].steps;
+    assert.equal(
+      steps.find((step) => step.run?.startsWith("cargo build")).if,
+      `\${{ !inputs.published }}`,
+    );
+    const env = steps.find((step) => step.name === "Run the real bootstrap twice").env;
+    assert.match(env.LOOM_E2E_LOOM_BIN, /!inputs\.published.*\|\| ''/);
+    assert.match(env.LOOM_REPO_DIR, /!inputs\.published.*\|\| ''/);
+    assert.equal(env.LOOM_E2E_PUBLISHED, `\${{ inputs.published }}`);
+  }
+});
+
+test("Unix smoke checks the published pin rather than an unreleased Cargo version", {
+  skip: process.platform === "win32",
+}, async () => {
+  const source = await readFile(join(repoRoot, "scripts/e2e-install-unix.sh"), "utf8");
+  const branch = source.match(/^if \[\[ \$\{LOOM_E2E_PUBLISHED[^\n]+\n[\s\S]*?^fi$/m)?.[0];
+  assert.ok(branch, "version selection must exist");
+  const workspace = await mkdtemp(join(tmpdir(), "loom-smoke-version-"));
+  const manifest = join(workspace, "manifest.toml");
+  try {
+    await mkdir(join(workspace, "cli/loom"), { recursive: true });
+    await writeFile(join(workspace, "cli/loom/Cargo.toml"), 'version = "9.9.9"\n');
+    await writeFile(
+      manifest,
+      '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v1.2.3" }\n',
+    );
+    const version = (published) =>
+      execFileSync("bash", ["-eu", "-c", `${branch}\nprintf '%s' "$loom_version"`], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          workspace,
+          manifest,
+          LOOM_REPO_DIR: "",
+          LOOM_E2E_PUBLISHED: published,
+        },
+      });
+    assert.equal(version("true"), "1.2.3");
+    assert.equal(version("false"), "9.9.9");
+    await writeFile(manifest, "[tools]\n");
+    assert.throws(() => version("true"), /missing published Loom pin/);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
 });

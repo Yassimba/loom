@@ -91,9 +91,7 @@ fn ready() -> PrerequisiteStatus {
     PrerequisiteStatus {
         pi: true,
         herdr: true,
-        npm: true,
         mise: true,
-        node: crate::NodeStatus::Supported,
     }
 }
 

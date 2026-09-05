@@ -9,7 +9,7 @@
 //! user's own config.toml. Tools therefore change version only when a new
 //! manifest lands on main, and change *set* only when the user asks.
 
-use crate::{skills, CommandSpec, System};
+use crate::{skills::Repository, CommandSpec, System};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -26,10 +26,6 @@ pub fn conf_d_target(home: &std::path::Path) -> PathBuf {
         .join("mise")
         .join("conf.d")
         .join("loom.toml")
-}
-
-pub fn mise_available(system: &dyn System) -> bool {
-    system.command_exists("mise")
 }
 
 /// The tool key a manifest/selection line defines, if any:
@@ -150,21 +146,26 @@ fn render_selection(manifest: &str, current: &str, keys: &[String]) -> Result<St
 /// Fetch the manifest, rebuild the selection (previous keys + `extra`),
 /// write it to conf.d, and `mise install` the result.
 pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, String> {
-    sync_selected_controlled(system, extra, &std::sync::atomic::AtomicBool::new(false))
+    sync_selected_from(
+        system,
+        extra,
+        &std::sync::atomic::AtomicBool::new(false),
+        &Repository::default(),
+    )
 }
 
-pub fn sync_selected_controlled(
+pub(crate) fn sync_selected_from(
     system: &dyn System,
     extra: &[String],
     cancelled: &std::sync::atomic::AtomicBool,
+    repository: &Repository,
 ) -> Result<PathBuf, String> {
     let home = system
         .home_dir()
         .ok_or_else(|| "home directory is unavailable".to_string())?;
     let target = conf_d_target(&home);
     crate::fs_tx::recover(&target)?;
-    let staging = home.join(".cache").join("loom").join("manifest-staging");
-    let result = skills::fetch_repo_controlled(system, &staging, cancelled).and_then(|repo_root| {
+    let target = repository.get(system, cancelled).and_then(|repo_root| {
         let source = repo_root.join(MANIFEST_IN_REPO);
         let manifest = fs::read_to_string(&source)
             .map_err(|error| format!("downloaded repo has no {MANIFEST_IN_REPO}: {error}"))?;
@@ -178,9 +179,7 @@ pub fn sync_selected_controlled(
         let content = render_selection(&manifest, &current, &keys)?;
         crate::fs_tx::atomic_write(&target, content.as_bytes())?;
         Ok(target)
-    });
-    let _ = fs::remove_dir_all(&staging);
-    let target = result?;
+    })?;
     mise_install(system, cancelled).map_err(|error| format!("mise install failed: {error}"))?;
     // Moved pins leave their old versions in the store; prune is best-effort
     // cleanup and only removes versions no config references anymore.
@@ -226,11 +225,6 @@ pub fn remove_selected(
     Ok(())
 }
 
-/// Refresh pins for the existing selection without changing it.
-pub fn sync_and_install(system: &dyn System) -> Result<PathBuf, String> {
-    sync_selected(system, &[])
-}
-
 fn mise_install(
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
@@ -246,6 +240,13 @@ fn mise_install(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn published_manifest_is_valid_toml() {
+        include_str!("../../../manifest/loom.toml")
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+    }
 
     const MANIFEST: &str = "\
 [tools]

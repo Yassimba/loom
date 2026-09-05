@@ -474,7 +474,6 @@ impl Wizard {
             .collect::<Vec<_>>();
         build_install_plan(
             &resources,
-            &[],
             self.model.status,
             self.model.platform,
             &self.skill_destination(),

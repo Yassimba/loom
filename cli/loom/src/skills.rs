@@ -7,6 +7,49 @@ use crate::{CommandSpec, Resource, ResourceKind, System};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+/// One lazy repository snapshot per command, shared by concurrent consumers.
+#[derive(Default)]
+pub(crate) struct Repository {
+    root: OnceLock<Result<PathBuf, String>>,
+    staging: OnceLock<PathBuf>,
+}
+
+impl Repository {
+    pub(crate) fn get(
+        &self,
+        system: &dyn System,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<PathBuf, String> {
+        self.root
+            .get_or_init(|| {
+                let staging = self.staging.get_or_init(|| {
+                    static NEXT: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(0);
+                    std::env::temp_dir().join(format!(
+                        "loom-repo-{}-{}-{}",
+                        std::process::id(),
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos(),
+                        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    ))
+                });
+                fetch_repo_controlled(system, staging, cancelled)
+            })
+            .clone()
+    }
+}
+
+impl Drop for Repository {
+    fn drop(&mut self) {
+        if let Some(staging) = self.staging.get() {
+            let _ = fs::remove_dir_all(staging);
+        }
+    }
+}
 
 pub const TARBALL_URL: &str = "https://codeload.github.com/Yassimba/loom/tar.gz/refs/heads/main";
 
@@ -301,15 +344,13 @@ pub struct TreeReport {
 /// Download the repo once and copy every named skill into every detected
 /// skill tree, then verify each copy landed with its SKILL.md. Returns the
 /// per-tree summaries, or one aggregated failure message.
-pub fn install_skills(
+pub(crate) fn install_skills(
     system: &dyn System,
+    repository: &Repository,
     skills: &[String],
     destination: &SkillDestination,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<Vec<TreeReport>, String> {
-    let home = system
-        .home_dir()
-        .ok_or_else(|| "home directory is unavailable".to_string())?;
     let trees = destination.trees();
     if trees.is_empty() {
         return Err("no skill agents selected".to_string());
@@ -321,8 +362,7 @@ pub fn install_skills(
         ));
     }
 
-    let staging = home.join(".cache").join("loom").join("staging");
-    let result = fetch_repo_controlled(system, &staging, cancelled).and_then(|repo_root| {
+    repository.get(system, cancelled).and_then(|repo_root| {
         let source_root = repo_root.join("skills");
         let mut missing = skills
             .iter()
@@ -336,9 +376,7 @@ pub fn install_skills(
         }
         install_opencode_adapter(&repo_root, destination)?;
         copy_into_trees(&source_root, &trees, skills)
-    });
-    let _ = fs::remove_dir_all(&staging);
-    result
+    })
 }
 
 /// Install the Loom-owned session adapter when OpenCode is present. The
@@ -365,16 +403,8 @@ fn replace_opencode_adapter(repo_root: &Path, target: &Path) -> Result<(), Strin
             "downloaded repo is missing the OpenCode adapter: {OPENCODE_PLUGIN_SOURCE}"
         ));
     }
-    let parent = target
-        .parent()
-        .ok_or_else(|| "OpenCode adapter target has no parent".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-    let incoming = parent.join(format!(".{OPENCODE_PLUGIN_NAME}.loom-new"));
-    let _ = fs::remove_file(&incoming);
-    fs::copy(&source, &incoming)
-        .map_err(|error| format!("could not stage OpenCode adapter: {error}"))?;
-    crate::fs_tx::replace_staged(target, &incoming)
+    let content = fs::read(&source).map_err(|error| error.to_string())?;
+    crate::fs_tx::atomic_write(target, &content)
 }
 
 fn owned_unchanged(state: &crate::ownership::InstallState, path: &Path) -> bool {
@@ -385,8 +415,9 @@ fn owned_unchanged(state: &crate::ownership::InstallState, path: &Path) -> bool 
 
 /// Refresh only unmodified Loom-owned skill copies. Catalog-named user
 /// content and edited copies are preserved rather than adopted or replaced.
-pub fn refresh_installed_skills(
+pub(crate) fn refresh_installed_skills(
     system: &dyn System,
+    repository: &Repository,
     resources: &[Resource],
 ) -> Result<Vec<TreeReport>, String> {
     let home = system
@@ -458,37 +489,39 @@ pub fn refresh_installed_skills(
             .collect());
     }
 
-    let staging = home.join(".cache").join("loom").join("staging");
-    let result = fetch_repo(system, &staging).and_then(|repo_root| {
-        let source_root = repo_root.join("skills");
-        let mut reports = Vec::new();
-        for (tree, names, preserved) in &copies {
-            let mut report = TreeReport {
-                tree: tree.clone(),
-                installed: 0,
-                skipped_existing: *preserved,
-                skipped_symlinks: 0,
-            };
-            for name in names {
-                let path = tree.join(name);
-                refresh_skill(&source_root, tree, name)?;
-                state.refresh_path_digest(&path, crate::ownership::digest_path(&path)?);
-                report.installed += 1;
-            }
-            if let Some(adapter) = adapter_for_tree(tree) {
-                let clean = owned_unchanged(&state, &adapter);
-                if clean {
-                    replace_opencode_adapter(&repo_root, &adapter)?;
-                    state.refresh_path_digest(&adapter, crate::ownership::digest_path(&adapter)?);
+    repository
+        .get(system, &std::sync::atomic::AtomicBool::new(false))
+        .and_then(|repo_root| {
+            let source_root = repo_root.join("skills");
+            let mut reports = Vec::new();
+            for (tree, names, preserved) in &copies {
+                let mut report = TreeReport {
+                    tree: tree.clone(),
+                    installed: 0,
+                    skipped_existing: *preserved,
+                    skipped_symlinks: 0,
+                };
+                for name in names {
+                    let path = tree.join(name);
+                    refresh_skill(&source_root, tree, name)?;
+                    state.refresh_path_digest(&path, crate::ownership::digest_path(&path)?);
+                    report.installed += 1;
                 }
+                if let Some(adapter) = adapter_for_tree(tree) {
+                    let clean = owned_unchanged(&state, &adapter);
+                    if clean {
+                        replace_opencode_adapter(&repo_root, &adapter)?;
+                        state.refresh_path_digest(
+                            &adapter,
+                            crate::ownership::digest_path(&adapter)?,
+                        );
+                    }
+                }
+                reports.push(report);
             }
-            reports.push(report);
-        }
-        state.save(&home)?;
-        Ok(reports)
-    });
-    let _ = fs::remove_dir_all(&staging);
-    result
+            state.save(&home)?;
+            Ok(reports)
+        })
 }
 
 /// Download and unpack the repo tarball into `staging`; returns the extracted
@@ -496,16 +529,12 @@ pub fn refresh_installed_skills(
 /// Windows 10+) through `System`, so tests can intercept both.
 /// `LOOM_REPO_DIR` overrides the download with a local checkout — for
 /// testing unpushed skills and manifest changes end to end.
-pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf, String> {
-    fetch_repo_controlled(system, staging, &std::sync::atomic::AtomicBool::new(false))
-}
-
-pub(crate) fn fetch_repo_controlled(
+fn fetch_repo_controlled(
     system: &dyn System,
     staging: &Path,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<PathBuf, String> {
-    if let Some(local) = std::env::var_os("LOOM_REPO_DIR") {
+    if let Some(local) = std::env::var_os("LOOM_REPO_DIR").filter(|value| !value.is_empty()) {
         let root = PathBuf::from(local);
         if !root.join("skills").is_dir() {
             return Err(format!(
@@ -772,6 +801,7 @@ mod tests {
 
         let error = install_skills(
             &NeverRun(home.clone()),
+            &Repository::default(),
             &["tdd".into()],
             &destination,
             &std::sync::atomic::AtomicBool::new(false),

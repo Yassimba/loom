@@ -21,7 +21,7 @@ pub use catalog::{Catalog, Profile, Resource, ResourceKind};
 pub use install::{
     build_install_plan, execute_install_plan, execute_install_plan_with,
     execute_install_plan_with_control, CommandSpec, InstallFailure, InstallPlan, InstallReport,
-    InstallStep, NodeStatus, Platform, PrerequisiteStatus, Runtime, StepAction, StepStatus,
+    InstallStep, NodeStatus, Platform, PrerequisiteStatus, StepAction, StepStatus,
     VerificationSpec, PI_MIN_NODE,
 };
 pub use ownership::{

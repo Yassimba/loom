@@ -3,8 +3,8 @@ use crate::ui::{confirm_plan, print_plan, Mark, Out};
 use crate::wizard::{run_wizard, Model, WizardOutcome};
 use crate::{
     build_install_plan, execute_install_plan, expand_skill_dependencies, Catalog, CommandSpec,
-    InstallFailure, InstallReport, NodeStatus, Platform, PrerequisiteStatus, Resource,
-    ResourceKind, SkillAgent, SkillDestination, SkillScope, System,
+    InstallFailure, InstallReport, Platform, PrerequisiteStatus, Resource, ResourceKind,
+    SkillAgent, SkillDestination, SkillScope, System,
 };
 use anyhow::{bail, Context, Result};
 use inquire::Confirm;
@@ -64,9 +64,7 @@ pub fn install_selected(
     let status = PrerequisiteStatus {
         pi: system.command_exists("pi"),
         herdr: system.command_exists("herdr"),
-        npm: system.command_exists("npm"),
-        mise: crate::manifest::mise_available(system),
-        node: NodeStatus::detect(system),
+        mise: system.command_exists("mise"),
     };
     let platform = if cfg!(windows) {
         Platform::Windows
@@ -138,7 +136,7 @@ pub fn install_selected(
             let out = Out::detect();
             out.title(mode.command(), "dry run");
             if !generic.is_empty() {
-                let plan = build_install_plan(&generic, &[], status, platform, &destination)?;
+                let plan = build_install_plan(&generic, status, platform, &destination)?;
                 print_plan(&out, &plan);
             }
             out.row(
@@ -182,7 +180,7 @@ pub fn install_selected(
         );
         return Ok(true);
     }
-    let plan = build_install_plan(&resources, &[], status, platform, &destination)?;
+    let plan = build_install_plan(&resources, status, platform, &destination)?;
     let settings_paths = SettingsPaths::detect()?;
     let related_settings = unapplied_related_settings(&resources, &settings_paths);
     let out = Out::detect();
@@ -831,10 +829,6 @@ pub fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec
     Ok(selected)
 }
 
-pub fn load_catalog() -> Result<Catalog> {
-    Catalog::embedded().context("could not load the curated setup catalog")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -941,7 +935,7 @@ mod tests {
             &system,
         )
         .unwrap());
-        assert_eq!(system.commands.into_inner().unwrap(), ["node --version"]);
+        assert!(system.commands.into_inner().unwrap().is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1037,9 +1031,7 @@ mod tests {
             PrerequisiteStatus {
                 pi: false,
                 herdr: true,
-                npm: false,
                 mise: true,
-                node: NodeStatus::Missing,
             },
             &report,
         )
@@ -1164,9 +1156,7 @@ mod tests {
             PrerequisiteStatus {
                 pi: false,
                 herdr: false,
-                npm: false,
                 mise: false,
-                node: NodeStatus::Missing,
             },
             &report,
         )
