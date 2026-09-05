@@ -112,6 +112,8 @@ smallest thing that fails if the logic breaks: an `assert`-based
 fixtures, no per-function suites unless asked. Trivial one-liners need no
 test, YAGNI applies to tests too.
 
+Never make fixes that are just patches, already try to fix as close to the source as possible so multiple other cases benefit from it
+
 ## Boundaries
 
 Ponytail governs what you build, not how you talk (pair with Caveman for

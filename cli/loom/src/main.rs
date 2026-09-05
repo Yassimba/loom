@@ -1,12 +1,14 @@
 use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use inquire::Confirm;
-use loom::app::{install_selected, load_catalog, SelectionMode, Selectors};
+use loom::app::{install_selected, SelectionMode, Selectors};
 use loom::init::{run_init, sync_projects, DomainLayout, Editor, InitOptions, Tracker};
 use loom::status::run_status;
 use loom::ui::{Mark, Out};
 use loom::update::run_updates;
-use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope};
+use loom::wiki::{WikiOperation, WikiRequest};
+use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope, UninstallOptions};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -26,15 +28,22 @@ enum Command {
     Setup(SelectionArgs),
     /// Add one or more capabilities
     Add(SelectionArgs),
+    /// Remove Loom-owned resources
+    Uninstall(UninstallArgs),
     /// Update installed managers, packages, plugins, and this CLI
     Update {
         /// Apply updates without confirmation
         #[arg(long)]
         yes: bool,
     },
+    /// Create, adopt, and manage Pi Wiki Vaults
+    Wiki {
+        #[command(subcommand)]
+        command: Option<WikiCommand>,
+    },
     /// Show installed agents, integrations, and runtime health
     Status,
-    /// Make this repository ready for coding agents
+    /// Make this repository ready; feature flags select only the named capabilities
     Init {
         /// Include the Python section (--no-python to exclude)
         #[arg(long, overrides_with = "no_python")]
@@ -70,7 +79,7 @@ enum Command {
         codegraph: bool,
         #[arg(long, hide = true)]
         no_codegraph: bool,
-        /// Accept detection defaults without prompting
+        /// Run without prompts; with no feature flags, accept detection defaults
         #[arg(long)]
         yes: bool,
         /// Rewrite Loom-managed project files from scratch
@@ -81,6 +90,64 @@ enum Command {
     Sync,
     /// Print shell completions (skill/tool/package names included)
     Completions { shell: clap_complete::Shell },
+}
+
+#[derive(Subcommand)]
+enum WikiCommand {
+    /// Create a new Vault at an absent path
+    Create {
+        path: PathBuf,
+        #[arg(long)]
+        feynman: bool,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Adopt an existing Obsidian Vault
+    Adopt {
+        path: PathBuf,
+        #[arg(long)]
+        feynman: bool,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Check every registered Vault
+    Status,
+    /// Restore project-local Pi wiring without changing knowledge
+    Repair { path: PathBuf },
+    /// Stop managing a Vault without deleting it
+    Unregister { path: PathBuf },
+    /// Open a Vault in Obsidian
+    Open { path: PathBuf },
+    /// Launch Pi with the Vault as its working directory
+    Launch { path: PathBuf },
+}
+
+#[derive(Args, Default)]
+struct UninstallArgs {
+    /// Remove a named owned skill; repeat for multiple skills
+    #[arg(long = "skill", conflicts_with = "all")]
+    skills: Vec<String>,
+    /// Remove a named owned Pi package; repeat for multiple packages
+    #[arg(long = "pi-package", conflicts_with = "all")]
+    pi_packages: Vec<String>,
+    /// Remove a named owned Herdr plugin; repeat for multiple plugins
+    #[arg(long = "herdr-plugin", conflicts_with = "all")]
+    herdr_plugins: Vec<String>,
+    /// Remove a named owned tool; repeat for multiple tools
+    #[arg(long = "tool", conflicts_with = "all")]
+    tools: Vec<String>,
+    /// Select every visible owned resource
+    #[arg(long)]
+    all: bool,
+    /// Apply the displayed removal plan without confirmation
+    #[arg(long)]
+    yes: bool,
+    /// Show the removal plan without making changes
+    #[arg(long)]
+    dry_run: bool,
+    /// Delete modified Loom-owned content; requires --yes in scripts
+    #[arg(long, requires = "yes")]
+    force_modified: bool,
 }
 
 #[derive(Args, Default)]
@@ -125,7 +192,7 @@ fn completion_command(catalog: &Catalog) -> clap::Command {
         )
     };
     let mut command = Cli::command();
-    for name in ["setup", "add"] {
+    for name in ["setup", "add", "uninstall"] {
         command = command.mut_subcommand(name, |sub| {
             sub.mut_arg("skills", |arg| {
                 arg.value_parser(values(ResourceKind::Skill))
@@ -144,7 +211,7 @@ fn completion_command(catalog: &Catalog) -> clap::Command {
 
 /// Print shell completions with each catalog selector value.
 fn print_completions(shell: clap_complete::Shell) -> Result<()> {
-    let catalog = load_catalog()?;
+    let catalog = Catalog::embedded()?;
     let mut command = completion_command(&catalog);
     clap_complete::generate(shell, &mut command, "loom", &mut std::io::stdout());
     Ok(())
@@ -156,7 +223,7 @@ fn run_selection(
     offer_wsl: bool,
     system: &RealSystem,
 ) -> Result<bool> {
-    let catalog = load_catalog()?;
+    let catalog = Catalog::embedded()?;
     let selectors = Selectors {
         skills: args.skills,
         pi_packages: args.pi_packages,
@@ -176,9 +243,41 @@ fn run_selection(
     )
 }
 
+fn run_uninstall(args: UninstallArgs, system: &RealSystem) -> Result<bool> {
+    let catalog = Catalog::embedded()?;
+    let selectors = Selectors {
+        skills: args.skills,
+        pi_packages: args.pi_packages,
+        herdr_plugins: args.herdr_plugins,
+        tools: args.tools,
+    };
+    let selected = if selectors.is_empty() {
+        Vec::new()
+    } else {
+        loom::app::resolve_selectors(&catalog, &selectors)?
+            .into_iter()
+            .map(|resource| resource.id)
+            .collect()
+    };
+    loom::uninstall::run_uninstall(
+        system,
+        &UninstallOptions {
+            selected,
+            all: args.all,
+            yes: args.yes,
+            dry_run: args.dry_run,
+            force_modified: args.force_modified,
+        },
+    )
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let system = RealSystem::default();
+    loom::System::refresh_path(&system);
+    if let Some(home) = loom::System::home_dir(&system) {
+        loom::ownership::record_bootstrap_from_env(&home).map_err(anyhow::Error::msg)?;
+    }
     // Bare `loom` is the guided setup — one less word to teach.
     let command = cli
         .command
@@ -186,7 +285,62 @@ fn main() -> Result<()> {
     let success = match command {
         Command::Setup(args) => run_selection(SelectionMode::Setup, args, true, &system)?,
         Command::Add(args) => run_selection(SelectionMode::Add, args, false, &system)?,
-        Command::Status => run_status(&system),
+        Command::Uninstall(args) => run_uninstall(args, &system)?,
+        Command::Wiki { command } => match command {
+            None => loom::wiki::run_interactive(&system)?,
+            Some(command) => {
+                let request = match command {
+                    WikiCommand::Create { path, feynman, yes } => WikiRequest {
+                        operation: WikiOperation::Create,
+                        vault: path,
+                        feynman,
+                        yes,
+                    },
+                    WikiCommand::Adopt { path, feynman, yes } => WikiRequest {
+                        operation: WikiOperation::Adopt,
+                        vault: path,
+                        feynman,
+                        yes,
+                    },
+                    WikiCommand::Status => WikiRequest {
+                        operation: WikiOperation::Status,
+                        vault: PathBuf::new(),
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Repair { path } => WikiRequest {
+                        operation: WikiOperation::Repair,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Unregister { path } => WikiRequest {
+                        operation: WikiOperation::Unregister,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Open { path } => WikiRequest {
+                        operation: WikiOperation::Open,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                    WikiCommand::Launch { path } => WikiRequest {
+                        operation: WikiOperation::Launch,
+                        vault: path,
+                        feynman: false,
+                        yes: true,
+                    },
+                };
+                loom::wiki::run_wiki(&request, &system)?
+            }
+        },
+        Command::Status => {
+            let core = run_status(&system);
+            let wiki = loom::wiki::status_registered(&system);
+            core && wiki
+        }
         Command::Sync => {
             let out = Out::detect();
             out.title("sync", "project AGENTS.md files");
@@ -228,7 +382,13 @@ fn main() -> Result<()> {
                 (_, true) => Some(false),
                 _ => None,
             };
-            run_init(
+            let home = loom::System::home_dir(&system)
+                .ok_or_else(|| anyhow::anyhow!("home directory is unavailable"))?;
+            let current = loom::System::current_dir(&system)
+                .ok_or_else(|| anyhow::anyhow!("current directory is unavailable"))?;
+            let project = loom::project_root(&current);
+            let before = loom::ownership::snapshot_project(&project);
+            let init = run_init(
                 &system,
                 &InitOptions {
                     python: flag(python, no_python),
@@ -242,7 +402,16 @@ fn main() -> Result<()> {
                     yes,
                     force,
                 },
-            )?
+            );
+            let ownership = loom::ownership::record_project_changes(&home, &before);
+            if let Err(error) = ownership {
+                let message = match loom::ownership::restore_project(&system, before) {
+                    Ok(()) => error,
+                    Err(rollback) => format!("{error}; rollback failed: {rollback}"),
+                };
+                return Err(anyhow::anyhow!(message));
+            }
+            init?
         }
         Command::Completions { shell } => {
             print_completions(shell)?;
@@ -250,14 +419,18 @@ fn main() -> Result<()> {
         }
         Command::Update { yes } => {
             if !yes
-                && !Confirm::new("Update skills, tools, Pi packages, Herdr, and project AGENTS.md?")
-                    .with_default(true)
-                    .prompt()?
+                && !Confirm::new(
+                    "Update skills, tools, Pi packages, Herdr, Wiki Vaults, and project AGENTS.md?",
+                )
+                .with_default(true)
+                .prompt()?
             {
                 println!("Cancelled; no changes made.");
                 true
             } else {
-                run_updates(&system, &load_catalog()?)
+                let updated = run_updates(&system, &Catalog::embedded()?);
+                let wikis_updated = loom::wiki::update_registered(&system);
+                updated && wikis_updated
             }
         }
     };
@@ -276,6 +449,7 @@ mod tests {
     fn selection_completion_includes_herdr_plugin_catalog_values() {
         let catalog = Catalog {
             schema_version: 1,
+            profiles: Vec::new(),
             resources: vec![Resource {
                 id: "herdr-plugin:reviewr".to_string(),
                 kind: ResourceKind::HerdrPlugin,
@@ -294,7 +468,7 @@ mod tests {
         };
 
         let command = completion_command(&catalog);
-        for name in ["setup", "add"] {
+        for name in ["setup", "add", "uninstall"] {
             let subcommand = command
                 .get_subcommands()
                 .find(|subcommand| subcommand.get_name() == name)
@@ -357,6 +531,36 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn wiki_create_is_pi_only_and_scriptable() {
+        let cli = Cli::try_parse_from([
+            "loom",
+            "wiki",
+            "create",
+            "/tmp/knowledge",
+            "--feynman",
+            "--yes",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Wiki {
+                command: Some(WikiCommand::Create {
+                    feynman: true,
+                    yes: true,
+                    ..
+                })
+            })
+        ));
+    }
+
+    #[test]
+    fn wiki_has_unregister_but_no_delete_command() {
+        assert!(Cli::try_parse_from(["loom", "wiki", "unregister", "/tmp/vault"]).is_ok());
+        assert!(Cli::try_parse_from(["loom", "wiki", "delete", "/tmp/vault"]).is_err());
     }
 
     #[test]

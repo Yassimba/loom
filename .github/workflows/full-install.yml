@@ -17,6 +17,10 @@ on:
   # Called by release.yml once a release's binaries are uploaded.
   workflow_call:
     inputs:
+      published:
+        description: Exercise published binaries instead of building a candidate
+        type: boolean
+        default: false
       checkout_ref:
         description: Git ref to test after release pinning
         required: false
@@ -27,6 +31,7 @@ permissions:
 
 jobs:
   linux-loom:
+    if: ${{ !inputs.published }}
     name: Build Loom for WSL
     runs-on: ubuntu-24.04
     steps:
@@ -41,6 +46,7 @@ jobs:
           path: cli/loom/target/release/loom
 
   windows-wsl:
+    if: ${{ !inputs.published }}
     name: Windows UX and WSL2
     needs: linux-loom
     runs-on: windows-2025
@@ -59,14 +65,14 @@ jobs:
       - name: Reject a WSL-only package on native Windows
         shell: pwsh
         run: |
-          $evidence = "$env:RUNNER_TEMP/loom-windows-e2e/native-explicit-pi-chat.txt"
+          $evidence = "$env:RUNNER_TEMP/loom-windows-e2e/native-explicit-feynman.txt"
           $stdout = "$evidence.stdout"
-          $process = Start-Process cli/loom/target/release/loom.exe -ArgumentList "add", "--pi-package", "chat", "--dry-run", "--yes" -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $evidence
+          $process = Start-Process cli/loom/target/release/loom.exe -ArgumentList "add", "--pi-package", "feynman", "--dry-run", "--yes" -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $evidence
           Get-Content $stdout | Add-Content $evidence
           Remove-Item $stdout
-          if ($process.ExitCode -eq 0) { throw "native pi-chat selection unexpectedly succeeded" }
-          if (-not (Select-String -Quiet -Path $evidence -Pattern "chat requires WSL2 on Windows")) {
-            throw "native pi-chat rejection did not explain WSL2"
+          if ($process.ExitCode -eq 0) { throw "native feynman selection unexpectedly succeeded" }
+          if (-not (Select-String -Quiet -Path $evidence -Pattern "feynman requires WSL2 on Windows")) {
+            throw "native feynman rejection did not explain WSL2"
           }
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -94,11 +100,11 @@ jobs:
           New-Item -ItemType Directory -Path $fakeDir -Force | Out-Null
           "#!/bin/sh`nexit 0`n" | Set-Content -Path (Join-Path $fakeDir "pi") -NoNewline
           $fakeLinuxPath = Convert-ToWslPath $fakeDir
-          $command = "chmod +x '$linuxPath' '$fakeLinuxPath/pi'; PATH='${fakeLinuxPath}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' '$linuxPath' add --pi-package chat --dry-run --yes"
-          wsl -d Ubuntu -- bash -lc $command *> "$evidenceDir/wsl-pi-chat-plan.txt"
-          if ($LASTEXITCODE -ne 0) { throw "WSL pi-chat dry-run failed" }
-          if (-not (Select-String -Quiet -Path "$evidenceDir/wsl-pi-chat-plan.txt" -Pattern "git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe180b40924f5")) {
-            throw "WSL plan omitted the exact pi-chat pin"
+          $command = "chmod +x '$linuxPath' '$fakeLinuxPath/pi'; PATH='${fakeLinuxPath}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' '$linuxPath' add --pi-package feynman --dry-run --yes"
+          wsl -d Ubuntu -- bash -lc $command *> "$evidenceDir/wsl-feynman-plan.txt"
+          if ($LASTEXITCODE -ne 0) { throw "WSL feynman dry-run failed" }
+          if (-not (Select-String -Quiet -Path "$evidenceDir/wsl-feynman-plan.txt" -SimpleMatch "would enter the Vault-scoped setup")) {
+            throw "WSL plan omitted the vault-scoped setup handoff"
           }
       - name: Upload Windows E2E evidence
         if: always()
@@ -130,12 +136,15 @@ jobs:
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        if: ${{ !inputs.published }}
       - run: cargo build --release --manifest-path cli/loom/Cargo.toml
+        if: ${{ !inputs.published }}
       - name: Run the real bootstrap twice
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          LOOM_E2E_LOOM_BIN: ${{ github.workspace }}/cli/loom/target/release/loom
-          LOOM_REPO_DIR: ${{ github.workspace }}
+          LOOM_E2E_LOOM_BIN: ${{ !inputs.published && format('{0}/cli/loom/target/release/loom', github.workspace) || '' }}
+          LOOM_REPO_DIR: ${{ !inputs.published && github.workspace || '' }}
+          LOOM_E2E_PUBLISHED: ${{ inputs.published }}
         run: bash scripts/e2e-install-unix.sh
       - name: Upload evidence
         if: always()
@@ -169,13 +178,16 @@ jobs:
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        if: ${{ !inputs.published }}
       - run: cargo build --release --manifest-path cli/loom/Cargo.toml
+        if: ${{ !inputs.published }}
       - name: Run the real bootstrap twice
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          LOOM_E2E_LOOM_BIN: ${{ github.workspace }}\cli\loom\target\release\loom.exe
-          LOOM_REPO_DIR: ${{ github.workspace }}
+          LOOM_E2E_LOOM_BIN: ${{ !inputs.published && format('{0}/cli/loom/target/release/loom.exe', github.workspace) || '' }}
+          LOOM_REPO_DIR: ${{ !inputs.published && github.workspace || '' }}
+          LOOM_E2E_PUBLISHED: ${{ inputs.published }}
           LOOM_E2E_POWERSHELL: ${{ matrix.engine }}
           LOOM_E2E_SKILL: ${{ matrix.skill }}
           LOOM_E2E_TOKEI: ${{ matrix.tokei }}

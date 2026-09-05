@@ -63,35 +63,14 @@ fn parse_node_version(raw: &str) -> Option<(u32, u32, u32)> {
 pub struct PrerequisiteStatus {
     pub pi: bool,
     pub herdr: bool,
-    pub npm: bool,
     pub mise: bool,
-    pub node: NodeStatus,
-}
-
-/// A manager the user can also install on its own, without selecting any
-/// resource that depends on it. Skills need no runtime: the CLI copies them
-/// into the agent trees itself.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Runtime {
-    Pi,
-    Herdr,
-    Mise,
-}
-
-impl Runtime {
-    pub fn installed(self, status: PrerequisiteStatus) -> bool {
-        match self {
-            Self::Pi => status.pi,
-            Self::Herdr => status.herdr,
-            Self::Mise => status.mise,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandSpec {
     pub program: String,
     pub args: Vec<String>,
+    pub cwd: Option<std::path::PathBuf>,
 }
 
 impl CommandSpec {
@@ -102,7 +81,14 @@ impl CommandSpec {
         Self {
             program: program.into(),
             args: args.into_iter().map(Into::into).collect(),
+            cwd: None,
         }
+    }
+
+    /// Run this command with `directory` as its process working directory.
+    pub fn in_dir(mut self, directory: impl Into<std::path::PathBuf>) -> Self {
+        self.cwd = Some(directory.into());
+        self
     }
 
     pub fn display(&self) -> String {
@@ -114,11 +100,9 @@ impl CommandSpec {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum VerificationSpec {
-    Command {
-        command: CommandSpec,
-        needle: Option<String>,
-    },
+pub struct VerificationSpec {
+    pub command: CommandSpec,
+    pub needle: Option<String>,
 }
 
 /// What a plan step does when executed: run a manager command, or copy
@@ -184,23 +168,19 @@ pub struct InstallReport {
 
 pub fn build_install_plan(
     resources: &[Resource],
-    runtimes: &[Runtime],
     status: PrerequisiteStatus,
     platform: Platform,
     skill_destination: &crate::skills::SkillDestination,
 ) -> Result<InstallPlan> {
-    let needs_pi = runtimes.contains(&Runtime::Pi)
-        || resources
-            .iter()
-            .any(|resource| resource.kind == ResourceKind::PiPackage);
-    let needs_herdr = runtimes.contains(&Runtime::Herdr)
-        || resources
-            .iter()
-            .any(|resource| resource.kind == ResourceKind::HerdrPlugin);
+    let needs_pi = resources
+        .iter()
+        .any(|resource| resource.kind == ResourceKind::PiPackage);
+    let needs_herdr = resources
+        .iter()
+        .any(|resource| resource.kind == ResourceKind::HerdrPlugin);
 
-    // Selected manifest tools install through mise; a missing Pi rides along
-    // as a tool when mise is available (the manifest pins it), and only
-    // falls back to a global npm install on mise-less machines.
+    // Every runtime arrives through Loom's pinned mise selection. This gives
+    // uninstall one ownership path instead of hidden npm/curl fallbacks.
     let mut tools = resources
         .iter()
         .filter(|resource| resource.kind == ResourceKind::Tool)
@@ -208,23 +188,11 @@ pub fn build_install_plan(
             std::iter::once(tool.install_target.clone()).chain(tool.companions.iter().cloned())
         })
         .collect::<Vec<_>>();
-    let pi_via_mise = needs_pi && !status.pi && status.mise;
-    if pi_via_mise && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
+    if needs_pi && !status.pi && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
         tools.push(crate::manifest::PI_TOOL_KEY.into());
     }
-
-    if !(needs_pi && !status.pi && status.mise) && needs_pi {
-        anyhow::ensure!(
-            status.pi || status.npm,
-            "installing Pi needs npm, which is not on PATH; install Node.js first"
-        );
-        // Same preflight for the Node runtime itself: a too-old Node would
-        // make `npm install` fail with an opaque engines error mid-plan.
-        if !status.pi {
-            if let Some(warning) = status.node.warning() {
-                anyhow::bail!("installing Pi is blocked: {warning}");
-            }
-        }
+    if needs_herdr && !status.herdr && !tools.contains(&"herdr".to_string()) {
+        tools.push("herdr".into());
     }
 
     let mut prerequisites = Vec::new();
@@ -249,25 +217,6 @@ pub fn build_install_plan(
             // Verified inside the sync itself: `mise install` fails loudly.
             verification: None,
         });
-    }
-    if needs_pi && !status.pi && !pi_via_mise {
-        prerequisites.push(InstallStep {
-            target: "Pi".into(),
-            manager: "pi".into(),
-            action: StepAction::Command(CommandSpec::new(
-                "npm",
-                ["install", "--global", "@earendil-works/pi-coding-agent"],
-            )),
-            verification: None,
-        });
-    }
-    if needs_herdr && !status.herdr {
-        prerequisites.push(prerequisite_step(
-            "herdr",
-            platform,
-            "curl -fsSL https://herdr.dev/install.sh | sh",
-            "irm https://herdr.dev/install.ps1 | iex",
-        ));
     }
 
     let skills = resources
@@ -299,7 +248,7 @@ pub fn build_install_plan(
             ResourceKind::PiPackage => (
                 "pi",
                 CommandSpec::new("pi", ["install", &resource.pi_install_spec()]),
-                VerificationSpec::Command {
+                VerificationSpec {
                     command: CommandSpec::new("pi", ["list"]),
                     needle: Some(resource.install_target.clone()),
                 },
@@ -315,7 +264,7 @@ pub fn build_install_plan(
                         "--yes",
                     ],
                 ),
-                VerificationSpec::Command {
+                VerificationSpec {
                     command: CommandSpec::new("herdr", ["plugin", "list"]),
                     needle: Some(resource.id.trim_start_matches("herdr-plugin:").into()),
                 },
@@ -367,6 +316,7 @@ pub fn execute_install_plan_with_control(
     cancelled: &std::sync::atomic::AtomicBool,
     observer: &mut dyn FnMut(usize, StepStatus),
 ) -> InstallReport {
+    let repository = &crate::skills::Repository::default();
     let lanes = install_lanes(plan);
     let mut outcomes = vec![None; plan.prerequisites.len() + plan.resources.len()];
     let (status_sender, statuses) = std::sync::mpsc::channel::<(usize, StepStatus)>();
@@ -388,7 +338,7 @@ pub fn execute_install_plan_with_control(
             let finish_sender = finish_sender.clone();
             running += 1;
             scope.spawn(move || {
-                let outcome = execute_lane(lane, system, cancelled, &status_sender);
+                let outcome = execute_lane(lane, system, cancelled, repository, &status_sender);
                 let _ = finish_sender.send((lane.manager.to_owned(), outcome));
             });
         }
@@ -424,7 +374,7 @@ pub fn execute_install_plan_with_control(
                 let finish_sender = finish_sender.clone();
                 running += 1;
                 scope.spawn(move || {
-                    let outcome = execute_lane(lane, system, cancelled, &status_sender);
+                    let outcome = execute_lane(lane, system, cancelled, repository, &status_sender);
                     let _ = finish_sender.send((lane.manager.to_owned(), outcome));
                 });
             }
@@ -438,10 +388,10 @@ pub fn execute_install_plan_with_control(
     // of which manager finished first.
     let mut report = InstallReport::default();
     for (index, outcome) in outcomes.into_iter().enumerate() {
-        let (step, resource) = if index < plan.prerequisites.len() {
-            (&plan.prerequisites[index], false)
+        let step = if index < plan.prerequisites.len() {
+            &plan.prerequisites[index]
         } else {
-            (&plan.resources[index - plan.prerequisites.len()], true)
+            &plan.resources[index - plan.prerequisites.len()]
         };
         match outcome {
             Some(StepStatus::Failed(message) | StepStatus::Skipped(message)) => {
@@ -450,7 +400,7 @@ pub fn execute_install_plan_with_control(
                     message,
                 });
             }
-            Some(StepStatus::Installed) if resource => report.installed.push(step.target.clone()),
+            Some(StepStatus::Installed) => report.installed.push(step.target.clone()),
             _ => {}
         }
     }
@@ -519,6 +469,7 @@ fn execute_lane(
     lane: &InstallLane<'_>,
     system: &(dyn System + Sync),
     cancelled: &std::sync::atomic::AtomicBool,
+    repository: &crate::skills::Repository,
     sender: &std::sync::mpsc::Sender<(usize, StepStatus)>,
 ) -> LaneOutcome {
     let prerequisites = lane
@@ -539,7 +490,7 @@ fn execute_lane(
             return LaneOutcome { unavailable: true };
         }
         let _ = sender.send((indexed.index, StepStatus::Running));
-        let failure = execute_step(indexed.step, system, cancelled).or_else(|| {
+        let failure = execute_step(indexed.step, system, cancelled, repository).or_else(|| {
             system.refresh_path();
             (!system.command_exists(lane.manager)).then(|| {
                 format!(
@@ -559,47 +510,17 @@ fn execute_lane(
         let _ = sender.send((indexed.index, StepStatus::Prepared));
     }
 
-    let (result_sender, results) = std::sync::mpsc::channel();
-    let mut launched = 0;
-    std::thread::scope(|scope| {
-        for (offset, indexed) in resources.iter().enumerate() {
-            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
-                for skipped in resources.iter().skip(offset) {
-                    let _ = sender.send((skipped.index, StepStatus::Skipped("cancelled".into())));
-                }
-                break;
-            }
-            launched += 1;
-            let result_sender = result_sender.clone();
-            let _ = sender.send((indexed.index, StepStatus::Running));
-            scope.spawn(move || {
-                let failure = execute_action(indexed.step, system, cancelled);
-                let _ = result_sender.send((offset, failure));
-            });
-        }
-    });
-    drop(result_sender);
-
-    let mut action_failures = vec![None; launched];
-    for (offset, failure) in results {
-        action_failures[offset] = Some(failure);
-    }
-    for (indexed, failure) in resources.into_iter().take(launched).zip(action_failures) {
-        let failure = failure.flatten();
+    for indexed in resources {
         if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
-            let _ = sender.send((
-                indexed.index,
-                StepStatus::Failed(failure.unwrap_or_else(|| "cancelled".into())),
-            ));
+            let _ = sender.send((indexed.index, StepStatus::Skipped("cancelled".into())));
             continue;
         }
-        let failure = failure
+        let _ = sender.send((indexed.index, StepStatus::Running));
+        let failure = execute_step(indexed.step, system, cancelled, repository)
             .or_else(|| {
-                verify_step(indexed.step, system, cancelled).and_then(|_| {
-                    // Parallel manager processes can race their shared registry.
-                    // A serial retry restores any registration another process displaced.
-                    execute_step(indexed.step, system, cancelled)
-                })
+                cancelled
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    .then(|| "cancelled".into())
             })
             .or_else(|| {
                 crate::pi_compat::apply_for_package(&indexed.step.target, system)
@@ -619,22 +540,34 @@ fn execute_step(
     step: &InstallStep,
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
+    repository: &crate::skills::Repository,
 ) -> Option<String> {
-    execute_action(step, system, cancelled).or_else(|| verify_step(step, system, cancelled))
+    execute_action(step, system, cancelled, repository)
+        .or_else(|| verify_step(step, system, cancelled))
 }
 
 fn execute_action(
     step: &InstallStep,
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
+    repository: &crate::skills::Repository,
 ) -> Option<String> {
     let command = match &step.action {
         StepAction::CopySkills {
             skills,
             destination,
-        } => return crate::skills::install_skills(system, skills, destination, cancelled).err(),
+        } => {
+            return crate::skills::install_skills(
+                system,
+                repository,
+                skills,
+                destination,
+                cancelled,
+            )
+            .err()
+        }
         StepAction::SyncTools { tools } => {
-            return crate::manifest::sync_selected_controlled(system, tools, cancelled).err()
+            return crate::manifest::sync_selected_from(system, tools, cancelled, repository).err()
         }
         StepAction::Command(command) => command,
     };
@@ -651,23 +584,20 @@ fn verify_step(
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Option<String> {
     let verification = step.verification.as_ref()?;
-    match verification {
-        VerificationSpec::Command { command, needle } => {
-            match system.run_controlled(command, crate::system::PROBE_COMMAND_TIMEOUT, cancelled) {
-                Ok(result) if !result.success => Some(format!(
-                    "verification failed: {}",
-                    command_failure_message(&result)
-                )),
-                Ok(result) => {
-                    let output = format!("{}\n{}", result.stdout, result.stderr);
-                    needle
-                        .as_ref()
-                        .filter(|needle| !output.contains(needle.as_str()))
-                        .map(|needle| format!("verification did not find {needle}"))
-                }
-                Err(error) => Some(format!("verification failed: {error}")),
-            }
+    let VerificationSpec { command, needle } = verification;
+    match system.run_controlled(command, crate::system::PROBE_COMMAND_TIMEOUT, cancelled) {
+        Ok(result) if !result.success => Some(format!(
+            "verification failed: {}",
+            command_failure_message(&result)
+        )),
+        Ok(result) => {
+            let output = format!("{}\n{}", result.stdout, result.stderr);
+            needle
+                .as_ref()
+                .filter(|needle| !output.contains(needle.as_str()))
+                .map(|needle| format!("verification did not find {needle}"))
         }
+        Err(error) => Some(format!("verification failed: {error}")),
     }
 }
 

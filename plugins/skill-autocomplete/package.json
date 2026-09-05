@@ -1,0 +1,54 @@
+{
+  "name": "@yassimba/pi-skill-autocomplete",
+  "version": "0.1.0",
+  "description": "Autocomplete Pi skills with $ anywhere in the editor.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "skills",
+    "autocomplete"
+  ],
+  "files": [
+    "index.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yassimba/loom.git",
+    "directory": "plugins/skill-autocomplete"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "loom": {
+    "catalog": {
+      "label": "$ skill autocomplete",
+      "description": "Autocomplete Pi skills with $ anywhere in the editor.",
+      "nextAction": "In Pi, type $ anywhere in a message."
+    }
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  }
+}

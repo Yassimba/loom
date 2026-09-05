@@ -1,13 +1,13 @@
 ---
 name: plannotator
-description: "Reference for using the Plannotator CLI: plan review, code review, annotating files, URLs, folders, and running local apps, annotating the last assistant message, browsing archived plan decisions, and exporting or sharing Guided Reviews. Invoke when asked to use Plannotator for anything not covered by a more specific plannotator-* skill."
+description: "Use Plannotator for plan and code review, annotating files, URLs, folders, local apps, or the latest assistant message, browsing archived decisions, and exporting or sharing Guided Reviews."
 ---
 
 # Plannotator CLI Reference
 
 Plannotator is a local, browser-based review layer for agent workflows: it opens plans, diffs, and documents in an annotation UI, the human marks them up, and the structured feedback comes back to you on stdout. It installs as a single `plannotator` binary plus per-host hooks, so plan review fires automatically when you exit plan mode; every other surface is launched explicitly from the CLI. A session runs on a random localhost port (fixed port 19432 in remote mode) and blocks until the reviewer submits feedback, approves, or closes the tab.
 
-This skill is the knowledge layer. The `plannotator-review`, `plannotator-annotate`, and `plannotator-last` skills are thin launchers for the three most common actions; use this reference when you need to pick the right command or flags yourself.
+This is the single Plannotator skill. Choose the matching CLI command below.
 
 ## Choose the command
 
@@ -154,7 +154,7 @@ plannotator uninstall [--purge] [--yes] [--dry-run]
 plannotator improve-context
 ```
 
-- `setup-goal` opens the interview or facts-acceptance UI for /goal workflows; it is driven by the `plannotator-setup-goal` skill and takes a bundle JSON (`-` reads stdin). Do not hand-build bundles.
+- `setup-goal` opens the interview or facts-acceptance UI for goal workflows and takes a bundle JSON (`-` reads stdin). Do not hand-build bundles.
 - `uninstall` removes Plannotator-installed components (`--purge` also deletes local data; `--yes` is required without a TTY; `--dry-run` previews).
 - `improve-context` and `install-runtime` are internal integration commands (hook plumbing and managed runtime install). Never run `improve-context` directly; `plannotator install-runtime agent-terminal` exists for reinstalling the optional annotate-terminal runtime and is normally run by the installer.
 - Additional host-internal subcommands (the `opencode-*` and `copilot-plan` family) are invoked by their plugins, not by you.

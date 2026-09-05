@@ -10,13 +10,14 @@ export const SCOPE_LABELS: Record<DirectoryScope, string> = {
   global: "All projects (global)",
 };
 
-interface DirectoryConfig {
+export interface DirectoryConfig {
   directories: string[];
+  orientations: Record<string, string>;
 }
 
 type ConfigRead =
   | { kind: "missing" }
-  | { kind: "loaded"; directories: string[] }
+  | { kind: "loaded"; config: DirectoryConfig }
   | { kind: "failed"; error: string };
 
 function readConfig(path: string): ConfigRead {
@@ -25,13 +26,19 @@ function readConfig(path: string): ConfigRead {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return { kind: "failed", error: "expected a JSON object" };
     }
-    const directories = (parsed as Partial<DirectoryConfig>).directories;
-    return {
-      kind: "loaded",
-      directories: Array.isArray(directories)
-        ? directories.filter((directory): directory is string => typeof directory === "string")
-        : [],
-    };
+    const input = parsed as Partial<DirectoryConfig>;
+    const directories = Array.isArray(input.directories)
+      ? input.directories.filter((directory): directory is string => typeof directory === "string")
+      : [];
+    const orientations =
+      input.orientations && typeof input.orientations === "object"
+        ? Object.fromEntries(
+            Object.entries(input.orientations).filter(
+              (entry): entry is [string, string] => typeof entry[1] === "string",
+            ),
+          )
+        : {};
+    return { kind: "loaded", config: { directories, orientations } };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
     return { kind: "failed", error: (error as Error).message };
@@ -50,18 +57,22 @@ export function directoryConfigPath(
 export function loadDirectories(
   scope: Exclude<DirectoryScope, "session">,
   cwd: string,
-): { directories: string[]; warning?: string } {
+): DirectoryConfig & { warning?: string } {
   const path = directoryConfigPath(scope, cwd);
   const result = readConfig(path);
-  if (result.kind === "loaded") return { directories: result.directories };
-  if (result.kind === "missing") return { directories: [] };
-  return { directories: [], warning: `Could not read ${path}: ${result.error}` };
+  if (result.kind === "loaded") return result.config;
+  if (result.kind === "missing") return { directories: [], orientations: {} };
+  return {
+    directories: [],
+    orientations: {},
+    warning: `Could not read ${path}: ${result.error}`,
+  };
 }
 
 export function saveDirectories(
   scope: Exclude<DirectoryScope, "session">,
   cwd: string,
-  directories: string[],
+  config: DirectoryConfig,
 ): { ok: true } | { ok: false; error: string } {
   const path = directoryConfigPath(scope, cwd);
   const existing = readConfig(path);
@@ -70,7 +81,7 @@ export function saveDirectories(
   }
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, `${JSON.stringify({ directories }, null, 2)}\n`, "utf8");
+    writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf8");
     return { ok: true };
   } catch (error) {
     return { ok: false, error: `Could not write ${path}: ${(error as Error).message}` };

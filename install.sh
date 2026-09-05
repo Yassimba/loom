@@ -21,7 +21,9 @@ esac
 command -v curl >/dev/null 2>&1 || { echo "$NAME: curl is required" >&2; exit 1; }
 
 # 1. mise — the only thing this script installs itself.
+mise_installed=0
 if ! command -v mise >/dev/null 2>&1; then
+  mise_installed=1
   echo "$NAME: installing mise (https://mise.jdx.dev)..."
   curl -fsSL --retry 5 --retry-delay 3 https://mise.run | sh
   export PATH="${HOME}/.local/bin:${PATH}"
@@ -89,6 +91,8 @@ if [ -n "$profile" ]; then
     printf '\n%s\n' "$activate" >> "$profile"
     echo "$NAME: added mise activation to $profile"
     activation_added=1
+    export LOOM_BOOTSTRAP_ACTIVATION_PATH="$profile"
+    export LOOM_BOOTSTRAP_ACTIVATION_LINE="$activate"
   fi
 else
   echo ""
@@ -109,6 +113,12 @@ finish() {
 # CI may point this handoff at the checked-out binary while keeping the real
 # bootstrap and manifest path intact.
 run_loom_setup() {
+  export LOOM_BOOTSTRAP=1
+  export LOOM_BOOTSTRAP_MISE_INSTALLED="$mise_installed"
+  LOOM_BOOTSTRAP_MISE_ROOT="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
+  export LOOM_BOOTSTRAP_MISE_ROOT
+  export LOOM_BOOTSTRAP_MISE_EXECUTABLE="$mise_bin"
+  export LOOM_BOOTSTRAP_MISE_MANAGER="direct"
   if [ -n "${LOOM_E2E_LOOM_BIN:-}" ]; then
     "$LOOM_E2E_LOOM_BIN" setup "$@"
   else
@@ -128,13 +138,15 @@ if [ ! -t 0 ]; then
     *) if ( : </dev/tty ) 2>/dev/null; then terminal=/dev/tty; else terminal=""; fi ;;
   esac
   if [ -n "$terminal" ] && [ -t 1 ]; then
-    run_loom_setup "$@" <"$terminal"
-    finish $?
+    status=0
+    run_loom_setup "$@" <"$terminal" || status=$?
+    finish "$status"
   fi
   if [ "$#" -eq 0 ]; then
     echo "$NAME: installed, but there is no terminal here for the guided setup. Open a shell and run: loom" >&2
     exit 1
   fi
 fi
-run_loom_setup "$@"
-finish $?
+status=0
+run_loom_setup "$@" || status=$?
+finish "$status"

@@ -23,7 +23,7 @@ jobs:
     outputs:
       binaries: ${{ steps.binaries.outputs.matrix }}
       released: ${{ steps.release.outputs.releases_created }}
-      npm: ${{ steps.npm.outputs.matrix }}
+      npm_packages: ${{ steps.npm_packages.outputs.matrix }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
@@ -46,8 +46,8 @@ jobs:
                 {target: "aarch64-pc-windows-msvc", os: "windows-latest"}
               ) | . + $crate]' <<<"$OUTPUTS")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-      - id: npm
-        name: Expand released npm packages into a target matrix
+      - id: npm_packages
+        name: Expand released npm packages into a matrix
         env:
           OUTPUTS: ${{ toJSON(steps.release.outputs) }}
         run: |
@@ -56,8 +56,9 @@ jobs:
             | [to_entries[]
                 | select(.key | test("^plugins/.*--release_created$"))
                 | select(.value == "true" or .value == true)
-                | (.key | sub("--release_created$"; "")) as $path
-                | {path: $path, sha: $outputs[$path + "--sha"]}]' <<<"$OUTPUTS")
+                | .key | sub("--release_created$"; "") as $path
+                | {path: $path, sha: $outputs["\($path)--sha"]}]
+          ' <<<"$OUTPUTS")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   binaries:
@@ -86,7 +87,8 @@ jobs:
 
   npm:
     needs: release-please
-    if: needs.release-please.outputs.npm != '[]'
+    if: needs.release-please.outputs.npm_packages != '[]'
+    name: npm · ${{ matrix.path }}
     permissions:
       contents: read
       id-token: write
@@ -94,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.release-please.outputs.npm) }}
+        include: ${{ fromJSON(needs.release-please.outputs.npm_packages) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -111,6 +113,8 @@ jobs:
   # tags, so `loom update` and fresh installs never see a release without
   # binaries.
   pin:
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
     needs: [release-please, binaries]
     if: needs.binaries.result == 'success'
     runs-on: ubuntu-latest
@@ -121,7 +125,8 @@ jobs:
           # deploy key: main's ruleset requires PRs but lets deploy keys
           # push pin commits directly
           ssh-key: ${{ secrets.AUTOFIX_SSH_KEY }}
-      - env:
+      - id: pin
+        env:
           MATRIX: ${{ needs.release-please.outputs.binaries }}
         run: |
           jq -r '.[] | "\(.crate) \(.tag)"' <<<"$MATRIX" | sort -u | while read -r crate tag; do
@@ -131,7 +136,12 @@ jobs:
           done
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -am "chore(manifest): pin released binaries" && git push
+          if ! git diff --quiet -- manifest/loom.toml; then
+            git add manifest/loom.toml
+            git commit -m "chore(manifest): pin released binaries"
+            git push
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   # Smoke the real installers on every platform against the freshly
   # published binaries and pins.
@@ -139,4 +149,5 @@ jobs:
     needs: pin
     uses: ./.github/workflows/full-install.yml
     with:
-      checkout_ref: main
+      checkout_ref: ${{ needs.pin.outputs.sha }}
+      published: true

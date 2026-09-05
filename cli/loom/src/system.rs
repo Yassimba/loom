@@ -26,6 +26,15 @@ pub trait System {
     fn command_exists(&self, name: &str) -> bool;
     fn refresh_path(&self);
     fn run(&self, command: &CommandSpec) -> Result<CommandResult>;
+    fn spawn_detached(&self, command: &CommandSpec) -> Result<()> {
+        let result = self.run(command)?;
+        anyhow::ensure!(
+            result.success,
+            "{}",
+            crate::install::command_failure_message(&result)
+        );
+        Ok(())
+    }
     fn run_probe(&self, command: &CommandSpec) -> Result<CommandResult> {
         self.run_controlled(command, PROBE_COMMAND_TIMEOUT, &AtomicBool::new(false))
     }
@@ -43,7 +52,7 @@ pub trait System {
     /// The home directory skill trees are detected under. Injectable so
     /// tests can point the installer at a temp home.
     fn home_dir(&self) -> Option<PathBuf> {
-        dirs::home_dir()
+        env::home_dir()
     }
     /// The directory `loom` was launched from. Skill project scope resolves
     /// its worktree root from here; injectable for installer tests.
@@ -109,24 +118,18 @@ fn command_for(path: &OsStr, spec: &CommandSpec) -> Command {
     let mut command = Command::new(program);
     command.args(&spec.args);
     command.env("PATH", path);
+    if let Some(directory) = &spec.cwd {
+        command.current_dir(directory);
+    }
     #[cfg(unix)]
     // Put every managed command in its own process group. Cancelling the
     // wrapper shell must also terminate package-manager and pipeline children.
-    unsafe {
-        command.pre_exec(|| {
-            if setpgid(0, 0) == 0 {
-                Ok(())
-            } else {
-                Err(std::io::Error::last_os_error())
-            }
-        });
-    }
+    command.process_group(0);
     command
 }
 
 #[cfg(unix)]
 unsafe extern "C" {
-    fn setpgid(pid: i32, pgid: i32) -> i32;
     fn kill(pid: i32, signal: i32) -> i32;
 }
 
@@ -186,7 +189,7 @@ impl System for RealSystem {
 
     fn refresh_path(&self) {
         let mut paths = env::split_paths(&self.path_value()).collect::<Vec<_>>();
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = env::home_dir() {
             paths.push(home.join(".local").join("bin"));
             paths.push(home.join(".cargo").join("bin"));
             // mise-managed tools resolve through its shims until the user's
@@ -235,6 +238,16 @@ impl System for RealSystem {
 
     fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
         self.run_controlled(command, MANAGER_COMMAND_TIMEOUT, &AtomicBool::new(false))
+    }
+
+    fn spawn_detached(&self, command: &CommandSpec) -> Result<()> {
+        command_for(&self.path_value(), command)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .with_context(|| format!("could not start {}", command.program))?;
+        Ok(())
     }
 
     fn run_controlled(

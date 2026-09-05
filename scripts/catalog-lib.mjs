@@ -203,12 +203,15 @@ async function readExternalPiPackages(repoRoot) {
       return {
         id: `pi-package:${name}`,
         kind: "pi-package",
-        group: "Pi packages",
+        group: name === "@companion-ai/feynman" ? "Wiki" : "Pi packages",
         label,
         description,
         installTarget: name,
         ...(source ? { source } : { version }),
         nextAction: nextAction ?? "Start Pi and use the installed package.",
+        ...(name === "@companion-ai/feynman"
+          ? { dependencies: ["github:AgriciDaniel/claude-obsidian"] }
+          : {}),
         ...(windowsSupport === "wsl" ? { windowsWsl: true } : {}),
       };
     },
@@ -297,7 +300,7 @@ export async function readToolCatalog(repoRoot) {
   return meta.tools.map((tool) => ({
     id: `tool:${tool.label}`,
     kind: "tool",
-    group: "Tools",
+    group: tool.group ?? "Tools",
     label: tool.label,
     description: tool.description,
     installTarget: tool.key,
@@ -333,5 +336,75 @@ export async function buildSetupCatalog(repoRoot) {
     skill.dependencies = [...skill.dependencies, ...targets];
     delete skill.toolDependencies;
   }
-  return [...piPackages, ...skills, ...herdrPlugins, ...tools];
+  const obsidian = tools.some(
+    (tool) => tool.installTarget === "github:AgriciDaniel/claude-obsidian",
+  )
+    ? [
+        {
+          id: "tool:obsidian-guidance",
+          kind: "tool",
+          group: "Wiki",
+          label: "Obsidian",
+          description:
+            "Optional desktop editor for a Vault. Loom provides official install guidance and never invokes an OS package manager.",
+          installTarget: "wiki:obsidian-guidance",
+          nextAction:
+            "Open the Vault in Obsidian, or keep using Markdown and Pi without the desktop app.",
+          dependencies: ["github:AgriciDaniel/claude-obsidian"],
+          bin: "obsidian",
+          companions: [],
+        },
+      ]
+    : [];
+  return [...piPackages, ...skills, ...herdrPlugins, ...tools, ...obsidian];
+}
+
+async function readProfileCatalog(repoRoot, resources) {
+  const manifest = JSON.parse(await readFile(join(repoRoot, "manifest", "profiles.json"), "utf8"));
+  if (!Array.isArray(manifest.profiles) || manifest.profiles.length === 0) {
+    throw new Error("profiles.json must contain a non-empty profiles array");
+  }
+  const ids = manifest.profiles.map((profile) => profile.id);
+  const labels = manifest.profiles.map((profile) => profile.label);
+  const duplicateIds = duplicateValues(ids);
+  const duplicateLabels = duplicateValues(labels);
+  if (duplicateIds.length > 0) {
+    throw new Error(`duplicate profile ids: ${duplicateIds.join(", ")}`);
+  }
+  if (duplicateLabels.length > 0) {
+    throw new Error(`duplicate profile labels: ${duplicateLabels.join(", ")}`);
+  }
+
+  const resourceIds = new Set(resources.map((resource) => resource.id));
+  return manifest.profiles.map((profile) => {
+    if (
+      typeof profile.id !== "string" ||
+      profile.id.length === 0 ||
+      typeof profile.label !== "string" ||
+      profile.label.length === 0 ||
+      typeof profile.description !== "string" ||
+      profile.description.length === 0 ||
+      !Array.isArray(profile.resources) ||
+      profile.resources.length === 0
+    ) {
+      throw new Error("every profile needs a non-empty id, label, description, and resources list");
+    }
+    const duplicateResources = duplicateValues(profile.resources);
+    if (duplicateResources.length > 0) {
+      throw new Error(
+        `profile ${profile.id} has duplicate resources: ${duplicateResources.join(", ")}`,
+      );
+    }
+    const unknown = profile.resources.filter((id) => !resourceIds.has(id));
+    if (unknown.length > 0) {
+      throw new Error(`profile ${profile.id} has unknown resources: ${unknown.join(", ")}`);
+    }
+    return profile;
+  });
+}
+
+export async function buildSetupCatalogDocument(repoRoot) {
+  const resources = await buildSetupCatalog(repoRoot);
+  const profiles = await readProfileCatalog(repoRoot, resources);
+  return { schemaVersion: 1, profiles, resources };
 }

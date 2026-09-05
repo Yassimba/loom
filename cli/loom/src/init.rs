@@ -251,6 +251,20 @@ struct InitFeatures {
     codegraph: bool,
 }
 
+fn has_project_selection(options: &InitOptions) -> bool {
+    options.python == Some(true)
+        || options.rust == Some(true)
+        || options.adhd == Some(true)
+        || options.tracker.is_some()
+        || options.domain.is_some()
+        || options.editor.is_some()
+        || options.coding_standards == Some(true)
+}
+
+fn has_explicit_selection(options: &InitOptions) -> bool {
+    has_project_selection(options) || options.codegraph == Some(true)
+}
+
 fn choose_features(
     project: &Path,
     beads_tools_installed: bool,
@@ -259,6 +273,26 @@ fn choose_features(
     options: &InitOptions,
     mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
 ) -> Result<InitFeatures> {
+    if has_explicit_selection(options) {
+        if options.tracker == Some(Tracker::Beads) && !beads_tools_installed {
+            anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
+        }
+        if options.codegraph == Some(true) && !codegraph_installed {
+            anyhow::bail!("CodeGraph is not installed; run `loom add --tool codegraph`");
+        }
+        return Ok(InitFeatures {
+            project_instructions: has_project_selection(options),
+            python: options.python.unwrap_or(false),
+            rust: options.rust.unwrap_or(false),
+            adhd: options.adhd.unwrap_or(false),
+            tracker: options.tracker,
+            domain: options.domain,
+            editor: options.editor,
+            coding_standards: options.coding_standards.unwrap_or(false),
+            codegraph: options.codegraph.unwrap_or(false),
+        });
+    }
+
     let (python_default, rust_default) = detect(project);
     let project_instructions = ask(
         "Set up project agent instructions?",
@@ -450,17 +484,19 @@ fn ignore_agent_docs(project: &Path) -> Result<&'static str> {
 }
 
 fn setup_codegraph(system: &dyn System) -> Result<()> {
-    let result = system
-        .run(&CommandSpec::new(
-            "codegraph",
-            ["install", "--yes", "--init"],
-        ))
-        .context("could not start CodeGraph setup")?;
-    if !result.success {
-        anyhow::bail!(
-            "CodeGraph setup failed: {}",
-            crate::install::command_failure_message(&result)
-        );
+    for command in [
+        CommandSpec::new("codegraph", ["install", "--yes", "--location", "local"]),
+        CommandSpec::new("codegraph", ["init"]),
+    ] {
+        let result = system
+            .run(&command)
+            .context("could not start CodeGraph setup")?;
+        if !result.success {
+            anyhow::bail!(
+                "CodeGraph setup failed: {}",
+                crate::install::command_failure_message(&result)
+            );
+        }
     }
     Ok(())
 }
@@ -507,8 +543,9 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         return Ok(true);
     }
     // Templates come from the published repo, so init output is publish-gated.
-    let staging = home.join(".cache").join("loom").join("init-staging");
-    let repo_root = skills::fetch_repo(system, &staging)
+    let repository = skills::Repository::default();
+    let repo_root = repository
+        .get(system, &std::sync::atomic::AtomicBool::new(false))
         .map_err(anyhow::Error::msg)
         .context("could not fetch the templates")?;
     let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
@@ -553,9 +590,7 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
             chosen.push((section.name, content));
         }
     }
-    let _ = fs::remove_dir_all(&staging);
 
-    let mut ok = true;
     let agents_path = project.join("AGENTS.md");
     let existing = fs::read_to_string(&agents_path).ok();
     let (agents, outcome) = render_agents(existing.as_deref(), &base, &chosen, options.force);
@@ -663,26 +698,11 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
     }
 
-    match register_project(&home, &project) {
-        Ok(()) => out.row(
-            Mark::Ok,
-            "Sync",
-            "registered; `loom update` refreshes the templates",
-        ),
-        Err(error) => {
-            ok = false;
-            out.row(
-                Mark::Bad,
-                "Sync",
-                format!("could not register the project: {error}"),
-            );
-        }
-    }
-    out.verdict(ok, if ok { "Done" } else { "Done with problems" });
+    out.verdict(true, "Done");
     if existing.is_none() {
         out.next("open AGENTS.md and fill in the project section");
     }
-    Ok(ok)
+    Ok(true)
 }
 
 /// What happened to each managed fence during a render.
@@ -780,40 +800,23 @@ fn render_fresh(base: &str, chosen: &[(&'static str, String)]) -> String {
     out
 }
 
-/// Machine-local list of projects init has scaffolded, so sync can walk
-/// them. Absolute paths, deduped; entries whose AGENTS.md vanished prune
-/// themselves on the next sync.
-fn registry_path(home: &Path) -> std::path::PathBuf {
-    home.join(".config").join("loom").join("projects.json")
-}
-
+/// Project roots come from the ownership ledger. The init receipt is written
+/// by the command boundary after every project mutation succeeds.
 fn read_registry(home: &Path) -> Vec<String> {
-    fs::read_to_string(registry_path(home))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
-}
-
-fn write_registry(home: &Path, projects: &[String]) -> Result<()> {
-    let path = registry_path(home);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(
-        &path,
-        format!("{}\n", serde_json::to_string_pretty(projects)?),
-    )?;
-    Ok(())
-}
-
-fn register_project(home: &Path, project: &Path) -> Result<()> {
-    let entry = project.display().to_string();
-    let mut projects = read_registry(home);
-    if !projects.contains(&entry) {
-        projects.push(entry);
-        write_registry(home, &projects)?;
-    }
-    Ok(())
+    let Ok(state) = crate::ownership::InstallState::load(home) else {
+        return Vec::new();
+    };
+    let mut projects = state
+        .resources
+        .values()
+        .filter_map(|resource| match &resource.scope {
+            crate::ownership::OwnershipScope::Project { root } => Some(root.display().to_string()),
+            crate::ownership::OwnershipScope::Global => None,
+        })
+        .collect::<Vec<_>>();
+    projects.sort();
+    projects.dedup();
+    projects
 }
 
 /// The outcome of a sync: one summary line plus one note per project.
@@ -838,6 +841,13 @@ impl SyncReport {
 /// nothing outside a fence is touched, and no new sections are added —
 /// section choices stay with `init` in the project.
 pub fn sync_projects(system: &dyn System) -> SyncReport {
+    sync_projects_from(system, &skills::Repository::default())
+}
+
+pub(crate) fn sync_projects_from(
+    system: &dyn System,
+    repository: &skills::Repository,
+) -> SyncReport {
     let Some(home) = system.home_dir() else {
         return SyncReport::failed("home directory is unavailable");
     };
@@ -850,19 +860,19 @@ pub fn sync_projects(system: &dyn System) -> SyncReport {
         };
     }
 
-    let staging = home.join(".cache").join("loom").join("sync-staging");
-    let templates = skills::fetch_repo(system, &staging).and_then(|repo_root| {
-        let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
-            .map_err(|error| format!("template missing: {BASE_TEMPLATE}: {error}"))?;
-        let mut sections = Vec::new();
-        for section in &SECTIONS {
-            let content = fs::read_to_string(repo_root.join(section.template))
-                .map_err(|error| format!("template missing: {}: {error}", section.template))?;
-            sections.push((section.name, content));
-        }
-        Ok((base, sections))
-    });
-    let _ = fs::remove_dir_all(&staging);
+    let templates = repository
+        .get(system, &std::sync::atomic::AtomicBool::new(false))
+        .and_then(|repo_root| {
+            let base = fs::read_to_string(repo_root.join(BASE_TEMPLATE))
+                .map_err(|error| format!("template missing: {BASE_TEMPLATE}: {error}"))?;
+            let mut sections = Vec::new();
+            for section in &SECTIONS {
+                let content = fs::read_to_string(repo_root.join(section.template))
+                    .map_err(|error| format!("template missing: {}: {error}", section.template))?;
+                sections.push((section.name, content));
+            }
+            Ok((base, sections))
+        });
     let (base, sections) = match templates {
         Ok(templates) => templates,
         Err(message) => return SyncReport::failed(message),
@@ -875,7 +885,7 @@ pub fn sync_projects(system: &dyn System) -> SyncReport {
         let agents_path = Path::new(project).join("AGENTS.md");
         let shown = tidy_path(Path::new(project), &home);
         let Ok(existing) = fs::read_to_string(&agents_path) else {
-            notes.push(format!("{shown}  gone, unregistered"));
+            notes.push(format!("{shown}  missing; skipped"));
             continue;
         };
         surviving.push(project.clone());
@@ -907,9 +917,6 @@ pub fn sync_projects(system: &dyn System) -> SyncReport {
             changes.push("current".into());
         }
         notes.push(format!("{shown}  {}", changes.join(" · ")));
-    }
-    if surviving.len() != projects.len() {
-        let _ = write_registry(&home, &surviving);
     }
     SyncReport {
         ok,
@@ -1027,7 +1034,7 @@ mod tests {
     }
 
     #[test]
-    fn codegraph_setup_delegates_to_upstreams_one_shot_command() {
+    fn codegraph_setup_uses_current_install_and_init_commands() {
         let system = RecordingSystem {
             commands: Mutex::new(Vec::new()),
         };
@@ -1036,10 +1043,10 @@ mod tests {
 
         assert_eq!(
             *system.commands.lock().unwrap(),
-            [CommandSpec::new(
-                "codegraph",
-                ["install", "--yes", "--init"]
-            )]
+            [
+                CommandSpec::new("codegraph", ["install", "--yes", "--location", "local"]),
+                CommandSpec::new("codegraph", ["init"]),
+            ]
         );
     }
 
@@ -1067,6 +1074,47 @@ mod tests {
         options.yes = false;
         options.python = Some(false);
         assert!(init_has_consent(&options, false));
+    }
+
+    #[test]
+    fn explicit_tracker_selects_only_tracker_setup() {
+        let options = InitOptions {
+            python: None,
+            rust: None,
+            adhd: None,
+            tracker: Some(Tracker::Beads),
+            domain: None,
+            editor: None,
+            coding_standards: None,
+            codegraph: None,
+            yes: false,
+            force: false,
+        };
+
+        let selected = choose_features(
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+            true,
+            true,
+            Editor::Cursor,
+            &options,
+            |prompt, _, _| panic!("explicit init should not prompt for {prompt}"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            selected,
+            InitFeatures {
+                project_instructions: true,
+                python: false,
+                rust: false,
+                adhd: false,
+                tracker: Some(Tracker::Beads),
+                domain: None,
+                editor: None,
+                coding_standards: false,
+                codegraph: false,
+            }
+        );
     }
 
     #[test]

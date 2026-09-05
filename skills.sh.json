@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "Coding",
-      "description": "The development loop — planning, TDD, debugging, review, release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
+      "description": "The development loop — planning, architecture, TDD, debugging, review, and release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
         "bdd",
         "blueprint",
@@ -32,37 +32,24 @@
         "to-spec",
         "to-tickets",
         "update-docstrings",
+        "write-readme",
         "wayfinder",
-        "whats-next"
-      ]
-    },
-    {
-      "title": "Architecture",
-      "description": "Design and understand the shape of a system: deep modules, domain language, and guided walkthroughs of unfamiliar code.",
-      "skills": [
+        "whats-next",
         "calldiff",
         "codebase-design",
         "domain-modeling",
         "explain-code-flow",
         "improve-codebase-architecture",
         "literate-programming",
-        "show-me"
+        "show-me",
+        "system-atlas",
+        "ponytail"
       ]
     },
     {
-      "title": "Design",
-      "description": "Shape, critique, and polish frontend interfaces with strong visual direction and production checks.",
-      "skills": ["impeccable"]
-    },
-    {
-      "title": "Diagrams",
-      "description": "Turn systems and data into pictures — draw.io, Mermaid, and diagram-design editorial diagrams.",
-      "skills": ["mermaid-skill", "diagram-design"]
-    },
-    {
-      "title": "Presentations",
-      "description": "Build self-contained browser slide decks.",
-      "skills": ["frontend-slides"]
+      "title": "Diagrams and slides",
+      "description": "Design and polish interfaces, turn systems and data into diagrams, and build self-contained browser slide decks.",
+      "skills": ["impeccable", "mermaid-skill", "diagram-design", "frontend-slides"]
     },
     {
       "title": "Observability",
@@ -70,8 +57,13 @@
       "skills": ["dd-apm", "dd-debugger", "dd-docs", "dd-logs", "dd-monitors", "dd-pup"]
     },
     {
+      "title": "Wiki",
+      "description": "Bring external knowledge into local Markdown and search it without losing source boundaries.",
+      "skills": ["confluence-export", "qmd"]
+    },
+    {
       "title": "General",
-      "description": "Interviewing, teaching, writing, and note-taking — skills for the work around the code.",
+      "description": "Interviewing, teaching, writing, review, and note-taking — skills for the work around the code.",
       "skills": [
         "explain-simply",
         "grill-me",
@@ -86,29 +78,11 @@
         "loom",
         "teach",
         "write-documentation",
-        "write-readme",
-        "writing-clearly-and-concisely",
+        "write-simply",
         "writing-for-agents",
-        "wtf"
+        "wtf",
+        "plannotator"
       ]
-    },
-    {
-      "title": "Plannotator",
-      "description": "Plan and code review in the browser with the plannotator CLI: review diffs, annotate files or URLs, revisit the last reply, mine the plan archive, build goal packages, and render visual explainers.",
-      "skills": [
-        "plannotator",
-        "plannotator-review",
-        "plannotator-annotate",
-        "plannotator-last",
-        "plannotator-compound",
-        "plannotator-setup-goal",
-        "plannotator-visual-explainer"
-      ]
-    },
-    {
-      "title": "Ponytail",
-      "description": "Build less: choose YAGNI, stdlib, and native features before adding code, then audit what can still be removed.",
-      "skills": ["ponytail"]
     }
   ]
 }

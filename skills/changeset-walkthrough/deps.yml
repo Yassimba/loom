@@ -1,6 +1,6 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
-  - writing-clearly-and-concisely
+  - write-simply
   - diagram-design
   - plannotator
   # Hard file dependency, not just an invocation: this skill's steps 2, 3 and 6

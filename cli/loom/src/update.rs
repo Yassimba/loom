@@ -117,30 +117,34 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     if system.command_exists("herdr") {
         tasks.push(CommandLane {
             label: "Herdr",
-            detail: "herdr and its plugins".into(),
-            commands: vec![
-                CommandSpec::new("herdr", ["update"]),
-                CommandSpec::new("herdr", ["plugin", "update", "--all"]),
-            ],
+            detail: "plugins".into(),
+            commands: vec![CommandSpec::new("herdr", ["plugin", "update", "--all"])],
         });
     }
     // The manifest lane owns tool updates, including this CLI's own pin.
     // Loom is only ever installed through mise, so a missing mise means the
     // bootstrap was undone; point back at it instead of self-updating.
-    let mise = crate::manifest::mise_available(system);
+    let mise = system.command_exists("mise");
 
     // Skills, projects, tools, Pi, and Herdr touch disjoint state, so every
     // lane runs at once; rows print in a fixed order once all are done.
+    let repository = &skills::Repository::default();
     type Job<'a> = Box<dyn FnOnce() -> Lane + Send + 'a>;
     let mut jobs: Vec<(&'static str, Job<'_>)> = vec![
         (
             "Skills",
-            Box::new(move || update_installed_skills(system, catalog)),
+            Box::new(move || update_installed_skills(system, catalog, repository)),
         ),
-        ("Projects", Box::new(move || sync_projects_lane(system))),
+        (
+            "Projects",
+            Box::new(move || sync_projects_lane(system, repository)),
+        ),
     ];
     if mise {
-        jobs.push(("Tools", Box::new(move || sync_tool_manifest(system))));
+        jobs.push((
+            "Tools",
+            Box::new(move || sync_tool_manifest(system, repository)),
+        ));
     } else {
         jobs.push((
             "Tools",
@@ -223,8 +227,13 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
 
 /// Refresh mise's conf.d copy of the published manifest and install its pins.
 /// Tools move only when a new manifest landed on main since the last sync.
-fn sync_tool_manifest(system: &dyn System) -> Lane {
-    match crate::manifest::sync_and_install(system) {
+fn sync_tool_manifest(system: &dyn System, repository: &skills::Repository) -> Lane {
+    match crate::manifest::sync_selected_from(
+        system,
+        &[],
+        &std::sync::atomic::AtomicBool::new(false),
+        repository,
+    ) {
         Ok(target) => {
             let home = system.home_dir().unwrap_or_default();
             Lane::ok("Tools", tidy_path(&target, &home))
@@ -273,8 +282,12 @@ fn run_command_lane(system: &dyn System, task: CommandLane) -> Lane {
 
 /// Refresh catalog skills in the exact global and current-project trees where
 /// they already exist. Agent and scope choices remain stable across updates.
-fn update_installed_skills(system: &dyn System, catalog: &Catalog) -> Lane {
-    match skills::refresh_installed_skills(system, &catalog.resources) {
+fn update_installed_skills(
+    system: &dyn System,
+    catalog: &Catalog,
+    repository: &skills::Repository,
+) -> Lane {
+    match skills::refresh_installed_skills(system, repository, &catalog.resources) {
         Ok(reports) if reports.is_empty() => Lane::ok("Skills", "none installed"),
         Ok(reports) => {
             let home = system.home_dir().unwrap_or_default();
@@ -284,13 +297,23 @@ fn update_installed_skills(system: &dyn System, catalog: &Catalog) -> Lane {
                 format!("{total} refreshed across {} trees", reports.len()),
             );
             for report in reports {
-                let skipped = if report.skipped_symlinks.is_empty() {
+                let mut notes = Vec::new();
+                if report.skipped_existing > 0 {
+                    notes.push(format!(
+                        "{} unowned or modified, preserved",
+                        report.skipped_existing
+                    ));
+                }
+                if report.skipped_symlinks > 0 {
+                    notes.push(format!("{} symlinked, left alone", report.skipped_symlinks));
+                }
+                let detail = if notes.is_empty() {
                     String::new()
                 } else {
-                    format!(" · {} symlinked, left alone", report.skipped_symlinks.len())
+                    format!(" · {}", notes.join(" · "))
                 };
                 lane.notes.push(format!(
-                    "{}  {}{skipped}",
+                    "{}  {}{detail}",
                     tidy_path(&report.tree, &home),
                     report.installed
                 ));
@@ -301,8 +324,8 @@ fn update_installed_skills(system: &dyn System, catalog: &Catalog) -> Lane {
     }
 }
 
-fn sync_projects_lane(system: &dyn System) -> Lane {
-    let sync = crate::init::sync_projects(system);
+fn sync_projects_lane(system: &dyn System, repository: &skills::Repository) -> Lane {
+    let sync = crate::init::sync_projects_from(system, repository);
     Lane {
         ok: sync.ok,
         label: "Projects",
@@ -318,7 +341,13 @@ mod tests {
     #[test]
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
-        let listed = "User packages:\n  npm:pi-subagents\n\nProject packages:\n  npm:pi-subagents\n  git:github.com/earendil-works/pi-chat@abc\n";
+        let listed = "User packages:\n  npm:pi-subagents\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
+        let feynman = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.id == "pi-package:@companion-ai/feynman")
+            .unwrap()
+            .pi_install_spec();
 
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
@@ -331,12 +360,8 @@ mod tests {
         assert!(commands
             .iter()
             .any(|command| command == "pi install -l npm:pi-subagents@0.65.1"));
-        assert!(commands.iter().any(|command| {
-            command.starts_with("pi install -l git:github.com/earendil-works/pi-chat@")
-        }));
-        assert!(!commands.iter().any(|command| {
-            command.starts_with("pi install git:github.com/earendil-works/pi-chat@")
-        }));
+        assert!(commands.contains(&format!("pi install -l {feynman}")));
+        assert!(!commands.contains(&format!("pi install {feynman}")));
 
         let windows_commands = pi_package_commands(&catalog, listed, true)
             .into_iter()
@@ -344,6 +369,6 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(!windows_commands
             .iter()
-            .any(|command| command.contains("pi-chat")));
+            .any(|command| command.contains("@companion-ai/feynman")));
     }
 }

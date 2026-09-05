@@ -31,6 +31,34 @@ function Get-Url([string]$Url, [string]$OutFile) {
   }
 }
 
+function Restore-AtomicPath([string]$Path) {
+  $Parent = Split-Path -Parent $Path
+  $Name = Split-Path -Leaf $Path
+  $Backup = Join-Path $Parent ".$Name.loom-old"
+  if (-not (Test-Path $Path) -and (Test-Path $Backup)) {
+    Move-Item -LiteralPath $Backup -Destination $Path
+  } elseif (Test-Path $Path) {
+    Remove-Item -LiteralPath $Backup -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Set-AtomicLines([string]$Path, [string[]]$Lines) {
+  $Parent = Split-Path -Parent $Path
+  New-Item -ItemType Directory -Path $Parent -Force | Out-Null
+  $Name = Split-Path -Leaf $Path
+  $Incoming = Join-Path $Parent ".$Name.loom-new"
+  $Backup = Join-Path $Parent ".$Name.loom-old"
+  Remove-Item -LiteralPath $Incoming -Force -ErrorAction SilentlyContinue
+  $Text = ($Lines -join [Environment]::NewLine) + [Environment]::NewLine
+  [System.IO.File]::WriteAllText($Incoming, $Text, [System.Text.UTF8Encoding]::new($false))
+  if (Test-Path $Path) {
+    [System.IO.File]::Replace($Incoming, $Path, $Backup)
+    Remove-Item -LiteralPath $Backup -Force -ErrorAction SilentlyContinue
+  } else {
+    Move-Item -LiteralPath $Incoming -Destination $Path
+  }
+}
+
 function Install-MiseRelease {
   $Headers = @{
     Accept = "application/vnd.github+json"
@@ -54,7 +82,7 @@ function Install-MiseRelease {
     $TmpChecksums = Join-Path $TmpDirectory "SHASUMS256.txt"
     Get-Url $Asset.browser_download_url $TmpArchive
     Get-Url $Checksums.browser_download_url $TmpChecksums
-    $ChecksumLine = Get-Content $TmpChecksums | Where-Object { $_.EndsWith($AssetName) } | Select-Object -First 1
+    $ChecksumLine = Get-Content -Encoding UTF8 $TmpChecksums | Where-Object { $_.EndsWith($AssetName) } | Select-Object -First 1
     if (-not $ChecksumLine) { throw "$Name`: mise checksum is missing for $AssetName" }
     $Expected = ($ChecksumLine -split '\s+')[0]
     $Actual = (Get-FileHash -Path $TmpArchive -Algorithm SHA256).Hash
@@ -71,6 +99,7 @@ function Install-MiseRelease {
     if ($InstallDirectory -notin $UserEntries) {
       $NewUserPath = (@($InstallDirectory) + $UserEntries) -join ';'
       [Environment]::SetEnvironmentVariable("Path", $NewUserPath, [System.EnvironmentVariableTarget]::User)
+      $script:MisePathAdded = $true
     }
     $env:Path = "$InstallDirectory;" + $env:Path
   } finally {
@@ -79,20 +108,36 @@ function Install-MiseRelease {
 }
 
 # 1. mise - the only thing this script installs itself.
+$MiseInstalledByLoom = $false
+$MiseInstallMethod = ""
+$MisePathAdded = $false
+$PendingMise = Join-Path $HOME ".config\loom\bootstrap-mise-pending.json"
+Restore-AtomicPath $PendingMise
+if ((Get-Command mise -ErrorAction SilentlyContinue) -and (Test-Path $PendingMise)) {
+  try {
+    $Pending = Get-Content -Encoding UTF8 $PendingMise -Raw | ConvertFrom-Json
+    $MiseInstalledByLoom = $true
+    $MiseInstallMethod = [string]$Pending.manager
+    $MisePathAdded = [bool]$Pending.pathAdded
+  } catch {
+    throw "$Name`: could not read pending mise ownership from $PendingMise`: $($_.Exception.Message)"
+  }
+}
 if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
+  $MiseInstalledByLoom = $true
   Write-Host "$Name`: installing mise (https://mise.jdx.dev)..."
   $installed = $false
   if (Get-Command winget -ErrorAction SilentlyContinue) {
     winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -eq 0) { $installed = $true }
+    if ($LASTEXITCODE -eq 0) { $installed = $true; $MiseInstallMethod = "winget" }
   }
   if (-not $installed -and (Get-Command scoop -ErrorAction SilentlyContinue)) {
     scoop install mise
-    if ($LASTEXITCODE -eq 0) { $installed = $true }
+    if ($LASTEXITCODE -eq 0) { $installed = $true; $MiseInstallMethod = "scoop" }
   }
   if (-not $installed) {
     Install-MiseRelease
-    $installed = $true
+    $MiseInstallMethod = "direct"
   }
   # The nested PowerShell of the README one-liner keeps its pre-install PATH.
   # Pull in the paths that WinGet or Scoop just persisted for future shells.
@@ -114,6 +159,13 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
     if (Test-Path $dir) { $env:Path = "$env:Path".TrimEnd(';') + ";" + $dir }
   }
 }
+if ($MiseInstalledByLoom) {
+  $PendingJson = ConvertTo-Json -Compress @{
+    manager = $MiseInstallMethod
+    pathAdded = $MisePathAdded
+  }
+  Set-AtomicLines $PendingMise @($PendingJson)
+}
 if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
   throw "$Name`: mise is installed but not on PATH yet; open a new terminal and rerun this installer"
 }
@@ -121,12 +173,12 @@ if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
 # 2. Refresh the required core block - node and the Loom CLI - while keeping
 #    any optional tools already chosen through the wizard. This also repairs
 #    selections left incomplete by an interrupted or older bootstrap.
-New-Item -ItemType Directory -Path $ConfD -Force | Out-Null
 $Selection = Join-Path $ConfD "loom.toml"
+Restore-AtomicPath $Selection
 $TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
 try {
   Get-Url $ManifestUrl $TmpManifest
-  $lines = Get-Content $TmpManifest
+  $lines = Get-Content -Encoding UTF8 $TmpManifest
   $begin = -1
   $end = -1
   for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -140,7 +192,7 @@ try {
     $updated = [System.Collections.Generic.List[string]]::new()
     $inserted = $false
     $skippingCore = $false
-    foreach ($line in Get-Content $Selection) {
+    foreach ($line in Get-Content -Encoding UTF8 $Selection) {
       if ($line.StartsWith("# core:begin")) { $skippingCore = $true; continue }
       if ($skippingCore) {
         if ($line.StartsWith("# core:end")) { $skippingCore = $false }
@@ -154,10 +206,9 @@ try {
     }
     if ($skippingCore) { throw "$Name`: existing selection has an incomplete core block" }
     if (-not $inserted) { throw "$Name`: existing selection is missing its [tools] table" }
-    $updated | Set-Content -Path $Selection
+    Set-AtomicLines $Selection @($updated)
   } else {
-    @("# Managed by Loom: the selected tools from the published manifest.", "", "[tools]") + $core |
-      Set-Content -Path $Selection
+    Set-AtomicLines $Selection @(@("# Managed by Loom: the selected tools from the published manifest.", "", "[tools]") + $core)
   }
   Write-Host "$Name`: core tools synced to $Selection"
 } finally {
@@ -174,20 +225,25 @@ $MiseExe = $MiseCommand.Replace("'", "''")
 $MiseDir = (Split-Path -Parent $MiseCommand).Replace("'", "''")
 $Activation = "`$env:Path = '$MiseDir;' + `$env:Path; (& '$MiseExe' activate pwsh) | Out-String | Invoke-Expression"
 (& $MiseCommand activate pwsh) | Out-String | Invoke-Expression
+$Documents = if ($env:LOOM_E2E_DOCUMENTS_DIR) {
+  $env:LOOM_E2E_DOCUMENTS_DIR
+} else {
+  [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+}
+if (-not $Documents) { $Documents = Join-Path $HOME "Documents" }
 $Profiles = @(
   [string]$PROFILE,
-  (Join-Path $HOME "Documents\WindowsPowerShell\profile.ps1"),
-  (Join-Path $HOME "Documents\PowerShell\profile.ps1")
+  (Join-Path $Documents "WindowsPowerShell\profile.ps1"),
+  (Join-Path $Documents "PowerShell\profile.ps1")
 ) | Select-Object -Unique
 $ChangedProfiles = @()
 foreach ($ProfilePath in $Profiles) {
-  $ProfileDirectory = Split-Path -Parent $ProfilePath
-  if ($ProfileDirectory) {
-    New-Item -ItemType Directory -Path $ProfileDirectory -Force | Out-Null
-  }
-  $ProfileContent = if (Test-Path $ProfilePath) { [string](Get-Content $ProfilePath -Raw) } else { "" }
+  Restore-AtomicPath $ProfilePath
+  $ProfileContent = if (Test-Path $ProfilePath) { [string](Get-Content -Encoding UTF8 $ProfilePath -Raw) } else { "" }
   if (-not $ProfileContent.Contains($Activation)) {
-    Add-Content -Path $ProfilePath -Value $Activation
+    $ExistingProfile = $ProfileContent.TrimEnd("`r", "`n")
+    $ProfileLines = if ($ExistingProfile) { @($ExistingProfile, $Activation) } else { @($Activation) }
+    Set-AtomicLines $ProfilePath $ProfileLines
     $ChangedProfiles += $ProfilePath
   }
 }
@@ -199,10 +255,23 @@ if ($ChangedProfiles.Count -gt 0) {
 # 5. Hand off to the guided setup with the freshly installed tools on PATH.
 # CI may point this handoff at the checked-out binary while keeping the real
 # bootstrap and manifest path intact.
+$env:LOOM_BOOTSTRAP = "1"
+$env:LOOM_BOOTSTRAP_MISE_INSTALLED = if ($MiseInstalledByLoom) { "1" } else { "0" }
+$env:LOOM_BOOTSTRAP_MISE_ROOT = if ($env:MISE_DATA_DIR) { $env:MISE_DATA_DIR } elseif ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME "mise" } else { Join-Path $env:LOCALAPPDATA "mise" }
+$env:LOOM_BOOTSTRAP_MISE_EXECUTABLE = $MiseCommand
+$env:LOOM_BOOTSTRAP_MISE_MANAGER = $MiseInstallMethod
+$env:LOOM_BOOTSTRAP_MISE_PATH_ADDED = if ($MisePathAdded) { "1" } else { "0" }
+$env:LOOM_BOOTSTRAP_MISE_PATH_ENTRY = Split-Path -Parent $MiseCommand
+$env:LOOM_BOOTSTRAP_ACTIVATION_LINE = $Activation
+$env:LOOM_BOOTSTRAP_ACTIVATION_PATHS_JSON = ConvertTo-Json -Compress @($ChangedProfiles)
 Write-Host ""
 if ($env:LOOM_E2E_LOOM_BIN) {
   & $env:LOOM_E2E_LOOM_BIN setup @SetupArgs
 } else {
   mise -C $HOME exec -- loom setup @SetupArgs
 }
-exit $LASTEXITCODE
+$SetupExit = $LASTEXITCODE
+if ($SetupExit -eq 0) {
+  Remove-Item -LiteralPath $PendingMise -Force -ErrorAction SilentlyContinue
+}
+exit $SetupExit

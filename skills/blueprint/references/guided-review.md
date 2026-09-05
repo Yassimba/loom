@@ -1,138 +1,84 @@
-# Markdown plan review
+# Compact Markdown plan review
 
-The canonical review document is `plan.md`. Plannotator renders its repository-backed SVG directives in the ordinary Markdown plan review, where the reviewer can expand figures, inspect bound source, annotate stable figure elements, revise, and approve.
+The author writes `plan.md` and `overlay.json`. Scripts generate the context
+snapshot and rendered figures. Existing approved legacy packages remain valid;
+new plans use version 2.
 
-## Artifacts
+## Contract
 
-```text
-ai-docs/blueprints/<slug>/
-├── brief.md
-├── evidence.json
-├── changes.json
-├── figure-selection.md
-├── plan.md
-└── diagrams/
-    ├── 01-context.svg
-    └── ...
-```
+`plan.md` contains these headings: Intent, Acceptance criteria, Changes,
+Implementation, Verification, Risks. Changes use stable C1/C2 IDs with target,
+current → proposed behavior, reason, and check. Put new source-backed facts in
+the relevant section. Treat rollback/migrations under Implementation or Risks
+when needed; record non-goals alongside Intent.
 
-`evidence.json` is the verified repository map shared by projection, drawing, review, and implementation:
+`overlay.json` records provenance and figure patches, not a second plan:
 
 ```json
 {
-  "entry": "src/session/api.ts:40-66",
-  "finalEffect": "One deduplicated session is stored",
-  "tracer": {
-    "name": "session request",
-    "input": "CreateSession",
-    "output": "Session"
-  },
-  "hops": [
-    {
-      "source": "src/session/store.ts:40-66",
-      "input": "CreateSession",
-      "output": "Session",
-      "stateChange": "Insert one session",
-      "sideEffects": [],
-      "failures": ["Duplicate identity"]
-    }
-  ]
+  "version": 2,
+  "target": {"head": "FULL_COMMIT_ID", "baselineSha256": "SOURCE_BASELINE_HASH", "workingTree": true},
+  "atlas": {"path": "ai-docs/atlas", "topics": ["api.session"], "snapshot": "context.json"},
+  "figures": [{"id": "session-write", "source": "diagrams/api/01-session.json",
+    "patch": {"modify": ["store"]}, "output": "diagrams/session.svg"}]
 }
 ```
 
-`changes.json` is the projected edit ledger and compact implementation handoff:
+For no atlas, use `"atlas": null`; figures authored with Mermaid use
+`"mermaid": "diagrams/session.mmd"` instead of source/patch. Use `figures: []`
+only when a purely textual change has no useful visual. This does not excuse
+missing architecture or runtime explanation for substantial changes.
 
-```json
-{
-  "handoff": {
-    "entry": "src/session/api.ts:createSession",
-    "tracer": "session request",
-    "finalEffect": "One deduplicated session is stored",
-    "acceptanceCriteria": ["A duplicate request does not create a second session"],
-    "unresolvedRisks": []
-  },
-  "changes": [
-    {
-      "id": "C1",
-      "class": "changed",
-      "target": "src/session/store.ts:createSession",
-      "current": "Writes immediately",
-      "projected": "Checks identity before writing",
-      "reason": "Prevent duplicate sessions",
-      "verification": "The duplicate-session acceptance example passes"
-    }
-  ]
-}
-```
+Capture `SOURCE_BASELINE_HASH` before inspection with `check-blueprint.py
+<blueprint-directory> --repo-root <repo> --baseline`. It excludes the generated
+Blueprint directory, so authoring the plan does not invalidate its baseline.
+Validation rejects source changes since inspection; inspect that drift before
+updating the target hash. Review HEAD and baseline are separate from atlas pins.
 
-Classes are `added`, `removed`, or `changed`. Every projected SVG element carries its ledger id as `data-change="C1"`. Every ledger id appears in the plan's searchable change list.
+Generate `context.json` with `atlas.py freeze <atlas> <topic-ids...> --output
+<blueprint>/context.json`. It preserves selected facts and pins; readers do not
+need the live atlas after approval. Retain final SVGs and fallback Mermaid
+sources under `diagrams/`. Temporary atlas overlay JSON/HTML/PNG files live
+outside the Blueprint directory. Historical facts retain their revision;
+current code bindings must be verified against the review target.
 
-## SVG directives
+## Render and submit
 
-Reference each admitted figure exactly once with this exact empty-body directive:
+Use each selected SVG once in the plan with the exact empty-body directive:
 
 ````markdown
-```plannotator-svg path="ai-docs/blueprints/example/diagrams/01-context.svg"
+```plannotator-svg path="ai-docs/blueprints/example/diagrams/session.svg"
 ```
 ````
 
-The path is repository-relative, double-quoted, and ends in `.svg`. Do not add attributes or content inside the fence. Keep SVG bytes in their files; do not inline or snapshot them in `plan.md`.
+Keep its viewBox and supported data-code/data-change metadata. Mermaid figures
+carry adjacent source references and visible PROJECTED labels where relevant.
 
-Bind only existing source that helps the reviewer judge the plan. Every binding is repository-relative and line-bounded:
-
-```html
-<g data-code="src/session/store.ts:40-66" data-plannotator-anchor="session-store">
-```
-
-Several `data-code` values can be comma-separated; Plannotator opens the first one. Use `data-plannotator-anchor` for elements that need stable comments between plan revisions. An unmarked click creates a figure-level comment. Projected elements stay unbound and visibly say `PROJECTED`.
-
-Keep `viewBox` on every SVG. Persist only final SVGs. Keep drawing scripts, HTML previews, PNGs, and contact sheets outside the repository.
-
-## Plan shape
-
-Write `plan.md` in this order:
-
-1. Intent, acceptance criteria, and non-goals.
-2. Current boundary.
-3. Projected structural diff and searchable change ledger.
-4. Data in → transformations, state, side effects, outputs, and failures.
-5. Additional admitted design views.
-6. Ordered implementation path.
-7. Tests, migration, compatibility, rollback, risks, and untouched areas.
-8. Approval decision and the contracts that approval locks.
-
-Prose carries intent, evidence, trade-offs, and build order. Figures carry shape. Place each directive beside the prose it supports.
-
-## Validate and submit
-
-Validate the complete artifact:
+Run:
 
 ```bash
-python3 <blueprint-skill>/scripts/check-blueprint.py \
-  ai-docs/blueprints/<slug> --repo-root <repo-root>
+python3 <blueprint>/scripts/check-blueprint.py ai-docs/blueprints/<slug> --repo-root <repo>
 ```
 
-Submit the canonical plan through the active Plannotator plan-mode tool. In Pi:
+Submit `plan.md` through the active Plannotator plan-submission tool; in Pi,
+`plannotator_submit_plan(filePath="ai-docs/blueprints/<slug>/plan.md")`.
+If unavailable, enter the integration's Plannotator plan mode. General
+annotation does not submit a plan review.
 
-```text
-plannotator_submit_plan(filePath="ai-docs/blueprints/<slug>/plan.md")
-```
-
-If the active integration does not expose a plan-submission tool, enter its Plannotator plan mode first. Do not use the general `annotate` command as a fallback: repository SVG loading is restricted to the plan server.
-
-The reviewer can expand figures, zoom, pan, fit, reveal source, annotate marked elements or the whole figure, approve, or deny with feedback.
-
-- **Revise** — address annotations in the affected artifacts, validate, and resubmit the same `plan.md` path.
-- **Rethink** — return to PIN and record the rejected approach.
-- Closing without approval pauses implementation.
+Revise affected sections/figures on feedback and resubmit. Closing without
+approval pauses implementation.
 
 ## Lock
 
-After explicit approval, preserve the reviewed plan and repository baseline:
+After explicit approval, run the same validator with `--lock`. It preserves
+`approved-plan.md` and writes `approval.json` with baseline identity and hashes
+of the plan, overlay, context snapshot, and retained diagram sources/outputs.
+Later atlas refreshes cannot change the approved package.
 
-```bash
-python3 <blueprint-skill>/scripts/check-blueprint.py \
-  ai-docs/blueprints/<slug> --repo-root <repo-root> --lock
-```
+The baseline hash detects a changed worktree but does not reconstruct one.
+If planning includes uncommitted code, preserve its patch/source separately
+before implementation or record the resulting verification limitation.
+Never claim a HEAD-only comparison reconstructs a dirty approved baseline.
 
-This writes `approved-plan.md` and `approval.json`. Do not run `--lock` before approval. Implementation starts only after both files exist.
+Existing v1 artifact validation and lock records remain supported. A later
+proposal creates a new directory/revision; never migrate an approved plan in place.

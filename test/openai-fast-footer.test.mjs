@@ -106,6 +106,20 @@ test("renders directory, branch, session name, and extension statuses", () => {
   assert.equal(lines[2], "one two lines", "statuses sorted by key and sanitized");
 });
 
+test("groups added directories with workspace context instead of model metadata", () => {
+  const lines = createFooter({
+    providerCount: 2,
+    statuses: {
+      "pi-add-dir": "added dirs second-brain, docs",
+      other: "other status",
+    },
+  }).render(120);
+  assert.match(lines[0], /\/work\/repo • context \+second-brain \+docs/);
+  assert.doesNotMatch(lines[1], /second-brain|docs/);
+  assert.match(lines[1], /\(partner\) gpt-5\.5/);
+  assert.equal(lines[2], "other status");
+});
+
 test("shows the provider prefix only when several providers are available", () => {
   const withOne = createFooter({ thinkingLevel: "off" }).render(120)[1];
   assert.doesNotMatch(withOne, /\(partner\)/);

@@ -133,7 +133,7 @@ If there is nothing to commit (all prior work already committed), continue to Ph
 
 ### Phase 5 — Release Notes
 
-If a prose-quality skill is installed (e.g. `writing-clearly-and-concisely`), invoke it for everything written in this phase.
+If a prose-quality skill is installed (e.g. `write-simply`), invoke it for everything written in this phase.
 
 1. **Analyze changes** against `<base>` (bound in Phase 0):
 

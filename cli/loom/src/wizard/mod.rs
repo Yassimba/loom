@@ -8,7 +8,7 @@ mod state;
 mod tests;
 
 use state::{Action, ExecStatus, InstallEvent, InstallJob, Wizard};
-pub use state::{Model, WizardOutcome};
+pub use state::{Model, WizardOutcome, WizardPurpose};
 
 use crate::settings::apply_setting;
 use crate::{execute_install_plan_with_control, InstallFailure, StepStatus, System};
@@ -28,7 +28,7 @@ pub fn run_wizard(model: Model, system: &(dyn System + Sync)) -> Result<WizardOu
         "interactive setup needs a terminal: open a new shell and run `loom setup`, or pass --skill, --pi-package, or --herdr-plugin (skills also accept --agent and --scope)"
     );
     let mut wizard = Wizard::new(model);
-    wizard.probing = true;
+    wizard.probing = wizard.model.purpose == WizardPurpose::Install;
     let mut terminal = ratatui::init();
     let _ = execute!(std::io::stdout(), EnableMouseCapture);
     let outcome = run_loop(&mut terminal, &mut wizard, system);
@@ -60,7 +60,7 @@ fn run_loop(
     std::thread::scope(|scope| {
         // Probe installed state in the background so the first frame is
         // instant; marks fill in when the managers have answered.
-        {
+        if wizard.model.purpose == WizardPurpose::Install {
             let resources = wizard.model.resources.clone();
             let status = wizard.model.status;
             let destination = wizard.skill_destination();

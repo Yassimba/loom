@@ -2,37 +2,15 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildSetupCatalog } from "./catalog-lib.mjs";
+import { buildSetupCatalogDocument } from "./catalog-lib.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "..");
 const outputPath = join(repoRoot, "cli", "loom", "setup-catalog.json");
 
-export function renderSetupCatalog(resources) {
-  const expanded = `${JSON.stringify({ schemaVersion: 1, resources }, null, 2)}\n`;
-  return collapseShortStringArrays(expanded);
-}
-
-// Biome formats short arrays inline (lineWidth 100); JSON.stringify always
-// expands them. Collapse string-only arrays that fit, so the generated file
-// passes the repo formatter untouched.
-function collapseShortStringArrays(json) {
-  return json.replace(
-    /^([ ]*)("[^"]+": )\[\n((?:[ ]*"(?:[^"\\]|\\.)*",?\n)+)[ ]*\](,?)$/gm,
-    (match, indent, key, body, comma) => {
-      const items = body
-        .split("\n")
-        .map((line) => line.trim().replace(/,$/, ""))
-        .filter(Boolean);
-      const inline = `${indent}${key}[${items.join(", ")}]${comma}`;
-      return inline.length <= 100 ? inline : match;
-    },
-  );
-}
-
 async function generate({ check }) {
-  const resources = await buildSetupCatalog(repoRoot);
-  const content = renderSetupCatalog(resources);
+  const catalog = await buildSetupCatalogDocument(repoRoot);
+  const content = `${JSON.stringify(catalog, null, 2)}\n`;
   if (check) {
     let current = "";
     try {

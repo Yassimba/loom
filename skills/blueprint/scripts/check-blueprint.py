@@ -14,16 +14,15 @@ from pathlib import Path
 
 FIGURE_ROW_RE = re.compile(r"^\|(.+?)\|\s*(DRAW|SKIP)\s*\|(.+?)\|(.+?)\|\s*$")
 DIRECTIVE_INFO_RE = re.compile(r'^plannotator-svg path="([^"\r\n]+\.svg)"$')
-DATA_CHANGE_RE = re.compile(r"\bdata-change\s*=\s*([\"'])(.*?)\1")
 DATA_CODE_RE = re.compile(r"\bdata-code\s*=\s*([\"'])(.*?)\1")
 REQUIRED_CHANGE_FIELDS = ("id", "class", "target", "current", "projected", "reason", "verification")
-REQUIRED_HANDOFF_FIELDS = ("entry", "tracer", "finalEffect")
-REQUIRED_EVIDENCE_FIELDS = ("entry", "finalEffect", "tracer", "hops")
+REQUIRED_HANDOFF_FIELDS = ("outcome",)
+REQUIRED_EVIDENCE_FIELDS = ("summary", "sources")
 CHANGE_CLASSES = {"added", "removed", "changed"}
 MAX_SVG_BYTES = 2 * 1024 * 1024
 ROOT_ARTIFACTS = {
     "approval.json", "approved-plan.md", "brief.md", "changes.json",
-    "evidence.json", "figure-selection.md", "plan.md",
+    "evidence.json", "figure-selection.md", "plan.md", "overlay.json", "context.json",
 }
 
 
@@ -32,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("blueprint_dir", type=Path)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--lock", action="store_true")
+    parser.add_argument("--baseline", action="store_true", help="print the source baseline hash, excluding this Blueprint directory")
     return parser.parse_args()
 
 
@@ -106,26 +106,34 @@ def contained_file(repo_root: Path, relative: str) -> Path:
     return candidate
 
 
+def validate_source_range(value: str, repo_root: Path, errors: list[str], label: str) -> None:
+    path, separator, line_range = value.rpartition(":")
+    if not separator or not re.fullmatch(r"[1-9]\d*-[1-9]\d*", line_range):
+        errors.append(f"{label}: invalid source range: {value}")
+        return
+    try:
+        source = contained_file(repo_root, path)
+        start, end = (int(part) for part in line_range.split("-"))
+        line_count = len(source.read_text(encoding="utf-8", errors="replace").splitlines())
+        if start > end or end > line_count:
+            errors.append(f"{label}: source range {value} exceeds {line_count} lines")
+    except (OSError, ValueError) as error:
+        errors.append(f"{label}: {error}")
+
+
 def validate_code_bindings(svg: Path, repo_root: Path, errors: list[str]) -> None:
     text = svg.read_text(encoding="utf-8")
     for match in DATA_CODE_RE.finditer(text):
         for binding in match.group(2).split(","):
-            value = binding.strip()
-            path, separator, line_range = value.rpartition(":")
-            if not separator or not re.fullmatch(r"[1-9]\d*-[1-9]\d*", line_range):
-                errors.append(f"{svg.name}: invalid data-code binding: {value}")
-                continue
-            try:
-                contained_file(repo_root, path)
-            except (OSError, ValueError) as error:
-                errors.append(f"{svg.name}: {error}")
+            validate_source_range(binding.strip(), repo_root, errors, svg.name)
 
 
-def baseline_sha256(repo_root: Path) -> str:
+def baseline_sha256(repo_root: Path, exclude: Path | None = None) -> str:
     digest = hashlib.sha256()
     digest.update(run_git(repo_root, "rev-parse", "HEAD"))
-    digest.update(run_git(repo_root, "diff", "--binary", "HEAD"))
-    status = run_git(repo_root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    paths = ["--", ".", f":(exclude){exclude.relative_to(repo_root)}"] if exclude else []
+    digest.update(run_git(repo_root, "diff", "--binary", "HEAD", *paths))
+    status = run_git(repo_root, "status", "--porcelain=v1", "-z", "--untracked-files=all", *paths)
     digest.update(status)
     for entry in status.split(b"\0"):
         if not entry.startswith(b"?? "):
@@ -147,12 +155,14 @@ def retained_artifacts(directory: Path) -> tuple[set[str], list[str]]:
     invalid = sorted(
         relative for relative in retained_files
         if relative not in ROOT_ARTIFACTS
-        and not (relative.startswith("diagrams/") and relative.lower().endswith(".svg"))
+        and not (relative.startswith("diagrams/") and relative.lower().endswith((".svg", ".mmd")))
     )
     return retained_files, invalid
 
 
 def validate(directory: Path, repo_root: Path) -> list[str]:
+    if (directory / "overlay.json").exists():
+        return validate_compact(directory, repo_root)
     errors: list[str] = []
     required = ["brief.md", "evidence.json", "changes.json", "figure-selection.md", "plan.md"]
     for name in required:
@@ -168,15 +178,22 @@ def validate(directory: Path, repo_root: Path) -> list[str]:
         missing = [field for field in REQUIRED_EVIDENCE_FIELDS if not evidence.get(field)]
         if missing:
             errors.append(f"evidence.json missing non-empty fields: {missing}")
-        tracer = evidence.get("tracer")
-        if not isinstance(tracer, dict) or not all(
-            isinstance(tracer.get(field), str) and tracer[field].strip()
-            for field in ("name", "input", "output")
-        ):
-            errors.append("evidence.json tracer needs non-empty name, input, and output")
-        hops = evidence.get("hops")
-        if not isinstance(hops, list) or not hops or not all(isinstance(hop, dict) for hop in hops):
-            errors.append("evidence.json hops must be a non-empty object array")
+        sources = evidence.get("sources")
+        if not isinstance(sources, list) or not sources:
+            errors.append("evidence.json sources must be a non-empty array")
+        else:
+            for index, item in enumerate(sources):
+                if not isinstance(item, dict):
+                    errors.append(f"evidence.json sources[{index}] must be an object")
+                    continue
+                source = item.get("source")
+                finding = item.get("finding")
+                if not isinstance(source, str) or not source.strip():
+                    errors.append(f"evidence.json sources[{index}] needs a source range")
+                else:
+                    validate_source_range(source.strip(), repo_root, errors, f"evidence.json sources[{index}]")
+                if not isinstance(finding, str) or not finding.strip():
+                    errors.append(f"evidence.json sources[{index}] needs a finding")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         errors.append(f"evidence.json: {error}")
 
@@ -212,7 +229,9 @@ def validate(directory: Path, repo_root: Path) -> list[str]:
                 draw_figures.append(svg.resolve())
         elif figure != "—":
             errors.append(f"{type_name}: SKIP figure cell must be —")
-    if len(draw_figures) != len(set(draw_figures)):
+    if not draw_figures:
+        errors.append("figure-selection needs at least one DRAW verdict")
+    elif len(draw_figures) != len(set(draw_figures)):
         errors.append("each DRAW verdict needs a distinct SVG")
 
     plan = (directory / "plan.md").read_text(encoding="utf-8")
@@ -279,22 +298,11 @@ def validate(directory: Path, repo_root: Path) -> list[str]:
         if len(ids) != len(set(ids)):
             errors.append("change ids must be unique")
 
-        diagram_ids: list[str] = []
         for svg in draw_figures:
             text = svg.read_text(encoding="utf-8")
             if "viewBox=" not in text:
                 errors.append(f"{svg.relative_to(directory)} lacks viewBox")
-            diagram_ids.extend(
-                change_id.strip()
-                for match in DATA_CHANGE_RE.finditer(text)
-                for change_id in match.group(2).split(",")
-                if change_id.strip()
-            )
             validate_code_bindings(svg, repo_root, errors)
-        unknown = sorted(set(diagram_ids) - set(ids))
-        absent = sorted(set(ids) - set(diagram_ids))
-        if unknown or absent:
-            errors.append(f"data-change ids must equal ledger ids; unknown={unknown}, absent={absent}")
         unlisted = [
             change_id for change_id in ids
             if not re.search(rf"(?<![A-Za-z0-9_]){re.escape(change_id)}(?![A-Za-z0-9_])", plan)
@@ -304,6 +312,12 @@ def validate(directory: Path, repo_root: Path) -> list[str]:
     except (OSError, ValueError, json.JSONDecodeError) as error:
         errors.append(f"changes.json: {error}")
 
+    errors.extend(validate_approval(directory, repo_root))
+    return errors
+
+
+def validate_approval(directory: Path, repo_root: Path) -> list[str]:
+    errors: list[str] = []
     approval = directory / "approval.json"
     approved_plan = directory / "approved-plan.md"
     if approval.exists() != approved_plan.exists():
@@ -325,9 +339,95 @@ def validate(directory: Path, repo_root: Path) -> list[str]:
             approved_at = datetime.fromisoformat(str(record.get("approvedAt", "")))
             if approved_at.utcoffset() is None:
                 errors.append("approval.json approvedAt must include a timezone")
+            if (directory / "overlay.json").exists() and record.get("artifactSha256") != artifact_hashes(directory):
+                errors.append("approved artifacts changed: overlay, context, or figures differ from the lock")
         except (OSError, ValueError, json.JSONDecodeError) as error:
             errors.append(f"approval.json: {error}")
 
+    return errors
+
+
+def artifact_hashes(directory: Path) -> dict[str, str]:
+    files, invalid = retained_artifacts(directory)
+    if invalid:
+        raise ValueError(f"unsupported artifacts: {invalid}")
+    return {relative: sha256_file(contained_file(directory, relative))
+            for relative in sorted(files) if relative not in {"approval.json", "approved-plan.md"}}
+
+
+def validate_compact(directory: Path, repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    try:
+        overlay = json.loads((directory / "overlay.json").read_text(encoding="utf-8"))
+        if not isinstance(overlay, dict) or overlay.get("version") != 2:
+            raise ValueError("overlay.json requires version 2")
+        plan = (directory / "plan.md").read_text(encoding="utf-8")
+        for heading in ("Intent", "Acceptance criteria", "Changes", "Implementation", "Verification", "Risks"):
+            if not re.search(rf"^## {re.escape(heading)}\s*$", plan, re.M | re.I):
+                errors.append(f"plan.md needs a {heading} section")
+        if not re.search(r"\bC[1-9]\d*\b", plan):
+            errors.append("plan.md needs stable C1/C2 change IDs")
+        target = overlay.get("target", {})
+        if not isinstance(target, dict) or not re.fullmatch(r"[0-9a-f]{40,64}", str(target.get("head", ""))):
+            errors.append("overlay target needs a full head commit ID")
+        elif not (directory / "approval.json").exists():
+            if target["head"] != run_git(repo_root, "rev-parse", "HEAD").decode().strip():
+                errors.append("overlay target differs from review HEAD; inspect drift before approval")
+            if target.get("baselineSha256") != baseline_sha256(repo_root, directory):
+                errors.append("overlay target baseline changed; inspect source drift and capture --baseline again")
+        atlas = overlay.get("atlas")
+        if atlas is not None:
+            if not isinstance(atlas, dict) or atlas.get("snapshot") != "context.json" or not atlas.get("topics"):
+                raise ValueError("atlas needs selected topics and context.json snapshot")
+            snapshot = json.loads(contained_file(directory, "context.json").read_text(encoding="utf-8"))
+            if {row["id"] for row in snapshot["topics"]} != set(atlas["topics"]):
+                errors.append("context snapshot does not match selected atlas topics")
+            if not snapshot.get("repositories") or any(not re.fullmatch(r"[0-9a-f]{40,64}", row["commit"])
+                                                       for row in snapshot["repositories"].values()):
+                errors.append("context snapshot needs pinned repositories")
+        figures = overlay.get("figures")
+        if not isinstance(figures, list):
+            raise ValueError("overlay figures must be a list")
+        paths, directive_errors = plan_directives(plan)
+        errors.extend(directive_errors)
+        selected = []
+        ids = []
+        for figure in figures:
+            ids.append(figure["id"])
+            relative = figure["output"]
+            if not relative.startswith("diagrams/") or not valid_svg_path(relative):
+                raise ValueError(f"invalid figure output: {relative}")
+            svg = contained_file(directory, relative)
+            selected.append(svg)
+            content = svg.read_text(encoding="utf-8")
+            if svg.stat().st_size > MAX_SVG_BYTES or "viewBox=" not in content:
+                errors.append(f"{relative}: SVG needs viewBox and must fit the size limit")
+            if not (directory / "approval.json").exists():
+                validate_code_bindings(svg, repo_root, errors)
+            if "mermaid" in figure:
+                mermaid = figure["mermaid"]
+                if not mermaid.startswith("diagrams/") or not mermaid.endswith(".mmd"):
+                    raise ValueError("Mermaid source must be diagrams/*.mmd")
+                contained_file(directory, mermaid)
+            elif atlas is None or not figure.get("source") or not isinstance(figure.get("patch"), dict):
+                errors.append(f"{relative}: needs an atlas source/patch or Mermaid source")
+        if len(ids) != len(set(ids)) or len(selected) != len(set(selected)):
+            errors.append("figure IDs and outputs must be unique")
+        actual = []
+        for relative in paths:
+            if not valid_svg_path(relative):
+                raise ValueError(f"invalid SVG directive: {relative}")
+            actual.append(contained_file(repo_root, relative))
+        if sorted(actual) != sorted(selected):
+            errors.append("plan must reference each selected SVG exactly once")
+        retained, invalid = retained_artifacts(directory)
+        if invalid:
+            errors.append(f"unsupported artifacts: {invalid}")
+        if {contained_file(directory, path) for path in retained if path.endswith(".svg")} != set(selected):
+            errors.append("retain only selected SVG outputs")
+        errors.extend(validate_approval(directory, repo_root))
+    except (OSError, ValueError, TypeError, KeyError, subprocess.CalledProcessError) as error:
+        errors.append(f"compact Blueprint: {error}")
     return errors
 
 
@@ -336,7 +436,7 @@ def lock(directory: Path, repo_root: Path) -> None:
     approved_plan = directory / "approved-plan.md"
     if approval.exists() or approved_plan.exists():
         raise ValueError("approval is already locked; preserve it and create a new Blueprint revision")
-    baseline = baseline_sha256(repo_root)
+    baseline = baseline_sha256(repo_root, directory if (directory / "overlay.json").exists() else None)
     shutil.copyfile(directory / "plan.md", approved_plan)
     record = {
         "planPath": str((directory / "plan.md").relative_to(repo_root)),
@@ -345,6 +445,8 @@ def lock(directory: Path, repo_root: Path) -> None:
         "baselineSha256": baseline,
         "approvedAt": datetime.now(timezone.utc).isoformat(),
     }
+    if (directory / "overlay.json").exists():
+        record["artifactSha256"] = artifact_hashes(directory)
     temporary = approval.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     temporary.replace(approval)
@@ -354,6 +456,11 @@ def main() -> int:
     args = parse_args()
     directory = args.blueprint_dir.resolve()
     repo_root = args.repo_root.resolve()
+    if args.baseline:
+        if args.lock:
+            raise SystemExit("--baseline and --lock are mutually exclusive")
+        print(baseline_sha256(repo_root, directory))
+        return 0
     errors = validate(directory, repo_root)
     if errors:
         print("Blueprint validation failed:")

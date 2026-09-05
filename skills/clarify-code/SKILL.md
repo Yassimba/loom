@@ -32,7 +32,7 @@ Keep existing abstractions, control flow, validation, and error behavior in plac
 
 ## Align Prose
 
-Invoke `writing-clearly-and-concisely`. Make nearby docstrings and comments agree with the new vocabulary. Keep prose that states purpose, contract, invariant, or a necessary reason. Remove narration and correct stale claims.
+Invoke `write-simply`. Make nearby docstrings and comments agree with the new vocabulary. Keep prose that states purpose, contract, invariant, or a necessary reason. Remove narration and correct stale claims.
 
 Update project context only when shared vocabulary or a user-facing workflow changed. An internal rename ends at its callers and focused documentation.
 

@@ -6,7 +6,7 @@ use loom::{
 };
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
@@ -149,7 +149,7 @@ fn cancellation_skips_resources_before_launch() {
 }
 
 #[test]
-fn resources_in_the_same_manager_lane_overlap() {
+fn resources_in_the_same_manager_lane_never_overlap() {
     let plan = InstallPlan {
         prerequisites: Vec::new(),
         resources: vec![
@@ -163,72 +163,9 @@ fn resources_in_the_same_manager_lane_overlap() {
 
     assert!(report.failures.is_empty());
     assert!(
-        system.overlapped.load(Ordering::SeqCst),
-        "resources sharing a manager should overlap"
+        !system.overlapped.load(Ordering::SeqCst),
+        "resources sharing a manager must not race their registry"
     );
-}
-
-struct LostRegistrationSystem {
-    one_runs: AtomicUsize,
-    two_runs: AtomicUsize,
-}
-
-impl System for LostRegistrationSystem {
-    fn command_exists(&self, _name: &str) -> bool {
-        true
-    }
-
-    fn refresh_path(&self) {}
-
-    fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
-        let stdout = match command.program.as_str() {
-            "install-one" => {
-                self.one_runs.fetch_add(1, Ordering::SeqCst);
-                String::new()
-            }
-            "install-two" => {
-                self.two_runs.fetch_add(1, Ordering::SeqCst);
-                String::new()
-            }
-            "pi" if self.one_runs.load(Ordering::SeqCst) > 1 => "one\ntwo".into(),
-            "pi" => "two".into(),
-            other => panic!("unexpected command: {other}"),
-        };
-        Ok(CommandResult {
-            success: true,
-            stdout,
-            stderr: String::new(),
-        })
-    }
-}
-
-#[test]
-fn a_registration_lost_during_parallel_install_is_restored_serially() {
-    let verified_step = |target: &str, program: &str, needle: &str| InstallStep {
-        verification: Some(loom::VerificationSpec::Command {
-            command: CommandSpec::new("pi", ["list"]),
-            needle: Some(needle.into()),
-        }),
-        ..step(target, "pi", program)
-    };
-    let plan = InstallPlan {
-        prerequisites: Vec::new(),
-        resources: vec![
-            verified_step("pi-package:one", "install-one", "one"),
-            verified_step("pi-package:two", "install-two", "two"),
-        ],
-    };
-    let system = LostRegistrationSystem {
-        one_runs: AtomicUsize::new(0),
-        two_runs: AtomicUsize::new(0),
-    };
-
-    let report = execute_install_plan(&plan, &system);
-
-    assert!(report.failures.is_empty());
-    assert_eq!(report.installed, vec!["pi-package:one", "pi-package:two"]);
-    assert_eq!(system.one_runs.load(Ordering::SeqCst), 2);
-    assert_eq!(system.two_runs.load(Ordering::SeqCst), 1);
 }
 
 struct MisePiSystem {
@@ -283,9 +220,7 @@ impl System for MisePiSystem {
                 fs::write(output, b"tarball")?;
             }
             "tar" => {
-                let manifest = self
-                    .home
-                    .join(".cache/loom/manifest-staging/loom-main/manifest/loom.toml");
+                let manifest = PathBuf::from(&command.args[3]).join("loom-main/manifest/loom.toml");
                 fs::create_dir_all(manifest.parent().unwrap())?;
                 fs::write(
                     manifest,
@@ -460,6 +395,7 @@ fn successful_bootstrap_must_make_its_manager_available() {
 /// installer runs end to end against a temp home.
 struct SkillInstallSystem {
     home: PathBuf,
+    commands: Mutex<Vec<CommandSpec>>,
     /// The skills the "downloaded" repo contains.
     repo_skills: Vec<String>,
 }
@@ -476,12 +412,19 @@ impl SkillInstallSystem {
         fs::create_dir_all(home.join(".config").join("opencode")).expect("create OpenCode config");
         Self {
             home,
+            commands: Mutex::new(Vec::new()),
             repo_skills: repo_skills.iter().map(ToString::to_string).collect(),
         }
     }
 
     fn staging(&self) -> PathBuf {
-        self.home.join(".cache").join("loom").join("staging")
+        self.commands
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|command| command.program == "tar")
+            .map(|command| PathBuf::from(&command.args[3]))
+            .expect("repository was extracted")
     }
 
     fn tree(&self) -> PathBuf {
@@ -511,7 +454,9 @@ impl System for SkillInstallSystem {
     }
 
     fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
+        self.commands.lock().unwrap().push(command.clone());
         match command.program.as_str() {
+            "mise" => {}
             "curl" => {
                 let output = command
                     .args
@@ -522,7 +467,7 @@ impl System for SkillInstallSystem {
                 fs::write(Path::new(output), b"tarball")?;
             }
             "tar" => {
-                let repo = self.staging().join("loom-main");
+                let repo = PathBuf::from(&command.args[3]).join("loom-main");
                 for name in &self.repo_skills {
                     let skill = repo.join("skills").join(name);
                     fs::create_dir_all(&skill)?;
@@ -535,6 +480,10 @@ impl System for SkillInstallSystem {
                     .join("loom-session-env.js");
                 fs::create_dir_all(adapter.parent().expect("adapter parent"))?;
                 fs::write(&adapter, "export const LoomSessionEnv = true;\n")?;
+                fs::write(
+                    repo.join("manifest/loom.toml"),
+                    "[tools]\n# core:begin\nnode = \"24.19.0\"\n# core:end\ngh = \"2.97.0\"\n",
+                )?;
             }
             other => panic!("unexpected command: {other}"),
         }
@@ -635,6 +584,44 @@ fn a_skill_missing_from_the_downloaded_repo_fails_the_step() {
         report.failures[0].message,
         "downloaded repo is missing skills: tdd"
     );
+}
+
+#[test]
+fn tools_and_skills_share_one_download_and_cleanup() {
+    let system = SkillInstallSystem::new("shared-repository", &["tdd"]);
+    let mut plan = copy_skills_plan(&["tdd"], &system);
+    plan.prerequisites.push(InstallStep {
+        target: "tools".into(),
+        manager: "mise".into(),
+        action: StepAction::SyncTools {
+            tools: vec!["gh".into()],
+        },
+        verification: None,
+    });
+
+    let report = execute_install_plan(&plan, &system);
+
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert!(system.tree().join("tdd/SKILL.md").is_file());
+    let selection = fs::read_to_string(system.home.join(".config/mise/conf.d/loom.toml")).unwrap();
+    assert!(selection.contains("gh = \"2.97.0\""));
+    let commands = system.commands.lock().unwrap();
+    assert_eq!(
+        commands
+            .iter()
+            .filter(|command| command.program == "curl")
+            .count(),
+        1
+    );
+    assert_eq!(
+        commands
+            .iter()
+            .filter(|command| command.program == "tar")
+            .count(),
+        1
+    );
+    drop(commands);
+    assert!(!system.staging().exists());
 }
 
 #[cfg(unix)]

@@ -56,7 +56,7 @@ options:
 
 ## 2. Draft the message
 
-Load `writing-clearly-and-concisely` and write the subject and body in its register. Draft from the _why_ of the staged diff: what motivated the change, where a line-by-line list would only restate `git diff`.
+Load `write-simply` and write the subject and body in its register. Draft from the _why_ of the staged diff: what motivated the change, where a line-by-line list would only restate `git diff`.
 
 Conventional Commits format:
 

@@ -34,6 +34,21 @@
       "nextAction": "Run `loom init` in a project to wire agents and build its index."
     },
     {
+      "key": "github:rtk-ai/rtk",
+      "label": "rtk",
+      "bin": "rtk",
+      "description": "Compress command output for coding agents to reduce token usage.",
+      "nextAction": "Run `rtk init --global` for Claude Code or `rtk init --global --agent cursor` for Cursor, then restart the agent."
+    },
+    {
+      "key": "npm:@tobilu/qmd",
+      "label": "qmd",
+      "bin": "qmd",
+      "group": "Wiki",
+      "description": "On-device Markdown search with BM25, vector search, and LLM reranking.",
+      "nextAction": "Run `qmd collection add ~/notes --name notes`, then `qmd embed`."
+    },
+    {
       "key": "github:agavra/tuicr",
       "label": "tuicr",
       "bin": "tuicr",
@@ -140,16 +155,33 @@
       "nextAction": "Run `pup auth login` once."
     },
     {
-      "key": "github:Yassimba/plannotator",
+      "key": "pipx:confluence-markdown-exporter",
+      "label": "confluence-markdown-exporter",
+      "bin": "cme",
+      "group": "Wiki",
+      "description": "Export Confluence pages, descendants, spaces, or organisations to Markdown.",
+      "nextAction": "Run `cme config edit auth.confluence` to configure authentication."
+    },
+    {
+      "key": "github:backnotprop/plannotator",
       "label": "plannotator",
-      "description": "Browser-based plan and code review for coding agents, with figure-led Guided Reviews: one document, a code peek, and in-app guides drawn by the changeset-walkthrough skill. The plannotator skills drive it.",
-      "nextAction": "In Claude Code run `/plugin marketplace add Yassimba/plannotator` and `/plugin install plannotator@plannotator`, then restart. Pick changeset-walkthrough in loom to get the figure-led guides."
+      "description": "Browser-based plan and code review, document annotation, and Guided Reviews for coding agents. The plannotator skill drives it.",
+      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart."
     },
     {
       "key": "github:AgriciDaniel/claude-obsidian",
       "label": "claude-obsidian",
-      "description": "An Obsidian vault as your agent's wiki: wiki-ingest, wiki-query, save, think, canvas, and the autoresearch loop, with a source-grounded Python core. By AgriciDaniel, MIT.",
-      "nextAction": "In Claude Code run `/plugin marketplace add AgriciDaniel/claude-obsidian` and `/plugin install claude-obsidian@agricidaniel-claude-obsidian`, then `/claude-obsidian:wiki`. Other agents load its skills from `$(mise where github:AgriciDaniel/claude-obsidian)/skills`."
+      "group": "Wiki",
+      "description": "An Obsidian Vault as Pi's project-local wiki: wiki-ingest, wiki-query, save, think, canvas, and autoresearch. By AgriciDaniel, MIT.",
+      "nextAction": "Run `loom wiki` to create or adopt a Vault.",
+      "windowsSupport": "wsl"
+    },
+    {
+      "key": "python",
+      "label": "python",
+      "description": "Exact-pinned Python runtime required by claude-obsidian.",
+      "nextAction": "Run `loom wiki` to configure a Vault.",
+      "bin": "python"
     }
   ]
 }

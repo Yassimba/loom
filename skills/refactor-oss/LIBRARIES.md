@@ -86,3 +86,11 @@ Apply these wherever this catalog is in hand:
 - **litestar** + **msgspec** (or pydantic, which litestar also serialises natively) — hand-rolled ASGI routing, RFC 9457 problem details, OpenAPI; avoid keeping a second wire model type when the domain model already serialises.
 - **adbc-driver-*** family — SQLAlchemy dialect packages for one more backend; pair with the sqlglot dialect that already exists.
 - **datacontract-specification** — hand-typed pydantic models of the datacontract.com spec.
+
+## Python — stdlib (added 2026-09)
+
+- **threading.Event** — test polling loops (`for _ in range(N): if cond(): ...; sleep`) that wait for a worker thread to reach a point; the worker sets the event, the test waits with a timeout.
+
+## Python — general (added 2026-09)
+
+- **pydantic** `model_validate(obj, from_attributes=True)` — hand-written `from_record`/`from_result` factories that copy same-named fields from a dataclass into a wire model.

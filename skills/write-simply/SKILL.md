@@ -1,9 +1,9 @@
 ---
-name: writing-clearly-and-concisely
+name: write-simply
 description: Writing or editing prose humans read - docs, commit messages, error messages, reports, UI text. Also the register other skills invoke for compact technical prose (docstrings, comments, captions, proposals), and the pass that makes text sound human instead of AI-written ("humanize", "reads like ChatGPT").
 ---
 
-# Writing Clearly and Concisely
+# Write Simply
 
 Always use ASD-STE100 Simplified Technical English plus Zinsser's four principles
 Write vigorous prose: every word tells, sentences are active and concrete, needless words are gone. Say what the thing does, in the words a knowledgeable human would pick.

@@ -7,12 +7,54 @@ use crate::{CommandSpec, Resource, ResourceKind, System};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+/// One lazy repository snapshot per command, shared by concurrent consumers.
+#[derive(Default)]
+pub(crate) struct Repository {
+    root: OnceLock<Result<PathBuf, String>>,
+    staging: OnceLock<PathBuf>,
+}
+
+impl Repository {
+    pub(crate) fn get(
+        &self,
+        system: &dyn System,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<PathBuf, String> {
+        self.root
+            .get_or_init(|| {
+                let staging = self.staging.get_or_init(|| {
+                    static NEXT: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(0);
+                    std::env::temp_dir().join(format!(
+                        "loom-repo-{}-{}-{}",
+                        std::process::id(),
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos(),
+                        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    ))
+                });
+                fetch_repo_controlled(system, staging, cancelled)
+            })
+            .clone()
+    }
+}
+
+impl Drop for Repository {
+    fn drop(&mut self) {
+        if let Some(staging) = self.staging.get() {
+            let _ = fs::remove_dir_all(staging);
+        }
+    }
+}
 
 pub const TARBALL_URL: &str = "https://codeload.github.com/Yassimba/loom/tar.gz/refs/heads/main";
 
 const OPENCODE_PLUGIN_SOURCE: &str = "manifest/opencode/plugins/loom-session-env.js";
 const OPENCODE_PLUGIN_NAME: &str = "loom-session-env.js";
-const SKILL_PROJECTS_REGISTRY: &str = "skill-projects.json";
 
 /// A user-facing skill destination. `AgentsStandard` is the portable
 /// `.agents/skills` tree used directly by several hosts.
@@ -150,6 +192,13 @@ impl SkillDestination {
             .collect::<Vec<_>>()
             .join(", ")
     }
+
+    pub(crate) fn opencode_adapter_path(&self) -> PathBuf {
+        match self.scope {
+            SkillScope::Global => opencode_adapter_path(&self.home),
+            SkillScope::Project => project_opencode_adapter_path(&self.project_root),
+        }
+    }
 }
 
 /// Prefer the Git worktree root so invoking Loom in a nested package still
@@ -204,81 +253,36 @@ pub(crate) fn opencode_adapter_path(home: &Path) -> PathBuf {
         .join(OPENCODE_PLUGIN_NAME)
 }
 
-fn skill_projects_registry(home: &Path) -> PathBuf {
-    home.join(".config")
-        .join("loom")
-        .join(SKILL_PROJECTS_REGISTRY)
-}
-
 pub(crate) fn read_skill_projects(home: &Path) -> Result<Vec<PathBuf>, String> {
-    let path = skill_projects_registry(home);
-    let raw = match fs::read_to_string(&path) {
-        Ok(raw) => raw,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(format!("could not read {}: {error}", path.display())),
-    };
-    serde_json::from_str(&raw)
-        .map_err(|error| format!("could not parse {}: {error}", path.display()))
-}
-
-fn write_skill_projects(home: &Path, projects: &[PathBuf]) -> Result<(), String> {
-    let path = skill_projects_registry(home);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-    }
-    let json = serde_json::to_string_pretty(projects).map_err(|error| error.to_string())?;
-    fs::write(&path, format!("{json}\n"))
-        .map_err(|error| format!("could not write {}: {error}", path.display()))
+    let state = crate::ownership::InstallState::load(home)?;
+    let mut projects = state
+        .resources
+        .values()
+        .filter(|resource| {
+            resource.id.contains("skill:")
+                && matches!(
+                    &resource.scope,
+                    crate::ownership::OwnershipScope::Project { .. }
+                )
+        })
+        .filter_map(|resource| match &resource.scope {
+            crate::ownership::OwnershipScope::Project { root } => Some(root.clone()),
+            crate::ownership::OwnershipScope::Global => None,
+        })
+        .collect::<Vec<_>>();
+    projects.sort();
+    projects.dedup();
+    Ok(projects)
 }
 
 fn is_real_directory(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
 }
 
-fn register_skill_project(home: &Path, project: &Path) -> Result<(), String> {
-    if !is_real_directory(project) {
-        return Err(format!(
-            "refusing to register a missing or symlinked project: {}",
-            project.display()
-        ));
-    }
-    let mut projects = read_skill_projects(home)?;
-    if !projects.iter().any(|candidate| candidate == project) {
-        projects.push(project.to_path_buf());
-        write_skill_projects(home, &projects)?;
-    }
-    Ok(())
-}
-
 pub(crate) fn prune_registered_skill_projects(home: &Path) -> Result<Vec<PathBuf>, String> {
     let mut registered = read_skill_projects(home)?;
-    registered.sort();
-    registered.dedup();
-    let before_prune = registered.clone();
     registered.retain(|root| is_real_directory(root));
-    if registered != before_prune {
-        write_skill_projects(home, &registered)?;
-    }
     Ok(registered)
-}
-
-pub(crate) fn registered_skill_projects(
-    home: &Path,
-    current: &Path,
-) -> Result<Vec<PathBuf>, String> {
-    let registered = prune_registered_skill_projects(home)?;
-
-    // Keep refreshing a legacy/current project tree without claiming Loom
-    // installed it. Only project-scoped installs add roots to the registry.
-    let mut visited = registered;
-    let current = project_root(current);
-    if is_real_directory(&current) {
-        visited.push(current);
-    }
-    visited.sort();
-    visited.dedup();
-    Ok(visited)
 }
 
 pub(crate) fn project_opencode_adapter_path(project_root: &Path) -> PathBuf {
@@ -289,8 +293,13 @@ pub(crate) fn project_opencode_adapter_path(project_root: &Path) -> PathBuf {
 }
 
 /// The selection plus the transitive closure of catalog skill dependencies,
-/// deduplicated, dependencies appended after the explicit selection.
-pub fn expand_skill_dependencies(all: &[Resource], selection: Vec<Resource>) -> Vec<Resource> {
+/// deduplicated, dependencies appended after the explicit selection. Plannotator
+/// includes its review extension when Pi is a selected destination.
+pub fn expand_skill_dependencies(
+    all: &[Resource],
+    selection: Vec<Resource>,
+    agents: &[SkillAgent],
+) -> Vec<Resource> {
     let mut expanded = selection;
     let mut seen = expanded
         .iter()
@@ -298,7 +307,16 @@ pub fn expand_skill_dependencies(all: &[Resource], selection: Vec<Resource>) -> 
         .collect::<HashSet<_>>();
     let mut cursor = 0;
     while cursor < expanded.len() {
-        let dependencies = expanded[cursor].dependencies.clone();
+        let resource = &expanded[cursor];
+        let mut dependencies = resource.dependencies.clone();
+        if agents.contains(&SkillAgent::Pi)
+            && matches!(
+                resource.install_target.as_str(),
+                "plannotator" | "github:backnotprop/plannotator"
+            )
+        {
+            dependencies.push("@plannotator/pi-extension".into());
+        }
         cursor += 1;
         for name in dependencies {
             let Some(dependency) = all
@@ -320,6 +338,9 @@ pub fn expand_skill_dependencies(all: &[Resource], selection: Vec<Resource>) -> 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CopyOutcome {
     Installed,
+    /// Existing content is user-owned until an ownership receipt proves
+    /// otherwise; setup must never replace or claim it.
+    AlreadyPresent,
     /// The tree entry is a symlink (e.g. a dev machine linking into a repo
     /// checkout); never write through it.
     SkippedSymlink,
@@ -330,21 +351,20 @@ pub enum CopyOutcome {
 pub struct TreeReport {
     pub tree: PathBuf,
     pub installed: usize,
-    pub skipped_symlinks: Vec<String>,
+    pub skipped_existing: usize,
+    pub skipped_symlinks: usize,
 }
 
 /// Download the repo once and copy every named skill into every detected
 /// skill tree, then verify each copy landed with its SKILL.md. Returns the
 /// per-tree summaries, or one aggregated failure message.
-pub fn install_skills(
+pub(crate) fn install_skills(
     system: &dyn System,
+    repository: &Repository,
     skills: &[String],
     destination: &SkillDestination,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<Vec<TreeReport>, String> {
-    let home = system
-        .home_dir()
-        .ok_or_else(|| "home directory is unavailable".to_string())?;
     let trees = destination.trees();
     if trees.is_empty() {
         return Err("no skill agents selected".to_string());
@@ -356,8 +376,7 @@ pub fn install_skills(
         ));
     }
 
-    let staging = home.join(".cache").join("loom").join("staging");
-    let result = fetch_repo_controlled(system, &staging, cancelled).and_then(|repo_root| {
+    repository.get(system, cancelled).and_then(|repo_root| {
         let source_root = repo_root.join("skills");
         let mut missing = skills
             .iter()
@@ -369,75 +388,60 @@ pub fn install_skills(
                 missing.cloned().collect::<Vec<_>>().join(", ")
             ));
         }
-        install_opencode_adapter(&home, &repo_root, destination)?;
-        let reports = copy_into_trees(&source_root, &trees, skills)?;
-        if destination.scope == SkillScope::Project {
-            register_skill_project(&home, &destination.project_root)?;
-        }
-        Ok(reports)
-    });
-    let _ = fs::remove_dir_all(&staging);
-    result
+        install_opencode_adapter(&repo_root, destination)?;
+        copy_into_trees(&source_root, &trees, skills)
+    })
 }
 
 /// Install the Loom-owned session adapter when OpenCode is present. The
 /// plugin gives shell tools the current raw session ID; it owns one fixed
 /// filename, so updates replace only Loom's previous copy.
 fn install_opencode_adapter(
-    home: &Path,
     repo_root: &Path,
     destination: &SkillDestination,
 ) -> Result<(), String> {
     if !destination.agents.contains(&SkillAgent::OpenCode) {
         return Ok(());
     }
-
-    let target = match destination.scope {
-        SkillScope::Global => opencode_adapter_path(home),
-        SkillScope::Project => project_opencode_adapter_path(&destination.project_root),
-    };
-    install_opencode_adapter_at(repo_root, &target)
+    let target = destination.opencode_adapter_path();
+    if target.symlink_metadata().is_ok() {
+        return Ok(());
+    }
+    replace_opencode_adapter(repo_root, &target)
 }
 
-fn install_opencode_adapter_at(repo_root: &Path, target: &Path) -> Result<(), String> {
+fn replace_opencode_adapter(repo_root: &Path, target: &Path) -> Result<(), String> {
     let source = repo_root.join(OPENCODE_PLUGIN_SOURCE);
     if !source.is_file() {
         return Err(format!(
             "downloaded repo is missing the OpenCode adapter: {OPENCODE_PLUGIN_SOURCE}"
         ));
     }
-    let parent = target
-        .parent()
-        .ok_or_else(|| "OpenCode adapter target has no parent".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-    let incoming = parent.join(format!(".{OPENCODE_PLUGIN_NAME}.loom-new"));
-    let _ = fs::remove_file(&incoming);
-    fs::copy(&source, &incoming)
-        .map_err(|error| format!("could not stage OpenCode adapter: {error}"))?;
-    if target.exists() || target.symlink_metadata().is_ok() {
-        fs::remove_file(target)
-            .map_err(|error| format!("could not replace {}: {error}", target.display()))?;
-    }
-    fs::rename(&incoming, target)
-        .map_err(|error| format!("could not install {}: {error}", target.display()))?;
-    Ok(())
+    let content = fs::read(&source).map_err(|error| error.to_string())?;
+    crate::fs_tx::atomic_write(target, &content)
 }
 
-/// Refresh only skill copies that already exist globally or in the current
-/// project. Each tree keeps its own set, so update never widens an earlier
-/// agent or scope choice.
-pub fn refresh_installed_skills(
+fn owned_unchanged(state: &crate::ownership::InstallState, path: &Path) -> bool {
+    state
+        .owned_path_digest(path)
+        .is_some_and(|owned| crate::ownership::digest_path(path).as_deref() == Ok(owned))
+}
+
+/// Refresh only unmodified Loom-owned skill copies. Catalog-named user
+/// content and edited copies are preserved rather than adopted or replaced.
+pub(crate) fn refresh_installed_skills(
     system: &dyn System,
+    repository: &Repository,
     resources: &[Resource],
 ) -> Result<Vec<TreeReport>, String> {
     let home = system
         .home_dir()
         .ok_or_else(|| "home directory is unavailable".to_string())?;
-    let current_dir = system
-        .current_dir()
-        .ok_or_else(|| "current directory is unavailable".to_string())?;
-    let projects = registered_skill_projects(&home, &current_dir)?;
+    let mut state = crate::ownership::InstallState::load(&home)?;
+    for path in state.owned_paths() {
+        crate::fs_tx::recover(&path)?;
+    }
+    let projects = prune_registered_skill_projects(&home)?;
     let mut trees = detect_skill_trees(&home);
     trees.extend(projects.iter().flat_map(|root| {
         SkillAgent::ALL
@@ -448,55 +452,90 @@ pub fn refresh_installed_skills(
     let mut seen = HashSet::new();
     trees.retain(|tree| seen.insert(tree.clone()));
 
+    let adapter_for_tree = |tree: &Path| {
+        if tree == home.join(".config").join("opencode").join("skills") {
+            Some(opencode_adapter_path(&home))
+        } else if tree.ends_with(Path::new(".opencode").join("skills")) {
+            tree.parent()
+                .and_then(Path::parent)
+                .map(project_opencode_adapter_path)
+        } else {
+            None
+        }
+    };
     let copies = trees
         .into_iter()
         .filter_map(|tree| {
-            let installed = resources
+            let mut refresh = Vec::new();
+            let mut preserved = 0;
+            for resource in resources
                 .iter()
                 .filter(|resource| resource.kind == ResourceKind::Skill)
                 .filter(|resource| skill_present_in(&tree, &resource.install_target))
-                .cloned()
-                .collect::<Vec<_>>();
-            if installed.is_empty() {
-                return None;
+            {
+                let path = tree.join(&resource.install_target);
+                let clean = owned_unchanged(&state, &path);
+                if clean {
+                    refresh.push(resource.install_target.clone());
+                } else {
+                    preserved += 1;
+                }
             }
-            // Refresh exactly the skills already present in this tree. A
-            // maintenance run must not widen the user's earlier selection.
-            let names = installed
-                .into_iter()
-                .map(|resource| resource.install_target)
-                .collect::<Vec<_>>();
-            Some((tree, names))
+            (!refresh.is_empty() || preserved > 0).then_some((tree, refresh, preserved))
         })
         .collect::<Vec<_>>();
     if copies.is_empty() {
         return Ok(Vec::new());
     }
-
-    let staging = home.join(".cache").join("loom").join("staging");
-    let result = fetch_repo(system, &staging).and_then(|repo_root| {
-        let source_root = repo_root.join("skills");
-        let mut reports = Vec::new();
-        for (tree, names) in &copies {
-            let mut copied = copy_into_trees(&source_root, std::slice::from_ref(tree), names)?;
-            reports.append(&mut copied);
-            let adapter = if *tree == home.join(".config").join("opencode").join("skills") {
-                Some(opencode_adapter_path(&home))
-            } else if tree.ends_with(Path::new(".opencode").join("skills")) {
-                tree.parent()
-                    .and_then(Path::parent)
-                    .map(project_opencode_adapter_path)
-            } else {
-                None
-            };
-            if let Some(adapter) = adapter {
-                install_opencode_adapter_at(&repo_root, &adapter)?;
-            }
-        }
-        Ok(reports)
+    let needs_refresh = copies.iter().any(|(tree, names, _)| {
+        !names.is_empty()
+            || adapter_for_tree(tree).is_some_and(|adapter| owned_unchanged(&state, &adapter))
     });
-    let _ = fs::remove_dir_all(&staging);
-    result
+    if !needs_refresh {
+        return Ok(copies
+            .into_iter()
+            .map(|(tree, _, preserved)| TreeReport {
+                tree,
+                installed: 0,
+                skipped_existing: preserved,
+                skipped_symlinks: 0,
+            })
+            .collect());
+    }
+
+    repository
+        .get(system, &std::sync::atomic::AtomicBool::new(false))
+        .and_then(|repo_root| {
+            let source_root = repo_root.join("skills");
+            let mut reports = Vec::new();
+            for (tree, names, preserved) in &copies {
+                let mut report = TreeReport {
+                    tree: tree.clone(),
+                    installed: 0,
+                    skipped_existing: *preserved,
+                    skipped_symlinks: 0,
+                };
+                for name in names {
+                    let path = tree.join(name);
+                    refresh_skill(&source_root, tree, name)?;
+                    state.refresh_path_digest(&path, crate::ownership::digest_path(&path)?);
+                    report.installed += 1;
+                }
+                if let Some(adapter) = adapter_for_tree(tree) {
+                    let clean = owned_unchanged(&state, &adapter);
+                    if clean {
+                        replace_opencode_adapter(&repo_root, &adapter)?;
+                        state.refresh_path_digest(
+                            &adapter,
+                            crate::ownership::digest_path(&adapter)?,
+                        );
+                    }
+                }
+                reports.push(report);
+            }
+            state.save(&home)?;
+            Ok(reports)
+        })
 }
 
 /// Download and unpack the repo tarball into `staging`; returns the extracted
@@ -504,16 +543,12 @@ pub fn refresh_installed_skills(
 /// Windows 10+) through `System`, so tests can intercept both.
 /// `LOOM_REPO_DIR` overrides the download with a local checkout — for
 /// testing unpushed skills and manifest changes end to end.
-pub(crate) fn fetch_repo(system: &dyn System, staging: &Path) -> Result<PathBuf, String> {
-    fetch_repo_controlled(system, staging, &std::sync::atomic::AtomicBool::new(false))
-}
-
-pub(crate) fn fetch_repo_controlled(
+fn fetch_repo_controlled(
     system: &dyn System,
     staging: &Path,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<PathBuf, String> {
-    if let Some(local) = std::env::var_os("LOOM_REPO_DIR") {
+    if let Some(local) = std::env::var_os("LOOM_REPO_DIR").filter(|value| !value.is_empty()) {
         let root = PathBuf::from(local);
         if !root.join("skills").is_dir() {
             return Err(format!(
@@ -583,7 +618,8 @@ fn copy_into_trees(
         let mut report = TreeReport {
             tree: tree.clone(),
             installed: 0,
-            skipped_symlinks: Vec::new(),
+            skipped_existing: 0,
+            skipped_symlinks: 0,
         };
         for name in skills {
             match copy_skill(source_root, tree, name) {
@@ -598,7 +634,8 @@ fn copy_into_trees(
                         ));
                     }
                 }
-                Ok(CopyOutcome::SkippedSymlink) => report.skipped_symlinks.push(name.clone()),
+                Ok(CopyOutcome::AlreadyPresent) => report.skipped_existing += 1,
+                Ok(CopyOutcome::SkippedSymlink) => report.skipped_symlinks += 1,
                 Err(error) => failures.push(format!("{name} into {}: {error}", tree.display())),
             }
         }
@@ -621,14 +658,19 @@ fn copy_skill(source_root: &Path, tree: &Path, name: &str) -> Result<CopyOutcome
     {
         return Ok(CopyOutcome::SkippedSymlink);
     }
+    if target.exists() {
+        return Ok(CopyOutcome::AlreadyPresent);
+    }
+    refresh_skill(source_root, tree, name)?;
+    Ok(CopyOutcome::Installed)
+}
+
+fn refresh_skill(source_root: &Path, tree: &Path, name: &str) -> Result<(), String> {
+    let target = tree.join(name);
     let incoming = tree.join(format!(".{name}.loom-new"));
     let _ = fs::remove_dir_all(&incoming);
     copy_dir(&source_root.join(name), &incoming).map_err(|error| error.to_string())?;
-    if target.exists() {
-        fs::remove_dir_all(&target).map_err(|error| error.to_string())?;
-    }
-    fs::rename(&incoming, &target).map_err(|error| error.to_string())?;
-    Ok(CopyOutcome::Installed)
+    crate::fs_tx::replace_staged(&target, &incoming)
 }
 
 fn copy_dir(source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -740,27 +782,6 @@ mod tests {
         fs::remove_dir_all(&home).ok();
     }
 
-    #[test]
-    fn project_skill_registry_deduplicates_and_prunes_missing_roots() {
-        let home = temp_home("project-registry");
-        let first = home.join("first");
-        let second = home.join("second");
-        fs::create_dir_all(&first).unwrap();
-        fs::create_dir_all(&second).unwrap();
-        register_skill_project(&home, &first).unwrap();
-        register_skill_project(&home, &second).unwrap();
-        register_skill_project(&home, &first).unwrap();
-        fs::remove_dir_all(&second).unwrap();
-
-        let third = home.join("third");
-        fs::create_dir_all(&third).unwrap();
-        let projects = registered_skill_projects(&home, &third).unwrap();
-
-        assert_eq!(projects, [first.clone(), third]);
-        assert_eq!(read_skill_projects(&home).unwrap(), [first]);
-        fs::remove_dir_all(&home).ok();
-    }
-
     #[cfg(unix)]
     #[test]
     fn project_install_rejects_a_symlink_before_writing() {
@@ -794,6 +815,7 @@ mod tests {
 
         let error = install_skills(
             &NeverRun(home.clone()),
+            &Repository::default(),
             &["tdd".into()],
             &destination,
             &std::sync::atomic::AtomicBool::new(false),
@@ -814,26 +836,49 @@ mod tests {
         let target = home.join("target");
         fs::create_dir_all(&project).unwrap();
         fs::create_dir_all(&target).unwrap();
-        register_skill_project(&home, &project).unwrap();
+        let mut state = crate::ownership::InstallState {
+            schema_version: 1,
+            resources: std::collections::BTreeMap::new(),
+        };
+        state.record(crate::ownership::OwnedResource {
+            id: format!("project:{}:skill:tdd", project.display()),
+            scope: crate::ownership::OwnershipScope::Project {
+                root: project.clone(),
+            },
+            depends_on: Vec::new(),
+            receipts: Vec::new(),
+        });
+        state.save(&home).unwrap();
         fs::remove_dir(&project).unwrap();
         symlink(&target, &project).unwrap();
 
         assert!(prune_registered_skill_projects(&home).unwrap().is_empty());
-        assert!(read_skill_projects(&home).unwrap().is_empty());
         fs::remove_dir_all(&home).ok();
     }
 
     #[test]
-    fn malformed_project_registry_is_preserved() {
-        let home = temp_home("project-registry-malformed");
-        let path = skill_projects_registry(&home);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, "not json\n").unwrap();
+    fn project_roots_come_from_the_ownership_ledger() {
+        let home = temp_home("project-ledger");
+        let project = home.join("project");
+        fs::create_dir_all(&project).unwrap();
+        let mut state = crate::ownership::InstallState {
+            schema_version: 1,
+            resources: std::collections::BTreeMap::new(),
+        };
+        state.record(crate::ownership::OwnedResource {
+            id: format!("project:{}:skill:tdd", project.display()),
+            scope: crate::ownership::OwnershipScope::Project {
+                root: project.clone(),
+            },
+            depends_on: Vec::new(),
+            receipts: Vec::new(),
+        });
+        state.save(&home).unwrap();
 
-        let error = registered_skill_projects(&home, &home.join("current")).unwrap_err();
-
-        assert!(error.contains("could not parse"));
-        assert_eq!(fs::read_to_string(&path).unwrap(), "not json\n");
+        assert_eq!(
+            prune_registered_skill_projects(&home).unwrap(),
+            vec![project]
+        );
         fs::remove_dir_all(&home).ok();
     }
 
@@ -860,6 +905,43 @@ mod tests {
     }
 
     #[test]
+    fn plannotator_adds_pi_extension_only_for_pi_and_only_once() {
+        let catalog = crate::Catalog::embedded().unwrap();
+        let extension = catalog
+            .resources
+            .iter()
+            .find(|r| r.install_target == "@plannotator/pi-extension")
+            .unwrap();
+        for target in ["plannotator", "github:backnotprop/plannotator"] {
+            let selected = catalog
+                .resources
+                .iter()
+                .find(|r| r.install_target == target)
+                .unwrap()
+                .clone();
+            for agents in [vec![], vec![SkillAgent::Claude], vec![SkillAgent::Pi]] {
+                let expanded =
+                    expand_skill_dependencies(&catalog.resources, vec![selected.clone()], &agents);
+                assert_eq!(
+                    expanded.iter().any(|r| r.id == extension.id),
+                    agents.contains(&SkillAgent::Pi)
+                );
+            }
+            let expanded = expand_skill_dependencies(
+                &catalog.resources,
+                vec![selected, extension.clone()],
+                &[SkillAgent::Pi],
+            );
+            assert_eq!(expanded.iter().filter(|r| r.id == extension.id).count(), 1);
+        }
+        let unrelated = skill("unrelated", &[]);
+        assert_eq!(
+            expand_skill_dependencies(&catalog.resources, vec![unrelated], &[SkillAgent::Pi]).len(),
+            1
+        );
+    }
+
+    #[test]
     fn dependency_closure_is_transitive_and_cycle_tolerant() {
         let all = vec![
             skill("release", &["commit"]),
@@ -868,7 +950,7 @@ mod tests {
             skill("unrelated", &[]),
         ];
 
-        let expanded = expand_skill_dependencies(&all, vec![all[0].clone()]);
+        let expanded = expand_skill_dependencies(&all, vec![all[0].clone()], &[]);
 
         assert_eq!(
             expanded
@@ -880,20 +962,69 @@ mod tests {
     }
 
     #[test]
-    fn copying_replaces_stale_content_via_temp_sibling() {
-        let home = temp_home("replace");
+    fn refresh_requires_an_unchanged_ownership_receipt() {
+        let home = temp_home("owned-refresh");
+        let tree = home.join("tree");
+        write_skill(&tree, "tdd");
+        let path = tree.join("tdd");
+        let mut state = crate::ownership::InstallState {
+            schema_version: 1,
+            resources: std::collections::BTreeMap::new(),
+        };
+        state.record(crate::ownership::OwnedResource {
+            id: "skill:tdd".into(),
+            scope: crate::ownership::OwnershipScope::Global,
+            depends_on: Vec::new(),
+            receipts: vec![crate::ownership::Receipt::Path {
+                path: path.clone(),
+                path_kind: crate::ownership::OwnedPathKind::Tree,
+                digest: crate::ownership::digest_path(&path).unwrap(),
+                before: None,
+            }],
+        });
+
+        assert!(owned_unchanged(&state, &path));
+        fs::write(path.join("SKILL.md"), "customized").unwrap();
+        assert!(!owned_unchanged(&state, &path));
+        assert!(!owned_unchanged(&state, &tree.join("unowned")));
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn setup_preserves_an_existing_skill() {
+        let home = temp_home("preserve");
+        let source = home.join("source");
+        write_skill(&source, "tdd");
+        let tree = home.join("tree");
+        fs::create_dir_all(tree.join("tdd")).unwrap();
+        fs::write(tree.join("tdd").join("custom.md"), "mine").unwrap();
+
+        let outcome = copy_skill(&source, &tree, "tdd").expect("copy");
+
+        assert_eq!(outcome, CopyOutcome::AlreadyPresent);
+        assert_eq!(
+            fs::read_to_string(tree.join("tdd").join("custom.md")).unwrap(),
+            "mine"
+        );
+        assert!(!tree.join("tdd").join("SKILL.md").exists());
+        fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn refresh_replaces_owned_content_via_recoverable_siblings() {
+        let home = temp_home("refresh");
         let source = home.join("source");
         write_skill(&source, "tdd");
         let tree = home.join("tree");
         fs::create_dir_all(tree.join("tdd")).unwrap();
         fs::write(tree.join("tdd").join("stale.md"), "old").unwrap();
 
-        let outcome = copy_skill(&source, &tree, "tdd").expect("copy");
+        refresh_skill(&source, &tree, "tdd").expect("refresh");
 
-        assert_eq!(outcome, CopyOutcome::Installed);
         assert!(tree.join("tdd").join("SKILL.md").is_file());
         assert!(!tree.join("tdd").join("stale.md").exists());
         assert!(!tree.join(".tdd.loom-new").exists());
+        assert!(!tree.join(".tdd.loom-old").exists());
         fs::remove_dir_all(&home).ok();
     }
 

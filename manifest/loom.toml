@@ -26,6 +26,7 @@ node = "24.20.0"
 # whole product, so `mise where github:AgriciDaniel/claude-obsidian` is the
 # product root its skills resolve scripts from.
 "github:AgriciDaniel/claude-obsidian" = "v2.1.1"
+python = "3.13.7"
 
 # teams calendar CLI (export meetings as JSON, find slots). Same GitHub
 # releases as loom, but through the ubi backend: mise keys an install by
@@ -35,7 +36,7 @@ node = "24.20.0"
 "ubi:Yassimba/loom" = { version = "loom-teams-v0.2.0", exe = "loom-teams", tag_regex = "^loom-teams-v" }
 
 # agents & multiplexer
-"npm:@earendil-works/pi-coding-agent" = "0.85.0"
+"npm:@earendil-works/pi-coding-agent" = "0.85.1"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its
 # manual install instruction and mise skips this entry.
 herdr = { version = "0.8.2", os = ["macos", "linux"] }
@@ -46,11 +47,17 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 # local semantic code index for coding agents
 "npm:@colbymchenry/codegraph" = "1.6.0"
 
+# compress command output for coding agents
+"github:rtk-ai/rtk" = "v0.48.0"
+
+# local hybrid search for Markdown knowledge bases
+"npm:@tobilu/qmd" = "2.8.3"
+
 # code review TUI (annotate diffs, export to GitHub or clipboard)
 "github:agavra/tuicr" = "v0.24.0"
 
 # browser-based plan and code review for coding agents
-"github:Yassimba/plannotator" = "v0.27.9-loom.1"
+"github:backnotprop/plannotator" = "v0.27.12"
 
 # forges
 gh = "2.98.0"
@@ -71,6 +78,9 @@ rust = { version = "1.98.0", os = ["macos"] }
 
 # observability
 "github:DataDog/pup" = "v1.16.0"
+
+# export Confluence pages and spaces to Markdown
+"pipx:confluence-markdown-exporter" = "5.4.0"
 
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
 # release with assets). macOS arm64 has no asset, so it builds via cargo.

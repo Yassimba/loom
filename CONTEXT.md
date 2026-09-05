@@ -40,6 +40,11 @@ the tools its user chose in the wizard. Updates refresh the selection's
 pins, never its membership.
 _Avoid_: installed tools, local manifest
 
+**Vault**:
+The user-selected Obsidian knowledge base that Loom creates or adopts and
+uses as the working scope for wiki capabilities.
+_Avoid_: wiki folder, knowledge folder
+
 **Overlay**:
 A user's own machine-local mise configuration, merged on top of the
 manifest and never published. The tools counterpart of `personal/` skills.
