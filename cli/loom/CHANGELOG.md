@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.20.0](https://github.com/Yassimba/loom/compare/loom-v0.19.1...loom-v0.20.0) (2026-09-05)
+
+
+### Features
+
+* add wiki search and revise skill workflows ([ef2ffb2](https://github.com/Yassimba/loom/commit/ef2ffb2653ce66da2e513f897232042e2fd69ea8))
+* **atlas:** add searchable context and incremental refresh ([00f15fa](https://github.com/Yassimba/loom/commit/00f15fa49483bf971efe06500af1bd566a049c12))
+* **cli:** add safe resource uninstall ([571d8a3](https://github.com/Yassimba/loom/commit/571d8a3ff6f1a52dbf45b02137e2e491e3c40338))
+* **confluence:** add API-backed page search ([5993d67](https://github.com/Yassimba/loom/commit/5993d67d229304047dd7ebf3ebc1d2a22662b494))
+* expand setup, wiki search, and Pi integrations ([3d6cc3f](https://github.com/Yassimba/loom/commit/3d6cc3f3641bd4879613f911d33a3fcedb544d43))
+* harden setup and agent workflows ([61694ac](https://github.com/Yassimba/loom/commit/61694acaf860c35a3dd6bbbc7afbad4e7552bfb9))
+* **loom:** add capability type lane ([2a09759](https://github.com/Yassimba/loom/commit/2a09759b529cb332dfa86d21b87df9daeaee281c))
+* **loom:** add profile capability wizard ([47617d3](https://github.com/Yassimba/loom/commit/47617d3eec58b113f6c8237bec3a091af52bfdf8))
+* **loom:** add RTK to the optional tool catalog ([b2b68e8](https://github.com/Yassimba/loom/commit/b2b68e8fe5532e3c4684b3bc2ec9c677888f14a3))
+* **loom:** add vault-scoped Pi wiki setup ([660069f](https://github.com/Yassimba/loom/commit/660069f12bcefdda97990ee7b9a696a72d954270))
+* **loom:** group profile capabilities by kind ([181c482](https://github.com/Yassimba/loom/commit/181c4828c846c01d8a0e05409deca0766db27ecf))
+* **loom:** include Plannotator extension for Pi users ([a8787e7](https://github.com/Yassimba/loom/commit/a8787e7a11c06f2612d8e2432cf046c2f047e82a))
+* **loom:** offer the i-have-adhd Pi package ([650ebb4](https://github.com/Yassimba/loom/commit/650ebb45ea8fb20ec6d627d8db508b9234528e66))
+* **loom:** offer the official Ponytail Pi package ([5cb6dad](https://github.com/Yassimba/loom/commit/5cb6dad033e9621d0b4bd582c1629d66ef232bfc))
+* **loom:** slide setup columns like yazi ([13767f6](https://github.com/Yassimba/loom/commit/13767f6fe1f578540371b129dcaba56ef709832e))
+* **pi-add-dir:** add project orientations ([61bbdab](https://github.com/Yassimba/loom/commit/61bbdabe0e09aa611767cb4a75777194ed48aa0c))
+* **pi-codegraph:** add automatic prompt context for Pi ([e1b9641](https://github.com/Yassimba/loom/commit/e1b9641018da6a9bf419d268aa1804f6e4c717d1))
+* **pi:** add inline skill autocomplete ([f2641be](https://github.com/Yassimba/loom/commit/f2641be5e6416b00352a0748598d90cd514910a2))
+* **skills:** add system atlas ([e20f4b9](https://github.com/Yassimba/loom/commit/e20f4b9208774dd03fdd7152c6a9dec24ad37e37))
+* **wiki:** add Confluence export and QMD tools ([3931d43](https://github.com/Yassimba/loom/commit/3931d4353f2ea7cf47ef72297ff7615fae999ca3))
+
+
+### Bug Fixes
+
+* **deps:** complete dependency upgrades and compatibility fixes ([#166](https://github.com/Yassimba/loom/issues/166)) ([99e609a](https://github.com/Yassimba/loom/commit/99e609a35f0266e7e77eb9bb2e8cf48333eb7938))
+* **deps:** update rust crate crossterm to 0.29 ([#131](https://github.com/Yassimba/loom/issues/131)) ([f211894](https://github.com/Yassimba/loom/commit/f211894b9de7730c8188e31c56bb0d57911682d5))
+* **deps:** update rust crate inquire to 0.9 ([#134](https://github.com/Yassimba/loom/issues/134)) ([19c8933](https://github.com/Yassimba/loom/commit/19c89332e0cd2646a44558d7cc50e458b43870fd))
+* **deps:** update rust crate toml_edit to 0.25 ([#139](https://github.com/Yassimba/loom/issues/139)) ([a966b68](https://github.com/Yassimba/loom/commit/a966b687d57d65c85d085a04a949d0a88a41cbc3))
+* **loom:** accept plain-terminal markers in scope layout test ([6733fa4](https://github.com/Yassimba/loom/commit/6733fa408e261ea0ff1776ba54fa7249dd0ea365))
+* **loom:** clarify vault setup and skill destinations ([df0c20b](https://github.com/Yassimba/loom/commit/df0c20bbfda76d2eb8a4ff404c350d433fe7c8a9))
+* **loom:** enforce Windows wiki routing and honor profile overrides ([6c19de4](https://github.com/Yassimba/loom/commit/6c19de483b598f40bd4ad6bb62a598941028e32f))
+* **loom:** harden Wiki runtime repair ([a1bdd02](https://github.com/Yassimba/loom/commit/a1bdd0213203df400ddd046535e53d6ff04651f7))
+* **loom:** honor explicit init feature selections ([9b036a1](https://github.com/Yassimba/loom/commit/9b036a1167c06b69080b3c4c297c13d96a678539))
+* preserve Windows bootstrap encoding and test isolation ([ddb6c7f](https://github.com/Yassimba/loom/commit/ddb6c7fdc1d894ca196110e544d80787a8148a13))
+* repair bootstrap data paths and Windows wiki checks ([df4ded1](https://github.com/Yassimba/loom/commit/df4ded1f2f47e4ce4bfcc2fd7f7a1129cbe0e75b))
+
 ## [0.19.1](https://github.com/Yassimba/loom/compare/loom-v0.19.0...loom-v0.19.1) (2026-08-30)
 
 

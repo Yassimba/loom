@@ -70,7 +70,7 @@ pub trait System {
     /// The home directory skill trees are detected under. Injectable so
     /// tests can point the installer at a temp home.
     fn home_dir(&self) -> Option<PathBuf> {
-        dirs::home_dir()
+        env::home_dir()
     }
     /// The directory `loom` was launched from. Skill project scope resolves
     /// its worktree root from here; injectable for installer tests.
@@ -207,7 +207,7 @@ impl System for RealSystem {
 
     fn refresh_path(&self) {
         let mut paths = env::split_paths(&self.path_value()).collect::<Vec<_>>();
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = env::home_dir() {
             paths.push(home.join(".local").join("bin"));
             paths.push(home.join(".cargo").join("bin"));
             // mise-managed tools resolve through its shims until the user's

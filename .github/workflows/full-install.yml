@@ -103,10 +103,8 @@ jobs:
           $command = "chmod +x '$linuxPath' '$fakeLinuxPath/pi'; PATH='${fakeLinuxPath}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' '$linuxPath' add --pi-package feynman --dry-run --yes"
           wsl -d Ubuntu -- bash -lc $command *> "$evidenceDir/wsl-feynman-plan.txt"
           if ($LASTEXITCODE -ne 0) { throw "WSL feynman dry-run failed" }
-          $package = (Get-Content manifest/pi-packages.json -Raw | ConvertFrom-Json).packages | Where-Object name -eq "@companion-ai/feynman"
-          $expectedSpec = "npm:@companion-ai/feynman@$($package.version)"
-          if (-not (Select-String -Quiet -Path "$evidenceDir/wsl-feynman-plan.txt" -SimpleMatch $expectedSpec)) {
-            throw "WSL plan omitted the exact feynman pin"
+          if (-not (Select-String -Quiet -Path "$evidenceDir/wsl-feynman-plan.txt" -SimpleMatch "would enter the Vault-scoped setup")) {
+            throw "WSL plan omitted the vault-scoped setup handoff"
           }
       - name: Upload Windows E2E evidence
         if: always()

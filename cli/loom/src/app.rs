@@ -126,6 +126,14 @@ pub fn install_selected(
         resolve_selectors(catalog, selectors)?,
         &destination.agents,
     );
+    if platform == Platform::Windows {
+        if let Some(resource) = resources.iter().find(|resource| resource.windows_wsl) {
+            bail!(
+                "{} requires WSL2 on Windows. Open Ubuntu and run this loom command there.",
+                resource.label
+            );
+        }
+    }
     if resources.iter().any(|resource| resource.group == "Wiki") {
         let feynman = resources
             .iter()
@@ -155,14 +163,6 @@ pub fn install_selected(
             "scripted Wiki selection cannot be mixed with global resources; run the selections separately or use the interactive wizard"
         );
         return crate::wiki::run_interactive_with_default(system, feynman);
-    }
-    if platform == Platform::Windows {
-        if let Some(resource) = resources.iter().find(|resource| resource.windows_wsl) {
-            bail!(
-                "{} requires WSL2 on Windows. Open Ubuntu and run this loom command there.",
-                resource.label
-            );
-        }
     }
     if resources.is_empty() {
         println!("Nothing selected; no changes made.");
