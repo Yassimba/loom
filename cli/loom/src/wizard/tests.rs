@@ -1058,7 +1058,11 @@ fn where_scope_options_fit_a_standard_terminal() {
         .map(|cell| cell.symbol())
         .collect::<String>();
 
-    assert!(text.contains("(•) All projects    ( ) This project"));
+    assert!(
+        text.contains("(•) All projects    ( ) This project")
+            || text.contains("(*) All projects    ( ) This project"),
+        "scope options must fit on one row: {text}"
+    );
 }
 
 #[test]
@@ -1086,6 +1090,7 @@ fn profile_choose_renders_in_plain_terminal_modes() {
 #[test]
 #[ignore = "run in isolated subprocess by profile_choose_renders_in_plain_terminal_modes"]
 fn profile_choose_plain_terminal_child() {
+    where_scope_options_fit_a_standard_terminal();
     let mut wizard = wizard();
     let output = screen(&mut wizard, 104, 24);
     assert!(output.contains("Profiles"));
