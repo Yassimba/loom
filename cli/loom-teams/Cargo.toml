@@ -20,7 +20,7 @@ sha2 = "0.11"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "process", "fs"] }
 dirs = "5"
 hex = "0.4.3"
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "vendored"] }
+keyring = { version = "4", features = ["apple-native", "windows-native", "sync-secret-service", "vendored"] }
 
 [profile.release]
 lto = true
