@@ -2,6 +2,13 @@
   "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: npm packages use an exact version and Git packages use an exact commit. Users get new versions only when a pin change lands on main; Renovate proposes npm bumps and the catalog-autofix workflow regenerates the embedded catalog. First-party packages still live in plugins/ workspaces.",
   "packages": [
     {
+      "name": "@dietrichgebert/ponytail",
+      "version": "4.9.0",
+      "label": "ponytail",
+      "description": "Ponytail modes and skills for Pi: prefer simple solutions and inject the active mode's instructions each turn. By Dietrich Gebert.",
+      "nextAction": "Run /reload in Pi, then /ponytail full to activate Ponytail or /ponytail off to disable it."
+    },
+    {
       "name": "@plannotator/pi-extension",
       "version": "0.27.12",
       "label": "plannotator",

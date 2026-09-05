@@ -293,6 +293,16 @@
       "nextAction": "Run /reload in Pi, then /plannotator-plan-mode to write and review a plan, or /plannotator-review to review code."
     },
     {
+      "id": "pi-package:@dietrichgebert/ponytail",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "ponytail",
+      "description": "Ponytail modes and skills for Pi: prefer simple solutions and inject the active mode's instructions each turn. By Dietrich Gebert.",
+      "installTarget": "@dietrichgebert/ponytail",
+      "version": "4.9.0",
+      "nextAction": "Run /reload in Pi, then /ponytail full to activate Ponytail or /ponytail off to disable it."
+    },
+    {
       "id": "pi-package:pi-rewind-hook",
       "kind": "pi-package",
       "group": "Pi packages",
