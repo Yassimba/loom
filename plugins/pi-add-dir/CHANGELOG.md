@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/Yassimba/loom/compare/pi-add-dir-v0.2.1...pi-add-dir-v0.3.0) (2026-09-05)
+
+
+### Features
+
+* expand setup, wiki search, and Pi integrations ([3d6cc3f](https://github.com/Yassimba/loom/commit/3d6cc3f3641bd4879613f911d33a3fcedb544d43))
+* harden setup and agent workflows ([61694ac](https://github.com/Yassimba/loom/commit/61694acaf860c35a3dd6bbbc7afbad4e7552bfb9))
+* **pi-add-dir:** add project orientations ([61bbdab](https://github.com/Yassimba/loom/commit/61bbdabe0e09aa611767cb4a75777194ed48aa0c))
+
 ## [0.2.1](https://github.com/Yassimba/loom/compare/pi-add-dir-v0.2.0...pi-add-dir-v0.2.1) (2026-08-30)
 
 

@@ -1,6 +1,6 @@
 [package]
 name = "loom-teams"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Teams/Outlook calendar data over Microsoft Graph: export meetings as JSON, find slots. Personal prototype — not for release."
 publish = false
