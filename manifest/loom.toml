@@ -70,7 +70,7 @@ zoxide = "0.10.0"
 rust = { version = "1.98.0", os = ["macos"] }
 
 # observability
-"github:DataDog/pup" = "v1.15.2"
+"github:DataDog/pup" = "v1.16.0"
 
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
 # release with assets). macOS arm64 has no asset, so it builds via cargo.
