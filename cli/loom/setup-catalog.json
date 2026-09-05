@@ -264,6 +264,16 @@
       "nextAction": "Run /reload in Pi, then /fff-health to inspect the index."
     },
     {
+      "id": "pi-package:i-have-adhd",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "i-have-adhd",
+      "description": "ADHD-friendly output for Pi with a session mode toggle, status indicator, and restoration after compaction. By Ayoub G.",
+      "installTarget": "i-have-adhd",
+      "source": "git:github.com/ayghri/i-have-adhd@58494af57962b2d7a996b4d419474380a299af5e",
+      "nextAction": "Run /reload in Pi, then /i-have-adhd on to enable the mode or /i-have-adhd off to disable it."
+    },
+    {
       "id": "pi-package:pi-mcp-adapter",
       "kind": "pi-package",
       "group": "Pi packages",

@@ -2,6 +2,13 @@
   "comment": "Upstream Pi packages the setup offers, exact-pinned like the mise manifest: npm packages use an exact version and Git packages use an exact commit. Users get new versions only when a pin change lands on main; Renovate proposes npm bumps and the catalog-autofix workflow regenerates the embedded catalog. First-party packages still live in plugins/ workspaces.",
   "packages": [
     {
+      "name": "i-have-adhd",
+      "source": "git:github.com/ayghri/i-have-adhd@58494af57962b2d7a996b4d419474380a299af5e",
+      "label": "i-have-adhd",
+      "description": "ADHD-friendly output for Pi with a session mode toggle, status indicator, and restoration after compaction. By Ayoub G.",
+      "nextAction": "Run /reload in Pi, then /i-have-adhd on to enable the mode or /i-have-adhd off to disable it."
+    },
+    {
       "name": "@dietrichgebert/ponytail",
       "version": "4.9.0",
       "label": "ponytail",
