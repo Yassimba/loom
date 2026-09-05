@@ -317,7 +317,9 @@ fn run_interactive(
     // screen; starting all-false keeps the first frame instant.
     let installed = vec![false; resources.len()];
     let ownership_destination = skill_destination.clone();
-    let setting_before = setting_snapshots(&settings, &settings_paths);
+    let mut ownership_settings = settings.clone();
+    ownership_settings.push(crate::settings::pi_adhd_setting());
+    let setting_before = setting_snapshots(&ownership_settings, &settings_paths);
     let adapter_existed = adapter_existed(&ownership_destination);
     let skills_before = existing_skill_paths(&resources, &ownership_destination);
     let model = Model {
@@ -376,7 +378,7 @@ fn run_interactive(
                 system,
                 &generic_resources,
                 &ownership_destination,
-                &settings,
+                &ownership_settings,
                 &setting_before,
                 &settings_paths,
                 adapter_existed,
@@ -1095,6 +1097,7 @@ mod tests {
                 zed_settings: root.join("zed.json"),
                 zed_keymap: root.join("keymap.json"),
                 pi_fff_config: root.join("fff.json"),
+                pi_adhd_flag: root.join(".i-have-adhd-always"),
                 diagrams: root.join("diagrams.json"),
             },
             false,
@@ -1223,6 +1226,7 @@ mod tests {
                 zed_settings: root.join("zed.json"),
                 zed_keymap: root.join("keymap.json"),
                 pi_fff_config: root.join("fff.json"),
+                pi_adhd_flag: root.join(".i-have-adhd-always"),
                 diagrams: root.join("diagrams.json"),
             },
             false,

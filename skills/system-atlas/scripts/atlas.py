@@ -332,10 +332,52 @@ def publish(stage: Path) -> dict:
     return {"published": str(root), "previous": str(backup)}
 
 
+def orient(root: Path, targets: dict, output: Path) -> dict:
+    """Write one map file for a change consumer plus one diff file per mapped path.
+    The map lists affected topics with facts, sources and figure handles, and every
+    changed path with its topics and diff file. One read replaces many calls."""
+    delta = affected(root, targets)
+    repos, records = repositories(root), topics(root)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "diffs").mkdir(exist_ok=True)
+    lines = [f"# Orientation: {root.name}", "", "Base pins: " + json.dumps(delta["base"]),
+             "Targets: " + json.dumps(delta["targets"]), "", f"## Affected topics ({len(delta['topics'])})"]
+    for topic_id in delta["topics"]:
+        topic = records[topic_id]
+        lines += ["", f"### {topic_id}: {topic['title']}", topic["summary"]]
+        for source in topic.get("sources", []):
+            lines.append(f"- src {source['id']}: {source['path']}:{source['start']}-{source['end']}")
+        for fact in topic["facts"]:
+            lines.append(f"- {fact['text']} [{', '.join(fact['sources'])}]")
+        for unknown in topic.get("unknowns", []):
+            lines.append(f"- unknown: {unknown}")
+        for figure in topic.get("figures", []):
+            handles = elements(read(inside(root, figure["json"])))
+            lines.append(f"- figure {figure['id']} ({figure['json']}): " + "; ".join(
+                f"{h['id']}={h.get('label', h.get('from', '') + '>' + h.get('to', ''))}"
+                + (f" @{','.join(h['code']) if isinstance(h['code'], list) else h['code']}" if h.get("code") else "")
+                for h in handles))
+    lines += ["", f"## Changed paths ({len(delta['changes'])}); mapped ones have a diff file", ""]
+    for change in delta["changes"]:
+        row = f"- {change['status']} {change['path']} -> {', '.join(change['topics']) or 'unmapped'}"
+        if change["topics"]:
+            repo = repos[change["repo"]]
+            diff = git((root / repo["path"]).resolve(), "diff", repo["commit"],
+                       delta["targets"][change["repo"]], "--", change["path"])
+            diff_path = output / "diffs" / (change["path"].replace("/", "__") + ".diff")
+            diff_path.write_text(diff, encoding="utf-8")
+            row += f" ({diff_path.relative_to(output)}, {len(diff.splitlines())} lines)"
+        lines.append(row)
+    (output / "orientation.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"orientation": str(output / "orientation.md"), "topics": len(delta["topics"]),
+            "changes": len(delta["changes"]), "unmapped": len(delta["unmapped"]),
+            "bytes": (output / "orientation.md").stat().st_size}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("index", "validate", "search", "show", "figure", "affected", "prepare", "publish", "freeze"):
+    for name in ("index", "validate", "search", "show", "figure", "affected", "prepare", "publish", "freeze", "orient"):
         command = commands.add_parser(name)
         command.add_argument("root", type=Path)
         if name == "search":
@@ -345,8 +387,10 @@ def main() -> int:
             command.add_argument("id")
             command.add_argument("--offset", type=int, default=0)
             command.add_argument("--limit", type=int, default=10)
-        if name in {"affected", "prepare"}:
+        if name in {"affected", "prepare", "orient"}:
             command.add_argument("--target", action="append", default=[], metavar="REPO=REV")
+        if name == "orient":
+            command.add_argument("--output", type=Path, required=True, help="directory")
         if name == "freeze":
             command.add_argument("ids", nargs="+")
             command.add_argument("--output", type=Path, required=True)
@@ -366,9 +410,12 @@ def main() -> int:
             result = show(root, args.id, args.offset, args.limit)
         elif args.command == "figure":
             result = show_figure(root, args.id, args.offset, args.limit)
-        elif args.command in {"affected", "prepare"}:
+        elif args.command in {"affected", "prepare", "orient"}:
             targets = dict(value.split("=", 1) for value in args.target)
-            result = (affected if args.command == "affected" else prepare)(root, targets)
+            if args.command == "orient":
+                result = orient(root, targets, args.output)
+            else:
+                result = (affected if args.command == "affected" else prepare)(root, targets)
         elif args.command == "freeze":
             result = {"repositories": repositories(root),
                       "topics": [topics(root)[topic_id] for topic_id in args.ids]}

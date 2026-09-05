@@ -68,6 +68,7 @@ impl Wizard {
                 items
             }
             Stage::Where(stage) => self.render_where(frame, body, stage),
+            Stage::Responses { cursor } => self.render_responses(frame, body, *cursor),
             Stage::Review { scroll } => {
                 self.render_review(frame, body, *scroll);
                 None
@@ -197,6 +198,7 @@ impl Wizard {
                     " ↑↓ move · ←→ column · space pick · / search · enter continue · ? keys"
                 }
                 Stage::Where(_) => " ↑↓ move · space toggle · enter continue · esc back",
+                Stage::Responses { .. } => " ↑↓ choose · enter continue · esc back",
                 Stage::Review { .. } => {
                     if self.model.purpose == super::state::WizardPurpose::Uninstall {
                         " enter review removal · ↑↓ scroll · esc back"
@@ -214,6 +216,7 @@ impl Wizard {
         let short = match &self.stages[self.stage_index] {
             Stage::Choose(_) => " ↑↓ ←→ space / enter ?",
             Stage::Where(_) => " ↑↓ space enter esc",
+            Stage::Responses { .. } => " ↑↓ enter esc",
             Stage::Review { .. } => " enter ↑↓ esc",
             Stage::Install(_) => " enter",
         };
@@ -271,7 +274,7 @@ impl Wizard {
     fn button_states(&self) -> (bool, &'static str, bool) {
         match &self.stages[self.stage_index] {
             Stage::Choose(_) => (false, "Next", true),
-            Stage::Where(_) => (true, "Next", true),
+            Stage::Where(_) | Stage::Responses { .. } => (true, "Next", true),
             Stage::Review { .. } => (
                 true,
                 if self.model.purpose == super::state::WizardPurpose::Uninstall {
@@ -992,6 +995,43 @@ impl Wizard {
 
     // ---- where -------------------------------------------------------------
 
+    fn render_responses(&self, frame: &mut Frame, area: Rect, cursor: usize) -> ListHit {
+        let [question, explanation, choices] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Min(4),
+        ])
+        .areas(area);
+        frame.render_widget(
+            Paragraph::new("Do you have ADHD and want ADHD-friendly responses in Pi?")
+                .style(Style::new().bold())
+                .wrap(Wrap { trim: true }),
+            question,
+        );
+        let enabled = crate::settings::setting_state(
+            &crate::settings::pi_adhd_setting(),
+            &self.model.settings_paths,
+        ) == crate::settings::SettingState::Applied;
+        let detail = if enabled {
+            "Already enabled. No keeps it enabled."
+        } else {
+            "Yes installs the plugin and enables it for future Pi sessions."
+        };
+        frame.render_widget(
+            Paragraph::new(detail).wrap(Wrap { trim: true }),
+            explanation,
+        );
+        let list = List::new(["Yes — always enable", "No — leave settings unchanged"])
+            .block(bordered(" Response preference ", true))
+            .highlight_style(highlight(true));
+        frame.render_stateful_widget(
+            list,
+            choices,
+            &mut ListState::default().with_selected(Some(cursor)),
+        );
+        Some((choices, 0))
+    }
+
     fn render_where(&self, frame: &mut Frame, area: Rect, stage: &WhereStage) -> ListHit {
         let [list_area, details_area] = if area.width < 70 {
             [area, Rect::new(area.x, area.y, 0, 0)]
@@ -1102,6 +1142,18 @@ impl Wizard {
 
     fn render_review(&self, frame: &mut Frame, area: Rect, scroll: u16) {
         let mut lines = Vec::new();
+        if self
+            .visible_stages()
+            .iter()
+            .any(|index| matches!(self.stages[*index], Stage::Responses { .. }))
+        {
+            lines.push(Line::from(if self.adhd_enabled {
+                "Pi responses: always enable ADHD-friendly responses"
+            } else {
+                "Pi responses: leave settings unchanged"
+            }));
+            lines.push(Line::from(""));
+        }
         if self.nothing_chosen() {
             lines.push(Line::from(
                 "Nothing picked. Enter leaves without changes; esc goes back.",

@@ -253,6 +253,7 @@ pub(crate) struct InstallStage {
 pub(crate) enum Stage {
     Choose(ChooseStage),
     Where(WhereStage),
+    Responses { cursor: usize },
     Review { scroll: u16 },
     Install(InstallStage),
 }
@@ -262,6 +263,7 @@ impl Stage {
         match self {
             Self::Choose(_) => "Choose",
             Self::Where(_) => "Skill scope",
+            Self::Responses { .. } => "Pi responses",
             Self::Review { .. } => "Review",
             Self::Install(_) => "Install",
         }
@@ -302,6 +304,7 @@ pub struct Wizard {
     pub(crate) setting_on: Vec<bool>,
     pub(crate) agent_on: Vec<bool>,
     pub(crate) skill_scope: SkillScope,
+    pub(crate) adhd_enabled: bool,
     /// Settings the user explicitly toggled; contextual pre-checks leave
     /// those alone.
     pub(crate) setting_touched: Vec<bool>,
@@ -323,14 +326,16 @@ pub struct Wizard {
 
 const CHOOSE: usize = 0;
 const WHERE: usize = 1;
-const REVIEW: usize = 2;
-const INSTALL: usize = 3;
+const RESPONSES: usize = 2;
+const REVIEW: usize = 3;
+const INSTALL: usize = 4;
 
 impl Wizard {
     pub fn new(model: Model) -> Self {
         let stages = vec![
             Stage::Choose(ChooseStage::new(choose_groups(&model))),
             Stage::Where(WhereStage { cursor: 1 }),
+            Stage::Responses { cursor: 1 },
             Stage::Review { scroll: 0 },
             Stage::Install(InstallStage {
                 items: Vec::new(),
@@ -351,6 +356,7 @@ impl Wizard {
             setting_on: vec![false; model.settings.len()],
             agent_on,
             skill_scope,
+            adhd_enabled: false,
             setting_touched: vec![false; model.settings.len()],
             stages,
             stage_index: CHOOSE,
@@ -376,7 +382,10 @@ impl Wizard {
             .iter()
             .enumerate()
             .filter(|(index, _)| {
-                self.selected[*index]
+                (self.selected[*index]
+                    || (self.adhd_enabled
+                        && self.model.resources[*index].id == "pi-package:i-have-adhd"
+                        && !self.resource_installed(*index)))
                     && (self.model.purpose == WizardPurpose::Install
                         || self.required_note(*index).is_none())
             })
@@ -404,6 +413,7 @@ impl Wizard {
             .zip(&self.setting_on)
             .filter(|(_, on)| **on)
             .map(|(spec, _)| spec.clone())
+            .chain(self.adhd_enabled.then(crate::settings::pi_adhd_setting))
             .collect()
     }
 
@@ -514,7 +524,7 @@ impl Wizard {
     }
 
     pub(crate) fn total_selected(&self) -> usize {
-        self.selection().len() + self.setting_on.iter().filter(|on| **on).count()
+        self.selection().len() + self.selected_settings().len()
     }
 
     /// The items a group stands for: its rows, or every resource for the
@@ -695,6 +705,9 @@ impl Wizard {
             return None;
         }
         let target = &self.model.resources[index].id;
+        if self.adhd_enabled && target == "pi-package:i-have-adhd" {
+            return Some("ADHD-friendly responses".into());
+        }
         for (parent_index, on) in self.selected.iter().enumerate() {
             if !*on {
                 continue;
@@ -722,7 +735,19 @@ impl Wizard {
 
     /// Where only exists when skills are going somewhere.
     pub(crate) fn stage_visible(&self, index: usize) -> bool {
-        index != WHERE || (self.model.purpose == WizardPurpose::Install && self.has_skills())
+        match index {
+            WHERE => self.model.purpose == WizardPurpose::Install && self.has_skills(),
+            RESPONSES => {
+                self.model.purpose == WizardPurpose::Install
+                    && self.model.mode == crate::app::SelectionMode::Setup
+                    && self
+                        .model
+                        .resources
+                        .iter()
+                        .any(|resource| resource.id == "pi-package:i-have-adhd")
+            }
+            _ => true,
+        }
     }
 
     pub(crate) fn visible_stages(&self) -> Vec<usize> {
@@ -1041,6 +1066,16 @@ impl Wizard {
                     _ => {}
                 }
             }
+            Stage::Responses { cursor } => match key.code {
+                KeyCode::Up | KeyCode::Char('k') | KeyCode::Home => *cursor = 0,
+                KeyCode::Down | KeyCode::Char('j') | KeyCode::End => *cursor = 1,
+                KeyCode::Char(' ')
+                | KeyCode::Tab
+                | KeyCode::BackTab
+                | KeyCode::Left
+                | KeyCode::Right => *cursor = 1 - *cursor,
+                _ => {}
+            },
             Stage::Review { scroll } => match key.code {
                 KeyCode::Up | KeyCode::Char('k') => *scroll = scroll.saturating_sub(1),
                 KeyCode::Down | KeyCode::Char('j') => *scroll = scroll.saturating_add(1),
@@ -1096,6 +1131,11 @@ impl Wizard {
                     self.expanded_selection(),
                 ))
             }),
+            Stage::Responses { cursor } => {
+                self.adhd_enabled = *cursor == 0;
+                self.go_forward();
+                None
+            }
             Stage::Choose(_) => {
                 self.go_forward();
                 None
@@ -1335,6 +1375,7 @@ impl Wizard {
                     self.activate_row(&row);
                 }
             }
+            Stage::Responses { cursor } if index < 2 => *cursor = index,
             Stage::Where(stage) if index <= SkillAgent::ALL.len() => {
                 stage.cursor = index;
                 self.toggle_where_row(index);

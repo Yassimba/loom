@@ -134,6 +134,7 @@ fn model(status: PrerequisiteStatus) -> Model {
             zed_settings: "/tmp/zed-settings.json".into(),
             zed_keymap: "/tmp/zed-keymap.json".into(),
             pi_fff_config: "/tmp/pi-fff.json".into(),
+            pi_adhd_flag: "/tmp/.i-have-adhd-always".into(),
             diagrams: "/tmp/loom-diagrams.json".into(),
         },
         status,
@@ -338,10 +339,10 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
 #[test]
 fn stages_are_choose_where_review_install_and_where_needs_skills() {
     let mut wizard = wizard();
-    assert_eq!(wizard.visible_stages(), [0, 2, 3]);
+    assert_eq!(wizard.visible_stages(), [0, 3, 4]);
     go_to(&mut wizard, Row::Resource(3));
     press(&mut wizard, &[KeyCode::Char(' ')]);
-    assert_eq!(wizard.visible_stages(), [0, 1, 2, 3]);
+    assert_eq!(wizard.visible_stages(), [0, 1, 3, 4]);
     press(&mut wizard, &[KeyCode::Enter]);
     assert_eq!(title(&wizard), "Skill scope");
     press(&mut wizard, &[KeyCode::Enter]);
@@ -1286,7 +1287,7 @@ fn bundled_skill_rows_are_included_for_selected_and_verified_installed_packages(
     go_to(&mut wizard, Row::Resource(1));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(!wizard.nothing_chosen());
-    wizard.stage_index = 2;
+    wizard.stage_index = 3;
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
         Some(Action::StartInstall)
@@ -1329,5 +1330,215 @@ fn diagram_choices_are_exclusive_and_not_automatically_or_bulk_selected() {
         go_to_group(&mut wizard, "Everything");
         press(&mut wizard, &[KeyCode::Char(' ')]);
         assert_eq!(wizard.setting_on, before);
+    }
+}
+
+fn adhd_wizard() -> Wizard {
+    let mut model = model(ready());
+    model.mode = crate::app::SelectionMode::Setup;
+    let mut package = resource(ResourceKind::PiPackage, "Pi packages", "i-have-adhd");
+    package.id = "pi-package:i-have-adhd".into();
+    model.resources.push(package);
+    model.installed.push(false);
+    model.settings.clear();
+    model.setting_states.clear();
+    model.settings_paths.pi_adhd_flag = std::env::temp_dir()
+        .join(format!(
+            "loom-adhd-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+        .join("custom-agent/.i-have-adhd-always");
+    Wizard::new(model)
+}
+
+#[test]
+fn adhd_question_requires_explicit_consent_and_reviews_the_flag() {
+    let mut wizard = adhd_wizard();
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert_eq!(title(&wizard), "Pi responses");
+    let rendered = screen(&mut wizard, 90, 18);
+    assert!(rendered.contains("Do you have ADHD and want ADHD-friendly responses in Pi?"));
+    assert!(rendered.contains("Yes — always enable"));
+    assert!(rendered.contains("No — leave settings unchanged"));
+    assert!(wizard.selected_settings().is_empty());
+    press(&mut wizard, &[KeyCode::Up, KeyCode::Enter]);
+    assert_eq!(title(&wizard), "Review");
+    assert!(wizard
+        .selection()
+        .iter()
+        .any(|r| r.id == "pi-package:i-have-adhd"));
+    assert_eq!(
+        wizard.selected_settings(),
+        vec![crate::settings::pi_adhd_setting()]
+    );
+    assert!(screen(&mut wizard, 180, 30).contains(".i-have-adhd-always"));
+    assert!(!wizard.model.settings_paths.pi_adhd_flag.exists());
+    // Going back and choosing No removes only the implicit package selection.
+    press(&mut wizard, &[KeyCode::Esc, KeyCode::Down, KeyCode::Enter]);
+    assert!(wizard.selection().is_empty());
+    assert!(wizard.selected_settings().is_empty());
+    assert!(screen(&mut wizard, 90, 18).contains("Pi responses: leave settings unchanged"));
+}
+
+#[test]
+fn adhd_no_bulk_selection_cancel_and_dry_run_never_write() {
+    let mut wizard = adhd_wizard();
+    // Everything can install the package but must not choose always-on.
+    press(&mut wizard, &[KeyCode::Home, KeyCode::Char(' ')]);
+    assert!(!wizard.adhd_enabled);
+    assert!(wizard.selected_settings().is_empty());
+    assert!(!wizard.model.settings_paths.pi_adhd_flag.exists());
+    let mut profile_model = wizard.model;
+    profile_model.profiles = vec![crate::catalog::Profile {
+        id: "responses".into(),
+        label: "Responses".into(),
+        description: "Pi response tools".into(),
+        resources: vec!["pi-package:i-have-adhd".into()],
+    }];
+    let mut profile_wizard = Wizard::new(profile_model);
+    go_to_group(&mut profile_wizard, "Responses");
+    press(&mut profile_wizard, &[KeyCode::Home, KeyCode::Char(' ')]);
+    assert!(profile_wizard
+        .selection()
+        .iter()
+        .any(|r| r.id == "pi-package:i-have-adhd"));
+    assert!(profile_wizard.selected_settings().is_empty());
+    let mut wizard = adhd_wizard();
+    wizard.model.dry_run = true;
+    press(&mut wizard, &[KeyCode::Enter, KeyCode::Up, KeyCode::Enter]);
+    let Some(Action::Exit(WizardOutcome::DryRun(plan, changes))) =
+        press(&mut wizard, &[KeyCode::Enter])
+    else {
+        panic!("expected dry run");
+    };
+    assert!(plan
+        .resources
+        .iter()
+        .any(|r| r.target == "pi-package:i-have-adhd"));
+    assert!(changes
+        .iter()
+        .any(|line| line.contains(".i-have-adhd-always")));
+    assert!(!wizard.model.settings_paths.pi_adhd_flag.exists());
+    assert!(matches!(
+        wizard.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+        Some(Action::Exit(WizardOutcome::Cancelled))
+    ));
+    assert!(!wizard.model.settings_paths.pi_adhd_flag.exists());
+}
+
+#[test]
+fn adhd_question_supports_mouse_resize_and_existing_flags() {
+    let mut wizard = adhd_wizard();
+    let flag = wizard.model.settings_paths.pi_adhd_flag.clone();
+    std::fs::create_dir_all(flag.parent().unwrap()).unwrap();
+    std::fs::write(&flag, "keep this content").unwrap();
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert!(screen(&mut wizard, 70, 15).contains("Already enabled"));
+    screen(&mut wizard, 40, 10);
+    assert!(wizard.hits.list.is_some());
+    let (list, _) = wizard.hits.list.unwrap();
+    wizard.handle_click(list.x + 1, list.y + 1);
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert!(wizard.adhd_enabled);
+    press(&mut wizard, &[KeyCode::Esc]);
+    screen(&mut wizard, 70, 15);
+    let (list, _) = wizard.hits.list.unwrap();
+    wizard.handle_click(list.x + 1, list.y + 2);
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert!(!wizard.adhd_enabled);
+    assert!(wizard.selected_settings().is_empty());
+    assert_eq!(std::fs::read_to_string(&flag).unwrap(), "keep this content");
+    std::fs::remove_dir_all(flag.parent().unwrap().parent().unwrap()).unwrap();
+}
+
+#[test]
+fn adhd_question_does_not_change_add_or_uninstall() {
+    for purpose in [WizardPurpose::Install, WizardPurpose::Uninstall] {
+        let mut wizard = adhd_wizard();
+        wizard.model.purpose = purpose;
+        if purpose == WizardPurpose::Install {
+            wizard.model.mode = crate::app::SelectionMode::Add;
+        }
+        assert!(!wizard
+            .visible_stages()
+            .iter()
+            .any(|&index| matches!(wizard.stages[index], Stage::Responses { .. })));
+        press(&mut wizard, &[KeyCode::Enter]);
+        assert_eq!(title(&wizard), "Review");
+        assert!(wizard.selected_settings().is_empty());
+    }
+}
+
+struct AdhdInstallSystem(bool);
+impl crate::System for AdhdInstallSystem {
+    fn command_exists(&self, _: &str) -> bool {
+        true
+    }
+    fn refresh_path(&self) {}
+    fn run(&self, _: &crate::CommandSpec) -> anyhow::Result<crate::CommandResult> {
+        Ok(crate::CommandResult {
+            success: self.0,
+            stdout: "i-have-adhd".into(),
+            stderr: "package install failed".into(),
+        })
+    }
+}
+
+#[test]
+fn adhd_install_job_writes_only_after_success_and_preserves_existing_flag() {
+    for (succeeds, cancelled, installed) in [
+        (true, false, false),
+        (false, false, false),
+        (true, true, false),
+        (false, false, true),
+    ] {
+        let mut wizard = adhd_wizard();
+        *wizard.model.installed.last_mut().unwrap() = installed;
+        let flag = wizard.model.settings_paths.pi_adhd_flag.clone();
+        std::fs::create_dir_all(flag.parent().unwrap()).unwrap();
+        let config = flag.parent().unwrap().join("settings.json");
+        std::fs::write(&config, "{\"theme\":\"light\"}\n").unwrap();
+        press(&mut wizard, &[KeyCode::Enter, KeyCode::Up, KeyCode::Enter]);
+        assert!(matches!(
+            press(&mut wizard, &[KeyCode::Enter]),
+            Some(Action::StartInstall)
+        ));
+        let job = wizard.begin_install().unwrap();
+        job.cancelled
+            .store(cancelled, std::sync::atomic::Ordering::Relaxed);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        super::run_install_job(job, &AdhdInstallSystem(succeeds), &sender);
+        assert_eq!(flag.exists(), (succeeds || installed) && !cancelled);
+        assert_eq!(
+            std::fs::read_to_string(config).unwrap(),
+            "{\"theme\":\"light\"}\n"
+        );
+        assert!(receiver
+            .try_iter()
+            .any(|event| matches!(event, InstallEvent::Done(_))));
+        if flag.exists() {
+            std::fs::write(&flag, "already configured").unwrap();
+            assert!(!crate::settings::apply_setting(
+                &crate::settings::pi_adhd_setting(),
+                &wizard.model.settings_paths
+            )
+            .unwrap());
+            assert_eq!(
+                std::fs::read_to_string(&flag).unwrap(),
+                "already configured"
+            );
+            assert_eq!(
+                crate::settings::setting_state(
+                    &crate::settings::pi_adhd_setting(),
+                    &wizard.model.settings_paths
+                ),
+                SettingState::Applied
+            );
+        }
+        std::fs::remove_dir_all(flag.parent().unwrap().parent().unwrap()).unwrap();
     }
 }
