@@ -230,17 +230,6 @@
       "nextAction": "Run /autoresearch with an optimization target in Pi."
     },
     {
-      "id": "pi-package:pi-chat",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "chat",
-      "description": "Bridge Discord and Telegram channels to isolated Pi sessions in Gondolin micro-VMs. By earendil-works.",
-      "installTarget": "pi-chat",
-      "source": "git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe180b40924f5",
-      "nextAction": "Install QEMU and tmux with your system package manager, then run /chat-config and /chat-connect in Pi.",
-      "windowsWsl": true
-    },
-    {
       "id": "pi-package:@companion-ai/feynman",
       "kind": "pi-package",
       "group": "Wiki",

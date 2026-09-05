@@ -54,7 +54,7 @@ Use `loom init --yes` to accept the detected defaults without questions.
 
 ### Windows and WSL2
 
-Native Windows works. Use WSL2 if you also want Linux-only tools such as Herdr or `pi-chat`:
+Native Windows works. Use WSL2 if you also want Linux-only tools such as Herdr:
 
 ```powershell
 wsl --install -d Ubuntu

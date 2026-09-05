@@ -45,14 +45,6 @@
       "nextAction": "Ask Pi to search the web."
     },
     {
-      "name": "pi-chat",
-      "source": "git:github.com/earendil-works/pi-chat@9adbd29b40ee27ff1decf0fc87cbe180b40924f5",
-      "label": "chat",
-      "description": "Bridge Discord and Telegram channels to isolated Pi sessions in Gondolin micro-VMs. By earendil-works.",
-      "nextAction": "Install QEMU and tmux with your system package manager, then run /chat-config and /chat-connect in Pi.",
-      "windowsSupport": "wsl"
-    },
-    {
       "name": "pi-rewind-hook",
       "version": "1.8.6",
       "label": "rewind",

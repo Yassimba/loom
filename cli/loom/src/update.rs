@@ -341,7 +341,13 @@ mod tests {
     #[test]
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
-        let listed = "User packages:\n  npm:pi-subagents\n\nProject packages:\n  npm:pi-subagents\n  git:github.com/earendil-works/pi-chat@abc\n";
+        let listed = "User packages:\n  npm:pi-subagents\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
+        let feynman = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.id == "pi-package:@companion-ai/feynman")
+            .unwrap()
+            .pi_install_spec();
 
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
@@ -354,12 +360,8 @@ mod tests {
         assert!(commands
             .iter()
             .any(|command| command == "pi install -l npm:pi-subagents@0.58.0"));
-        assert!(commands.iter().any(|command| {
-            command.starts_with("pi install -l git:github.com/earendil-works/pi-chat@")
-        }));
-        assert!(!commands.iter().any(|command| {
-            command.starts_with("pi install git:github.com/earendil-works/pi-chat@")
-        }));
+        assert!(commands.contains(&format!("pi install -l {feynman}")));
+        assert!(!commands.contains(&format!("pi install {feynman}")));
 
         let windows_commands = pi_package_commands(&catalog, listed, true)
             .into_iter()
@@ -367,6 +369,6 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(!windows_commands
             .iter()
-            .any(|command| command.contains("pi-chat")));
+            .any(|command| command.contains("@companion-ai/feynman")));
     }
 }

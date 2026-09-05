@@ -234,27 +234,29 @@ test("profile validation rejects ambiguous or stale presets", async (t) => {
 
 test("external Pi packages accept an exact Git commit source", async () => {
   const repoRoot = await createCatalogFixture();
-  const source = `git:github.com/example/pi-chat@${"a".repeat(40)}`;
+  const source = `git:github.com/example/pi-example@${"a".repeat(40)}`;
   await writeFile(
     join(repoRoot, "manifest", "pi-packages.json"),
     JSON.stringify({
       packages: [
         {
-          name: "pi-chat",
+          name: "pi-example",
           source,
-          label: "chat",
-          description: "Chat bridge",
+          label: "example",
+          description: "Example package",
           windowsSupport: "wsl",
         },
       ],
     }),
   );
 
-  const chat = (await buildSetupCatalog(repoRoot)).find(({ id }) => id === "pi-package:pi-chat");
+  const example = (await buildSetupCatalog(repoRoot)).find(
+    ({ id }) => id === "pi-package:pi-example",
+  );
 
-  assert.equal(chat.source, source);
-  assert.equal(chat.version, undefined);
-  assert.equal(chat.windowsWsl, true);
+  assert.equal(example.source, source);
+  assert.equal(example.version, undefined);
+  assert.equal(example.windowsWsl, true);
 });
 
 test("every public Pi extension package is offered in the setup catalog", async () => {

@@ -119,17 +119,20 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
 
 #[test]
 fn git_pi_package_uses_its_exact_source() {
-    let mut chat = resource(ResourceKind::PiPackage, "pi-package:pi-chat", "pi-chat");
-    chat.source = Some(
-        "git:github.com/earendil-works/pi-chat@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+    let mut example = resource(
+        ResourceKind::PiPackage,
+        "pi-package:pi-example",
+        "pi-example",
     );
+    example.source =
+        Some("git:github.com/example/pi-example@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
     let status = PrerequisiteStatus {
         pi: true,
         herdr: true,
         mise: false,
     };
 
-    let plan = build_install_plan(&[chat], status, Platform::Unix).unwrap();
+    let plan = build_install_plan(&[example], status, Platform::Unix).unwrap();
 
     assert_eq!(
         plan.resources[0].action,
@@ -137,7 +140,7 @@ fn git_pi_package_uses_its_exact_source() {
             "pi",
             [
                 "install",
-                "git:github.com/earendil-works/pi-chat@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "git:github.com/example/pi-example@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             ],
         ))
     );
