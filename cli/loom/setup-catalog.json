@@ -1157,6 +1157,17 @@
       "companions": []
     },
     {
+      "id": "tool:rtk",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "rtk",
+      "description": "Compress command output for coding agents to reduce token usage.",
+      "installTarget": "github:rtk-ai/rtk",
+      "nextAction": "Run `rtk init --global` for Claude Code or `rtk init --global --agent cursor` for Cursor, then restart the agent.",
+      "bin": "rtk",
+      "companions": []
+    },
+    {
       "id": "tool:qmd",
       "kind": "tool",
       "group": "Wiki",

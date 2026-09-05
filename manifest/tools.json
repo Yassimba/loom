@@ -34,6 +34,13 @@
       "nextAction": "Run `loom init` in a project to wire agents and build its index."
     },
     {
+      "key": "github:rtk-ai/rtk",
+      "label": "rtk",
+      "bin": "rtk",
+      "description": "Compress command output for coding agents to reduce token usage.",
+      "nextAction": "Run `rtk init --global` for Claude Code or `rtk init --global --agent cursor` for Cursor, then restart the agent."
+    },
+    {
       "key": "npm:@tobilu/qmd",
       "label": "qmd",
       "bin": "qmd",

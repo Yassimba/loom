@@ -47,6 +47,9 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 # local semantic code index for coding agents
 "npm:@colbymchenry/codegraph" = "1.6.0"
 
+# compress command output for coding agents
+"github:rtk-ai/rtk" = "v0.48.0"
+
 # local hybrid search for Markdown knowledge bases
 "npm:@tobilu/qmd" = "2.8.3"
 
