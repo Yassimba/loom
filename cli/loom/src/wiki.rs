@@ -9,6 +9,7 @@ pub const PRODUCT_KEY: &str = "github:AgriciDaniel/claude-obsidian";
 pub const PYTHON_KEY: &str = "python";
 const QMD_KEY: &str = "npm:@tobilu/qmd";
 const CONFLUENCE_KEY: &str = "pipx:confluence-markdown-exporter";
+const CONFLUENCE_SKILL: &str = "confluence-export";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WikiOperation {
@@ -541,6 +542,13 @@ fn wiki_tool_keys(confluence: bool) -> Vec<String> {
     tools
 }
 
+fn wiki_skill_names(confluence: bool) -> Vec<String> {
+    confluence
+        .then(|| CONFLUENCE_SKILL.into())
+        .into_iter()
+        .collect()
+}
+
 fn qmd_index(vault: &Path) -> String {
     format!(
         "loom-wiki-{}",
@@ -817,14 +825,10 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
             request.confluence,
         )
     };
+    let repository = crate::skills::Repository::default();
     crate::wiki_progress::run(system, !request.yes, |system, cancelled| {
-        manifest::sync_selected_from(
-            system,
-            &wiki_tool_keys(confluence),
-            cancelled,
-            &crate::skills::Repository::default(),
-        )
-        .map_err(anyhow::Error::msg)
+        manifest::sync_selected_from(system, &wiki_tool_keys(confluence), cancelled, &repository)
+            .map_err(anyhow::Error::msg)
     })?;
     let product = product_root(system)?;
     if matches!(
@@ -847,8 +851,21 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
     {
         return Ok(true);
     }
-    let search_note = crate::wiki_progress::run(system, !request.yes, |system, _| {
+    let search_note = crate::wiki_progress::run(system, !request.yes, |system, cancelled| {
         install_packages(system, &product, &vault, feynman)?;
+        crate::skills::install_skills(
+            system,
+            &repository,
+            &wiki_skill_names(confluence),
+            &crate::skills::SkillDestination {
+                agents: vec![crate::skills::SkillAgent::AgentsStandard],
+                scope: crate::skills::SkillScope::Project,
+                home: home.clone(),
+                project_root: vault.clone(),
+            },
+            cancelled,
+        )
+        .map_err(anyhow::Error::msg)?;
         setup_qmd(system, &vault)
     })?;
     println!("{search_note}");
@@ -1227,6 +1244,8 @@ mod tests {
             .iter()
             .any(|key| key == CONFLUENCE_KEY));
         assert!(wiki_tool_keys(true).iter().any(|key| key == CONFLUENCE_KEY));
+        assert!(wiki_skill_names(false).is_empty());
+        assert_eq!(wiki_skill_names(true), [CONFLUENCE_SKILL]);
     }
 
     #[test]
