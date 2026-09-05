@@ -76,10 +76,11 @@ test "$(grep -c '^# core:end' "$selection")" -eq 1
 grep -Fq 'beads_rust' "$selection"
 grep -Fq 'beads_viewer' "$selection"
 if [[ $(uname -s) == Darwin ]]; then
-  grep -Fq '"cargo:tokei"' "$selection"
+  tokei_backend=cargo:tokei
 else
-  grep -Fq '"aqua:XAMPPRocky/tokei"' "$selection"
+  tokei_backend=aqua:XAMPPRocky/tokei
 fi
+grep -Fq "\"$tokei_backend\"" "$selection"
 
 for skill_root in \
   "${HOME}/.agents/skills" \
@@ -125,7 +126,9 @@ awk '/^# core:begin/{inside=1; next} /^# core:end/{inside=0} inside && /^[^#[:sp
 grep -Fxf <(grep -E '^"(aqua:XAMPPRocky/tokei|cargo:tokei)"' "$manifest") "$selection" >/dev/null
 loom_version=$(awk -F'"' '/^version = /{print $2; exit}' "${LOOM_REPO_DIR:-$workspace}/cli/loom/Cargo.toml")
 grep -Fqx "loom $loom_version" "$evidence_dir/loom-version.txt"
-grep -Fq 'tokei 12.1.2' "$evidence_dir/tokei-version.txt"
+tokei_version=$(awk -F'"' -v backend="$tokei_backend" '$2 == backend {print $4; exit}' "$manifest")
+test -n "$tokei_version"
+grep -Fq "tokei $tokei_version" "$evidence_dir/tokei-version.txt"
 grep -Fq 'loom setup' "$evidence_dir/rerun-stdout.txt"
 grep -Fq 'Everything selected is already set up; no changes made' "$evidence_dir/rerun-stdout.txt"
 grep -Fq 'next run `loom status` to verify the setup' "$evidence_dir/bootstrap-stdout.txt"

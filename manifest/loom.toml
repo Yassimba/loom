@@ -75,7 +75,7 @@ rust = { version = "1.98.0", os = ["macos"] }
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
 # release with assets). macOS arm64 has no asset, so it builds via cargo.
 "aqua:XAMPPRocky/tokei" = { version = "12.1.2", os = ["linux", "windows"] }
-"cargo:tokei" = { version = "12.1.2", os = ["macos"] }
+"cargo:tokei" = { version = "14.0.0", os = ["macos"] }
 "github:zdyxry/tokui" = "0.12.0"
 
 # issue tracking for agents (beads: br is the tracker, bv the TUI viewer)
