@@ -537,7 +537,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "record-library",
-      "description": "Record a library in the refactor-oss catalog — the package plus the hand-roll it retires — so future scans hunt with it.",
+      "description": "Record a library in the refactor catalog — the package plus the hand-roll it retires — so future OSS reviews hunt with it.",
       "installTarget": "record-library",
       "nextAction": "Ask your coding agent to use the record-library skill.",
       "dependencies": []
@@ -555,25 +555,13 @@
       ]
     },
     {
-      "id": "skill:refactor-nuclear",
+      "id": "skill:refactor",
       "kind": "skill",
       "group": "Coding",
-      "label": "refactor-nuclear",
-      "description": "Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. Use for a thermo-nuclear code quality review, thermonuclear review, deep code quality audit, or especially harsh maintainability review.",
-      "installTarget": "refactor-nuclear",
-      "nextAction": "Ask your coding agent to use the refactor-nuclear skill.",
-      "dependencies": [
-        "write-simply"
-      ]
-    },
-    {
-      "id": "skill:refactor-tests",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "refactor-tests",
-      "description": "Refactor a test suite — prune tests that prove nothing, collapse case lists into properties, parametrize, and measure the shrink. Use after a refactor lands, when tests mirror the implementation, or when the suite's cost outgrows the faults it catches.",
-      "installTarget": "refactor-tests",
-      "nextAction": "Ask your coding agent to use the refactor-tests skill.",
+      "label": "refactor",
+      "description": "Refactor code through five parallel reviews—ecosystem reuse, design patterns, tests, types.",
+      "installTarget": "refactor",
+      "nextAction": "Ask your coding agent to use the refactor skill.",
       "dependencies": [
         "write-simply"
       ]

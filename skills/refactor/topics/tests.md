@@ -1,15 +1,10 @@
----
-name: refactor-tests
-description: Refactor a test suite — prune tests that prove nothing, collapse case lists into properties, parametrize, and measure the shrink. Use after a refactor lands, when tests mirror the implementation, or when the suite's cost outgrows the faults it catches.
----
-
-# Refactor Tests
+# Tests review
 
 Refactor the requested tests so every surviving test proves behavior through a stable boundary and would catch a real production fault.
 
-## Suggest First
+## Review output
 
-Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the change and the production fault the surviving test still catches, followed by two fenced Markdown code blocks tagged with the code's source language:
+Return a numbered list of suggestions; each item names the change and the production fault the surviving test still catches, followed by two fenced Markdown code blocks tagged with the source language:
 
 This is what the code looks like before:
 
@@ -23,7 +18,7 @@ and after:
 the proposed test code
 ```
 
-Wait for the user's picks; apply only the picks.
+Report test areas checked and left alone.
 
 ## Tests At Stable Boundaries
 
@@ -52,7 +47,4 @@ assert events == ["stop", "install", "verify", "start"]
 
 ## Completion Standard
 
-Done when the approved picks are applied, every remaining test names a production fault it would catch, the suite passes, and the report ends with the measured before/after per-module line delta.
-
-Task / scope:
-$ARGUMENTS
+Done when every suggestion names the production fault its surviving test would catch and the report ends with the estimated before/after per-module line delta.

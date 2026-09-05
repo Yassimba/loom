@@ -1,4 +1,0 @@
-interface:
-  display_name: "Refactor Tests"
-  short_description: "Prune, property-ize, and measure a test suite"
-  default_prompt: "Use $refactor-tests to prune and harden the tests for this code."

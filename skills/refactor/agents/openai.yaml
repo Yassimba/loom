@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refactor"
+  short_description: "Five-angle parallel refactor review"
+  default_prompt: "Use $refactor to review this code through OSS, patterns, tests, types, and nuclear structural lenses."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Refactor Types"
-  short_description: "Refactor toward complete, invariant-carrying types"
-  default_prompt: "Use $refactor-types to move this code's invariants into complete types."

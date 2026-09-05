@@ -1,12 +1,4 @@
----
-name: refactor-nuclear
-description: Run an extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth. Use for a thermo-nuclear code quality review, thermonuclear review, deep code quality audit, or especially harsh maintainability review.
-disable-model-invocation: true
----
-
-# Thermo-Nuclear Code Quality Review
-
-Use this skill for an unusually strict review focused on implementation quality, maintainability, abstraction quality, and codebase health.
+# Nuclear structural review
 
 Above all, this skill should push the reviewer to be **ambitious** about code structure. Do not merely identify local cleanup opportunities. Actively search for "code judo" moves: restructurings that preserve behavior while making the implementation dramatically simpler, smaller, more direct, and more elegant.
 
@@ -132,9 +124,9 @@ When you identify a code-quality problem, prefer suggestions like:
 Do not be satisfied with "maybe rename this" feedback when the real issue is structural.
 Do not be satisfied with a merely cleaner version of the same messy idea if there is a plausible path to a much simpler idea.
 
-## Suggest First
+## Review output
 
-Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the problem and the remedy with its concrete benefit, followed by two fenced Markdown code blocks tagged with the code's source language:
+Return a numbered list of suggestions; each item names the problem and the remedy with its concrete benefit, followed by two fenced Markdown code blocks tagged with the source language:
 
 This is what the code looks like before:
 
@@ -148,7 +140,7 @@ and after:
 the proposed code
 ```
 
-Wait for the user's picks; apply only the picks.
+Report high-risk areas checked and left alone.
 
 ## Review Tone
 

@@ -1,20 +1,14 @@
----
-name: refactor-types
-description: Refactor toward complete, modern types — PEP 695 and advanced typing, dataclass/pydantic records over string-keyed dicts, parse don't validate, illegal states unrepresentable
-disable-model-invocation: true
----
-
-# Refactor Types
+# Types review
 
 Refactor the requested code so its types carry the invariants. A reader should learn the rules of the domain from the type definitions, and the type checker should enforce them.
 
 Work the scope in four passes, in order: **modernize** the spellings, **model** the records, **deepen** the invariants, **complete** the objects.
 
-Before proposing, read the project's `requires-python` (or equivalent) and run its type checker for the baseline — the modern rows below are gated on the Python version, and `typing_extensions` backports the newer ones.
+Before reviewing, read the project's language version (for Python, `requires-python`) and type-checker configuration. The modern Python rows below are version-gated; `typing_extensions` backports newer features.
 
-## Suggest First
+## Review output
 
-Propose before changing. Invoke the `write-simply` skill, then present a numbered list of suggestions; each item is one sentence naming the change and its concrete benefit, followed by two fenced Markdown code blocks tagged with the code's source language:
+Return a numbered list of suggestions; each item names the change and its concrete benefit, followed by two fenced Markdown code blocks tagged with the source language:
 
 This is what the code looks like before:
 
@@ -28,7 +22,7 @@ and after:
 the proposed code
 ```
 
-Wait for the user's picks; apply only the picks.
+Report type boundaries checked and left alone.
 
 ## Design Vocabulary
 
@@ -62,11 +56,11 @@ Upgrade legacy spellings on sight — each row is a mechanical rewrite the type 
 
 Prove union handling complete with exhaustive `match` plus `assert_never` on the fall-through arm.
 
-Reach for the advanced tools only where they make a real contract precise — a `ParamSpec` on a decorator that forwards arguments earns its place; one on a decorator that ignores them is ceremony.
+Reach for the advanced tools where they make a real contract precise — a `ParamSpec` on a decorator that forwards arguments earns its place; one on a decorator that ignores them is ceremony.
 
 ## Pass 2 — Model The Records
 
-A string-keyed dict crossing a function boundary is a record wearing a disguise. Replace every such dict with a dataclass or a pydantic model: a frozen dataclass when the data is internal, a pydantic model when it arrives from outside and needs validation, a `TypedDict` only at the rim where an external API imposes dict shape (JSON payloads, `**kwargs`).
+A string-keyed dict crossing a function boundary is a record wearing a disguise. Replace every such dict with a dataclass or a pydantic model: a frozen dataclass when the data is internal, a pydantic model when it arrives from outside and needs validation, a `TypedDict` at the rim where an external API imposes dict shape (JSON payloads, `**kwargs`).
 
 DON'T pass structured data as a string-keyed dict:
 
@@ -199,7 +193,4 @@ session.promote(message)
 
 ## Completion Standard
 
-Done when the approved picks are applied and, within their scope, all four passes hold: every legacy typing spelling is upgraded to its modern row; no string-keyed dict crosses a function boundary as a record; every boundary parses raw data into a trusted domain value exactly once and illegal state combinations fail to construct; behavior about a type lives on the type. Run the repository's type checker and tests and report the results.
-
-Task / scope:
-$ARGUMENTS
+Done when the report accounts for all four passes in scope: modern spellings, modeled records, deep invariants, and complete objects. Every recommendation must make a concrete contract more precise rather than add typing ceremony.

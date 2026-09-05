@@ -1,16 +1,16 @@
 ---
 name: record-library
-description: Record a library in the refactor-oss catalog — the package plus the hand-roll it retires — so future scans hunt with it.
+description: Record a library in the refactor catalog — the package plus the hand-roll it retires — so future OSS reviews hunt with it.
 disable-model-invocation: true
 ---
 
 # Record library
 
-Record one or more libraries in the `refactor-oss` library catalog, so every future scan checks whether they apply.
+Record one or more libraries in the `refactor` library catalog, so every future OSS review checks whether they apply.
 
 ## 1. Locate the catalog
 
-Find `LIBRARIES.md` inside the installed `refactor-oss` skill. Check the directory beside this skill first (the two usually install together), then glob the agent's skill trees for `refactor-oss/LIBRARIES.md`. When no catalog turns up, report that `refactor-oss` is not installed and stop.
+Find `references/oss-libraries.md` inside the installed `refactor` skill. Check the directory beside this skill first, then glob the agent's skill trees for `refactor/references/oss-libraries.md`. When no catalog turns up, report that `refactor` is not installed and stop.
 
 Done when exactly one catalog file is open.
 
