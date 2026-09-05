@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/tlehman/litprog-skill
+  path: .
+  commit: 7ca90701555d4c70d3ac43eb2e405e0b9b9aa8dc

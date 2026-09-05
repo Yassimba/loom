@@ -1,0 +1,53 @@
+{
+  "name": "@yassimba/pi-loom",
+  "version": "0.1.0",
+  "description": "Loom branding and a startup notice for published Loom updates in Pi.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "loom"
+  ],
+  "files": [
+    "index.ts",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yassimba/loom.git",
+    "directory": "plugins/pi-loom"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "loom": {
+    "catalog": {
+      "label": "Loom",
+      "description": "Loom branding and a startup notice for published Loom updates in Pi.",
+      "nextAction": "Start Pi to see the Loom header and available Loom updates."
+    }
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  }
+}

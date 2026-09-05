@@ -57,8 +57,27 @@ async function indexSkillDirectories(repoRoot) {
   return index;
 }
 
-// skills/<name>/deps.yml — the skills this skill invokes; installers pull
-// them in transitively. Validated against the reviewed set by the caller.
+function readUpstream(value, depsPath) {
+  const upstream = value?.upstream;
+  if (upstream === undefined) return undefined;
+  const complete =
+    typeof upstream === "object" &&
+    upstream !== null &&
+    typeof upstream.repository === "string" &&
+    upstream.repository.length > 0 &&
+    typeof upstream.path === "string" &&
+    upstream.path.length > 0 &&
+    typeof upstream.commit === "string" &&
+    /^[0-9a-f]{40}$/.test(upstream.commit);
+  if (!complete) {
+    throw new Error(`deps.yml upstream must contain repository, path, and commit: ${depsPath}`);
+  }
+  return upstream;
+}
+
+// skills/<name>/deps.yml — invoked resources plus optional immutable upstream
+// provenance. Installers pull resource dependencies transitively; provenance
+// stays in the source sidecar for audits and refreshes.
 async function readSkillDependencies(skillRoot) {
   const depsPath = join(skillRoot, "deps.yml");
   let raw;
@@ -71,10 +90,13 @@ async function readSkillDependencies(skillRoot) {
   const value = parse(raw);
   const skills = value?.skills ?? [];
   const tools = value?.tools ?? [];
+  const upstream = readUpstream(value, depsPath);
   const names = (list) =>
     Array.isArray(list) && list.every((name) => typeof name === "string" && name.length > 0);
-  if (!names(skills) || !names(tools) || skills.length + tools.length === 0) {
-    throw new Error(`deps.yml must hold non-empty skills and/or tools lists of names: ${depsPath}`);
+  if (!names(skills) || !names(tools) || (skills.length + tools.length === 0 && !upstream)) {
+    throw new Error(
+      `deps.yml must hold non-empty skills/tools lists or upstream provenance: ${depsPath}`,
+    );
   }
   return { skills, tools };
 }
@@ -135,6 +157,10 @@ function rejectDependencyCycles(entries, index) {
   for (const { name } of entries) visit(name);
 }
 
+function bundledSkillMetadata(bundledSkills) {
+  return bundledSkills === undefined ? {} : { bundledSkills };
+}
+
 export async function readPiPackageCatalog(repoRoot) {
   const packagesRoot = join(repoRoot, "plugins");
   const resources = await readExternalPiPackages(repoRoot);
@@ -167,6 +193,7 @@ export async function readPiPackageCatalog(repoRoot) {
       description: catalog.description,
       installTarget: manifest.name,
       nextAction: catalog.nextAction ?? "Start Pi and use the installed package.",
+      ...bundledSkillMetadata(catalog.bundledSkills),
       ...(catalog.windowsSupport === "wsl" ? { windowsWsl: true } : {}),
     });
   }
@@ -189,7 +216,7 @@ async function readExternalPiPackages(repoRoot) {
   }
   const meta = JSON.parse(raw);
   return meta.packages.map(
-    ({ name, version, source, label, description, nextAction, windowsSupport }) => {
+    ({ name, version, source, label, description, nextAction, windowsSupport, bundledSkills }) => {
       if (!name || !label || !description) {
         throw new Error(`pi-packages.json entries need name, label, and description`);
       }
@@ -208,6 +235,7 @@ async function readExternalPiPackages(repoRoot) {
         description,
         installTarget: name,
         ...(source ? { source } : { version }),
+        ...bundledSkillMetadata(bundledSkills),
         nextAction: nextAction ?? "Start Pi and use the installed package.",
         ...(name === "@companion-ai/feynman"
           ? { dependencies: ["github:AgriciDaniel/claude-obsidian"] }
@@ -322,6 +350,21 @@ export async function buildSetupCatalog(repoRoot) {
     readHerdrPluginCatalog(repoRoot),
     readToolCatalog(repoRoot),
   ]);
+  const sharedNames = new Set(skills.map((skill) => skill.installTarget));
+  for (const pkg of piPackages) {
+    if (pkg.bundledSkills === undefined) continue;
+    if (
+      !Array.isArray(pkg.bundledSkills) ||
+      pkg.bundledSkills.some(
+        (name) => typeof name !== "string" || !/^[a-z0-9-]+$/.test(name) || !sharedNames.has(name),
+      ) ||
+      new Set(pkg.bundledSkills).size !== pkg.bundledSkills.length
+    ) {
+      throw new Error(
+        `invalid bundledSkills for ${pkg.installTarget}: expected unique shared skill names`,
+      );
+    }
+  }
   // Tool deps are declared by wizard label; resolve to install targets so
   // the CLI's one expansion walk covers skills and tools alike.
   const toolTargets = new Map(tools.map((tool) => [tool.label, tool.installTarget]));

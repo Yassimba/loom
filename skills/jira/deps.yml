@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/jdrhyne/agent-skills
+  path: skills/jira
+  commit: 439cd3a9da78c4f463a0c0b5ba30a217b24b7c3b

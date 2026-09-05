@@ -1,3 +1,10 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
+skills:
+  - system-atlas
 tools:
   - plannotator
+
+upstream:
+  repository: https://github.com/backnotprop/plannotator
+  path: apps/skills/core/plannotator
+  commit: d749c55c027ad033c76684b8445afd485fa9a4d3

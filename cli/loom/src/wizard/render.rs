@@ -747,7 +747,17 @@ impl Wizard {
         let (mark, mark_style, dim_label, note) = match row {
             Row::Resource(index) => {
                 let resource = &self.model.resources[*index];
-                if self.resource_installed(*index) {
+                if let Some(note) = self.included_note(*index) {
+                    let actionable = !self
+                        .actionable(&[super::state::Item::Resource(*index)])
+                        .is_empty();
+                    let (mark, style) = if actionable {
+                        mark_for(self.selected[*index])
+                    } else {
+                        (ON, Style::new().fg(OK).dim())
+                    };
+                    (mark, style, !actionable, note)
+                } else if self.resource_installed(*index) {
                     (
                         " ✓ ",
                         Style::new().fg(OK).dim(),

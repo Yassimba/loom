@@ -6,11 +6,11 @@
       "title": "Coding",
       "description": "The development loop — planning, architecture, TDD, debugging, review, and release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
+        "api-design",
         "bdd",
         "blueprint",
         "brainstorming",
         "browser-usage",
-        "changeset-walkthrough",
         "clarify-code",
         "code-review",
         "commit",
@@ -22,10 +22,10 @@
         "next",
         "prototype",
         "record-library",
+        "cleanup",
         "refactor",
-        "refactor-nuclear",
-        "refactor-tests",
         "release",
+        "security-review",
         "tdd",
         "terraform-engineer",
         "ticket-overview",
@@ -53,8 +53,8 @@
     },
     {
       "title": "Observability",
-      "description": "Datadog via the pup CLI — auth, logs, APM, monitors, live debugger, CI flakes, and docs.",
-      "skills": ["dd-apm", "dd-debugger", "dd-docs", "dd-logs", "dd-monitors", "dd-pup"]
+      "description": "Datadog operations and investigation through one task-routing skill backed by the pup CLI and official docs.",
+      "skills": ["datadog"]
     },
     {
       "title": "Wiki",

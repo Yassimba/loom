@@ -8,9 +8,10 @@ set -euo pipefail
 # either creates links, writes into the git worktree, or refuses.
 #
 #   status                   what is linked, diverged, unknown, or absent
-#   link    [name]           repo -> trees, as symlinks. Replaces a real dir
-#                            only after proving it identical to the repo copy;
-#                            a diverged dir is left alone with a pull hint.
+#   link    [name]           repo -> trees, as symlinks. Removes stale links
+#                            to deleted repo skills. Replaces a real dir only
+#                            after proving it identical to the repo copy; a
+#                            diverged dir is left alone with a pull hint.
 #   pull    [name]           selected primary tree -> repo. Defaults to
 #                            ~/.claude/skills; --tree selects another agent.
 #                            Copies a diverged global dir over the repo copy
@@ -92,10 +93,45 @@ clean_or_die() {
 
 copy_skill() { rsync -a --delete --exclude '.DS_Store' "$1/" "$2/"; }
 
+remove_stale_links() {
+  local tree="$1" target name src
+  [ -d "$tree" ] || return 0
+  for target in "$tree"/*; do
+    [ -L "$target" ] || continue
+    name="$(basename "$target")"
+    [ -z "$(repo_path "$name")" ] || continue
+    src="$(readlink "$target")"
+    case "$src" in
+      "$SKILLS"/*|"$PERSONAL"/*)
+        rm "$target"
+        item "remove   $name  (stale repo link)"
+        ;;
+    esac
+  done
+}
+
 link_one() {
   local name="$1" tree="$2" src target
   src="$(repo_path "$name")"
   target="$tree/$name"
+
+  if [ "$tree" = "$HOME/.pi/agent/skills" ] && printf '%s\n' "$PI_BUNDLED_SKILLS" | grep -Fxq "$name"; then
+    # Never traverse a redirected agent tree to remove a duplicate.
+    if [ -L "$HOME/.pi" ] || [ -L "$HOME/.pi/agent" ] || [ -L "$tree" ]; then
+      item "skip     $name  (Pi skill tree is symlinked)"
+    elif [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then
+      rm "$target"
+      item "included $name  (package provides Pi skill; repo link removed)"
+    elif [ ! -L "$target" ] && [ -d "$target" ] && same "$src" "$target"; then
+      rm -rf "$target"
+      item "included $name  (package provides Pi skill; identical copy removed)"
+    elif [ -e "$target" ] || [ -L "$target" ]; then
+      item "preserved $name  (package also provides it; custom copy/link left untouched)"
+    else
+      item "included $name  (provided by Pi package)"
+    fi
+    return 0
+  fi
 
   if [ -L "$target" ]; then
     [ "$(readlink "$target")" = "$src" ] && return 0
@@ -126,20 +162,38 @@ link_one() {
   item "link     $name -> $target"
 }
 
+reconcile_pi_shared() {
+  local tree
+  for tree in "${TREES[@]}"; do
+    if [ "$tree" = "$HOME/.pi/agent/skills" ] || [ "$tree" = "$HOME/.agents/skills" ]; then
+      command -v loom >/dev/null || die "loom not found (needed to check bundled Pi skills)"
+      loom bundled-skills --reconcile
+      return
+    fi
+  done
+}
+
 cmd_link() {
   local only="${1:-}" tree n
+  PI_BUNDLED_SKILLS=""
   if [ -n "$only" ]; then
     [ -n "$(repo_path "$only")" ] || die "no skill named '$only' under skills/"
   fi
   for tree in "${TREES[@]}"; do
+    if [ "$tree" = "$HOME/.pi/agent/skills" ]; then
+      reconcile_pi_shared
+      PI_BUNDLED_SKILLS="$(loom bundled-skills)"
+    fi
     mkdir -p "$tree"
     say "$tree:"
+    remove_stale_links "$tree"
     while read -r n; do
       [ -n "$n" ] || continue
       [ -n "$only" ] && [ "$n" != "$only" ] && continue
       link_one "$n" "$tree"
     done < <(repo_names)
   done
+  reconcile_pi_shared
 }
 
 cmd_pull() {
@@ -233,9 +287,9 @@ cmd_status() {
 
 cmd_deps() {
   command -v python3 >/dev/null || die "python3 not found (needed to read skills.sh.json)"
-  # Per-skill deps.yml sidecars declare the skills a skill invokes, so
-  # installers pull them in transitively. Every declared dep must itself be a
-  # shared skill at its stated path, and the graph must stay acyclic.
+  # Per-skill deps.yml sidecars declare invoked resources and optional immutable
+  # upstream provenance. Every declared dep must be shared at its stated path,
+  # the graph must stay acyclic, and provenance must be complete.
   python3 - "$REPO" <<'PYEOF' || die "deps.yml dependency validation failed"
 import json, re, sys
 from pathlib import Path
@@ -250,9 +304,17 @@ for f in repo.glob("skills/*/deps.yml"):
         m = re.search(rf"^{key}:\s*$((?:\n\s*-\s+[^\n]+)*)", text, re.M)
         return re.findall(r"-\s+([\w-]+)", m.group(1)) if m else []
     deps, tools = section("skills"), section("tools")
+    upstream = re.search(r"^upstream:\s*$", text, re.M)
     graph[skill] = deps
-    if not deps and not tools:
-        bad.append(f"{f.relative_to(repo)}: declares no deps — delete the file instead")
+    if upstream:
+        values = {
+            key: (match.group(1).strip() if (match := re.search(rf"^  {key}:\s*(.+)$", text, re.M)) else "")
+            for key in ("repository", "path", "commit")
+        }
+        if not all(values.values()) or not re.fullmatch(r"[0-9a-f]{40}", values["commit"]):
+            bad.append(f"{f.relative_to(repo)}: upstream needs repository, path, and a 40-character commit")
+    if not deps and not tools and not upstream:
+        bad.append(f"{f.relative_to(repo)}: declares neither deps nor upstream provenance — delete the file instead")
     for name in deps:
         if name not in shared:
             bad.append(f"{f.relative_to(repo)}: dep '{name}' is not a shared skill")
@@ -272,7 +334,7 @@ def visit(n):
     stack.pop()
 for n in list(graph): visit(n)
 for b in bad: print("  invalid  " + b)
-if not bad: print(f"  ok       {len(graph)} deps.yml sidecars: deps shared, paths exist, graph acyclic")
+if not bad: print(f"  ok       {len(graph)} deps.yml sidecars: deps valid, provenance complete, graph acyclic")
 sys.exit(1 if bad else 0)
 PYEOF
 }

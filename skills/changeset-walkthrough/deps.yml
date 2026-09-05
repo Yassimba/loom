@@ -1,8 +1,0 @@
-# Skills this skill invokes; installers pull them in transitively.
-skills:
-  - write-simply
-  - diagram-design
-  - plannotator
-  # Hard file dependency, not just an invocation: this skill's steps 2, 3 and 6
-  # run explain-code-flow's scripts and load its references directly.
-  - explain-code-flow

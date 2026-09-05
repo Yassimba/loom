@@ -37,5 +37,5 @@ files unchanged. Use references to retained facts instead of rewriting them.
 ## When figures help
 
 For an explanation, proposal, or finding that needs a figure, read
-[overlays.md](overlays.md). It covers direct atlas overlays, historical bindings,
-and Mermaid fallback. A text-only review stops after retrieval.
+[overlays.md](overlays.md). It resolves the personal/project diagram preference and covers
+atlas overlays, Mermaid views, and historical bindings. A text-only review stops after retrieval.

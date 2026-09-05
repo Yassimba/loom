@@ -69,6 +69,9 @@ enum Command {
         /// Editor used for clickable source links
         #[arg(long, value_enum)]
         editor: Option<Editor>,
+        /// Diagram style for this project; inherit uses your Loom setup default
+        #[arg(long, value_enum)]
+        diagrams: Option<loom::diagrams::DiagramStyle>,
         /// Add the project's CODING_STANDARDS.md review checklist
         #[arg(long, overrides_with = "no_coding_standards")]
         coding_standards: bool,
@@ -90,6 +93,13 @@ enum Command {
     Sync,
     /// Print shell completions (skill/tool/package names included)
     Completions { shell: clap_complete::Shell },
+    /// List or reconcile Pi package-provided skills (`scripts/sync-skills.sh`)
+    #[command(hide = true)]
+    BundledSkills {
+        /// Write Pi shared-skill exclusions and drop unchanged owned copies
+        #[arg(long)]
+        reconcile: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -100,6 +110,8 @@ enum WikiCommand {
         #[arg(long)]
         feynman: bool,
         #[arg(long)]
+        confluence: bool,
+        #[arg(long)]
         yes: bool,
     },
     /// Adopt an existing Obsidian Vault
@@ -107,6 +119,8 @@ enum WikiCommand {
         path: PathBuf,
         #[arg(long)]
         feynman: bool,
+        #[arg(long)]
+        confluence: bool,
         #[arg(long)]
         yes: bool,
     },
@@ -290,46 +304,63 @@ fn main() -> Result<()> {
             None => loom::wiki::run_interactive(&system)?,
             Some(command) => {
                 let request = match command {
-                    WikiCommand::Create { path, feynman, yes } => WikiRequest {
+                    WikiCommand::Create {
+                        path,
+                        feynman,
+                        confluence,
+                        yes,
+                    } => WikiRequest {
                         operation: WikiOperation::Create,
                         vault: path,
                         feynman,
+                        confluence,
                         yes,
                     },
-                    WikiCommand::Adopt { path, feynman, yes } => WikiRequest {
+                    WikiCommand::Adopt {
+                        path,
+                        feynman,
+                        confluence,
+                        yes,
+                    } => WikiRequest {
                         operation: WikiOperation::Adopt,
                         vault: path,
                         feynman,
+                        confluence,
                         yes,
                     },
                     WikiCommand::Status => WikiRequest {
                         operation: WikiOperation::Status,
                         vault: PathBuf::new(),
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Repair { path } => WikiRequest {
                         operation: WikiOperation::Repair,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Unregister { path } => WikiRequest {
                         operation: WikiOperation::Unregister,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Open { path } => WikiRequest {
                         operation: WikiOperation::Open,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Launch { path } => WikiRequest {
                         operation: WikiOperation::Launch,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                 };
@@ -370,6 +401,7 @@ fn main() -> Result<()> {
             tracker,
             domain,
             editor,
+            diagrams,
             coding_standards,
             no_coding_standards,
             codegraph,
@@ -397,6 +429,7 @@ fn main() -> Result<()> {
                     tracker,
                     domain,
                     editor,
+                    diagrams,
                     coding_standards: flag(coding_standards, no_coding_standards),
                     codegraph: flag(codegraph, no_codegraph),
                     yes,
@@ -415,6 +448,20 @@ fn main() -> Result<()> {
         }
         Command::Completions { shell } => {
             print_completions(shell)?;
+            true
+        }
+        Command::BundledSkills { reconcile } => {
+            let home = loom::System::home_dir(&system)
+                .ok_or_else(|| anyhow::anyhow!("home directory is unavailable"))?;
+            if reconcile {
+                for note in loom::reconcile_bundled_skills(&home).map_err(anyhow::Error::msg)? {
+                    eprintln!("{note}");
+                }
+            } else {
+                for name in loom::provided_bundled_skills(&home) {
+                    println!("{name}");
+                }
+            }
             true
         }
         Command::Update { yes } => {
@@ -464,6 +511,7 @@ mod tests {
                 source: None,
                 windows_wsl: false,
                 companions: vec![],
+                bundled_skills: Vec::new(),
             }],
         };
 
@@ -541,6 +589,7 @@ mod tests {
             "create",
             "/tmp/knowledge",
             "--feynman",
+            "--confluence",
             "--yes",
         ])
         .unwrap();
@@ -550,6 +599,7 @@ mod tests {
             Some(Command::Wiki {
                 command: Some(WikiCommand::Create {
                     feynman: true,
+                    confluence: true,
                     yes: true,
                     ..
                 })

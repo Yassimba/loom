@@ -3,7 +3,7 @@
 //! handling, and install progress. Everything here is terminal-free so the whole flow is
 //! unit-testable; rendering lives in `render.rs`.
 
-use crate::settings::{SettingSpec, SettingState, SettingsPaths};
+use crate::settings::{SettingChange, SettingSpec, SettingState, SettingsPaths};
 use crate::{
     build_install_plan, InstallPlan, InstallReport, Platform, PrerequisiteStatus, Resource,
     ResourceKind, SkillAgent, SkillDestination, SkillScope,
@@ -429,6 +429,30 @@ impl Wizard {
             .any(|resource| resource.kind == ResourceKind::Skill)
     }
 
+    pub(super) fn included_note(&self, index: usize) -> Option<String> {
+        let skill = &self.model.resources[index];
+        if self.model.purpose != WizardPurpose::Install || skill.kind != ResourceKind::Skill {
+            return None;
+        }
+        let destination = self.skill_destination();
+        self.model
+            .resources
+            .iter()
+            .enumerate()
+            .find(|(index, package)| {
+                package.kind == ResourceKind::PiPackage
+                    && package.bundled_skills.contains(&skill.install_target)
+                    && ((self.selected[*index]
+                        && crate::bundled_skills::selectable(package, &destination))
+                        || crate::bundled_skills::provides(
+                            package,
+                            &skill.install_target,
+                            &destination,
+                        ))
+            })
+            .map(|(_, package)| format!("Included with {} for Pi", package.label))
+    }
+
     pub(crate) fn resource_installed(&self, index: usize) -> bool {
         if self.model.purpose == WizardPurpose::Uninstall {
             return false;
@@ -443,6 +467,11 @@ impl Wizard {
                 || (!trees.is_empty()
                     && trees.iter().all(|tree| {
                         crate::skills::skill_present_in(tree, &resource.install_target)
+                            || crate::bundled_skills::provided_in_tree(
+                                &destination.home,
+                                tree,
+                                &resource.install_target,
+                            )
                     }));
         }
         self.model.installed[index]
@@ -496,23 +525,32 @@ impl Wizard {
 
     pub(crate) fn item_state(&self, item: Item) -> ItemState {
         match item {
-            Item::Resource(index) if self.resource_installed(index) => ItemState::Installed,
-            Item::Resource(index) => self.required_note(index).map_or_else(
-                || {
-                    if self.selected[index] {
-                        ItemState::Picked
-                    } else {
-                        ItemState::Available
-                    }
-                },
-                |reason| {
-                    if self.model.purpose == WizardPurpose::Uninstall {
-                        ItemState::RequiredKeep(reason)
-                    } else {
-                        ItemState::Required(reason)
-                    }
-                },
-            ),
+            Item::Resource(index) => match self.included_note(index) {
+                Some(note)
+                    if self.resource_installed(index)
+                        || self.required_note(index).is_some()
+                        || self.selected_agents().is_empty() =>
+                {
+                    ItemState::Required(note)
+                }
+                _ if self.resource_installed(index) => ItemState::Installed,
+                _ => self.required_note(index).map_or_else(
+                    || {
+                        if self.selected[index] {
+                            ItemState::Picked
+                        } else {
+                            ItemState::Available
+                        }
+                    },
+                    |reason| {
+                        if self.model.purpose == WizardPurpose::Uninstall {
+                            ItemState::RequiredKeep(reason)
+                        } else {
+                            ItemState::Required(reason)
+                        }
+                    },
+                ),
+            },
             Item::Setting(index) if self.setting_applied(index) => ItemState::Installed,
             Item::Setting(index) if !self.setting_available(index) => {
                 ItemState::Unavailable("pick or install its related capability first".into())
@@ -549,7 +587,10 @@ impl Wizard {
     fn precheck_settings(&mut self) {
         let selection = self.selection();
         for (index, spec) in self.model.settings.iter().enumerate() {
-            if self.setting_touched[index] || self.setting_applied(index) {
+            if self.setting_touched[index]
+                || self.setting_applied(index)
+                || matches!(spec.change, SettingChange::DiagramStyle(_))
+            {
                 continue;
             }
             self.setting_on[index] = match &spec.related_resource {
@@ -571,6 +612,17 @@ impl Wizard {
         match item {
             Item::Resource(index) => self.selected[index] = on,
             Item::Setting(index) => {
+                if matches!(
+                    self.model.settings[index].change,
+                    SettingChange::DiagramStyle(_)
+                ) {
+                    for (other, spec) in self.model.settings.iter().enumerate() {
+                        if matches!(spec.change, SettingChange::DiagramStyle(_)) {
+                            self.setting_on[other] = false;
+                            self.setting_touched[other] = true;
+                        }
+                    }
+                }
                 self.setting_on[index] = on;
                 self.setting_touched[index] = true;
             }
@@ -587,7 +639,11 @@ impl Wizard {
     }
 
     fn toggle_group(&mut self, items: &[Item]) {
-        let actionable = self.actionable(items);
+        // Diagram styles are alternatives, not bulk-selectable settings.
+        let items: Vec<_> = items.iter().copied().filter(|item| !matches!(item,
+            Item::Setting(index) if matches!(self.model.settings[*index].change, SettingChange::DiagramStyle(_))
+        )).collect();
+        let actionable = self.actionable(&items);
         let all_on = actionable.iter().all(|item| self.item_on(*item));
         for item in actionable {
             self.set_item(item, !all_on);
@@ -720,7 +776,9 @@ impl Wizard {
         }
         let selected = self.expanded_selection();
         let has_wiki = selected.iter().any(|resource| resource.group == "Wiki");
-        let only_wiki = has_wiki && selected.iter().all(|resource| resource.group == "Wiki");
+        let only_wiki = has_wiki
+            && selected.iter().all(|resource| resource.group == "Wiki")
+            && self.selected_settings().is_empty();
         if only_wiki && !self.model.dry_run {
             return Some(Action::Exit(WizardOutcome::WikiSelection {
                 feynman: selected

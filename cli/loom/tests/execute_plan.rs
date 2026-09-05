@@ -665,3 +665,481 @@ fn parallel_managers_still_report_in_plan_order() {
         "report order must follow the plan, not thread completion"
     );
 }
+
+fn install_ponytail_package(home: &Path, settings: &str) -> PathBuf {
+    let root = home.join(".pi/agent/npm/node_modules/@dietrichgebert/ponytail");
+    fs::create_dir_all(root.join("skills/ponytail")).unwrap();
+    fs::write(
+        root.join("skills/ponytail/SKILL.md"),
+        "---\nname: ponytail\ndescription: Bundled skill.\n---\n# bundled\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("package.json"),
+        r#"{"name":"@dietrichgebert/ponytail","version":"4.9.0","pi":{"skills":["./skills"]}}"#,
+    )
+    .unwrap();
+    fs::write(home.join(".pi/agent/settings.json"), settings).unwrap();
+    root
+}
+
+const PONYTAIL_SETTINGS: &str = r#"{"packages":["npm:@dietrichgebert/ponytail@4.9.0"]}"#;
+
+#[test]
+fn installed_bundle_skips_only_pi_and_preserves_skill_only_and_filtered_installs() {
+    for settings in [
+        Some(PONYTAIL_SETTINGS),
+        None,
+        Some(r#"{"packages":[{"source":"npm:@dietrichgebert/ponytail","skills":[]}]}"#),
+    ] {
+        let system = SkillInstallSystem::new("bundled-destinations", &["ponytail"]);
+        if let Some(settings) = settings {
+            install_ponytail_package(&system.home, settings);
+        }
+        let destination = SkillDestination::new(
+            vec![SkillAgent::Pi, SkillAgent::Claude],
+            SkillScope::Global,
+            &system.home,
+            &system.home,
+        );
+        let report =
+            execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+        assert!(report.failures.is_empty(), "{report:?}");
+        assert!(system.tree().join("ponytail/SKILL.md").is_file());
+        assert_eq!(
+            system
+                .home
+                .join(".pi/agent/skills/ponytail/SKILL.md")
+                .is_file(),
+            settings != Some(PONYTAIL_SETTINGS)
+        );
+    }
+}
+
+fn record_owned_skill(home: &Path, path: &Path) {
+    let mut state = loom::InstallState::load(home).unwrap();
+    state.record(loom::OwnedResource {
+        id: "skill:ponytail".into(),
+        scope: loom::OwnershipScope::Global,
+        depends_on: vec![],
+        receipts: vec![loom::Receipt::Path {
+            path: path.to_path_buf(),
+            path_kind: loom::OwnedPathKind::Tree,
+            digest: loom::digest_path(path).unwrap(),
+            before: None,
+        }],
+    });
+    state.save(home).unwrap();
+}
+
+#[test]
+fn bundled_skills_reconcile_only_unchanged_owned_copies() {
+    for edited in [false, true] {
+        let system = SkillInstallSystem::new("bundled-reconcile", &[]);
+        let package = install_ponytail_package(&system.home, PONYTAIL_SETTINGS);
+        let path = system.home.join(".pi/agent/skills/ponytail");
+        fs::create_dir_all(&path).unwrap();
+        fs::write(path.join("SKILL.md"), "# owned\n").unwrap();
+        record_owned_skill(&system.home, &path);
+        if edited {
+            fs::write(path.join("SKILL.md"), "# custom\n").unwrap();
+        }
+        let destination = SkillDestination::new(
+            vec![SkillAgent::Pi],
+            SkillScope::Global,
+            &system.home,
+            &system.home,
+        );
+        let report =
+            execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+        assert!(report.failures.is_empty(), "{report:?}");
+        assert_eq!(path.exists(), edited);
+        assert_eq!(
+            loom::InstallState::load(&system.home)
+                .unwrap()
+                .resources
+                .contains_key("skill:ponytail"),
+            edited
+        );
+        assert!(package.join("skills/ponytail/SKILL.md").is_file());
+        assert!(
+            system.commands.lock().unwrap().is_empty(),
+            "bundled-only needs no repo download"
+        );
+    }
+}
+
+struct PackageInstallSystem {
+    skills: SkillInstallSystem,
+    fail: bool,
+}
+impl System for PackageInstallSystem {
+    fn command_exists(&self, _: &str) -> bool {
+        true
+    }
+    fn refresh_path(&self) {}
+    fn home_dir(&self) -> Option<PathBuf> {
+        Some(self.skills.home.clone())
+    }
+    fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
+        if command.program != "pi" {
+            return self.skills.run(command);
+        }
+        if !self.fail {
+            install_ponytail_package(&self.skills.home, PONYTAIL_SETTINGS);
+        }
+        Ok(CommandResult {
+            success: !self.fail,
+            stdout: "npm:@dietrichgebert/ponytail@4.9.0".into(),
+            stderr: "package failed".into(),
+        })
+    }
+}
+
+#[test]
+fn selected_bundle_finishes_before_copy_and_failed_package_keeps_standalone() {
+    for fail in [false, true] {
+        let system = PackageInstallSystem {
+            skills: SkillInstallSystem::new("selected-bundle", &["ponytail"]),
+            fail,
+        };
+        let existing = system.skills.home.join(".pi/agent/skills/ponytail");
+        if fail {
+            install_ponytail_package(&system.skills.home, PONYTAIL_SETTINGS);
+            fs::create_dir_all(&existing).unwrap();
+            fs::write(existing.join("SKILL.md"), "# existing standalone").unwrap();
+            record_owned_skill(&system.skills.home, &existing);
+        }
+        let catalog = loom::Catalog::embedded().unwrap();
+        let selected = catalog
+            .find(&["pi-package:@dietrichgebert/ponytail".into()])
+            .unwrap();
+        let selected =
+            loom::expand_skill_dependencies(&catalog.resources, selected, &[SkillAgent::Pi]);
+        let destination = SkillDestination::new(
+            vec![SkillAgent::Pi],
+            SkillScope::Global,
+            &system.skills.home,
+            &system.skills.home,
+        );
+        let plan = loom::build_install_plan(
+            &selected,
+            loom::PrerequisiteStatus {
+                pi: true,
+                herdr: true,
+                mise: true,
+            },
+            loom::Platform::Unix,
+            &destination,
+        )
+        .unwrap();
+        let report = execute_install_plan(&plan, &system);
+        assert_eq!(report.failures.is_empty(), !fail);
+        if fail {
+            assert!(report
+                .failures
+                .iter()
+                .any(|failure| failure.target == "skills" && failure.message.contains("retry")));
+            assert!(!report.installed.contains(&"skills".into()));
+            assert_eq!(
+                fs::read_to_string(existing.join("SKILL.md")).unwrap(),
+                "# existing standalone"
+            );
+        }
+        assert_eq!(
+            system
+                .skills
+                .home
+                .join(".pi/agent/skills/ponytail/SKILL.md")
+                .exists(),
+            fail
+        );
+    }
+}
+
+#[test]
+fn unrelated_failed_pi_package_does_not_block_standalone_skills() {
+    let system = PackageInstallSystem {
+        skills: SkillInstallSystem::new("unrelated-pi-failure", &["ponytail"]),
+        fail: true,
+    };
+    let destination = SkillDestination::new(
+        vec![SkillAgent::Pi],
+        SkillScope::Global,
+        &system.skills.home,
+        &system.skills.home,
+    );
+    let mut plan = copy_skills_plan_for(&["ponytail"], destination);
+    plan.resources
+        .push(step("pi-package:unrelated", "pi", "pi"));
+    let report = execute_install_plan(&plan, &system);
+    assert!(report.installed.contains(&"skills".into()));
+    assert!(system
+        .skills
+        .home
+        .join(".pi/agent/skills/ponytail/SKILL.md")
+        .is_file());
+}
+
+fn pi_skill_discovery(home: &Path, project: &Path) -> serde_json::Value {
+    let helper = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/pi-skill-discovery.mjs");
+    let output = std::process::Command::new("node")
+        .arg(helper)
+        .arg(project)
+        .arg(home.join(".pi/agent"))
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("PI_OFFLINE", "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
+#[test]
+fn shared_global_and_project_copies_are_excluded_only_from_real_pi_discovery() {
+    for (scope, shared_agent) in [
+        (SkillScope::Global, SkillAgent::AgentsStandard),
+        (SkillScope::Project, SkillAgent::Codex),
+    ] {
+        let system = SkillInstallSystem::new("shared-pi-discovery", &["ponytail"]);
+        let project = system.home.join("project");
+        fs::create_dir_all(project.join(".git")).unwrap();
+        let package = install_ponytail_package(&system.home, PONYTAIL_SETTINGS);
+        let destination = SkillDestination::new(
+            vec![SkillAgent::Pi, shared_agent],
+            scope,
+            &system.home,
+            &project,
+        );
+        let report = execute_install_plan(
+            &copy_skills_plan_for(&["ponytail"], destination.clone()),
+            &system,
+        );
+        assert!(report.failures.is_empty(), "{report:?}");
+        let root = if scope == SkillScope::Global {
+            &system.home
+        } else {
+            &project
+        };
+        let shared = root.join(".agents/skills/ponytail/SKILL.md");
+        assert!(shared.is_file());
+        fs::write(
+            &shared,
+            "---\nname: ponytail\ndescription: Shared skill.\n---\n# standalone\n",
+        )
+        .unwrap();
+        let result = pi_skill_discovery(&system.home, &project);
+        assert_eq!(result["skills"].as_array().unwrap().len(), 1, "{result}");
+        assert_eq!(
+            PathBuf::from(result["skills"][0]["filePath"].as_str().unwrap())
+                .canonicalize()
+                .unwrap(),
+            package
+                .join("skills/ponytail/SKILL.md")
+                .canonicalize()
+                .unwrap()
+        );
+        assert!(
+            !result["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|d| d["type"] == "collision"),
+            "{result}"
+        );
+        let settings = if scope == SkillScope::Global {
+            root.join(".pi/agent/settings.json")
+        } else {
+            root.join(".pi/settings.json")
+        };
+        let configured = fs::read_to_string(&settings).unwrap();
+        let mut without: serde_json::Value = serde_json::from_str(&configured).unwrap();
+        without["skills"] = serde_json::json!([]);
+        fs::write(&settings, without.to_string()).unwrap();
+        let red = pi_skill_discovery(&system.home, &project);
+        assert!(
+            red["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|d| d["type"] == "collision"),
+            "real discovery must reproduce the original collision: {red}"
+        );
+        fs::write(&settings, configured).unwrap();
+        // Typed receipts remove only the contributed array element, not packages or other keys.
+        let mut state = loom::InstallState::load(&system.home).unwrap();
+        let plan = loom::uninstall::build_uninstall_plan(
+            &state,
+            &loom::uninstall::UninstallRequest::default(),
+            &project,
+            loom::uninstall::receipt_status,
+        )
+        .unwrap();
+        let removed = loom::uninstall::execute_uninstall_plan(
+            &plan,
+            &mut state,
+            &system.home,
+            &system,
+            &AtomicBool::new(false),
+        );
+        assert!(removed.failures.is_empty(), "{removed:?}");
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+        assert_eq!(config["skills"], serde_json::json!([]));
+        assert!(shared.is_file());
+        assert!(
+            package.join("skills/ponytail/SKILL.md").is_file(),
+            "an external provider is not claimed"
+        );
+    }
+}
+
+#[test]
+fn shared_exclusions_preserve_user_entries_and_reconcile_removed_provider() {
+    let system = SkillInstallSystem::new("shared-exclusion-ownership", &["ponytail"]);
+    install_ponytail_package(&system.home, PONYTAIL_SETTINGS);
+    let settings = system.home.join(".pi/agent/settings.json");
+    let destination = SkillDestination::new(
+        vec![SkillAgent::AgentsStandard],
+        SkillScope::Global,
+        &system.home,
+        &system.home,
+    );
+    let shared = system.home.join(".agents/skills/ponytail/SKILL.md");
+    let entry = format!("-{}", shared.display());
+    let original = serde_json::json!({"packages":["npm:@dietrichgebert/ponytail@4.9.0"],"theme":"custom","skills":[entry,"!unrelated"]});
+    fs::write(&settings, original.to_string()).unwrap();
+    let plan = copy_skills_plan_for(&["ponytail"], destination.clone());
+    assert!(execute_install_plan(&plan, &system).failures.is_empty());
+    assert!(
+        loom::InstallState::load(&system.home)
+            .unwrap()
+            .resources
+            .is_empty(),
+        "preexisting exclusion remains user-owned"
+    );
+    let mut config = original.clone();
+    config["skills"] = serde_json::json!(["!unrelated"]);
+    fs::write(&settings, config.to_string()).unwrap();
+    assert!(execute_install_plan(&plan, &system).failures.is_empty());
+    assert!(
+        execute_install_plan(&plan, &system).failures.is_empty(),
+        "idempotent"
+    );
+    let mut config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+    assert_eq!(config["skills"].as_array().unwrap().len(), 2);
+    config["packages"] = serde_json::json!([]); // direct pi remove, then next Loom install/update
+    fs::write(&settings, config.to_string()).unwrap();
+    assert!(execute_install_plan(&plan, &system).failures.is_empty());
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+    assert_eq!(config["skills"], serde_json::json!(["!unrelated"]));
+    assert_eq!(config["theme"], "custom");
+    assert!(shared.is_file());
+}
+
+#[test]
+fn project_only_provider_conflict_does_not_change_settings_or_skills() {
+    let system = SkillInstallSystem::new("project-only-provider", &["ponytail"]);
+    let project = system.home.join("project");
+    fs::create_dir_all(project.join(".git")).unwrap();
+    let global = install_ponytail_package(&system.home, PONYTAIL_SETTINGS);
+    let local = project.join(".pi/npm/node_modules/@dietrichgebert/ponytail");
+    fs::create_dir_all(local.parent().unwrap()).unwrap();
+    fs::rename(global, &local).unwrap();
+    let settings = system.home.join(".pi/agent/settings.json");
+    fs::write(&settings, "{}").unwrap();
+    fs::write(project.join(".pi/settings.json"), PONYTAIL_SETTINGS).unwrap();
+    let shared = system.home.join(".agents/skills/ponytail/SKILL.md");
+    fs::create_dir_all(shared.parent().unwrap()).unwrap();
+    fs::write(&shared, "# shared").unwrap();
+    let destination = SkillDestination::new(
+        vec![SkillAgent::Pi, SkillAgent::Codex],
+        SkillScope::Project,
+        &system.home,
+        &project,
+    );
+    let report = execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+    assert!(
+        report.failures.iter().any(|failure| failure
+            .message
+            .contains("project-only Pi provider conflicts")),
+        "{report:?}"
+    );
+    assert_eq!(fs::read_to_string(&settings).unwrap(), "{}");
+    assert_eq!(
+        fs::read_to_string(project.join(".pi/settings.json")).unwrap(),
+        PONYTAIL_SETTINGS
+    );
+    assert_eq!(fs::read_to_string(shared).unwrap(), "# shared");
+    assert!(!project.join(".agents/skills").exists());
+}
+
+#[test]
+fn malformed_ledger_and_explicit_inclusions_do_not_get_overwritten() {
+    let system = SkillInstallSystem::new("shared-exclusion-invalid", &["ponytail"]);
+    install_ponytail_package(&system.home, PONYTAIL_SETTINGS);
+    let settings = system.home.join(".pi/agent/settings.json");
+    let shared = system.home.join(".agents/skills/ponytail/SKILL.md");
+    fs::create_dir_all(shared.parent().unwrap()).unwrap();
+    fs::write(&shared, "# shared").unwrap();
+    let destination = SkillDestination::new(
+        vec![SkillAgent::AgentsStandard],
+        SkillScope::Global,
+        &system.home,
+        &system.home,
+    );
+    let plan = copy_skills_plan_for(&["ponytail"], destination);
+    let ledger = system.home.join(loom::ownership::STATE_PATH);
+    fs::create_dir_all(ledger.parent().unwrap()).unwrap();
+    fs::write(&ledger, "malformed").unwrap();
+    assert!(!execute_install_plan(&plan, &system).failures.is_empty());
+    assert_eq!(fs::read_to_string(&settings).unwrap(), PONYTAIL_SETTINGS);
+    assert_eq!(fs::read_to_string(&ledger).unwrap(), "malformed");
+    fs::remove_file(ledger).unwrap();
+    let explicit = serde_json::json!({"packages":["npm:@dietrichgebert/ponytail@4.9.0"], "skills":[format!("+{}", shared.display())]});
+    fs::write(&settings, explicit.to_string()).unwrap();
+    assert!(!execute_install_plan(&plan, &system).failures.is_empty());
+    assert_eq!(fs::read_to_string(&settings).unwrap(), explicit.to_string());
+    assert_eq!(fs::read_to_string(shared).unwrap(), "# shared");
+}
+
+#[cfg(unix)]
+#[test]
+fn shared_alias_to_bundled_file_is_not_excluded_from_pi() {
+    let system = SkillInstallSystem::new("shared-bundle-alias", &["ponytail"]);
+    let project = system.home.join("project");
+    fs::create_dir_all(&project).unwrap();
+    let package = install_ponytail_package(&system.home, PONYTAIL_SETTINGS);
+    let shared = system.home.join(".agents/skills/ponytail");
+    fs::create_dir_all(shared.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(package.join("skills/ponytail"), &shared).unwrap();
+    let destination = SkillDestination::new(
+        vec![SkillAgent::Pi, SkillAgent::AgentsStandard],
+        SkillScope::Global,
+        &system.home,
+        &project,
+    );
+    let report = execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+    assert!(report.failures.is_empty(), "{report:?}");
+    assert_eq!(
+        fs::read_to_string(system.home.join(".pi/agent/settings.json")).unwrap(),
+        PONYTAIL_SETTINGS
+    );
+    let result = pi_skill_discovery(&system.home, &project);
+    assert_eq!(result["skills"].as_array().unwrap().len(), 1, "{result}");
+    assert!(
+        !result["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["type"] == "collision"),
+        "{result}"
+    );
+}

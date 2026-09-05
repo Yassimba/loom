@@ -1,40 +1,31 @@
 ---
 name: loom
-description: Set up Loom on a machine or repository. Use when installing or updating Loom resources, initializing a project, finishing a selected tool's authentication, handling native Windows or WSL, checking status, or repairing setup.
+description: "Loom help: explain the setup, choose resources, install or update, configure projects or wiki vaults, and troubleshoot installation or authentication."
 ---
 
 # Loom
 
-Loom is the only installer:
+Use the conversation to choose a path. For a bare `/loom`, ask: "What would you like to set up, change, or understand?" Ask for a platform or target directory only when it changes the next action.
 
-- Machine: `loom setup`
-- Repository: `loom init`
-- Pi Wiki Vault: `loom wiki`
+## Explain or choose
 
-## Run
+Consult **Sources** for the question. Explain the relevant behavior; for a recommendation, name the resource and the tradeoff that matters to this user. Keep this path read-only. Move to **Make a change** when the user asks to apply the recommendation.
 
-1. Check `loom --version`. If missing, explain the bootstrap and ask before running it:
+Done when the question is answered or the choice is explained, with unverified details identified.
 
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/Yassimba/loom/main/install.sh | sh
-   ```
+## Troubleshoot
 
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
-   ```
+Get the failing command and exact error. Use read-only probes, starting with `loom --version` and relevant `loom status` output, to distinguish a missing install, PATH problem, authentication failure, or project configuration error. Consult **Sources** for the affected command or tool.
 
-2. Use `loom setup`, `loom add`, `loom init`, `loom wiki`, `loom update`, or `loom status` for the requested boundary. Read `--help` for current selectors and flags instead of guessing them.
+Done when evidence identifies a cause and a proposed repair, or you name the missing evidence needed to distinguish the remaining causes. Apply repairs through **Make a change**.
 
-3. `setup`, `add`, and `update` need a real terminal unless `--yes` is passed. When acting non-interactively, pass `--yes`; also pass explicit selectors and preview setup/add with `--dry-run`.
+## Make a change
 
-4. For repository defaults, offer `loom init --yes`. Use explicit choices only when the user supplied them.
+For installation, resource selection, updates, project or wiki setup, and repairs, follow [references/changes.md](references/changes.md). That procedure owns preview, confirmation, execution, and verification.
 
-5. After setup or add, report every next action from Loom. Offer each selected tool's official authentication or configuration command; explain it and ask before running it. Credentials stay with that tool.
+## Sources
 
-For Wiki work, use Create or Adopt explicitly. Loom reviews all portable Vault writes through `claude-obsidian`, keeps product code outside the Vault, and installs Pi packages below ignored `.pi/`. `loom wiki unregister <path>` removes only the machine-local registry record. Never describe it as deleting the Vault. Run `cd <vault> && pi` to keep wiki skills project-local. Native Windows uses WSL for Vault mutations; Obsidian remains optional.
-
-Native Windows: before setup, read [references/windows.md](references/windows.md).
-
-Before any install, update, init, or upstream setup command, show the exact command and get confirmation. Status checks and dry runs need no confirmation.
-
-Done when Loom reports every requested resource or project file as successful. Repeat failed, skipped, and remaining next actions exactly.
+- **Commands and resources:** use the installed CLI's `--help` and catalog/menu. Select supported flags and resource names from that output.
+- **Concepts, supported agents, and architecture:** consult the [Loom README](https://github.com/Yassimba/loom#readme) and follow the links relevant to the question. A local checkout is useful evidence; identify unpublished behavior as such.
+- **Updates:** use Loom's published manifest pins as the authority. The manifest is the menu; the user's selection is what gets installed. A newer upstream tool release does not mean Loom offers it yet.
+- **Authentication:** use the selected tool's official instructions. Credentials remain with that tool.

@@ -127,10 +127,18 @@ impl StepAction {
                 skills,
                 destination,
             } => format!(
-                "copy skills into {} targets ({}): {}",
+                "copy skills into {} targets ({}), except enabled package-provided Pi skills: {}{}",
                 destination.scope.label().to_lowercase(),
                 destination.display(),
-                skills.join(", ")
+                skills.join(", "),
+                if destination.scope == crate::SkillScope::Project {
+                    format!(
+                        "; {}",
+                        crate::bundled_skills::project_launch_note(&destination.project_root)
+                    )
+                } else {
+                    String::new()
+                }
             ),
             Self::SyncTools { tools } => format!(
                 "add to the mise selection and install: {}",
@@ -364,10 +372,13 @@ pub fn execute_install_plan_with_control(
                 let dependency_failed =
                     outcome.unavailable || (lane.manager == "pi" && !system.command_exists("pi"));
                 if dependency_failed {
-                    let message = format!("{} is unavailable", display_name(lane.manager));
+                    let message = skipped_message(lane.manager);
                     for step in &lane.steps {
                         handle_status(step.index, StepStatus::Skipped(message.clone()));
                     }
+                    let _ = finish_sender
+                        .send((lane.manager.to_owned(), LaneOutcome { unavailable: true }));
+                    running += 1;
                     continue;
                 }
                 let status_sender = status_sender.clone();
@@ -446,6 +457,27 @@ fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
             }),
         }
     }
+    // A skill a selected Pi package bundles must wait for that package, so
+    // the copy step can see whether Pi now provides it.
+    let bundled_names = crate::bundled_skills::packages()
+        .iter()
+        .filter(|package| plan.resources.iter().any(|step| step.target == package.id))
+        .flat_map(|package| &package.bundled_skills)
+        .collect::<Vec<_>>();
+    let needs_bundled_pi = plan.resources.iter().any(|step| {
+        matches!(&step.action,
+            StepAction::CopySkills { skills, destination }
+                if (destination.agents.contains(&crate::SkillAgent::Pi)
+                    || destination.agents.contains(&crate::SkillAgent::AgentsStandard)
+                    || (destination.scope == crate::SkillScope::Project && destination.agents.contains(&crate::SkillAgent::Codex)))
+                    && skills.iter().any(|name| bundled_names.contains(&name))
+        )
+    });
+    if needs_bundled_pi {
+        if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == "skills") {
+            lane.waits_for = Some("pi");
+        }
+    }
     let pi_via_mise = plan.prerequisites.iter().any(|step| {
         matches!(
             &step.action,
@@ -463,6 +495,15 @@ fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
 
 struct LaneOutcome {
     unavailable: bool,
+}
+
+/// Why the remaining steps of a lane were skipped.
+fn skipped_message(manager: &str) -> String {
+    if manager == "skills" {
+        "Pi package installation did not complete; skills skipped — fix the package failure and retry".into()
+    } else {
+        format!("{} is unavailable", display_name(manager))
+    }
 }
 
 fn execute_lane(
@@ -501,7 +542,7 @@ fn execute_lane(
         });
         if let Some(message) = failure {
             let _ = sender.send((indexed.index, StepStatus::Failed(message)));
-            let message = format!("{} is unavailable", display_name(lane.manager));
+            let message = skipped_message(lane.manager);
             for skipped in prerequisites.iter().skip(offset + 1).chain(&resources) {
                 let _ = sender.send((skipped.index, StepStatus::Skipped(message.clone())));
             }
@@ -510,8 +551,10 @@ fn execute_lane(
         let _ = sender.send((indexed.index, StepStatus::Prepared));
     }
 
+    let mut failed = false;
     for indexed in resources {
         if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+            failed = true;
             let _ = sender.send((indexed.index, StepStatus::Skipped("cancelled".into())));
             continue;
         }
@@ -528,12 +571,17 @@ fn execute_lane(
                     .map(|error| error.to_string())
             });
         let status = match failure {
-            Some(message) => StepStatus::Failed(message),
+            Some(message) => {
+                failed = true;
+                StepStatus::Failed(message)
+            }
             None => StepStatus::Installed,
         };
         let _ = sender.send((indexed.index, status));
     }
-    LaneOutcome { unavailable: false }
+    LaneOutcome {
+        unavailable: failed,
+    }
 }
 
 fn execute_step(

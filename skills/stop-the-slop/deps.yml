@@ -1,3 +1,8 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
   - write-simply
+
+upstream:
+  repository: https://github.com/hardikpandya/stop-slop
+  path: .
+  commit: 8da1f030185bdfe8471220585162991eaeb970e9

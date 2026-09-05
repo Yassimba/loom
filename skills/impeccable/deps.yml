@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/pbakaus/impeccable
+  path: .agents/skills/impeccable
+  commit: 8dac6ae7e020c43ab10ce9b41939f6fd42627b96

@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/affaan-m/ECC
+  path: skills/api-design
+  commit: e04ea0b9cc8248686edf5ac751cadff550e162b8

@@ -157,6 +157,21 @@ fn render_selection(manifest: &str, current: &str, keys: &[String]) -> Result<St
     Ok(out)
 }
 
+// Wiki setup and update sync keys directly, bypassing install-plan expansion.
+fn with_tool_companions(mut keys: Vec<String>) -> Result<Vec<String>, String> {
+    let catalog = crate::Catalog::embedded().map_err(|error| error.to_string())?;
+    for tool in &catalog.resources {
+        if keys.contains(&tool.install_target) {
+            for companion in &tool.companions {
+                if !keys.contains(companion) {
+                    keys.push(companion.clone());
+                }
+            }
+        }
+    }
+    Ok(keys)
+}
+
 /// Fetch the manifest, rebuild the selection (previous keys + `extra`),
 /// write it to conf.d, and `mise install` the result.
 pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, String> {
@@ -189,6 +204,7 @@ pub(crate) fn sync_selected_from(
                 keys.push(key.clone());
             }
         }
+        let keys = with_tool_companions(keys)?;
         let current = fs::read_to_string(&target).unwrap_or_default();
         let content = render_selection(&manifest, &current, &keys)?;
         crate::fs_tx::atomic_write(&target, content.as_bytes())?;
@@ -254,6 +270,22 @@ fn mise_install(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selected_confluence_includes_its_pinned_installer_once() {
+        let keys = with_tool_companions(vec!["pipx:confluence-markdown-exporter".into()]).unwrap();
+        assert!(keys.contains(&"uv".into()));
+        let content = render_selection(BUNDLED_MANIFEST, "", &keys).unwrap();
+        let pinned_uv = BUNDLED_MANIFEST
+            .lines()
+            .find(|line| line_key(line) == Some("uv"))
+            .unwrap();
+        assert!(content.contains(pinned_uv));
+        assert_eq!(with_tool_companions(keys.clone()).unwrap(), keys);
+        assert!(!with_tool_companions(vec!["npm:@tobilu/qmd".into()])
+            .unwrap()
+            .contains(&"uv".into()));
+    }
 
     #[test]
     fn published_manifest_is_valid_toml() {

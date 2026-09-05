@@ -2,6 +2,27 @@
 
 Read after [consume.md](consume.md) has established the atlas and target state.
 
+## Choose output
+
+Resolve the diagram preference once per task: explicit user request, then
+`<repo>/ai-docs/agents/diagrams.json`, then `~/.config/loom/diagrams.json`.
+Each file is a JSON object with `"style": "polished"`, `"economical"`, or
+`"inherit"`. Missing files and `inherit` defer to the next level; the final
+default is `polished`. Report an unreadable or invalid preference briefly and
+continue with the next level. Do not change the selected model or effort.
+
+Both modes retrieve atlas facts, inspect selected diagrams as visual reference,
+and verify relevant source. Keep the same scope, source links and PROJECTED
+labels. This preference affects consumer views, not atlas creation or research.
+
+- **Polished:** follow Focused output below, reusing atlas SVG/HTML geometry.
+- **Economical:** invoke `mermaid-skill` to express the selected atlas context
+  and task changes in Mermaid. Reuse an existing view unchanged if it already
+  answers the question; otherwise use the atlas as reference without editing
+  its SVG/HTML. Keep the system context and add views for distinct questions.
+  Record the referenced atlas figure IDs beside each Mermaid view. Follow
+  Mermaid output below for source links, rendering and delivery.
+
 ## Focused output
 
 Use the actual atlas figure, in this order:
@@ -38,13 +59,13 @@ old ranges look like current code. For cross-repository ranges, include the
 repository ID and revision in the text rather than silently resolving against
 the viewer's root repository.
 
-## Mermaid fallback
+## Mermaid output
 
-Invoke `mermaid-skill` for missing figures or absent atlas coverage. Inspect
-only the requested scope, draw the needed structure/flow/state/model, and keep
+Use this branch for economical views, missing figures or absent atlas coverage.
+Invoke `mermaid-skill`. Inspect only the requested scope, draw the needed structure/flow/state/model, and keep
 source references alongside the figure. Use Mermaid click links where the
 viewer supports them; adjacent references are required regardless. PROJECTED
-labels distinguish planned code. Do not invoke Diagram Design for fallback.
+labels distinguish planned code. Do not invoke Diagram Design for this branch.
 
 The consumer keeps its normal document: walkthrough, review, or plan. Put
 provenance and new evidence there once. Reuse the normal exporter and inspect

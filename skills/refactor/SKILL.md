@@ -1,155 +1,58 @@
 ---
 name: refactor
-description: refactor to reduce unneeded complexity
+description: Five-angle refactor review with before/after proposals, annotation approval, and verified implementation.
+disable-model-invocation: true
 ---
 
-You are a lazy senior developer. Lazy means efficient, not careless. You have
-seen every over-engineered codebase and been paged at 3am for one. The best
-code is the code never written.
+# Refactor
 
-Review the diff OR the named code (depending on context) for unnecessary complexity.
-Find all violations then present each finding concisely: location, what to cut, what replaces it.
+## 1. Scope
 
-The diff's best outcome is getting shorter. If the happy path is 95% of runtime behavior, it should be approximately 95% of the code readers see.
+Use the user's scope; otherwise staged/unstaged changes and non-ignored untracked source. With none, announce a whole-repository review before dispatch. Exclude generated, vendored, and build output unless requested.
 
-Validate that there are no duplicate codepaths and it reuses existing functionality WITHOUT creating small unneeded wrappers AND hunt for code that can be replaced with stdlib or functionality of existing dependencies instead of hand rolled.
+Read project instructions, runtime versions, and validation commands. Record repository, branch, relevant base/head revisions, and initial worktree/index state. List the assigned files/subsystems and give all reviewers one read-only snapshot including dirty and untracked content; a commit alone is insufficient.
 
-## Exhaustive local pass
+## 2. Review
 
-1. Set the scope before reviewing: every changed file for a diff, or every file that directly implements the named code.
-2. Check every in-scope file for every tag below, plus duplicate codepaths, pass-through wrappers, and existing stdlib, platform, or dependency functionality.
-3. Keep a file-by-file checklist while reviewing. Do not answer until every file and check is complete. Do not stop after "representative examples" or "a convenient number of findings".
-4. Report every distinct problem. A repeated problem can be one finding only when the finding lists every location.
+Follow the host's subagent protocol and available-agent discovery. Dispatch one read-only reviewer per `topics/` file asynchronously. Split oversized assignments by named subsystem, assigning each file once per topic and explicitly covering integration flows. Bound concurrency; report budget-limited coverage.
 
-## Format
+Supply each reviewer the snapshot, assignment, project constraints, and absolute paths to its topic and the [review contract](references/review-contract.md), instructing it to read both. Assign a durable report destination returned through the host's artifact mechanism. Collect a contract-compliant report for every assignment.
 
-Invoke the `write-simply` skill to not use jargon and make clear statements
+The parent owns reconciliation, approval, and implementation. On dispatch/tooling failure, preserve partial reports, report the exact failure and run/repository/worktree/ref state, and resume only through the same protocol after resolving the blocker.
 
-Each finding starts with `L<line>: <tag> <what>. <replacement>.`, or
-`<file>:L<line>: ...` for multi-file diffs, then shows only the code that
-changes:
+## 3. Reconcile
 
-````markdown
-```LANGUAGE
-current code, trimmed to the lines that change
-```
+Check all reports against the snapshot. Merge duplicates under stable IDs (`R1`, …), retaining contributing topics. Record prerequisites; group incompatible remedies as alternatives and recommend one with a reason. Rank by benefit and risk. Separate behavior changes and pending investigations from implementation-ready refactors, as defined in the contract.
 
-```LANGUAGE
-proposed code
-```
-````
+Account for every finding as a proposal, alternative, or reasoned dismissal; retain kept areas and coverage gaps. Use the `write-simply` register to render the full review contract in self-contained HTML at `ai-docs/refactors/<scope>-<timestamp>.html`. Include scope/snapshot and reconciled IDs, escape code as text, and show each behavior line directly below its title without expansion. Put step 4's approval rules at the top.
 
-Tags:
+## 4. Approve
 
-- `delete:` dead code, unused flexibility, speculative feature. Replacement: nothing.
-- `stdlib:` hand-rolled thing the standard library ships. Name the function.
-- `native:` dependency or code doing what the platform already does. Name the feature.
-- `yagni:` abstraction with one implementation, config nobody sets, layer with one caller.
-- `shrink:` same logic, fewer lines. Show the shorter form.
-- `type:` random functions that can be part of a real class
+With no proposals, deliver coverage and finish. Otherwise invoke the `plannotator` skill, when the tool is available, to annotate the HTML with structured decision output; without it, provide the file path and request decisions in chat.
 
-## Examples
+**On explicit approval or feedback submission, unannotated behavior-preserving proposals are approved**, subject to these exceptions:
 
-❌ "This EmailValidator class might be more complex than necessary, have you
-considered whether all these validation rules are needed at this stage?"
+| Case | Decision |
+| --- | --- |
+| Skip/reject | Excluded |
+| Revise | Pending approval of the revised proposal |
+| Ambiguous feedback | Affected proposals pending clarification |
+| Incompatible alternatives | Explicit named choice required |
+| Behavior change | Explicit approval of stated effects required |
+| Skipped/pending prerequisite | Dependent proposal pending; offer an independent revision if useful |
+| Dismissal, empty output, silence, timeout, or tool failure | No approval |
 
-✅ `L12-38: stdlib: 27-line validator class. A direct check, 2 lines; confirmation mail performs real validation.`
+Global holds/rejections apply to the whole report. Record feedback and per-ID decisions; approval covers only the reviewed version. Proceed with any independent batch whose proposals are implementation-ready, compatible, and approved, including all prerequisites.
 
-before:
+## 5. Implement and verify
 
-```python
-validator = EmailValidator()
-validator.require_valid(email)
-```
+Compare affected files and callers with the snapshot before writing. Re-review changed evidence and renew approval for materially changed proposals. Preserve unrelated edits and the existing index. Catalog edits follow the [separate authorization rule](references/oss-libraries.md#catalog-maintenance).
 
-after:
+Dispatch a writer asynchronously with the approved IDs and full proposals. Use low thinking for mechanical work and deeper reasoning for structural/semantic work. Keep one writer per worktree; apply prerequisites first.
 
-```python
-if "@" not in email:
-    raise ValueError("invalid email")
-```
+Baseline relevant checks before editing; add focused characterization checks for uncovered behavior at risk. After implementation, run project-required and proposal-specific checks. Compare the diff with the approved batch; return scope expansion or design drift for approval.
 
-✅`L4: native: moment.js imported for one format call. Intl.DateTimeFormat, 0 dependencies.`
+Account for every approved ID as implemented and verified or blocked with its partial diff and failed/unrun checks. Report the artifact path, completed/pending/skipped IDs, validation results, and residual risks.
 
-before:
-
-```javascript
-import moment from "moment";
-const label = moment(createdAt).format("MMM D, YYYY");
-```
-
-after:
-
-```javascript
-const label = new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
-  createdAt,
-);
-```
-
-✅ `repo.py:L88: yagni: AbstractRepository with one implementation. Call the database until a second implementation exists.`
-before:
-
-```python
-repository = SqlUserRepository(database)
-user = repository.get(user_id)
-```
-
-after:
-
-```python
-user = database.select_user(user_id)
-```
-
-✅ `L52-71: delete: retry wrapper around an idempotent local call. Call it directly.`
-
-before:
-
-```python
-result = retry(lambda: calculate_total(items), attempts=3)
-```
-
-after:
-
-```python
-result = calculate_total(items)
-```
-
-✅ `L30-44: shrink: manual loop builds a dict. dict(zip(keys, values)), 1 line.`
-
-```python
-result = {}
-for key, value in zip(keys, values):
-    result[key] = value
-```
-
-```python
-result = dict(zip(keys, values))
-```
-
-✅ `user.py:L18-25: type: user_from_row is a stray constructor for User. User.from_row owns that construction path.`
-
-before:
-
-```python
-def make_a_random_user(row: Row) -> User:
-    return User(id=row["id"], email=row["email"])
-
-user = user_from_row(row)
-```
-
-after:
-
-```python
-class User:
-    @classmethod
-    def from_row(cls, row: Row) -> Self:
-        return cls(id=row["id"], email=row["email"])
-
-user = User.from_row(row)
-```
-
-## Scoring
-
-End with the only metric that matters: `net: -<N> lines possible.`
-
-If there is nothing to cut, say `Lean already. Ship.` and stop.
+Task / scope:
+$ARGUMENTS

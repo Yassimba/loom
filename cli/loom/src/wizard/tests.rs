@@ -27,6 +27,7 @@ fn resource(kind: ResourceKind, group: &str, label: &str) -> Resource {
         source: None,
         windows_wsl: false,
         companions: Vec::new(),
+        bundled_skills: Vec::new(),
     }
 }
 
@@ -133,6 +134,7 @@ fn model(status: PrerequisiteStatus) -> Model {
             zed_settings: "/tmp/zed-settings.json".into(),
             zed_keymap: "/tmp/zed-keymap.json".into(),
             pi_fff_config: "/tmp/pi-fff.json".into(),
+            diagrams: "/tmp/loom-diagrams.json".into(),
         },
         status,
         platform: Platform::Unix,
@@ -864,6 +866,26 @@ fn wiki_group_routes_to_the_vault_workflow_with_optional_feynman() {
 }
 
 #[test]
+fn wiki_selection_applies_picked_settings_before_handoff() {
+    let mut model = model(ready());
+    model.resources = vec![resource(ResourceKind::Tool, "Wiki", "claude-obsidian")];
+    model.profiles.clear();
+    model.installed = vec![false];
+    model.settings[0].related_resource = None;
+    let mut wizard = Wizard::new(model);
+    wizard.selected[0] = true;
+    wizard.setting_on[0] = true;
+
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert_eq!(title(&wizard), "Review");
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::StartInstall)
+    ));
+    assert_eq!(wizard.begin_install().unwrap().settings.len(), 1);
+}
+
+#[test]
 fn mixed_wiki_selection_installs_generic_resources_before_handoff() {
     let mut model = model(ready());
     model.resources = vec![
@@ -1165,4 +1187,147 @@ fn uninstall_review_renders_on_a_narrow_terminal() {
 
     assert!(text.contains("Remove"));
     assert!(text.contains("review"));
+}
+
+#[test]
+fn bundled_skill_rows_are_included_for_selected_and_verified_installed_packages() {
+    let home = std::env::temp_dir().join(format!(
+        "loom-wizard-bundle-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let catalog = crate::Catalog::embedded().unwrap();
+    let mut model = model(ready());
+    model.resources = catalog
+        .find(&[
+            "pi-package:@dietrichgebert/ponytail".into(),
+            "skill:ponytail".into(),
+        ])
+        .unwrap();
+    model.profiles.clear();
+    model.installed = vec![false; 2];
+    model.skill_destination = SkillDestination::new(
+        vec![SkillAgent::Pi, SkillAgent::Claude],
+        SkillScope::Global,
+        &home,
+        &home,
+    );
+    let mut wizard = Wizard::new(model);
+    wizard.selected[0] = true;
+    assert_eq!(
+        wizard.included_note(1).as_deref(),
+        Some("Included with ponytail for Pi")
+    );
+    assert!(wizard.item_on(Item::Resource(1)));
+    wizard.agent_on.fill(false);
+    assert!(
+        wizard.included_note(1).is_some(),
+        "the package supplies its own Pi destination"
+    );
+    assert!(
+        !wizard.has_skills(),
+        "no standalone destinations means no copy step"
+    );
+    assert!(wizard.plan().is_ok());
+    for (index, agent) in SkillAgent::ALL.iter().enumerate() {
+        wizard.agent_on[index] = matches!(agent, SkillAgent::Pi | SkillAgent::Claude);
+    }
+    assert_eq!(
+        wizard
+            .expanded_selection()
+            .iter()
+            .filter(|r| r.id == "skill:ponytail")
+            .count(),
+        1
+    );
+    wizard.selected[1] = true;
+    assert_eq!(
+        wizard
+            .expanded_selection()
+            .iter()
+            .filter(|r| r.id == "skill:ponytail")
+            .count(),
+        1
+    );
+    wizard.selected[0] = false;
+    assert!(
+        wizard.included_note(1).is_none(),
+        "skill alone stays standalone"
+    );
+    wizard.set_installed(vec![true, false]);
+    assert!(
+        wizard.included_note(1).is_none(),
+        "list output alone is not skill proof"
+    );
+    let root = home.join(".pi/agent/npm/node_modules/@dietrichgebert/ponytail");
+    std::fs::create_dir_all(root.join("skills/ponytail")).unwrap();
+    std::fs::write(root.join("skills/ponytail/SKILL.md"), "# bundled").unwrap();
+    std::fs::write(
+        root.join("package.json"),
+        r#"{"pi":{"skills":["./skills"]}}"#,
+    )
+    .unwrap();
+    let settings = home.join(".pi/agent/settings.json");
+    std::fs::write(
+        &settings,
+        r#"{"packages":["npm:@dietrichgebert/ponytail@4.9.0"]}"#,
+    )
+    .unwrap();
+    assert!(wizard.included_note(1).is_some());
+    assert!(
+        !wizard.resource_installed(1),
+        "Claude still needs its standalone skill"
+    );
+    wizard.selected[1] = false;
+    assert!(!wizard.actionable(&[Item::Resource(1)]).is_empty());
+    go_to(&mut wizard, Row::Resource(1));
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(!wizard.nothing_chosen());
+    wizard.stage_index = 2;
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::StartInstall)
+    ));
+    std::fs::write(
+        &settings,
+        r#"{"packages":[{"source":"npm:@dietrichgebert/ponytail@4.9.0","skills":[]}]}"#,
+    )
+    .unwrap();
+    assert!(wizard.included_note(1).is_none());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn diagram_choices_are_exclusive_and_not_automatically_or_bulk_selected() {
+    for applied in [false, true] {
+        let mut model = model(ready());
+        model.zed_present = true;
+        model.settings = crate::settings::curated_settings()
+            .into_iter()
+            .filter(|spec| matches!(spec.change, SettingChange::DiagramStyle(_)))
+            .collect();
+        model.setting_states = vec![SettingState::NotApplied; 2];
+        if applied {
+            model.setting_states[0] = SettingState::Applied;
+        }
+        let mut wizard = Wizard::new(model);
+        assert_eq!(wizard.setting_on, [false, false]);
+        go_to(&mut wizard, Row::Setting(1));
+        press(&mut wizard, &[KeyCode::Char(' ')]);
+        assert_eq!(wizard.setting_on, [false, true]);
+        assert_eq!(wizard.selected_settings()[0].id, "loom:diagrams-economical");
+        if !applied {
+            go_to(&mut wizard, Row::Setting(0));
+            press(&mut wizard, &[KeyCode::Char(' ')]);
+            assert_eq!(wizard.setting_on, [true, false]);
+        }
+        // The Settings group must not choose a different mode on the user's behalf.
+        let before = wizard.setting_on.clone();
+        go_to_group(&mut wizard, "Everything");
+        press(&mut wizard, &[KeyCode::Char(' ')]);
+        assert_eq!(wizard.setting_on, before);
+    }
 }

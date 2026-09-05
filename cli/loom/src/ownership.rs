@@ -15,6 +15,7 @@ const INIT_FILES: &[&str] = &[
     "ai-docs/agents/issue-tracker.md",
     "ai-docs/agents/domain.md",
     "ai-docs/agents/editor.md",
+    crate::diagrams::PROJECT_PATH,
 ];
 const INIT_TREES: &[&str] = &[".beads", ".codegraph"];
 
@@ -247,6 +248,10 @@ pub enum Receipt {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         before: Option<String>,
     },
+    PiSkillExclusion {
+        path: PathBuf,
+        entry: String,
+    },
     ActivationLine {
         path: PathBuf,
         line: String,
@@ -374,7 +379,7 @@ pub fn record_bootstrap_from_env(home: &Path) -> Result<(), String> {
     state.save(home)
 }
 
-fn same_path(left: &Path, right: &Path) -> bool {
+pub(crate) fn same_path(left: &Path, right: &Path) -> bool {
     left == right
         || left
             .canonicalize()
@@ -514,6 +519,10 @@ fn same_contribution(left: &Receipt, right: &Receipt) -> bool {
             },
         ) => a == b && x == y,
         (Receipt::MiseTool { key: a }, Receipt::MiseTool { key: b }) => a == b,
+        (
+            Receipt::PiSkillExclusion { path: a, entry: x },
+            Receipt::PiSkillExclusion { path: b, entry: y },
+        ) => same_path(a, b) && x == y,
         (Receipt::Path { path: a, .. }, Receipt::Path { path: b, .. }) => same_path(a, b),
         (
             Receipt::ActivationLine { path: a, line: x },

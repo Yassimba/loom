@@ -305,6 +305,35 @@ test("personal skills cannot enter the setup catalog", async () => {
   await assert.rejects(buildSetupCatalog(repoRoot), /reviewed skill not found: private/);
 });
 
+test("a provenance-only deps file is accepted", async () => {
+  const repoRoot = await createCatalogFixture();
+  await writeFile(
+    join(repoRoot, "skills", "helper", "deps.yml"),
+    `upstream:
+  repository: https://github.com/example/skills
+  path: skills/helper
+  commit: ${"a".repeat(40)}
+`,
+  );
+
+  const helper = (await buildSetupCatalog(repoRoot)).find(({ id }) => id === "skill:helper");
+
+  assert.deepEqual(helper.dependencies, []);
+});
+
+test("incomplete upstream provenance is rejected", async () => {
+  const repoRoot = await createCatalogFixture();
+  await writeFile(
+    join(repoRoot, "skills", "helper", "deps.yml"),
+    "upstream:\n  repository: https://github.com/example/skills\n",
+  );
+
+  await assert.rejects(
+    buildSetupCatalog(repoRoot),
+    /upstream must contain repository, path, and commit/,
+  );
+});
+
 test("a dependency cycle fails catalog generation", async () => {
   const repoRoot = await createCatalogFixture();
   await writeFile(join(repoRoot, "skills", "helper", "deps.yml"), "skills:\n  - reviewed\n");
@@ -332,4 +361,25 @@ test("private packages cannot advertise themselves in setup", async () => {
   await writeFile(manifestPath, JSON.stringify({ ...manifest, private: true }));
 
   await assert.rejects(buildSetupCatalog(repoRoot), /setup Pi package is private/);
+});
+
+test("bundledSkills explicitly links Pi packages to reviewed skills", async () => {
+  const repoRoot = await createCatalogFixture();
+  const path = join(repoRoot, "manifest", "pi-packages.json");
+  const pkg = {
+    name: "different-package-name",
+    version: "1.0.0",
+    label: "Package",
+    description: "Bundled",
+    bundledSkills: ["helper"],
+  };
+  await writeFile(path, JSON.stringify({ packages: [pkg] }));
+  const catalog = await buildSetupCatalog(repoRoot);
+  assert.deepEqual(catalog.find(({ installTarget }) => installTarget === pkg.name).bundledSkills, [
+    "helper",
+  ]);
+  for (const invalid of [["private"], ["../helper"], ["helper", "helper"], "helper"]) {
+    await writeFile(path, JSON.stringify({ packages: [{ ...pkg, bundledSkills: invalid }] }));
+    await assert.rejects(buildSetupCatalog(repoRoot), /invalid bundledSkills/);
+  }
 });

@@ -3,3 +3,8 @@ skills:
   - blueprint
   - code-review
   - tdd
+
+upstream:
+  repository: https://github.com/mattpocock/skills
+  path: skills/engineering/implement
+  commit: 3cca18b368ae95cdbdebbff572ccafa662551015

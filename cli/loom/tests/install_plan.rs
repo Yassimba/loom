@@ -37,6 +37,7 @@ fn resource(kind: ResourceKind, id: &str, target: &str) -> Resource {
         source: None,
         windows_wsl: false,
         companions: Vec::new(),
+        bundled_skills: Vec::new(),
     }
 }
 
@@ -83,7 +84,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
             },
             StepAction::Command(CommandSpec::new(
                 "pi",
-                ["install", "npm:@yassimba/pi-openai-fast"],
+                ["install", "npm:@yassimba/pi-openai-fast@latest"],
             )),
             StepAction::Command(CommandSpec::new(
                 "herdr",
@@ -332,4 +333,20 @@ fn tool_companions_join_the_mise_sync() {
             ],
         }
     );
+}
+
+#[test]
+fn bundled_package_auto_selects_its_shared_skill() {
+    let catalog = loom::Catalog::embedded().unwrap();
+    for id in [
+        "pi-package:i-have-adhd",
+        "pi-package:@dietrichgebert/ponytail",
+    ] {
+        let package = catalog.find(&[id.into()]).unwrap();
+        let name = package[0].label.clone();
+        let expanded = expand_skill_dependencies(&catalog.resources, package, &[SkillAgent::Pi]);
+        assert!(expanded
+            .iter()
+            .any(|resource| resource.id == format!("skill:{name}")));
+    }
 }

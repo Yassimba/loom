@@ -7,6 +7,7 @@
 //! land wrapped in `<!-- loom:section:<name> -->` markers so a re-run
 //! appends missing sections and never touches anything else.
 
+use crate::diagrams::{self, DiagramStyle};
 use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, CommandSpec, System};
 use anyhow::{Context, Result};
@@ -85,6 +86,7 @@ pub struct InitOptions {
     pub tracker: Option<Tracker>,
     pub domain: Option<DomainLayout>,
     pub editor: Option<Editor>,
+    pub diagrams: Option<DiagramStyle>,
     pub coding_standards: Option<bool>,
     pub codegraph: Option<bool>,
     pub yes: bool,
@@ -247,6 +249,7 @@ struct InitFeatures {
     tracker: Option<Tracker>,
     domain: Option<DomainLayout>,
     editor: Option<Editor>,
+    diagrams: Option<DiagramStyle>,
     coding_standards: bool,
     codegraph: bool,
 }
@@ -262,7 +265,7 @@ fn has_project_selection(options: &InitOptions) -> bool {
 }
 
 fn has_explicit_selection(options: &InitOptions) -> bool {
-    has_project_selection(options) || options.codegraph == Some(true)
+    has_project_selection(options) || options.diagrams.is_some() || options.codegraph == Some(true)
 }
 
 fn choose_features(
@@ -288,6 +291,7 @@ fn choose_features(
             tracker: options.tracker,
             domain: options.domain,
             editor: options.editor,
+            diagrams: options.diagrams,
             coding_standards: options.coding_standards.unwrap_or(false),
             codegraph: options.codegraph.unwrap_or(false),
         });
@@ -396,6 +400,17 @@ fn choose_features(
         )?,
         None => false,
     };
+    let diagrams = if project_instructions {
+        Some(select_choice(
+            "Choose a diagram style for this project",
+            "Use your setup default (Polished if unset), or choose a style for this project. Both use the same atlas facts.",
+            vec![DiagramStyle::Inherit, DiagramStyle::Polished, DiagramStyle::Economical],
+            DiagramStyle::Inherit,
+            options.yes,
+        )?)
+    } else {
+        None
+    };
     Ok(InitFeatures {
         project_instructions,
         python,
@@ -404,6 +419,7 @@ fn choose_features(
         tracker,
         domain,
         editor,
+        diagrams,
         coding_standards,
         codegraph,
     })
@@ -512,6 +528,7 @@ fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
         || options.editor.is_some()
         || options.coding_standards.is_some()
         || options.codegraph.is_some()
+        || options.diagrams.is_some()
 }
 
 pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
@@ -532,10 +549,27 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     let out = Out::detect();
     let home = system.home_dir().context("home directory is unavailable")?;
     out.title("init", tidy_path(&project, &home));
+    if let Some(style) = features.diagrams {
+        let path = project.join(diagrams::PROJECT_PATH);
+        // --yes accepts defaults without resetting an existing project override.
+        let preserve = options.yes && options.diagrams.is_none() && path.exists();
+        let changed = !preserve && diagrams::write_style(&path, style)?;
+        out.row(
+            Mark::Ok,
+            "Diagrams",
+            if changed {
+                style.to_string()
+            } else {
+                "project preference unchanged".into()
+            },
+        );
+    }
     if !features.project_instructions {
         if features.codegraph {
             setup_codegraph(system)?;
             out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
+            out.verdict(true, "Done");
+        } else if features.diagrams.is_some() {
             out.verdict(true, "Done");
         } else {
             out.verdict(true, "Nothing selected; no changes made");
@@ -1059,6 +1093,7 @@ mod tests {
             tracker: None,
             domain: None,
             editor: None,
+            diagrams: None,
             coding_standards: None,
             codegraph: None,
             yes: false,
@@ -1085,6 +1120,7 @@ mod tests {
             tracker: Some(Tracker::Beads),
             domain: None,
             editor: None,
+            diagrams: None,
             coding_standards: None,
             codegraph: None,
             yes: false,
@@ -1111,6 +1147,7 @@ mod tests {
                 tracker: Some(Tracker::Beads),
                 domain: None,
                 editor: None,
+                diagrams: None,
                 coding_standards: false,
                 codegraph: false,
             }
@@ -1128,6 +1165,7 @@ mod tests {
             tracker: None,
             domain: None,
             editor: None,
+            diagrams: None,
             coding_standards: None,
             codegraph: None,
             yes: true,
@@ -1158,6 +1196,7 @@ mod tests {
                 tracker: Some(Tracker::Beads),
                 domain: Some(DomainLayout::Single),
                 editor: Some(Editor::Cursor),
+                diagrams: Some(DiagramStyle::Inherit),
                 coding_standards: true,
                 codegraph: true,
             }

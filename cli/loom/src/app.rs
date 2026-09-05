@@ -487,6 +487,11 @@ pub(crate) fn detect_installed(
                     !skill_trees.is_empty()
                         && skill_trees.iter().all(|tree| {
                             crate::skills::skill_present_in(tree, &resource.install_target)
+                                || crate::bundled_skills::provided_in_tree(
+                                    &destination.home,
+                                    tree,
+                                    &resource.install_target,
+                                )
                         })
                 }
             }
@@ -916,6 +921,7 @@ mod tests {
             source: None,
             windows_wsl: false,
             companions: Vec::new(),
+            bundled_skills: Vec::new(),
         };
         let tree = SkillAgent::AgentsStandard.global_skill_tree(&root);
         std::fs::create_dir_all(tree.join("already-there")).unwrap();
@@ -1019,6 +1025,7 @@ mod tests {
             source: None,
             windows_wsl: false,
             companions: Vec::new(),
+            bundled_skills: Vec::new(),
         };
         let status = PrerequisiteStatus {
             pi: true,
@@ -1053,6 +1060,7 @@ mod tests {
                 source: None,
                 windows_wsl: false,
                 companions: vec!["search-helper".into()],
+                bundled_skills: Vec::new(),
             },
             Resource {
                 id: "pi-package:chat".into(),
@@ -1068,6 +1076,7 @@ mod tests {
                 source: None,
                 windows_wsl: false,
                 companions: Vec::new(),
+                bundled_skills: Vec::new(),
             },
         ];
         let report = InstallReport {
@@ -1086,6 +1095,7 @@ mod tests {
                 zed_settings: root.join("zed.json"),
                 zed_keymap: root.join("keymap.json"),
                 pi_fff_config: root.join("fff.json"),
+                diagrams: root.join("diagrams.json"),
             },
             false,
             &BTreeSet::new(),
@@ -1121,6 +1131,7 @@ mod tests {
             source: None,
             windows_wsl: false,
             companions: Vec::new(),
+            bundled_skills: Vec::new(),
         };
         let catalog = Catalog {
             schema_version: 1,
@@ -1184,6 +1195,7 @@ mod tests {
             source: None,
             windows_wsl: false,
             companions: Vec::new(),
+            bundled_skills: Vec::new(),
         };
         let destination = SkillDestination::new(
             vec![SkillAgent::AgentsStandard],
@@ -1211,6 +1223,7 @@ mod tests {
                 zed_settings: root.join("zed.json"),
                 zed_keymap: root.join("keymap.json"),
                 pi_fff_config: root.join("fff.json"),
+                diagrams: root.join("diagrams.json"),
             },
             false,
             &skills_before,

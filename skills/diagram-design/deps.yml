@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/cathrynlavery/diagram-design
+  path: skills/diagram-design
+  commit: 4451eadc484d76aa860edf3289c16fcd082dcdbf

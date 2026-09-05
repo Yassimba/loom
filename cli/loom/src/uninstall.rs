@@ -199,6 +199,7 @@ fn uninstall_wizard_selection(
                 source: None,
                 windows_wsl: false,
                 companions: Vec::new(),
+                bundled_skills: Vec::new(),
             }
         })
         .collect::<Vec<_>>();
@@ -222,6 +223,7 @@ fn uninstall_wizard_selection(
                 zed_settings: home.join(".config/zed/settings.json"),
                 zed_keymap: home.join(".config/zed/keymap.json"),
                 pi_fff_config: home.join(".pi/agent/pi-fff.json"),
+                diagrams: home.join(".config/loom/diagrams.json"),
             },
             status: crate::PrerequisiteStatus {
                 pi: true,
@@ -511,6 +513,13 @@ pub fn receipt_status(receipt: &Receipt) -> ReceiptStatus {
                 ReceiptStatus::Clean
             } else {
                 ReceiptStatus::Modified
+            }
+        }
+        Receipt::PiSkillExclusion { path, entry } => {
+            match crate::bundled_skills::exclusion_present(path, entry) {
+                Ok(true) => ReceiptStatus::Clean,
+                Ok(false) => ReceiptStatus::Missing,
+                Err(_) => ReceiptStatus::Modified,
             }
         }
         Receipt::ActivationLine { path, line } => match fs::read_to_string(path) {
@@ -861,6 +870,9 @@ fn remove_receipt(
                 (OwnedPathKind::Tree, _) => fs::remove_dir_all(path)
                     .map_err(|error| format!("could not remove {}: {error}", path.display()))?,
             }
+        }
+        Receipt::PiSkillExclusion { path, entry } => {
+            crate::bundled_skills::remove_exclusion(path, entry)?;
         }
         Receipt::ActivationLine { path, line } => {
             let content = match fs::read_to_string(path) {

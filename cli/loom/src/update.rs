@@ -88,9 +88,9 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     let mut tasks = Vec::new();
     let mut pi_compat_targets = Vec::new();
     if system.command_exists("pi") {
-        // Pinned reinstalls instead of `pi update --all`: cataloged packages
-        // move only when their pin (or a first-party publish) does, and Pi
-        // itself is the mise manifest's job. Packages outside the catalog
+        // Cataloged reinstalls instead of `pi update --all`: external packages
+        // use their pin, first-party packages request npm's latest release, and
+        // Pi itself is the mise manifest's job. Packages outside the catalog
         // are left alone.
         let listed = system
             .run_probe(&CommandSpec::new("pi", ["list"]))
@@ -109,7 +109,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
         if !commands.is_empty() {
             tasks.push(CommandLane {
                 label: "Pi packages",
-                detail: format!("{} pinned", commands.len()),
+                detail: format!("{} refreshed", commands.len()),
                 commands,
             });
         }
@@ -202,6 +202,23 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             labels.len(),
             reconcile_pi_compat(system, &pi_compat_targets),
         ));
+    }
+    // Package files are now stable; never reconcile during a reinstall or
+    // after a failed Pi lane. Skills refresh and package installs run in parallel.
+    if !lanes
+        .iter()
+        .any(|(_, lane)| lane.label == "Pi packages" && !lane.ok)
+    {
+        if let Some(home) = system.home_dir() {
+            match crate::bundled_skills::reconcile_installed(&home) {
+                Ok(notes) => {
+                    for note in notes {
+                        out.note(note);
+                    }
+                }
+                Err(error) => lanes.push((labels.len() + 1, Lane::failed("Bundled skills", error))),
+            }
+        }
     }
     lanes.sort_by_key(|(index, _)| *index);
 
@@ -341,7 +358,7 @@ mod tests {
     #[test]
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
-        let listed = "User packages:\n  npm:pi-subagents\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
+        let listed = "User packages:\n  npm:pi-subagents\n  npm:@yassimba/pi-add-dir\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
         let feynman = catalog
             .resources
             .iter()
@@ -357,6 +374,9 @@ mod tests {
         assert!(commands
             .iter()
             .any(|command| command == "pi install npm:pi-subagents@0.65.1"));
+        assert!(commands
+            .iter()
+            .any(|command| command == "pi install npm:@yassimba/pi-add-dir@latest"));
         assert!(commands
             .iter()
             .any(|command| command == "pi install -l npm:pi-subagents@0.65.1"));

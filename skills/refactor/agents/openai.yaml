@@ -1,4 +1,4 @@
 interface:
   display_name: "Refactor"
-  short_description: "Happy-path-first refactor with deep modules and typed invariants"
-  default_prompt: "Use $refactor to refactor this code with happy-path-first, evidence-driven design."
+  short_description: "Five-angle review, approval, and refactoring"
+  default_prompt: "Use $refactor to review this code through OSS, patterns, tests, types, and nuclear structural lenses. Reconcile the proposals for annotation, then implement and verify the approved changes."

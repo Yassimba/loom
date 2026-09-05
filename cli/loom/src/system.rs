@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::env;
 use std::ffi::{OsStr, OsString};
-use std::io::Read;
+use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -48,6 +48,24 @@ pub trait System {
         _cancelled: &AtomicBool,
     ) -> Result<CommandResult> {
         self.run(command)
+    }
+    /// Bounded streaming output; the callback must not block or disclose arbitrary tool output.
+    fn run_streamed(
+        &self,
+        command: &CommandSpec,
+        timeout: Duration,
+        cancelled: &AtomicBool,
+        input: Option<&[u8]>,
+        output: &(dyn Fn(&[u8]) + Sync),
+    ) -> Result<CommandResult> {
+        anyhow::ensure!(
+            input.is_none(),
+            "this system does not support private stdin"
+        );
+        let result = self.run_controlled(command, timeout, cancelled)?;
+        output(result.stdout.as_bytes());
+        output(result.stderr.as_bytes());
+        Ok(result)
     }
     /// The home directory skill trees are detected under. Injectable so
     /// tests can point the installer at a temp home.
@@ -256,55 +274,143 @@ impl System for RealSystem {
         timeout: Duration,
         cancelled: &AtomicBool,
     ) -> Result<CommandResult> {
+        self.run_streamed(command, timeout, cancelled, None, &|_| {})
+    }
+
+    fn run_streamed(
+        &self,
+        command: &CommandSpec,
+        timeout: Duration,
+        cancelled: &AtomicBool,
+        input: Option<&[u8]>,
+        output: &(dyn Fn(&[u8]) + Sync),
+    ) -> Result<CommandResult> {
+        anyhow::ensure!(
+            !cancelled.load(Ordering::Relaxed),
+            "cancelled while running command"
+        );
         let mut child = command_for(&self.path_value(), command)
+            .stdin(if input.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .with_context(|| format!("could not start {}", command.program))?;
-        let mut stdout = child.stdout.take().expect("stdout was piped");
-        let mut stderr = child.stderr.take().expect("stderr was piped");
-        let stdout_reader = std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            let _ = stdout.read_to_end(&mut bytes);
-            bytes
-        });
-        let stderr_reader = std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            let _ = stderr.read_to_end(&mut bytes);
-            bytes
-        });
-        let started = Instant::now();
-        let status = loop {
-            if cancelled.load(Ordering::Relaxed) {
-                terminate_process_tree(&mut child);
-                anyhow::bail!("cancelled while running {}", command.display());
-            }
-            if started.elapsed() >= timeout {
-                terminate_process_tree(&mut child);
-                anyhow::bail!(
-                    "timed out after {}s while running {}",
-                    timeout.as_secs(),
-                    command.display()
+        let stdout = child.stdout.take().expect("stdout was piped");
+        let stderr = child.stderr.take().expect("stderr was piped");
+        let stdin = child.stdin.take();
+        std::thread::scope(|scope| {
+            let stdout_reader = scope.spawn(|| capture_stream(stdout, output));
+            let stderr_reader = scope.spawn(|| capture_stream(stderr, output));
+            let writer = scope.spawn(move || {
+                if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                    stdin.write_all(input)?;
+                }
+                Ok::<_, std::io::Error>(())
+            });
+            let started = Instant::now();
+            let status = (|| loop {
+                anyhow::ensure!(
+                    !cancelled.load(Ordering::Relaxed),
+                    "cancelled while running command"
                 );
-            }
-            if let Some(status) = child.try_wait()? {
-                break status;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        };
-        let stdout = stdout_reader.join().unwrap_or_default();
-        let stderr = stderr_reader.join().unwrap_or_default();
-        Ok(CommandResult {
-            success: status.success(),
-            stdout: String::from_utf8_lossy(&stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&stderr).into_owned(),
+                anyhow::ensure!(
+                    started.elapsed() < timeout,
+                    "timed out after {}s while running command",
+                    timeout.as_secs()
+                );
+                if let Some(status) = child.try_wait()? {
+                    break Ok::<_, anyhow::Error>(status);
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            })();
+            // Also close pipes held by descendants after the wrapper exits.
+            terminate_process_tree(&mut child);
+            let stdout = stdout_reader.join().unwrap_or_default();
+            let stderr = stderr_reader.join().unwrap_or_default();
+            let written = writer.join();
+            let status = status?;
+            anyhow::ensure!(
+                matches!(written, Ok(Ok(()))),
+                "could not send private command input"
+            );
+            Ok(CommandResult {
+                success: status.success(),
+                stdout: String::from_utf8_lossy(&stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&stderr).into_owned(),
+            })
         })
     }
+}
+
+fn capture_stream(mut reader: impl Read, output: &(dyn Fn(&[u8]) + Sync)) -> Vec<u8> {
+    const LIMIT: usize = 4 * 1024 * 1024;
+    let mut captured = std::collections::VecDeque::new();
+    let mut chunk = [0; 4096];
+    while let Ok(count) = reader.read(&mut chunk) {
+        if count == 0 {
+            break;
+        }
+        output(&chunk[..count]);
+        if captured.len() + count > LIMIT {
+            captured.drain(..count.min(captured.len()));
+        }
+        captured.extend(&chunk[..count]);
+    }
+    captured.into_iter().collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn streamed_commands_report_partial_output_and_cancel_with_private_stdin() {
+        let system = RealSystem::default();
+        let cancelled = AtomicBool::new(false);
+        let received = Mutex::new(Vec::new());
+        let command = CommandSpec::new(
+            "sh",
+            [
+                "-c",
+                "read value; printf 'partial\\r'; printf 'stderr' >&2; sleep 5",
+            ],
+        );
+        assert!(!command.display().contains("SECRET-FIXTURE"));
+        let started = Instant::now();
+        let error = system
+            .run_streamed(
+                &command,
+                Duration::from_secs(3),
+                &cancelled,
+                Some(b"SECRET-FIXTURE\n"),
+                &|chunk| {
+                    received.lock().unwrap().extend_from_slice(chunk);
+                    cancelled.store(true, Ordering::Relaxed);
+                },
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(!received.lock().unwrap().is_empty());
+        assert!(error.contains("cancelled"));
+        assert!(!error.contains("SECRET-FIXTURE"));
+    }
+
+    #[test]
+    fn capture_drains_large_streams_with_bounded_memory() {
+        let bytes = vec![b'x'; 5 * 1024 * 1024];
+        let seen = std::sync::atomic::AtomicUsize::new(0);
+        let result = capture_stream(std::io::Cursor::new(&bytes), &|chunk| {
+            seen.fetch_add(chunk.len(), Ordering::Relaxed);
+        });
+        assert_eq!(seen.load(Ordering::Relaxed), bytes.len());
+        assert!(result.len() <= 4 * 1024 * 1024);
+    }
 
     #[cfg(unix)]
     #[test]

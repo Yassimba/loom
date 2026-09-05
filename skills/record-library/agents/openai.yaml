@@ -1,4 +1,4 @@
 interface:
   display_name: "Record Library"
-  short_description: "Record a library in the refactor-oss catalog"
+  short_description: "Record a library in the refactor catalog"
   default_prompt: "Use $record-library to record this library and the hand-roll it retires in the catalog."

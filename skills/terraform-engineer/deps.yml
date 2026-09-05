@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/jeffallan/claude-skills
+  path: skills/terraform-engineer
+  commit: 882ef55e377dbf9a4dbe496bb41ac6ccd0e555cf

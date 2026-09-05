@@ -39,7 +39,8 @@ pub struct Resource {
     /// The executable to probe on PATH (tool resources only).
     #[serde(default)]
     pub bin: Option<String>,
-    /// Exact npm version pin (external Pi packages only).
+    /// Exact npm version pin (external Pi packages only); first-party
+    /// packages request npm's latest release.
     #[serde(default)]
     pub version: Option<String>,
     /// Exact non-npm Pi package source, currently a Git commit pin.
@@ -52,6 +53,9 @@ pub struct Resource {
     /// only); mise os filters decide which applies on each machine.
     #[serde(default)]
     pub companions: Vec<String>,
+    /// Shared skills supplied by this Pi package under skills/<name>/SKILL.md.
+    #[serde(default)]
+    pub bundled_skills: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -76,7 +80,7 @@ impl Resource {
     pub fn pi_install_spec(&self) -> String {
         self.source.clone().unwrap_or_else(|| match &self.version {
             Some(version) => format!("npm:{}@{version}", self.install_target),
-            None => format!("npm:{}", self.install_target),
+            None => format!("npm:{}@latest", self.install_target),
         })
     }
 }

@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/warpdotdev/common-skills
+  path: .agents/skills/skill-doctor
+  commit: b811c24365ae505bfc9646458957b886e29110b5
