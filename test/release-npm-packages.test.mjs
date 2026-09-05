@@ -11,5 +11,5 @@ test("release workflow publishes every released plugin package", async () => {
 
   assert.match(workflow, /\^plugins\/\.\*--release_created\$/);
   assert.match(workflow, /npm publish \.\/\$\{\{ matrix\.path \}\}/);
-  assert.doesNotMatch(workflow, /npm publish \.\/plugins\/openai-fast/);
+  assert.doesNotMatch(workflow, /npm publish \.\/plugins\/pi-fast/);
 });

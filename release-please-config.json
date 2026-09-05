@@ -11,9 +11,9 @@
       "release-type": "rust",
       "component": "loom-teams"
     },
-    "plugins/openai-fast": {
+    "plugins/pi-fast": {
       "release-type": "node",
-      "component": "openai-fast"
+      "component": "pi-fast"
     },
     "plugins/pi-add-dir": {
       "release-type": "node",

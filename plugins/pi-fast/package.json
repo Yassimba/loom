@@ -1,7 +1,7 @@
 {
-  "name": "@yassimba/pi-openai-fast",
+  "name": "@yassimba/pi-fast",
   "version": "1.2.0",
-  "description": "OpenAI fast mode toggle for Pi using the priority service tier",
+  "description": "Turn priority requests on or off for OpenAI, Codex, and xAI in Pi",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -25,7 +25,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Yassimba/loom.git",
-    "directory": "plugins/openai-fast"
+    "directory": "plugins/pi-fast"
   },
   "publishConfig": {
     "access": "public"
@@ -37,8 +37,8 @@
   },
   "loom": {
     "catalog": {
-      "label": "OpenAI Fast Mode",
-      "description": "Request OpenAI priority service tier from supported models"
+      "label": "Fast Mode",
+      "description": "Use /fast in Pi to request priority responses from OpenAI, Codex, and xAI"
     }
   },
   "peerDependencies": {

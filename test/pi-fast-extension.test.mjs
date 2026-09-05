@@ -3,13 +3,12 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { configPaths } from "../plugins/openai-fast/src/config.ts";
-import {
+import piFast, {
   FAST_DESIRED_HANDOFF_ENV,
   FAST_REQUESTED_INACTIVE_UNSUPPORTED_MODEL_WARNING,
   FAST_STATUS_KEY,
-  registerPiOpenAIFast,
-} from "../plugins/openai-fast/src/index.ts";
+} from "../plugins/pi-fast/index.ts";
+import { configPaths } from "../plugins/pi-fast/src/config.ts";
 
 const SUPPORTED_MODEL = { provider: "openai-codex", id: "gpt-5.5" };
 const UNSUPPORTED_MODEL = { provider: "partner", id: "slow-model" };
@@ -59,7 +58,7 @@ function createContext(options = {}) {
 
 /** Register the extension against a temp HOME with optional config, run, restore env. */
 async function withExtension(options, run) {
-  const home = await mkdtemp(join(tmpdir(), "pi-openai-fast-ext-"));
+  const home = await mkdtemp(join(tmpdir(), "pi-fast-ext-"));
   const previousHome = process.env.HOME;
   const previousHandoff = process.env[FAST_DESIRED_HANDOFF_ENV];
   process.env.HOME = home;
@@ -72,7 +71,7 @@ async function withExtension(options, run) {
     await writeFile(path, JSON.stringify(options.config), "utf8");
   }
   const pi = createPi(options);
-  registerPiOpenAIFast(pi.api);
+  piFast(pi.api);
   const harness = createContext({ cwd, ...options.context });
   try {
     await run({ pi, cwd, home, ...harness });
@@ -86,6 +85,59 @@ async function withExtension(options, run) {
 async function inject(pi, ctx, payload = { model: "gpt-5.5" }) {
   return await pi.emit("before_provider_request", { payload }, ctx);
 }
+
+test("defaults request priority for Astra and future models without model-list updates", async () => {
+  await withExtension(
+    { fastFlag: true, config: { footer: { mode: "status" } } },
+    async ({ pi, ctx, statusCalls, notifications }) => {
+      await pi.emit("session_start", {}, ctx);
+      for (const provider of ["openai", "openai-codex", "xai"]) {
+        for (const id of ["gpt-6-astra", "future-model"]) {
+          await pi.emit("model_select", { model: { provider, id } }, ctx);
+          assert.deepEqual(await inject(pi, ctx, { model: id }), {
+            model: id,
+            service_tier: "priority",
+          });
+          assert.equal(statusCalls.at(-1).text, "fast");
+        }
+      }
+      assert.deepEqual(notifications, []);
+      for (const model of [
+        { provider: "openai-proxy", id: "gpt-6-astra" },
+        { provider: "anthropic", id: "gpt-6-astra" },
+        { provider: "openai", id: "" },
+        undefined,
+      ]) {
+        await pi.emit("model_select", { model }, ctx);
+        assert.equal(await inject(pi, ctx), undefined);
+        assert.equal(statusCalls.at(-1).text, undefined);
+      }
+    },
+  );
+});
+
+test("explicit allowlists replace defaults, including an empty list", async () => {
+  for (const supportedModels of [[], ["openai-codex/gpt-5.5"], ["partner/*"]]) {
+    await withExtension({ fastFlag: true, config: { supportedModels } }, async ({ pi, ctx }) => {
+      await pi.emit("session_start", {}, ctx);
+      assert.equal(
+        (await inject(pi, ctx))?.service_tier,
+        supportedModels.includes("openai-codex/gpt-5.5") ? "priority" : undefined,
+      );
+      await pi.emit(
+        "model_select",
+        { model: { provider: "openai-codex", id: "gpt-6-astra" } },
+        ctx,
+      );
+      assert.equal(await inject(pi, ctx), undefined);
+      await pi.emit("model_select", { model: UNSUPPORTED_MODEL }, ctx);
+      assert.equal(
+        (await inject(pi, ctx))?.service_tier,
+        supportedModels.includes("partner/*") ? "priority" : undefined,
+      );
+    });
+  }
+});
 
 test("session start without any request leaves Fast Mode off", async () => {
   await withExtension({}, async ({ pi, ctx }) => {
@@ -119,7 +171,9 @@ test("/fast with arguments shows usage and does not toggle", async () => {
   await withExtension({}, async ({ pi, ctx, notifications }) => {
     await pi.emit("session_start", {}, ctx);
     await pi.runCommand("fast", "on", ctx);
-    assert.deepEqual(notifications, [{ message: "Usage: /fast", type: "error" }]);
+    assert.deepEqual(notifications, [
+      { message: "Run /fast without arguments to turn Fast Mode on or off.", type: "error" },
+    ]);
     assert.equal(await inject(pi, ctx), undefined);
   });
 });
@@ -157,7 +211,8 @@ test("model_select activates and deactivates Fast Mode with a single warning", a
     assert.equal(await inject(pi, ctx), undefined);
     await pi.emit("model_select", { model: { provider: "partner", id: "other" } }, ctx);
     assert.equal(
-      notifications.filter((n) => n.message.includes("not supported")).length,
+      notifications.filter((n) => n.message === FAST_REQUESTED_INACTIVE_UNSUPPORTED_MODEL_WARNING)
+        .length,
       1,
       "repeated unsupported selections warn only once",
     );
@@ -193,7 +248,10 @@ test("an invalid handoff value warns and is ignored", async () => {
   await withExtension({ handoff: "yes" }, async ({ pi, ctx, notifications }) => {
     await pi.emit("session_start", {}, ctx);
     assert.equal(notifications.length, 1);
-    assert.match(notifications[0].message, /Ignoring invalid PI_OPENAI_FAST_DESIRED value "yes"/);
+    assert.match(
+      notifications[0].message,
+      /Ignoring PI_FAST_DESIRED="yes"\. Set it to 1 for on or 0 for off/,
+    );
     assert.equal(await inject(pi, ctx), undefined);
   });
 });
@@ -230,7 +288,7 @@ test("a failing persist write surfaces a warning", async () => {
       await writeFile(configPaths(cwd).global, "{broken", "utf8");
       await pi.runCommand("fast", "", ctx);
       assert.equal(notifications.length, 1);
-      assert.match(notifications[0].message, /needs manual repair/);
+      assert.match(notifications[0].message, /The file was left unchanged/);
     },
   );
 });
@@ -242,7 +300,7 @@ test("config load warnings are notified once and fall back to console without a 
       await pi.emit("session_start", {}, ctx);
       await pi.emit("session_start", {}, ctx);
       assert.equal(notifications.length, 1, "second session start does not re-deliver");
-      assert.match(notifications[0].message, /must be an array/);
+      assert.match(notifications[0].message, /Use an array such as/);
     },
   );
   const warnings = [];
@@ -259,7 +317,7 @@ test("config load warnings are notified once and fall back to console without a 
     console.warn = originalWarn;
   }
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /^\[pi-openai-fast\] /);
+  assert.match(warnings[0], /^\[pi-fast\] /);
 });
 
 test("status footer mode publishes and clears the fast status", async () => {

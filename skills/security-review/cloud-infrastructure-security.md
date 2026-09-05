@@ -1,5 +1,5 @@
-| name | description |
-|------|-------------|
+| name                          | description                                                                                                                                                                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | cloud-infrastructure-security | Use this skill when deploying to cloud platforms, configuring infrastructure, managing IAM policies, setting up logging/monitoring, or implementing CI/CD pipelines. Provides cloud security checklist aligned with best practices. |
 
 # Cloud & Infrastructure Security Skill
@@ -27,17 +27,17 @@ This skill ensures cloud infrastructure, CI/CD pipelines, and deployment configu
 # PASS: CORRECT: Minimal permissions
 iam_role:
   permissions:
-    - s3:GetObject  # Only read access
+    - s3:GetObject # Only read access
     - s3:ListBucket
   resources:
-    - arn:aws:s3:::my-bucket/*  # Specific bucket only
+    - arn:aws:s3:::my-bucket/* # Specific bucket only
 
 # FAIL: WRONG: Overly broad permissions
 iam_role:
   permissions:
-    - s3:*  # All S3 actions
+    - s3:* # All S3 actions
   resources:
-    - "*"  # All resources
+    - "*" # All resources
 ```
 
 #### Multi-Factor Authentication (MFA)
@@ -66,10 +66,10 @@ aws iam enable-mfa-device \
 
 ```typescript
 // PASS: CORRECT: Use cloud secrets manager
-import { SecretsManager } from '@aws-sdk/client-secrets-manager';
+import { SecretsManager } from "@aws-sdk/client-secrets-manager";
 
-const client = new SecretsManager({ region: 'us-east-1' });
-const secret = await client.getSecretValue({ SecretId: 'prod/api-key' });
+const client = new SecretsManager({ region: "us-east-1" });
+const secret = await client.getSecretValue({ SecretId: "prod/api-key" });
 const apiKey = JSON.parse(secret.SecretString).key;
 
 // FAIL: WRONG: Hardcoded or in environment variables only
@@ -143,22 +143,27 @@ resource "aws_security_group" "bad" {
 
 ```typescript
 // PASS: CORRECT: Comprehensive logging
-import { CloudWatchLogsClient, CreateLogStreamCommand } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  CloudWatchLogsClient,
+  CreateLogStreamCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
 
 const logSecurityEvent = async (event: SecurityEvent) => {
   await cloudwatch.putLogEvents({
-    logGroupName: '/aws/security/events',
-    logStreamName: 'authentication',
-    logEvents: [{
-      timestamp: Date.now(),
-      message: JSON.stringify({
-        type: event.type,
-        userId: event.userId,
-        ip: event.ip,
-        result: event.result,
-        // Never log sensitive data
-      })
-    }]
+    logGroupName: "/aws/security/events",
+    logStreamName: "authentication",
+    logEvents: [
+      {
+        timestamp: Date.now(),
+        message: JSON.stringify({
+          type: event.type,
+          userId: event.userId,
+          ip: event.ip,
+          result: event.result,
+          // Never log sensitive data
+        }),
+      },
+    ],
   });
 };
 ```
@@ -188,7 +193,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # Minimal permissions
+      contents: read # Minimal permissions
 
     steps:
       - uses: actions/checkout@v4
@@ -215,7 +220,7 @@ jobs:
 // package.json - Use lock files and integrity checks
 {
   "scripts": {
-    "install": "npm ci",  // Use ci for reproducible builds
+    "install": "npm ci", // Use ci for reproducible builds
     "audit": "npm audit --audit-level=moderate",
     "check": "npm outdated"
   }
@@ -244,16 +249,16 @@ export default {
 
     // Add security headers
     const headers = new Headers(response.headers);
-    headers.set('X-Frame-Options', 'DENY');
-    headers.set('X-Content-Type-Options', 'nosniff');
-    headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-    headers.set('Permissions-Policy', 'geolocation=(), microphone=()');
+    headers.set("X-Frame-Options", "DENY");
+    headers.set("X-Content-Type-Options", "nosniff");
+    headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    headers.set("Permissions-Policy", "geolocation=(), microphone=()");
 
     return new Response(response.body, {
       status: response.status,
-      headers
+      headers,
     });
-  }
+  },
 };
 ```
 

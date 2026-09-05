@@ -2,8 +2,8 @@
 
 Issues for this repo live in the Beads graph (`.beads/issues.jsonl`), managed
 with the `br` CLI. Beads is dependency-aware: issues block each other, and
-triage is computed from the graph with `bv`. Use the `next` skill to select,
-claim, and start the next actionable issue.
+triage is computed from the graph with `bv`. Run `implement` without a scope to
+select, claim, and start the next actionable issue.
 
 ## Conventions
 

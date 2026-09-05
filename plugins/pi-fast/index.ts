@@ -4,30 +4,25 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { defaultFastConfig, type FastConfig, loadConfig, saveDesiredActive } from "./config.ts";
-import { FastFooter, type FooterContext, type FooterModel, type FooterTheme } from "./footer.ts";
-
-export const FAST_EXTENSION_CAPABILITIES = ["fast-mode", "footer-status-feedback"] as const;
-export type FastExtensionCapability = (typeof FAST_EXTENSION_CAPABILITIES)[number];
+import { defaultFastConfig, type FastConfig, loadConfig, saveDesiredActive } from "./src/config.ts";
+import {
+  FastFooter,
+  type FooterContext,
+  type FooterModel,
+  type FooterTheme,
+} from "./src/footer.ts";
 
 export const FAST_COMMAND = "fast";
 export const FAST_FLAG = "fast";
-export const FAST_STATUS_KEY = "pi-openai-fast";
-export const FAST_DESIRED_HANDOFF_ENV = "PI_OPENAI_FAST_DESIRED";
+export const FAST_STATUS_KEY = "pi-fast";
+export const FAST_DESIRED_HANDOFF_ENV = "PI_FAST_DESIRED";
 export const PRIORITY_SERVICE_TIER = "priority";
 
-export const FAST_REQUESTED_INACTIVE_NO_MODEL_WARNING =
-  "Fast Mode is requested but inactive because no model is selected.";
+export const FAST_REQUESTED_INACTIVE_NO_MODEL_WARNING = "Select a model to use Fast Mode.";
 export const FAST_REQUESTED_INACTIVE_UNSUPPORTED_MODEL_WARNING =
-  "Fast Mode is requested but inactive because the current model is not supported.";
+  "Fast Mode is paused because this model isn't in supportedModels. Switch models or edit pi-fast.json.";
 
-function modelKey(model: unknown): string | undefined {
-  if (typeof model !== "object" || model === null) return undefined;
-  const { provider, id } = model as { provider?: unknown; id?: unknown };
-  return typeof provider === "string" && typeof id === "string" ? `${provider}/${id}` : undefined;
-}
-
-/** Toggling /fast exports the preference so newly launched subagents inherit it. */
+/** Shares the /fast choice with subagents started after the toggle. */
 function writeFastDesiredHandoff(desiredActive: boolean): void {
   process.env[FAST_DESIRED_HANDOFF_ENV] = desiredActive ? "1" : "0";
 }
@@ -37,15 +32,11 @@ function readFastDesiredHandoff(): { desiredActive?: boolean; warning?: string }
   if (value === undefined) return {};
   if (value === "1" || value === "0") return { desiredActive: value === "1" };
   return {
-    warning: `Ignoring invalid ${FAST_DESIRED_HANDOFF_ENV} value ${JSON.stringify(value)}; expected exact value 1 or 0.`,
+    warning: `Ignoring ${FAST_DESIRED_HANDOFF_ENV}=${JSON.stringify(value)}. Set it to 1 for on or 0 for off.`,
   };
 }
 
-export default function piOpenAIFast(pi: ExtensionAPI): void {
-  registerPiOpenAIFast(pi);
-}
-
-export function registerPiOpenAIFast(pi: ExtensionAPI): void {
+export default function piFast(pi: ExtensionAPI): void {
   let config: FastConfig = defaultFastConfig();
   let configLoad: Promise<{ warnings: string[] }> | undefined;
   let configLoaded = false;
@@ -56,19 +47,23 @@ export function registerPiOpenAIFast(pi: ExtensionAPI): void {
   let footerView: FooterContext | undefined;
 
   pi.registerFlag(FAST_FLAG, {
-    description: "Start this session with Fast Mode enabled",
+    description: "Request priority responses for this session",
     type: "boolean",
     default: false,
   });
 
   function isActive(): boolean {
-    const key = modelKey(currentModel);
-    return desiredActive && key !== undefined && config.supportedModels.includes(key);
+    if (!desiredActive || !currentModel?.provider || !currentModel.id) return false;
+    const { provider, id } = currentModel;
+    return (
+      config.supportedModels.includes(`${provider}/${id}`) ||
+      config.supportedModels.includes(`${provider}/*`)
+    );
   }
 
   function inactiveReason(): "no-model" | "unsupported-model" | undefined {
     if (!desiredActive || isActive()) return undefined;
-    return modelKey(currentModel) === undefined ? "no-model" : "unsupported-model";
+    return currentModel?.provider && currentModel.id ? "unsupported-model" : "no-model";
   }
 
   function notify(
@@ -79,7 +74,7 @@ export function registerPiOpenAIFast(pi: ExtensionAPI): void {
     try {
       ui?.notify?.(message, type);
     } catch {
-      // Notification sinks must not make lifecycle or command handling fail.
+      // A broken UI notification must not stop the session or /fast command.
     }
   }
 
@@ -87,13 +82,13 @@ export function registerPiOpenAIFast(pi: ExtensionAPI): void {
     warnings: readonly string[],
     ui: ExtensionContext["ui"] | undefined,
   ): void {
-    for (const message of new Set(warnings)) {
+    for (const message of warnings) {
       if (typeof ui?.notify === "function") notify(ui, message, "warning");
-      else console.warn(`[pi-openai-fast] ${message}`);
+      else console.warn(`[pi-fast] ${message}`);
     }
   }
 
-  /** Apply a state change and notify when Fast Mode newly becomes requested-but-inactive. */
+  /** Warns once when a model change or toggle leaves Fast Mode unable to run. */
   function transition(
     update: { desiredActive?: boolean; model?: FooterModel | undefined },
     ui: ExtensionContext["ui"] | undefined,
@@ -147,7 +142,7 @@ export function registerPiOpenAIFast(pi: ExtensionAPI): void {
         fastLabelColors: {
           dark: config.footer.darkFastColor,
           light: config.footer.lightFastColor,
-          vars: { ...config.footer.vars },
+          vars: config.footer.vars,
         },
         tui,
       });
@@ -175,7 +170,7 @@ export function registerPiOpenAIFast(pi: ExtensionAPI): void {
     return (await configLoad).warnings;
   }
 
-  /** Session startup: load config once, then apply flag > env handoff > persisted preference. */
+  /** Loads settings once. The flag overrides the environment, which overrides the saved choice. */
   async function startSession(ctx: ExtensionContext, model = ctx.model as FooterModel | undefined) {
     const warnings = [...(await loadConfigOnce(ctx.cwd))];
     const handoff = readFastDesiredHandoff();
@@ -191,10 +186,10 @@ export function registerPiOpenAIFast(pi: ExtensionAPI): void {
   }
 
   pi.registerCommand(FAST_COMMAND, {
-    description: "Toggle Fast Mode priority service tier",
+    description: "Turn priority requests on or off",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       if (args.trim().length > 0) {
-        notify(ctx.ui, "Usage: /fast", "error");
+        notify(ctx.ui, "Run /fast without arguments to turn Fast Mode on or off.", "error");
         return;
       }
       if (!configLoaded) await startSession(ctx);

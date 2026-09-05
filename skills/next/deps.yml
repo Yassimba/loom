@@ -1,4 +1,0 @@
-# Tools this skill invokes; installers pull them in transitively.
-tools:
-  - beads
-  - beads-viewer

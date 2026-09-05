@@ -1,8 +1,12 @@
-# Skills this skill invokes; installers pull them in transitively.
+# Skills and tools this skill invokes; installers pull them in transitively.
 skills:
   - blueprint
   - code-review
+  - ponytail
   - tdd
+tools:
+  - beads
+  - beads-viewer
 
 upstream:
   repository: https://github.com/mattpocock/skills

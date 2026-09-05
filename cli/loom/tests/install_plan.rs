@@ -54,8 +54,8 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
         resource(ResourceKind::Skill, "skill:tdd", "tdd"),
         resource(
             ResourceKind::PiPackage,
-            "pi-package:@yassimba/pi-openai-fast",
-            "@yassimba/pi-openai-fast",
+            "pi-package:@yassimba/pi-fast",
+            "@yassimba/pi-fast",
         ),
         resource(
             ResourceKind::HerdrPlugin,
@@ -84,7 +84,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
             },
             StepAction::Command(CommandSpec::new(
                 "pi",
-                ["install", "npm:@yassimba/pi-openai-fast@latest"],
+                ["install", "npm:@yassimba/pi-fast@latest"],
             )),
             StepAction::Command(CommandSpec::new(
                 "herdr",
@@ -108,7 +108,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
             None,
             Some(VerificationSpec {
                 command: CommandSpec::new("pi", ["list"]),
-                needle: Some("@yassimba/pi-openai-fast".into()),
+                needle: Some("@yassimba/pi-fast".into()),
             }),
             Some(VerificationSpec {
                 command: CommandSpec::new("herdr", ["plugin", "list"]),
@@ -211,8 +211,8 @@ fn missing_foundations_are_installed_before_selected_resources() {
 fn selecting_a_pi_package_without_pi_uses_the_pinned_mise_runtime() {
     let resources = vec![resource(
         ResourceKind::PiPackage,
-        "pi-package:@yassimba/pi-openai-fast",
-        "@yassimba/pi-openai-fast",
+        "pi-package:@yassimba/pi-fast",
+        "@yassimba/pi-fast",
     )];
     let status = PrerequisiteStatus {
         pi: false,
@@ -238,8 +238,8 @@ fn selecting_a_pi_package_without_pi_uses_the_pinned_mise_runtime() {
 fn an_installed_pi_needs_no_runtime_install() {
     let resources = vec![resource(
         ResourceKind::PiPackage,
-        "pi-package:@yassimba/pi-openai-fast",
-        "@yassimba/pi-openai-fast",
+        "pi-package:@yassimba/pi-fast",
+        "@yassimba/pi-fast",
     )];
     let status = PrerequisiteStatus {
         pi: true,
@@ -258,8 +258,8 @@ fn selected_tools_sync_through_mise_before_resources() {
         resource(ResourceKind::Tool, "tool:gh", "gh"),
         resource(
             ResourceKind::PiPackage,
-            "pi-package:@yassimba/pi-openai-fast",
-            "@yassimba/pi-openai-fast",
+            "pi-package:@yassimba/pi-fast",
+            "@yassimba/pi-fast",
         ),
     ];
     // Pi is missing but mise is present: Pi rides along as a manifest tool

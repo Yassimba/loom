@@ -22,7 +22,6 @@
         "skill:ponytail",
         "tool:pi",
         "tool:herdr",
-        "tool:calldiff",
         "tool:codegraph",
         "tool:tuicr",
         "tool:gh",
@@ -88,7 +87,6 @@
         "skill:to-spec",
         "skill:to-tickets",
         "skill:ticket-overview",
-        "skill:whats-next",
         "skill:frontend-slides",
         "skill:write-documentation",
         "skill:explain-simply",
@@ -120,7 +118,6 @@
         "skill:research",
         "skill:show-me",
         "tool:pi",
-        "tool:calldiff",
         "tool:codegraph",
         "tool:tokei",
         "tool:mermaid-cli",
@@ -142,8 +139,7 @@
         "skill:ticket-overview",
         "skill:to-spec",
         "skill:to-tickets",
-        "skill:next",
-        "skill:whats-next",
+        "skill:implement",
         "skill:frontend-slides",
         "skill:write-simply",
         "skill:explain-simply",
@@ -237,6 +233,15 @@
       "windowsWsl": true
     },
     {
+      "id": "pi-package:@yassimba/pi-fast",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "Fast Mode",
+      "description": "Use /fast in Pi to request priority responses from OpenAI, Codex, and xAI",
+      "installTarget": "@yassimba/pi-fast",
+      "nextAction": "Start Pi and use the installed package."
+    },
+    {
       "id": "pi-package:@companion-ai/feynman",
       "kind": "pi-package",
       "group": "Wiki",
@@ -291,15 +296,6 @@
       "installTarget": "pi-mcp-adapter",
       "version": "2.32.1",
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
-    },
-    {
-      "id": "pi-package:@yassimba/pi-openai-fast",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "OpenAI Fast Mode",
-      "description": "Request OpenAI priority service tier from supported models",
-      "installTarget": "@yassimba/pi-openai-fast",
-      "nextAction": "Start Pi and use the installed package."
     },
     {
       "id": "pi-package:@plannotator/pi-extension",
@@ -513,18 +509,8 @@
       "dependencies": [
         "blueprint",
         "code-review",
-        "tdd"
-      ]
-    },
-    {
-      "id": "skill:next",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "next",
-      "description": "Claim the next actionable Beads task using bv and br. Use when the user asks to pick, grab, claim, or start the next task; a preview without claiming belongs to whats-next.",
-      "installTarget": "next",
-      "nextAction": "Ask your coding agent to use the next skill.",
-      "dependencies": [
+        "ponytail",
+        "tdd",
         "github:Dicklesworthstone/beads_rust",
         "github:Dicklesworthstone/beads_viewer"
       ]
@@ -623,10 +609,11 @@
       "kind": "skill",
       "group": "Coding",
       "label": "ticket-overview",
-      "description": "Beads/BV ticket map with ASCII dependencies and product context. Use when the user asks for: (1) the complete issue graph, (2) roadmap workstreams and execution leverage, or (3) what a set of tickets is building.",
+      "description": "Read-only Beads/BV ticket guidance. Use when the user asks what's next, wants an open-ticket roadmap, needs the complete issue graph, or asks what a set of tickets is building.",
       "installTarget": "ticket-overview",
       "nextAction": "Ask your coding agent to use the ticket-overview skill.",
       "dependencies": [
+        "implement",
         "write-simply"
       ]
     },
@@ -693,30 +680,6 @@
         "prototype",
         "research",
         "loom"
-      ]
-    },
-    {
-      "id": "skill:whats-next",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "whats-next",
-      "description": "Preview the next actionable Beads task — its context and a sketch of the approach, claiming nothing. Use when the user asks what's next or what to work on next, or wants to size up the coming task before committing to it.",
-      "installTarget": "whats-next",
-      "nextAction": "Ask your coding agent to use the whats-next skill.",
-      "dependencies": [
-        "next"
-      ]
-    },
-    {
-      "id": "skill:calldiff",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "calldiff",
-      "description": "Diff call stacks across git commits — like git diff, but for who-calls-whom. Shows which callees appeared, disappeared, or moved under an entrypoint across 22 languages (diff, tree, and reach). Use for agentic code review when call flow changed and line diffs bury the shape of the change.",
-      "installTarget": "calldiff",
-      "nextAction": "Ask your coding agent to use the calldiff skill.",
-      "dependencies": [
-        "npm:calldiff"
       ]
     },
     {
@@ -1118,17 +1081,6 @@
       "bin": "herdr",
       "companions": [],
       "windowsWsl": true
-    },
-    {
-      "id": "tool:calldiff",
-      "kind": "tool",
-      "group": "Tools",
-      "label": "calldiff",
-      "description": "Diff call stacks across git commits — who-calls-whom across 22 languages (diff, tree, reach).",
-      "installTarget": "npm:calldiff",
-      "nextAction": "Run `calldiff diff` in a git repository.",
-      "bin": "calldiff",
-      "companions": []
     },
     {
       "id": "tool:codegraph",

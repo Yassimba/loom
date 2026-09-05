@@ -10,11 +10,11 @@ import {
   normalizeFastColorValue,
   resolveFastColorValue,
   saveDesiredActive,
-} from "../plugins/openai-fast/src/config.ts";
+} from "../plugins/pi-fast/src/config.ts";
 
 // configPaths derives the global path from os.homedir(), which honors $HOME.
 async function withTempHome(run) {
-  const home = await mkdtemp(join(tmpdir(), "pi-openai-fast-config-"));
+  const home = await mkdtemp(join(tmpdir(), "pi-fast-config-"));
   const previousHome = process.env.HOME;
   process.env.HOME = home;
   try {
@@ -29,23 +29,11 @@ async function writeConfigFile(path, value) {
   await writeFile(path, typeof value === "string" ? value : JSON.stringify(value), "utf8");
 }
 
-test("default config matches the PRD config contract", () => {
+test("default config allows future models on supported providers", () => {
   assert.deepEqual(DEFAULT_FAST_CONFIG, {
     persistState: false,
     desiredActive: false,
-    supportedModels: [
-      "openai/gpt-5.4",
-      "openai/gpt-5.5",
-      "openai-codex/gpt-5.4",
-      "openai-codex/gpt-5.5",
-      "openai-codex/gpt-5.6-sol",
-      "openai-codex/gpt-5.6-terra",
-      "openai-codex/gpt-5.6-luna",
-      "xai/grok-4.3",
-      "xai/grok-4.5",
-      "xai/grok-4.6",
-      "xai/grok-build-0.1",
-    ],
+    supportedModels: ["openai/*", "openai-codex/*", "xai/*"],
     footer: { mode: "replace", vars: {} },
   });
 });
@@ -53,8 +41,8 @@ test("default config matches the PRD config contract", () => {
 test("uses the required global and project config paths", async () => {
   await withTempHome(async ({ home, cwd }) => {
     assert.deepEqual(configPaths(cwd), {
-      project: join(cwd, ".pi", "extensions", "pi-openai-fast.json"),
-      global: join(home, ".pi", "agent", "extensions", "pi-openai-fast.json"),
+      project: join(cwd, ".pi", "extensions", "pi-fast.json"),
+      global: join(home, ".pi", "agent", "extensions", "pi-fast.json"),
     });
   });
 });
@@ -93,14 +81,6 @@ test("project config overrides global config field by field", async () => {
   });
 });
 
-test("migrates the legacy active field to desiredActive", async () => {
-  await withTempHome(async ({ cwd }) => {
-    await writeConfigFile(configPaths(cwd).global, { active: true });
-    const { config } = await loadConfig(cwd);
-    assert.equal(config.desiredActive, true);
-  });
-});
-
 test("trims supported model entries and drops invalid ones with warnings", async () => {
   await withTempHome(async ({ cwd }) => {
     const path = configPaths(cwd).global;
@@ -110,8 +90,30 @@ test("trims supported model entries and drops invalid ones with warnings", async
     const { config, warnings } = await loadConfig(cwd);
     assert.deepEqual(config.supportedModels, ["openai/gpt-5.5"]);
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /Ignored invalid supportedModels entries/);
+    assert.match(warnings[0], /Ignoring these supportedModels entries/);
     assert.match(warnings[0], /missing-slash/);
+  });
+});
+
+test("provider wildcards survive loading and preference saves; other patterns are rejected", async () => {
+  await withTempHome(async ({ cwd }) => {
+    const path = configPaths(cwd).global;
+    await writeConfigFile(path, {
+      supportedModels: [
+        " openai/* ",
+        "partner/exact",
+        "*/*",
+        "openai*/model",
+        "openai/**",
+        "openai/nested/*",
+      ],
+    });
+    const { config, warnings } = await loadConfig(cwd);
+    assert.deepEqual(config.supportedModels, ["openai/*", "partner/exact"]);
+    assert.equal(warnings.length, 1);
+    assert.equal((await saveDesiredActive(cwd, true)).ok, true);
+    const written = JSON.parse(await readFile(path, "utf8"));
+    assert.deepEqual(written.supportedModels, config.supportedModels);
   });
 });
 
@@ -120,7 +122,7 @@ test("warns when supportedModels is not an array and keeps the base list", async
     await writeConfigFile(configPaths(cwd).global, { supportedModels: "openai/gpt-5.5" });
     const { config, warnings } = await loadConfig(cwd);
     assert.deepEqual(config.supportedModels, DEFAULT_FAST_CONFIG.supportedModels);
-    assert.match(warnings[0], /must be an array/);
+    assert.match(warnings[0], /Use an array such as/);
   });
 });
 
@@ -130,7 +132,7 @@ test("warns when every supportedModels entry is invalid", async () => {
     const { config, warnings } = await loadConfig(cwd);
     assert.deepEqual(config.supportedModels, []);
     assert.equal(warnings.length, 2);
-    assert.match(warnings[1], /All supportedModels entries .* were invalid/);
+    assert.match(warnings[1], /None of the supportedModels entries .* are valid/);
   });
 });
 
@@ -140,7 +142,7 @@ test("warns and uses defaults for an unreadable config layer", async () => {
     const { config, warnings } = await loadConfig(cwd);
     assert.deepEqual(config, DEFAULT_FAST_CONFIG);
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /Could not read pi-openai-fast config/);
+    assert.match(warnings[0], /Couldn't load .* contains a JSON object/);
   });
 });
 
@@ -174,24 +176,24 @@ test("warns on invalid, missing-variable, and circular color tokens", async () =
     assert.equal(config.footer.darkFastColor, undefined);
     assert.equal(config.footer.lightFastColor, undefined);
     assert.equal(warnings.length, 2);
-    assert.match(warnings[0], /footer\.darkFastColor .* not a supported color token/);
-    assert.match(warnings[1], /footer\.lightFastColor .* resolves circularly/);
+    assert.match(warnings[0], /footer\.darkFastColor=.*use a hex color/);
+    assert.match(warnings[1], /footer\.lightFastColor=.*refers back to itself/);
 
     await writeConfigFile(configPaths(cwd).global, { footer: { darkFastColor: "missingVar" } });
     const second = await loadConfig(cwd);
-    assert.match(second.warnings[0], /variable "missingVar" is not defined/);
+    assert.match(second.warnings[0], /define color variable "missingVar" in footer.vars/);
   });
 });
 
-test("silently ignores legacy generated color literals", async () => {
+test("accepts colors that older releases treated as legacy defaults", async () => {
   await withTempHome(async ({ cwd }) => {
     await writeConfigFile(configPaths(cwd).global, {
       footer: { darkFastColor: "#FF50BE", lightFastColor: "#d20000" },
     });
     const { config, warnings } = await loadConfig(cwd);
     assert.deepEqual(warnings, []);
-    assert.equal(config.footer.darkFastColor, undefined);
-    assert.equal(config.footer.lightFastColor, undefined);
+    assert.equal(config.footer.darkFastColor, "#FF50BE");
+    assert.equal(config.footer.lightFastColor, "#d20000");
   });
 });
 
@@ -211,8 +213,8 @@ test("resolves nested variable chains to concrete tokens", () => {
   const vars = { a: "b", b: "#112233" };
   assert.deepEqual(resolveFastColorValue("a", vars), { value: "#112233" });
   assert.deepEqual(resolveFastColorValue("#445566", {}), { value: "#445566" });
-  assert.match(resolveFastColorValue("ghost", {}).error, /is not defined/);
-  assert.match(resolveFastColorValue("x", { x: "y", y: "x" }).error, /circularly/);
+  assert.match(resolveFastColorValue("ghost", {}).error, /define color variable "ghost"/);
+  assert.match(resolveFastColorValue("x", { x: "y", y: "x" }).error, /refers back to itself/);
 });
 
 test("saves desiredActive to the global config by default", async () => {
@@ -243,11 +245,10 @@ test("saves desiredActive to the project config when one exists", async () => {
   });
 });
 
-test("save sanitizes invalid fields and removes the legacy active field", async () => {
+test("save sanitizes invalid fields", async () => {
   await withTempHome(async ({ cwd }) => {
     const path = configPaths(cwd).global;
     await writeConfigFile(path, {
-      active: true,
       persistState: "yes",
       supportedModels: ["openai/gpt-5.5", "bad entry"],
       footer: { mode: "banner", vars: { ok: "#112233", bad: 7 }, darkFastColor: "#12345" },
@@ -279,7 +280,7 @@ test("save refuses to clobber a malformed config file", async () => {
     await writeConfigFile(path, "{broken");
     const result = await saveDesiredActive(cwd, true);
     assert.equal(result.ok, false);
-    assert.match(result.warnings[0], /needs manual repair/);
+    assert.match(result.warnings[0], /contains a JSON object\. The file was left unchanged/);
     assert.equal(await readFile(path, "utf8"), "{broken", "malformed file left untouched");
   });
 });
