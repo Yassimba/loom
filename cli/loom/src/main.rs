@@ -69,6 +69,9 @@ enum Command {
         /// Editor used for clickable source links
         #[arg(long, value_enum)]
         editor: Option<Editor>,
+        /// Diagram style for this project; inherit uses your Loom setup default
+        #[arg(long, value_enum)]
+        diagrams: Option<loom::diagrams::DiagramStyle>,
         /// Add the project's CODING_STANDARDS.md review checklist
         #[arg(long, overrides_with = "no_coding_standards")]
         coding_standards: bool,
@@ -90,6 +93,13 @@ enum Command {
     Sync,
     /// Print shell completions (skill/tool/package names included)
     Completions { shell: clap_complete::Shell },
+    /// List or reconcile Pi package-provided skills (`scripts/sync-skills.sh`)
+    #[command(hide = true)]
+    BundledSkills {
+        /// Write Pi shared-skill exclusions and drop unchanged owned copies
+        #[arg(long)]
+        reconcile: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -391,6 +401,7 @@ fn main() -> Result<()> {
             tracker,
             domain,
             editor,
+            diagrams,
             coding_standards,
             no_coding_standards,
             codegraph,
@@ -418,6 +429,7 @@ fn main() -> Result<()> {
                     tracker,
                     domain,
                     editor,
+                    diagrams,
                     coding_standards: flag(coding_standards, no_coding_standards),
                     codegraph: flag(codegraph, no_codegraph),
                     yes,
@@ -436,6 +448,20 @@ fn main() -> Result<()> {
         }
         Command::Completions { shell } => {
             print_completions(shell)?;
+            true
+        }
+        Command::BundledSkills { reconcile } => {
+            let home = loom::System::home_dir(&system)
+                .ok_or_else(|| anyhow::anyhow!("home directory is unavailable"))?;
+            if reconcile {
+                for note in loom::reconcile_bundled_skills(&home).map_err(anyhow::Error::msg)? {
+                    eprintln!("{note}");
+                }
+            } else {
+                for name in loom::provided_bundled_skills(&home) {
+                    println!("{name}");
+                }
+            }
             true
         }
         Command::Update { yes } => {
@@ -485,6 +511,7 @@ mod tests {
                 source: None,
                 windows_wsl: false,
                 companions: vec![],
+                bundled_skills: Vec::new(),
             }],
         };
 

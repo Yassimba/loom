@@ -8,10 +8,9 @@ Inspect changed source and affected callers at both revisions. Use CodeGraph
 when its index matches the required source; otherwise use targeted Git reads.
 Classify additions, removals, and changed responsibilities/contracts/routes.
 
-Reuse matching atlas figures and their element IDs. Edit existing edges and nodes
-directly in a copy of the HTML/SVG; preserve layout where possible. Draw removed
-elements in their original positions when available. Use Mermaid when no
-suitable atlas figure exists. A separate unchanged figure is needed only when
+Follow the [shared output preference](../../system-atlas/references/overlays.md).
+Reuse matching atlas figures and element IDs. Preserve layout and removed
+elements’ original positions where possible. A separate unchanged figure is needed only when
 it explains context the diff cannot show.
 
 Use added (green +), removed (red dashed −), and modified (amber ~), with a

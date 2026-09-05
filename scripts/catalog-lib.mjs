@@ -157,6 +157,10 @@ function rejectDependencyCycles(entries, index) {
   for (const { name } of entries) visit(name);
 }
 
+function bundledSkillMetadata(bundledSkills) {
+  return bundledSkills === undefined ? {} : { bundledSkills };
+}
+
 export async function readPiPackageCatalog(repoRoot) {
   const packagesRoot = join(repoRoot, "plugins");
   const resources = await readExternalPiPackages(repoRoot);
@@ -189,6 +193,7 @@ export async function readPiPackageCatalog(repoRoot) {
       description: catalog.description,
       installTarget: manifest.name,
       nextAction: catalog.nextAction ?? "Start Pi and use the installed package.",
+      ...bundledSkillMetadata(catalog.bundledSkills),
       ...(catalog.windowsSupport === "wsl" ? { windowsWsl: true } : {}),
     });
   }
@@ -211,7 +216,7 @@ async function readExternalPiPackages(repoRoot) {
   }
   const meta = JSON.parse(raw);
   return meta.packages.map(
-    ({ name, version, source, label, description, nextAction, windowsSupport }) => {
+    ({ name, version, source, label, description, nextAction, windowsSupport, bundledSkills }) => {
       if (!name || !label || !description) {
         throw new Error(`pi-packages.json entries need name, label, and description`);
       }
@@ -230,6 +235,7 @@ async function readExternalPiPackages(repoRoot) {
         description,
         installTarget: name,
         ...(source ? { source } : { version }),
+        ...bundledSkillMetadata(bundledSkills),
         nextAction: nextAction ?? "Start Pi and use the installed package.",
         ...(name === "@companion-ai/feynman"
           ? { dependencies: ["github:AgriciDaniel/claude-obsidian"] }
@@ -344,6 +350,21 @@ export async function buildSetupCatalog(repoRoot) {
     readHerdrPluginCatalog(repoRoot),
     readToolCatalog(repoRoot),
   ]);
+  const sharedNames = new Set(skills.map((skill) => skill.installTarget));
+  for (const pkg of piPackages) {
+    if (pkg.bundledSkills === undefined) continue;
+    if (
+      !Array.isArray(pkg.bundledSkills) ||
+      pkg.bundledSkills.some(
+        (name) => typeof name !== "string" || !/^[a-z0-9-]+$/.test(name) || !sharedNames.has(name),
+      ) ||
+      new Set(pkg.bundledSkills).size !== pkg.bundledSkills.length
+    ) {
+      throw new Error(
+        `invalid bundledSkills for ${pkg.installTarget}: expected unique shared skill names`,
+      );
+    }
+  }
   // Tool deps are declared by wizard label; resolve to install targets so
   // the CLI's one expansion walk covers skills and tools alike.
   const toolTargets = new Map(tools.map((tool) => [tool.label, tool.installTarget]));

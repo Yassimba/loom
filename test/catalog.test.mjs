@@ -362,3 +362,24 @@ test("private packages cannot advertise themselves in setup", async () => {
 
   await assert.rejects(buildSetupCatalog(repoRoot), /setup Pi package is private/);
 });
+
+test("bundledSkills explicitly links Pi packages to reviewed skills", async () => {
+  const repoRoot = await createCatalogFixture();
+  const path = join(repoRoot, "manifest", "pi-packages.json");
+  const pkg = {
+    name: "different-package-name",
+    version: "1.0.0",
+    label: "Package",
+    description: "Bundled",
+    bundledSkills: ["helper"],
+  };
+  await writeFile(path, JSON.stringify({ packages: [pkg] }));
+  const catalog = await buildSetupCatalog(repoRoot);
+  assert.deepEqual(catalog.find(({ installTarget }) => installTarget === pkg.name).bundledSkills, [
+    "helper",
+  ]);
+  for (const invalid of [["private"], ["../helper"], ["helper", "helper"], "helper"]) {
+    await writeFile(path, JSON.stringify({ packages: [{ ...pkg, bundledSkills: invalid }] }));
+    await assert.rejects(buildSetupCatalog(repoRoot), /invalid bundledSkills/);
+  }
+});

@@ -1,6 +1,6 @@
 ---
 name: blueprint
-description: "Plan substantial code changes using atlas context and small projected overlays, with Mermaid fallback and Plannotator approval."
+description: "Plan substantial code changes using atlas context and projected views in SVG/HTML or Mermaid and Plannotator approval."
 ---
 
 # Blueprint
@@ -29,9 +29,8 @@ target, current → proposed behavior, reason, and verification. Include ordered
 implementation steps, compatibility/migration needs, risks, and rollback where
 applicable.
 
-Select atlas figures by question, then write small patches using semantic
-element IDs. Copy the selected HTML and edit its SVG, preserving unchanged layout;
-invoke `mermaid-skill` for missing coverage. For a comparison use
+Select atlas figures by question, then follow
+[the shared output preference](../system-atlas/references/overlays.md). For a comparison use
 [the diff convention](../explain-code-flow/references/diagram-diff.md).
 Separate atlas-to-current drift from current-to-proposal changes. Proposed
 elements remain unbound and visibly PROJECTED.

@@ -1,14 +1,14 @@
 ---
 name: explain-code-flow
-description: "Explain a feature from system context to runtime detail, reusing atlas figures and facts. For a revision range, overlay the changed flow; use Mermaid when atlas coverage is missing."
+description: "Explain a feature from system context to runtime detail, reusing atlas figures and facts. Show changed flows in polished SVG/HTML or economical Mermaid views."
 ---
 
 # Explain Code Flow
 
 Explain the live entry, the values that travel, and the final result. Reuse the
-atlas's actual figures as focused views: keep their element IDs and layout,
-then highlight the path or patch verified drift. Reusing its theme or viewer
-alone is not diagram reuse. Inspect the local delta and missing facts.
+atlas's facts and figures through
+[the shared output preference](../system-atlas/references/overlays.md). Inspect
+the local delta and missing facts.
 
 ## 1. Pin and retrieve
 
@@ -29,13 +29,11 @@ needed detail. Cover context and the runtime spine; add another view only for
 a distinct question. "More detail" first means a closer explanation of the
 existing nodes, edges, values and branches.
 
-Highlight the path directly in a copy of the atlas SVG. For a revision comparison, follow
-[references/diagram-diff.md](references/diagram-diff.md). Missing figures use
-`mermaid-skill`; they do not require Diagram Design.
+For a revision comparison, follow
+[references/diagram-diff.md](references/diagram-diff.md).
 Keep exact identifiers and source references beside each figure. A missing
-revision pin requires source verification, not a new layout. Before drawing a
-new figure, name the closest atlas figure and the specific detail it cannot
-show with an overlay or an adjacent explanation.
+revision pin requires source verification, not a new layout. For a new detail absent from the atlas, name the closest figure and the
+specific coverage gap.
 
 Done when the entry-to-result path is complete and every new claim has source
 evidence or an explicit uncertainty.
@@ -57,7 +55,6 @@ changed/new figures once. Reply with the result and walkthrough path.
 
 Done when the focused walkthrough is readable without opening the full atlas,
 its references identify the right revisions, and it links back to deeper detail.
-Record figure provenance: atlas figure ID/path and unchanged, overlaid, or new
-(with the coverage gap). Use the existing exporter; author only the selection,
-small overlay patches and prose. Reuse views locally; delegate only independent
+Record figure provenance: atlas figure ID/path and unchanged, overlaid,
+Mermaid adaptation, or new (with the coverage gap). Use the existing exporter. Reuse views locally; delegate only independent
 missing-code investigation when delegation is authorized.

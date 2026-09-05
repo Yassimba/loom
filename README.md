@@ -58,6 +58,15 @@ loom init
 
 Use `loom init --yes` to accept the detected defaults without questions.
 
+Choose **Polished** (atlas SVG/HTML) or **Economical** (Mermaid from atlas
+references) in setup's Diagrams settings. This saves your personal default in
+`~/.config/loom/diagrams.json`. `loom init` offers a project override, or set it
+with `loom init --diagrams economical` (`polished` and `inherit` also work).
+The override lives in `ai-docs/agents/diagrams.json`; `loom init --yes` preserves
+an existing choice. A request such as “use polished diagrams for this plan”
+overrides both for that task. Blueprint, explanations and guided reviews share
+this preference; atlas depth, source verification and model selection stay the same.
+
 ### Windows and WSL2
 
 Native Windows works. Use WSL2 if you also want Linux-only tools such as Herdr:
@@ -202,6 +211,10 @@ Create makes a new Vault. Adopt requires an existing directory with `.obsidian/`
 
 Wiki setup also installs QMD and its Vault-local skill, registers the Vault's Markdown files, and builds search embeddings. The capability screen can optionally add Feynman and the Confluence Markdown exporter; scripted setup uses `--feynman` and `--confluence`. Each Vault gets a separate named index; setup prints its `qmd --index ... query "your question"` command. The first embedding run may download a model. Repair and `loom update` refresh the index and embeddings. This is a snapshot, not a file watcher; rerun repair after editing notes to refresh search. Unregistering a Vault leaves its QMD index intact.
 
+Interactive Wiki setup shows stage spinners, elapsed time, and live output activity while tools install and QMD downloads models, indexes, and embeds. Raw tool output stays hidden because it may contain private data. QMD does not expose reliable piped percentages. Esc or Ctrl-C stops ongoing commands; already completed installations remain. After embedding, Loom checks for pending work and runs one collection-scoped hybrid search, limited to 120 seconds. Failure produces a warning; an empty index skips the check. This prepares disk caches, not a persistent model service: later CLI searches still load models.
+
+When Confluence is selected, the interactive setup offers a URL, username/email, and masked API-token or PAT form. Saving requires confirmation; replacement of an existing account is explicit. Credentials use CME's shared config (`CME_CONFIG_PATH`, or its platform app directory), stored as owner-only plaintext, not Keychain or Vault content. Other accounts and settings remain unchanged. This configures authentication but does not verify connectivity. `--yes` and `loom update` never prompt for or save credentials; use CME's own configuration separately.
+
 Wiki skills are available only inside the Vault. Loom keeps exact-pinned Python and `claude-obsidian` product code outside it, then writes project-local Pi state below ignored `.pi/`. Optional Feynman is also installed there, not globally.
 
 ```bash
@@ -263,6 +276,31 @@ npx skills add Yassimba/loom
 ```
 
 ### Install Pi packages
+
+The ponytail and i-have-adhd packages already include their Pi skills. Loom marks
+these skills **Included with package**, skips standalone Pi copies when the
+package's enabled files are present, and still copies skills to other selected
+agents. Skill-only installs work normally. If a selected provider package fails,
+the dependent skills step is skipped; fix the package failure and retry.
+
+`loom update` removes only unchanged, receipt-owned Pi duplicates. On a linked
+checkout, `scripts/sync-skills.sh link ponytail --tree pi` (and the same command
+for `i-have-adhd`) removes matching repo links or identical copies instead of
+recreating them. Custom edits/foreign links and disabled or filtered packages
+are left alone.
+
+Pi also discovers `.agents/skills`. Loom keeps those shared copies for other
+hosts and adds exact Pi-only exclusions after verifying the provider. Existing
+filters remain intact; only exclusions recorded in Loom's ownership ledger are
+removed during uninstall or reconciled after a direct `pi remove` on the next
+`loom update`, skill install, or global skill sync. Preexisting equal exclusions
+remain user-owned. Explicit force-inclusions require manual resolution.
+
+For project shared skills, **start Pi from the selected project root**: nested
+launches discover ancestor skills but do not inherit the root's `.pi/settings.json`.
+A project-only provider cannot safely hide a global shared skill; Loom reports
+that conflict without changing global visibility. Install the provider globally
+or resolve that scope conflict manually.
 
 Loom includes three Pi packages from this repository:
 

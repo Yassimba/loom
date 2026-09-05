@@ -1,196 +1,34 @@
 # Types review
 
-Refactor the requested code so its types carry the invariants. A reader should learn the rules of the domain from the type definitions, and the type checker should enforce them.
+Which domain rules remain implicit or unenforced?
 
-Work the scope in four passes, in order: **modernize** the spellings, **model** the records, **deepen** the invariants, **complete** the objects.
+Read the [review contract](../references/review-contract.md). Establish language version, type-checker configuration, and modeling conventions. Cover all four passes; mark inapplicable ones in coverage.
 
-Before reviewing, read the project's language version (for Python, `requires-python`) and type-checker configuration. The modern Python rows below are version-gated; `typing_extensions` backports newer features.
+## 1. Encode invariants
 
-## Review output
+Trace external, persisted, IPC, and network input through parsing to consumers. Find lost validation proofs, repeated checks, and impossible boolean/nullable combinations.
 
-Return a numbered list of suggestions; each item names the change and its concrete benefit, followed by two fenced Markdown code blocks tagged with the source language:
+- Parse into trusted values; let internal signatures carry the proof. Static types and assertions cannot replace runtime validation of untrusted input.
+- Represent mutually exclusive states with unions or equivalent idioms; check exhaustive handling of closed state sets.
+- Introduce domain IDs, versions, paths, or result types where they prevent a concrete mix-up or clarify a caller's contract.
+- Pass required state explicitly instead of discovering optional ambient state deep in the flow.
 
-This is what the code looks like before:
+`version = Version.parse(raw); install(version)` carries proof that `validate_version(raw); install(raw)` discards. Name each proposed type's invariant and affected consumers.
 
-```LANGUAGE
-the current code, trimmed to the lines that change
-```
+## 2. Model records
 
-and after:
+Use records where field-specific types or construction rules clarify a contract; retain mappings for dynamic keys, lookup tables, and open-ended data.
 
-```LANGUAGE
-the proposed code
-```
+Prefer existing modeling tools. In Python, dataclasses can own internal invariants, `TypedDict` describes dict-shaped interfaces, and existing schema libraries parse external input. Freeze only where immutability preserves behavior; new validation dependencies need a benefit beyond replacing a few checks.
 
-Report type boundaries checked and left alone.
+Account for every producer and consumer, including outside the edited function. Check serialization, equality, mutation, and public call-site compatibility.
 
-## Design Vocabulary
+## 3. Place behavior with its owner
 
-Translate the intent into established software design language:
+Localize invariant-preserving operations with their state, following language idioms. `session.promote(message)` can replace separate message/status mutations when they form one domain operation.
 
-| Desired quality                               | Established terminology                                       |
-| --------------------------------------------- | ------------------------------------------------------------- |
-| Types enforce invariants                      | Type-driven design, making illegal states unrepresentable     |
-| Boundary checks produce trusted values        | Parse, Don't Validate, smart constructors, refinement types   |
-| Constructors and assertions enforce contracts | Design by Contract, preconditions, postconditions, invariants |
-| State and behavior have one owner             | Encapsulation, Tell Don't Ask, Information Expert             |
+Keep independent transformations as functions when privileged state access is unnecessary. File/network construction belongs on a type only when that dependency fits its responsibility. Judge locality of changes and validation, not method count.
 
-## Pass 1 — Modernize
+## 4. Modernize supported spellings
 
-Upgrade legacy spellings on sight — each row is a mechanical rewrite the type checker verifies, applied only where the project's Python version (or `typing_extensions`) allows it:
-
-| Legacy                                     | Modern                                                           |
-| ------------------------------------------ | ---------------------------------------------------------------- |
-| `Optional[X]`, `Union[X, Y]`               | `X \| None`, `X \| Y`                                            |
-| `typing.List`, `Dict`, `Tuple`, `Set`      | `list[...]`, `dict[...]`, `tuple[...]`, `set[...]`               |
-| `T = TypeVar("T")` + `Generic[T]`          | PEP 695: `class Stack[T]:`, `def first[T](items: list[T]) -> T:` |
-| `Alias = ...`, `Alias: TypeAlias = ...`    | PEP 695: `type Alias = ...`                                      |
-| methods returning the class name           | `Self`                                                           |
-| stringly-typed constants                   | `Literal[...]` or a `StrEnum`                                    |
-| `**kwargs: Any`                            | `Unpack[SomeTypedDict]`                                          |
-| decorators that forward signatures         | `ParamSpec`                                                      |
-| heterogeneous variadic tuples              | `TypeVarTuple`: `*Ts`                                            |
-| boolean narrowing helpers returning `bool` | `TypeIs` (or `TypeGuard`)                                        |
-| duck-typed dependencies                    | `Protocol`                                                       |
-| inheritance overrides left implicit        | `@override`                                                      |
-
-Prove union handling complete with exhaustive `match` plus `assert_never` on the fall-through arm.
-
-Reach for the advanced tools where they make a real contract precise — a `ParamSpec` on a decorator that forwards arguments earns its place; one on a decorator that ignores them is ceremony.
-
-## Pass 2 — Model The Records
-
-A string-keyed dict crossing a function boundary is a record wearing a disguise. Replace every such dict with a dataclass or a pydantic model: a frozen dataclass when the data is internal, a pydantic model when it arrives from outside and needs validation, a `TypedDict` at the rim where an external API imposes dict shape (JSON payloads, `**kwargs`).
-
-DON'T pass structured data as a string-keyed dict:
-
-```python
-def notify(user: dict[str, str | int]) -> None:
-    send(user["email"], f"Hi {user['name']}")
-```
-
-DO model the record and parse the dict once at the boundary:
-
-```python
-@dataclass(frozen=True)
-class User:
-    name: str
-    email: Email
-
-
-def notify(user: User) -> None:
-    send(user.email, f"Hi {user.name}")
-```
-
-The rewrite pays immediately: typo'd keys become attribute errors the type checker catches, the value types stop being a union smeared over every key, and the record gains a home for behavior (Pass 4).
-
-## Pass 3 — Deepen The Invariants
-
-Use the type system as design:
-
-- make illegal states unrepresentable: model mutually exclusive states as a union of types, and prove handling exhaustive
-- parse external, persisted, IPC, and network data once at the boundary into a trusted domain value; internal functions receive trusted values, never re-check raw data
-- use domain types for meaningful IDs, versions, paths, URLs, states, and results; return values that answer the caller's actual question
-- enforce invariants in constructors, schemas, value objects, and narrow signatures, kept close to the owner of the state
-- make required state an explicit parameter instead of optional ambient state read deep in the flow
-- assert conditions that must already be true at a callsite
-- give every value the most precise type that expresses the contract — `Any`, stringly protocols, and nullable grab-bags all yield to a type that says what the value is
-
-DON'T validate raw values and then throw away what the check proved:
-
-```python
-validate_version(raw)
-await install(raw)  # still a raw string
-```
-
-DO parse into a trusted domain value once:
-
-```python
-version = Version.parse(raw)
-await install(version)
-```
-
-DON'T represent mutually exclusive states with nullable fields and booleans:
-
-```python
-@dataclass
-class Server:
-    starting: bool = False
-    url: str | None = None
-    error: str | None = None
-```
-
-DO model the legal states directly:
-
-```python
-@dataclass(frozen=True)
-class Stopped: ...
-
-
-@dataclass(frozen=True)
-class Starting: ...
-
-
-@dataclass(frozen=True)
-class Ready:
-    url: ServerUrl
-
-
-@dataclass(frozen=True)
-class Failed:
-    error: ServerError
-
-
-type ServerState = Stopped | Starting | Ready | Failed
-```
-
-DON'T pass a loose bag of optional callbacks and behavior flags:
-
-```python
-create_server(start=start, stop=stop, read=read, retry=True, legacy=False)
-```
-
-DO require a cohesive interface that answers the caller's real needs:
-
-```python
-create_server(process=server_process, cli=wsl_cli)
-```
-
-## Pass 4 — Complete The Objects
-
-Make objects complete: behavior about a type lives on the type, starting with construction. Prefer ten complete objects with ten methods each over one data object orbited by a hundred free functions.
-
-DON'T orbit a data object with free functions:
-
-```python
-def get_config(path: Path) -> Config: ...
-def config_is_stale(config: Config) -> bool: ...
-```
-
-DO give the type its own constructors and behavior:
-
-```python
-class Config:
-    @classmethod
-    def from_path(cls, path: Path) -> Self: ...
-
-    def is_stale(self) -> bool: ...
-```
-
-DON'T ask for owned state and mutate it elsewhere:
-
-```python
-if session.status() == "pending":
-    session.messages().append(message)
-    session.set_status("active")
-```
-
-DO tell the owner the domain operation:
-
-```python
-session.promote(message)
-```
-
-## Completion Standard
-
-Done when the report accounts for all four passes in scope: modern spellings, modeled records, deep invariants, and complete objects. Every recommendation must make a concrete contract more precise rather than add typing ceremony.
+After contract review, separate compatible mechanical rewrites from design changes. For Python, read [Python typing](../references/python-typing.md); otherwise follow the configured compiler and project conventions. Each recommendation must clarify a contract or remove a concrete maintenance cost.

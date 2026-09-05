@@ -548,7 +548,7 @@ fn qmd_index(vault: &Path) -> String {
     )
 }
 
-fn setup_qmd(system: &dyn System, vault: &Path) -> Result<()> {
+fn setup_qmd(system: &dyn System, vault: &Path) -> Result<String> {
     let skill = vault.join(".agents/skills/qmd/SKILL.md");
     if !skill.is_file() {
         run_checked(
@@ -583,12 +583,60 @@ fn setup_qmd(system: &dyn System, vault: &Path) -> Result<()> {
         )?;
     }
     run_checked(system, &command(&["update"]))?;
-    println!(
-        "Building QMD embeddings for {} (the first run may download a model)...",
-        vault.display()
+    let status = run_checked(system, &command(&["status"]))?;
+    let total = qmd_document_count(&status)?;
+    if total == 0 {
+        return Ok("Search check skipped: the Vault index is empty.".into());
+    }
+    run_checked(system, &command(&["pull", "--progress"]))?;
+    let embedded = run_checked(system, &command(&["embed"]))?;
+    anyhow::ensure!(
+        !embedded.contains("Another embed process is already running")
+            && !embedded.contains("chunks still failed after retries"),
+        "QMD embeddings are incomplete or busy; rerun Wiki repair"
     );
-    run_checked(system, &command(&["embed"]))?;
-    Ok(())
+    let status = run_checked(system, &command(&["status"]))?;
+    qmd_document_count(&status)?;
+    anyhow::ensure!(
+        !status.contains("Pending:"),
+        "QMD still has pending embeddings; rerun Wiki repair"
+    );
+    let checked = system.run_controlled(
+        &command(&[
+            "query",
+            "What knowledge and topics are documented in this wiki?",
+            "-c",
+            "vault",
+            "-C",
+            "4",
+            "-n",
+            "1",
+            "--format",
+            "files",
+        ]),
+        std::time::Duration::from_secs(120),
+        &std::sync::atomic::AtomicBool::new(false),
+    );
+    // Never print search results or tool errors: they may contain private notes.
+    Ok(if checked.is_ok_and(|result| result.success) {
+        "Search check completed. Disk caches are prepared; models reload for later CLI searches."
+    } else {
+        "Search index prepared. Warning: first-search check failed or timed out; try a search later."
+    }.into())
+}
+
+fn qmd_document_count(status: &str) -> Result<usize> {
+    status
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("Total:")?
+                .split_whitespace()
+                .next()?
+                .parse()
+                .ok()
+        })
+        .context("QMD status did not report an indexed document count; search readiness is unknown")
 }
 
 fn offer_global_feynman_migration(system: &dyn System, vault: &Path, yes: bool) -> Result<()> {
@@ -769,7 +817,15 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
             request.confluence,
         )
     };
-    manifest::sync_selected(system, &wiki_tool_keys(confluence)).map_err(anyhow::Error::msg)?;
+    crate::wiki_progress::run(system, !request.yes, |system, cancelled| {
+        manifest::sync_selected_from(
+            system,
+            &wiki_tool_keys(confluence),
+            cancelled,
+            &crate::skills::Repository::default(),
+        )
+        .map_err(anyhow::Error::msg)
+    })?;
     let product = product_root(system)?;
     if matches!(
         request.operation,
@@ -791,11 +847,17 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
     {
         return Ok(true);
     }
-    install_packages(system, &product, &vault, feynman)?;
-    setup_qmd(system, &vault)?;
+    let search_note = crate::wiki_progress::run(system, !request.yes, |system, _| {
+        install_packages(system, &product, &vault, feynman)?;
+        setup_qmd(system, &vault)
+    })?;
+    println!("{search_note}");
     let mut registry = WikiRegistry::load(&home)?;
     registry.register(vault.clone(), feynman, confluence);
     registry.save(&home)?;
+    if confluence && !request.yes {
+        crate::wiki_confluence::configure(system)?;
+    }
     if feynman
         && matches!(
             request.operation,
@@ -811,7 +873,7 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
         "Search: qmd --index {} query \"your question\"",
         qmd_index(&vault)
     );
-    if confluence {
+    if confluence && request.yes {
         println!("Confluence: run `cme config edit auth.confluence` to configure authentication.");
     }
     if !request.yes
@@ -960,7 +1022,7 @@ pub fn update_registered(system: &(dyn System + Sync)) -> bool {
         match install_packages(system, &product, &record.path, record.feynman)
             .and_then(|()| setup_qmd(system, &record.path))
         {
-            Ok(()) => println!("  ✓ Wiki {} — refreshed", record.path.display()),
+            Ok(note) => println!("  ✓ Wiki {} — refreshed. {note}", record.path.display()),
             Err(error) => {
                 println!("  ✗ Wiki {} — {error}", record.path.display());
                 healthy = false;
@@ -1174,6 +1236,10 @@ mod tests {
             collections: Mutex<std::collections::BTreeSet<String>>,
             commands: Mutex<Vec<CommandSpec>>,
             fail_embed: bool,
+            empty: bool,
+            embed_message: String,
+            fail_search: bool,
+            pending: bool,
         }
         impl System for QmdSystem {
             fn command_exists(&self, _: &str) -> bool {
@@ -1211,15 +1277,44 @@ mod tests {
                         assert!(collections.insert(command.args[1].clone()));
                         true
                     }
-                    "update" => true,
+                    "update" | "status" | "pull" | "query" => true,
                     "embed" => !self.fail_embed,
                     _ => panic!("unexpected QMD command"),
                 };
                 Ok(CommandResult {
                     success,
-                    stdout: String::new(),
+                    stdout: if command.args[2] == "status" {
+                        format!(
+                            "  Total:    {} files indexed\n{}",
+                            if self.empty { 0 } else { 1 },
+                            if self.pending {
+                                "Pending: 1 need embedding"
+                            } else {
+                                ""
+                            }
+                        )
+                    } else if command.args[2] == "embed" {
+                        self.embed_message.clone()
+                    } else {
+                        String::new()
+                    },
                     stderr: "embedding failed".into(),
                 })
+            }
+            fn run_controlled(
+                &self,
+                command: &CommandSpec,
+                timeout: std::time::Duration,
+                _: &std::sync::atomic::AtomicBool,
+            ) -> Result<CommandResult> {
+                assert_eq!(timeout.as_secs(), 120);
+                let result = self.run(command)?;
+                assert!(command.args.windows(2).any(|args| args == ["-c", "vault"]));
+                assert!(command.args.windows(2).any(|args| args == ["-C", "4"]));
+                if self.fail_search {
+                    anyhow::bail!("timeout with private result text");
+                }
+                Ok(result)
             }
         }
         let root = temp("qmd");
@@ -1257,7 +1352,77 @@ mod tests {
                     .filter(|c| c.cwd.as_deref() == Some(second.as_path()))
                     .count()
         );
+        let indexed = commands
+            .iter()
+            .filter(|c| c.args[0] == "--index")
+            .map(|c| c.args[2].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &indexed[..8],
+            [
+                "collection",
+                "collection",
+                "update",
+                "status",
+                "pull",
+                "embed",
+                "status",
+                "query"
+            ]
+        );
+        assert_eq!(indexed.iter().filter(|c| **c == "query").count(), 3);
         drop(commands);
+        for (empty, message, fail_search) in [
+            (true, "", false),
+            (
+                false,
+                "Another embed process is already running. Skipping.",
+                false,
+            ),
+            (false, "2 chunks still failed after retries", false),
+            (false, "", true),
+        ] {
+            let probe = QmdSystem {
+                empty,
+                embed_message: message.into(),
+                fail_search,
+                ..Default::default()
+            };
+            let result = setup_qmd(&probe, &first);
+            if empty {
+                assert!(result.unwrap().contains("empty"));
+            } else if fail_search {
+                let note = result.unwrap();
+                assert!(note.contains("Warning"));
+                assert!(!note.contains("private result text"));
+            } else {
+                assert!(result.is_err());
+            }
+            assert_eq!(
+                probe
+                    .commands
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|c| c.args.get(2).is_some_and(|arg| arg == "query"))
+                    .count(),
+                usize::from(fail_search)
+            );
+        }
+        let pending = QmdSystem {
+            pending: true,
+            ..Default::default()
+        };
+        assert!(setup_qmd(&pending, &first)
+            .unwrap_err()
+            .to_string()
+            .contains("pending"));
+        assert!(!pending
+            .commands
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|c| c.args.get(2).is_some_and(|arg| arg == "query")));
         let failing = QmdSystem {
             fail_embed: true,
             ..Default::default()

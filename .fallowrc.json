@@ -1,6 +1,11 @@
 {
   "$schema": "https://docs.fallow.tools/schemas/fallowrc.json",
-  "entry": ["plugins/*/src/index.ts", "plugins/*/src/*/index.ts", "manifest/opencode/plugins/*.js"],
+  "entry": [
+    "plugins/*/src/index.ts",
+    "plugins/*/src/*/index.ts",
+    "manifest/opencode/plugins/*.js",
+    "test/pi-skill-discovery.mjs"
+  ],
   "ignorePatterns": ["skills/**", "drafts/**", "**/*.generated.*"],
   "ignoreDependencies": [],
   "ignoreExportsUsedInFile": true,

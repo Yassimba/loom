@@ -37,7 +37,7 @@ updating the target hash. Review HEAD and baseline are separate from atlas pins.
 
 Generate `context.json` with `atlas.py freeze <atlas> <topic-ids...> --output
 <blueprint>/context.json`. It preserves selected facts and pins; readers do not
-need the live atlas after approval. Retain final SVGs and fallback Mermaid
+need the live atlas after approval. Retain final SVGs and Mermaid
 sources under `diagrams/`. Temporary atlas overlay JSON/HTML/PNG files live
 outside the Blueprint directory. Historical facts retain their revision;
 current code bindings must be verified against the review target.

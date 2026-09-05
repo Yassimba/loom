@@ -309,6 +309,14 @@ pub fn expand_skill_dependencies(
     while cursor < expanded.len() {
         let resource = &expanded[cursor];
         let mut dependencies = resource.dependencies.clone();
+        if resource.kind == ResourceKind::PiPackage && !agents.is_empty() {
+            dependencies.extend(
+                resource
+                    .bundled_skills
+                    .iter()
+                    .map(|name| format!("skill:{name}")),
+            );
+        }
         if agents.contains(&SkillAgent::Pi)
             && matches!(
                 resource.install_target.as_str(),
@@ -321,7 +329,7 @@ pub fn expand_skill_dependencies(
         for name in dependencies {
             let Some(dependency) = all
                 .iter()
-                .find(|candidate| candidate.install_target == name)
+                .find(|candidate| candidate.id == name || candidate.install_target == name)
                 .cloned()
             else {
                 continue; // catalog generation guarantees deps resolve; stay lenient here
@@ -376,21 +384,50 @@ pub(crate) fn install_skills(
         ));
     }
 
-    repository.get(system, cancelled).and_then(|repo_root| {
-        let source_root = repo_root.join("skills");
-        let mut missing = skills
-            .iter()
-            .filter(|name| !source_root.join(name.as_str()).join("SKILL.md").is_file())
-            .peekable();
-        if missing.peek().is_some() {
-            return Err(format!(
-                "downloaded repo is missing skills: {}",
-                missing.cloned().collect::<Vec<_>>().join(", ")
-            ));
+    crate::bundled_skills::check_shared_scope(destination, skills)?;
+    crate::bundled_skills::reconcile_exclusions(&destination.home)?;
+    let mut reports = Vec::new();
+    for tree in trees {
+        let mut standalone = Vec::new();
+        let mut included = 0;
+        for name in skills {
+            if crate::bundled_skills::provided_in_tree(&destination.home, &tree, name) {
+                crate::bundled_skills::reconcile_copy(&destination.home, &tree.join(name))?;
+                included += 1;
+            } else {
+                standalone.push(name.clone());
+            }
         }
-        install_opencode_adapter(&repo_root, destination)?;
-        copy_into_trees(&source_root, &trees, skills)
-    })
+        let mut report = if standalone.is_empty() {
+            // Every skill came with a package: no repo download needed.
+            TreeReport {
+                tree,
+                installed: 0,
+                skipped_existing: 0,
+                skipped_symlinks: 0,
+            }
+        } else {
+            let repo_root = repository.get(system, cancelled)?;
+            let source_root = repo_root.join("skills");
+            let missing = standalone
+                .iter()
+                .filter(|name| !source_root.join(name).join("SKILL.md").is_file())
+                .cloned()
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                return Err(format!(
+                    "downloaded repo is missing skills: {}",
+                    missing.join(", ")
+                ));
+            }
+            install_opencode_adapter(&repo_root, destination)?;
+            copy_into_tree(&source_root, tree, &standalone)?
+        };
+        report.skipped_existing += included;
+        reports.push(report);
+    }
+    crate::bundled_skills::exclude_shared(destination, skills)?;
+    Ok(reports)
 }
 
 /// Install the Loom-owned session adapter when OpenCode is present. The
@@ -421,7 +458,7 @@ fn replace_opencode_adapter(repo_root: &Path, target: &Path) -> Result<(), Strin
     crate::fs_tx::atomic_write(target, &content)
 }
 
-fn owned_unchanged(state: &crate::ownership::InstallState, path: &Path) -> bool {
+pub(crate) fn owned_unchanged(state: &crate::ownership::InstallState, path: &Path) -> bool {
     state
         .owned_path_digest(path)
         .is_some_and(|owned| crate::ownership::digest_path(path).as_deref() == Ok(owned))
@@ -603,46 +640,41 @@ fn fetch_repo_controlled(
     }
 }
 
-fn copy_into_trees(
+fn copy_into_tree(
     source_root: &Path,
-    trees: &[PathBuf],
+    tree: PathBuf,
     skills: &[String],
-) -> Result<Vec<TreeReport>, String> {
-    let mut reports = Vec::new();
+) -> Result<TreeReport, String> {
+    fs::create_dir_all(&tree)
+        .map_err(|error| format!("could not create {}: {error}", tree.display()))?;
     let mut failures = Vec::new();
-    for tree in trees {
-        if let Err(error) = fs::create_dir_all(tree) {
-            failures.push(format!("could not create {}: {error}", tree.display()));
-            continue;
-        }
-        let mut report = TreeReport {
-            tree: tree.clone(),
-            installed: 0,
-            skipped_existing: 0,
-            skipped_symlinks: 0,
-        };
-        for name in skills {
-            match copy_skill(source_root, tree, name) {
-                Ok(CopyOutcome::Installed) => {
-                    if tree.join(name).join("SKILL.md").is_file() {
-                        report.installed += 1;
-                    } else {
-                        failures.push(format!(
-                            "{} landed without a SKILL.md in {}",
-                            name,
-                            tree.display()
-                        ));
-                    }
+    let mut report = TreeReport {
+        tree,
+        installed: 0,
+        skipped_existing: 0,
+        skipped_symlinks: 0,
+    };
+    let tree = &report.tree;
+    for name in skills {
+        match copy_skill(source_root, tree, name) {
+            Ok(CopyOutcome::Installed) => {
+                if tree.join(name).join("SKILL.md").is_file() {
+                    report.installed += 1;
+                } else {
+                    failures.push(format!(
+                        "{} landed without a SKILL.md in {}",
+                        name,
+                        tree.display()
+                    ));
                 }
-                Ok(CopyOutcome::AlreadyPresent) => report.skipped_existing += 1,
-                Ok(CopyOutcome::SkippedSymlink) => report.skipped_symlinks += 1,
-                Err(error) => failures.push(format!("{name} into {}: {error}", tree.display())),
             }
+            Ok(CopyOutcome::AlreadyPresent) => report.skipped_existing += 1,
+            Ok(CopyOutcome::SkippedSymlink) => report.skipped_symlinks += 1,
+            Err(error) => failures.push(format!("{name} into {}: {error}", tree.display())),
         }
-        reports.push(report);
     }
     if failures.is_empty() {
-        Ok(reports)
+        Ok(report)
     } else {
         Err(failures.join("; "))
     }
@@ -712,6 +744,7 @@ mod tests {
             source: None,
             windows_wsl: false,
             companions: Vec::new(),
+            bundled_skills: Vec::new(),
         }
     }
 

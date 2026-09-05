@@ -131,6 +131,9 @@ plannotator guide share --id <savedGuideId> [--public] [--ttl <7d|24h|30m|3600>]
 plannotator guide unshare <id> --token <deleteToken>
 ```
 
+When authoring diagrams for a Guided Review, follow
+[the shared atlas consumer procedure](../system-atlas/references/consume.md).
+
 Guided Reviews are AI-generated walkthroughs of a diff, produced inside the code review UI. The CLI works with saved ones:
 
 - `list` shows guides Plannotator has persisted for the current repo.

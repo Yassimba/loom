@@ -203,6 +203,23 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             reconcile_pi_compat(system, &pi_compat_targets),
         ));
     }
+    // Package files are now stable; never reconcile during a reinstall or
+    // after a failed Pi lane. Skills refresh and package installs run in parallel.
+    if !lanes
+        .iter()
+        .any(|(_, lane)| lane.label == "Pi packages" && !lane.ok)
+    {
+        if let Some(home) = system.home_dir() {
+            match crate::bundled_skills::reconcile_installed(&home) {
+                Ok(notes) => {
+                    for note in notes {
+                        out.note(note);
+                    }
+                }
+                Err(error) => lanes.push((labels.len() + 1, Lane::failed("Bundled skills", error))),
+            }
+        }
+    }
     lanes.sort_by_key(|(index, _)| *index);
 
     let mut failed = 0;

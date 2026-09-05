@@ -65,4 +65,4 @@ The HTML is the deliverable, the manifests and `assemble.py` are the source. If 
 
 ## Reuse existing figures
 
-Use the existing diagram HTML for later change plans. Copy the selected figure and edit its SVG directly, preserving unchanged IDs and layout. Follow [references/overlays.md](references/overlays.md) for focused views and verified source bindings. Draw a new figure only when no atlas question matches.
+For later change plans, follow [references/overlays.md](references/overlays.md). This preference does not change atlas creation.

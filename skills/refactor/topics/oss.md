@@ -1,41 +1,21 @@
 # OSS review
 
-Find hand-rolled logic that stdlib, the platform, or a mature dependency can delete. For a whole-repository scope, follow [the OSS scan](../references/oss-scan.md). Always consult [the library catalog](../references/oss-libraries.md) as a seed, not a census.
+What machinery can we stop owning?
+
+Read the [review contract](../references/review-contract.md) and [library catalog](../references/oss-libraries.md), loading relevant ecosystem entries only. For whole-repository scope, follow the [OSS scan](../references/oss-scan.md).
 
 ## 1. Inventory
 
-Establish what is already paid for:
+Read assigned packages' manifests and lockfiles. Identify declared dependencies, installed versions where available, runtime/platform constraints, canonical helpers, and applicable catalog sections.
 
-- the project's declared dependencies, from the ecosystem's manifests (pyproject.toml, package.json, Cargo.toml, go.mod, …)
-- the library catalog and its standing orders ([oss-libraries.md](../references/oss-libraries.md))
+## 2. Compare replacements
 
-Done when you can say, for the scope, which packages are available and which catalog entries might apply.
+Apply the catalog's selection order to each custom mechanism. Compare current semantics with the replacement's version-specific documentation or implementation: inputs, outputs, errors, ordering, cancellation, resource lifecycle, and deployment support.
 
-## 2. Propose
+Count adapters and migration work against deleted code. For new dependencies, check maintenance, license compatibility, security, transitive weight, and runtime cost. Record unknowns.
 
-For each piece of hand-rolled machinery in scope, apply the catalog's standing orders. Report a numbered list; each item names the hand-roll, its replacement, and the code it deletes, followed by two fenced Markdown code blocks tagged with the source language:
+Recommend contract-preserving swaps with lower total ownership cost. Keep custom code when domain semantics, error recovery, or size favor it; classify semantic mismatches under the review contract. Account for every inspected mechanism as proposed, kept with reason, or unresolved.
 
-This is what the code looks like before:
+## 3. Catalog candidates
 
-```LANGUAGE
-the current code, trimmed to the lines that change
-```
-
-and after:
-
-```LANGUAGE
-the proposed code
-```
-
-Custom code that is genuinely the right call — error recovery, domain-specific semantics, code smaller than the dependency it would pull in — is listed as keep-with-reason instead of a suggestion.
-
-Done when every hand-roll in scope appears as a suggestion or a keep-with-reason.
-
-## 3. Catalog feedback
-
-List every recommended package missing from the catalog, in the catalog's format: the package and the hand-roll it retires. The later writer updates the catalog for approved recommendations.
-
-# Anti-Patterns
-
-Over-customizing: Wrapping a library so heavily it loses its benefits
-Dependency bloat: Installing a massive package for one small feature
+Report recommended packages missing from the catalog as `package — machinery it retires`, with necessary version constraints. Return candidates only; catalog edits follow the catalog's separate authorization rule.

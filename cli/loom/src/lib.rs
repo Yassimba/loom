@@ -1,5 +1,7 @@
 pub mod app;
+mod bundled_skills;
 mod catalog;
+pub mod diagrams;
 mod fs_tx;
 pub mod init;
 mod install;
@@ -15,9 +17,14 @@ pub mod ui;
 pub mod uninstall;
 pub mod update;
 pub mod wiki;
+mod wiki_confluence;
+mod wiki_progress;
 mod wiki_tui;
 pub mod wizard;
 
+pub use bundled_skills::{
+    provided_bundled_skills, reconcile_installed as reconcile_bundled_skills,
+};
 pub use catalog::{Catalog, Profile, Resource, ResourceKind};
 pub use install::{
     build_install_plan, execute_install_plan, execute_install_plan_with,

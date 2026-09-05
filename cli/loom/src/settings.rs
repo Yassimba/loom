@@ -3,6 +3,7 @@
 //! preserving — `toml_edit` for Herdr's config.toml, a span-splicing JSONC
 //! editor for Zed's commented settings.json.
 
+use crate::diagrams::{self, DiagramStyle};
 use crate::jsonc;
 use anyhow::{Context, Result};
 use serde_json::{json, Value as Json};
@@ -31,7 +32,10 @@ pub enum SettingChange {
     /// for the same command already exists.
     HerdrKeyCommands(Vec<KeyCommand>),
     /// Set (or subset-merge into) a top-level key in Zed's settings.json.
-    ZedValue { key: String, value: Json },
+    ZedValue {
+        key: String,
+        value: Json,
+    },
     /// Bind keys in one `context` block of Zed's keymap.json by appending a
     /// block at the end (a later block wins in Zed). A key the user already
     /// bound anywhere in that context is left alone.
@@ -42,6 +46,7 @@ pub enum SettingChange {
     /// Create a JSON config with curated defaults, but never replace an
     /// existing file.
     PiFffDefaults(Json),
+    DiagramStyle(DiagramStyle),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -67,6 +72,7 @@ pub struct SettingsPaths {
     pub zed_settings: PathBuf,
     pub zed_keymap: PathBuf,
     pub pi_fff_config: PathBuf,
+    pub diagrams: PathBuf,
 }
 
 impl SettingsPaths {
@@ -108,6 +114,7 @@ impl SettingsPaths {
             zed_settings: zed_dir.join("settings.json"),
             zed_keymap: zed_dir.join("keymap.json"),
             pi_fff_config: pi_agent_dir.join("pi-fff.json"),
+            diagrams: home_config_dir()?.join("loom/diagrams.json"),
         })
     }
 }
@@ -127,7 +134,7 @@ fn home_config_dir() -> Result<PathBuf> {
 }
 
 pub fn curated_settings() -> Vec<SettingSpec> {
-    vec![
+    let mut settings = vec![
         SettingSpec {
             id: "herdr:annotate-keybindings".into(),
             group: "Herdr".into(),
@@ -202,7 +209,18 @@ pub fn curated_settings() -> Vec<SettingSpec> {
                 "mode": "override"
             })),
         },
-    ]
+    ];
+    for style in [DiagramStyle::Polished, DiagramStyle::Economical] {
+        settings.push(SettingSpec {
+            id: format!("loom:diagrams-{}", style.value()),
+            group: "Diagrams (choose one)".into(),
+            label: style.to_string(),
+            description: "Default for plans, explanations and reviews. A project or request can override it. Both styles use the same atlas facts.".into(),
+            related_resource: None,
+            change: SettingChange::DiagramStyle(style),
+        });
+    }
+    settings
 }
 
 impl SettingSpec {
@@ -212,6 +230,7 @@ impl SettingSpec {
             SettingChange::ZedValue { .. } => &paths.zed_settings,
             SettingChange::ZedKeymap { .. } => &paths.zed_keymap,
             SettingChange::PiFffDefaults(_) => &paths.pi_fff_config,
+            SettingChange::DiagramStyle(_) => &paths.diagrams,
         }
     }
 
@@ -227,6 +246,9 @@ impl SettingSpec {
     /// A short, review-screen friendly rendition of what gets written.
     pub fn change_summary(&self) -> Vec<String> {
         match &self.change {
+            SettingChange::DiagramStyle(style) => {
+                vec![format!("Personal diagram default: {}", style.value())]
+            }
             SettingChange::HerdrKeyCommands(commands) => commands
                 .iter()
                 .map(|command| format!("[[keys.command]] {} → {}", command.key, command.command))
@@ -268,6 +290,9 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
             })
             .unwrap_or(false),
         SettingChange::PiFffDefaults(_) => true,
+        SettingChange::DiagramStyle(style) => serde_json::from_str::<Json>(&content)
+            .map(|value| value["style"] == style.value())
+            .unwrap_or(false),
     };
     if applied {
         SettingState::Applied
@@ -279,6 +304,9 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
 /// Apply the setting; returns false when the file already had it.
 pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> {
     let path = spec.target_path(paths);
+    if let SettingChange::DiagramStyle(style) = spec.change {
+        return diagrams::write_style(path, style);
+    }
     let defaults = match &spec.change {
         SettingChange::PiFffDefaults(defaults) => Some(defaults),
         _ => None,
@@ -306,7 +334,7 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
             SettingChange::HerdrKeyCommands(_) => String::new(),
             SettingChange::ZedValue { .. } => "{}\n".into(),
             SettingChange::ZedKeymap { .. } => "[]\n".into(),
-            SettingChange::PiFffDefaults(_) => unreachable!(),
+            SettingChange::PiFffDefaults(_) | SettingChange::DiagramStyle(_) => unreachable!(),
         },
         Err(error) => {
             return Err(error).with_context(|| format!("could not read {}", path.display()))
@@ -318,7 +346,7 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
         SettingChange::ZedKeymap { context, bindings } => {
             apply_zed_keymap(&existing, context, bindings)?
         }
-        SettingChange::PiFffDefaults(_) => unreachable!(),
+        SettingChange::PiFffDefaults(_) | SettingChange::DiagramStyle(_) => unreachable!(),
     };
     let Some(updated) = updated else {
         return Ok(false);
@@ -659,6 +687,7 @@ mod tests {
             zed_settings: root.join("zed-settings.json"),
             zed_keymap: root.join("zed-keymap.json"),
             pi_fff_config: root.join("agent/pi-fff.json"),
+            diagrams: root.join("diagrams.json"),
         };
         let fff = curated_settings()
             .into_iter()

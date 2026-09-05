@@ -1,50 +1,23 @@
 # Tests review
 
-Refactor the requested tests so every surviving test proves behavior through a stable boundary and would catch a real production fault.
+Can the tests get simpler without losing fault detection?
 
-## Review output
+Read the [review contract](../references/review-contract.md). Inspect production paths, the existing framework, and test commands alongside the assigned tests.
 
-Return a numbered list of suggestions; each item names the change and the production fault the surviving test still catches, followed by two fenced Markdown code blocks tagged with the source language:
+## Preserve the fault detector
 
-This is what the code looks like before:
+Judge tests by detected production faults, not implementation size. Prefer stable use-case boundaries and observable results; assert internal call order only when it is contractual.
 
-```LANGUAGE
-the current test code, trimmed to the lines that change
-```
+For every deletion or merge, map each original regression to a surviving assertion/property or explain why its protection is obsolete. Retain edge-case examples and past regressions unless broader coverage demonstrably subsumes them.
 
-and after:
+Replace mock machinery with real boundaries or small controlled fakes where fault detection becomes clearer. Preserve isolation from uncontrolled networks, clocks, randomness, and shared state; a higher-level test must still catch the original fault.
 
-```LANGUAGE
-the proposed test code
-```
+## Compress setup and cases
 
-Report test areas checked and left alone.
+Use existing fixtures, helpers, and parametrization to remove repeated intent while keeping scenarios visible. Keep fixtures local unless several modules share their lifecycle.
 
-## Tests At Stable Boundaries
+A property-based proposal specifies its invariant/round trip/relationship, input domain and edge cases, independent oracle, replaced examples, and retained regressions. Prefer installed tools; add Hypothesis, fast-check, proptest, jqwik, or another ecosystem tool only when input space and fault detection justify it. Keep short case tables when clearer. Stateful testing requires a real transition model and sequence-dependent faults.
 
-Tests should prove behavior through real boundaries. Do not test one-line helpers, duplicate implementation logic, or build large mock systems for small changes.
+## Completion
 
-DON'T test the implementation sentence by sentence:
-
-```python
-assert server_id_for("Debian") == "wsl:Debian"
-assert should_restart(available=False) is True
-```
-
-DO test the stable use-case boundary and observable order:
-
-```python
-await controller.update("Debian")
-assert events == ["stop", "install", "verify", "start"]
-```
-
-## Prune And Compress
-
-- Delete tests that prove nothing — assignment checks, mirror-the-implementation asserts, tests that cannot fail. Keep only tests that would catch a real regression.
-- Make sure to see where we can use property based testing. Hypothesis in Python also to cleanup the current paramatrize or duplicated tests and to harden existing tests;
-- Suggest the ecosystem's framework (fast-check, proptest, jqwik). Collapse hand-written case lists into properties and strengthen the surviving tests; note `hypothesis.stateful` exists, reach for it when a stateful model is genuinely warranted.
-- Collapse further with pytest fixtures, shared fixtures in `conftest.py`, and `@pytest.mark.parametrize`.
-
-## Completion Standard
-
-Done when every suggestion names the production fault its surviving test would catch and the report ends with the estimated before/after per-module line delta.
+Account for all assigned test areas and fault mappings. Mark lost coverage, uncontrolled nondeterminism, and unproven oracles unresolved. Include estimated per-module line deltas as supporting evidence, not the success criterion.

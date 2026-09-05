@@ -1,44 +1,27 @@
-# Whole-repository audit
+# Whole-repository OSS scan
 
-Produce a ranked report of places where a mature package deletes custom code. The cheapest wins hide in dependencies the project already declares; the biggest wins hide in modules not yet written. Changing code or architecture to enable a package is in scope for the recommendations — this is a buy-vs-build audit, not a lint pass, and it changes no code itself.
+Use within the assigned OSS review and [review contract](review-contract.md). Request missing assignments through the parent, which owns dispatch; keep one orchestration tree.
 
 ## 1. Survey
 
-Before any dispatch, establish:
+Map every in-scope source area to an assigned package/subsystem slice with approximate size, available dependencies, and explicit integration flows. Use the parent's snapshot and exclusions.
 
-- the package/module layout and total source LOC
-- every declared dependency, per package, from the ecosystem's manifests (pyproject.toml, package.json, Cargo.toml, go.mod, …)
+## 2. Inspect
 
-Done when you can name each slice of the codebase, its size, and the dependencies available to it.
+Read each slice's implementations against existing helpers, dependencies, and relevant [catalog](oss-libraries.md) entries. Use an available clone detector; otherwise inspect duplication directly.
 
-## 2. Inspect every slice
-
-Partition the source into 3–5 slices of comparable size, by package or subsystem, and inspect each slice exhaustively. For every slice:
-
-- read the actual implementations, not just names
-- compare against dependencies already available to that slice
-- use the [library catalog](oss-libraries.md) as a seed, not a census
-- record file + line range, approximate custom LOC, what it does, candidate package(s), confidence, and estimated line reduction
-- record what was checked and found clean, so it is never re-investigated
-
-Include anything this repository makes special: a predecessor codebase, an upstream standard whose implementation is already a dependency, or an empty module whose stack is undecided. Run an already-available clone detector when the repository provides one; otherwise inspect duplication directly rather than adding tooling for the audit.
-
-Done when every slice and clone candidate is accounted for.
+For each mechanism, record the contract's finding fields plus purpose, approximate owned code, candidates, semantic fit, and net reduction after adapters/migration. Account for every assigned source area, clone candidate, and cross-slice use. Classify upstream-vocabulary drift separately from behavior-preserving substitutions.
 
 ## 3. Synthesize
 
-Merge everything into one report, tiered:
+Group each finding once:
 
-1. **Existing deps underused** — swaps with no new install; name the dependency and the custom code it absorbs
-2. **Small new dependencies** — each paired with the specific lines it deletes
-3. **Greenfield decisions** — empty or planned modules where choosing a package now avoids writing or porting code later
-4. **Bugs found along the way** — drifted vocabulary copies, inconsistent semantics between duplicate implementations, latent correctness gaps the explorers surfaced
-5. **Checked and keep** — hand-rolled code that is genuinely the right call, with the reason, so nobody re-litigates it
+1. Underused existing dependencies, stdlib, or platform features.
+2. New dependencies with demonstrated net benefit.
+3. Bugs or semantic changes requiring explicit approval.
+4. Kept with reasons.
+5. Unresolved candidates and coverage gaps.
 
-Every item keeps its file:line anchor, package, confidence, and estimated line delta. Close with a suggested order — bugs first, mechanical swaps second, architecture decisions third — and a total realistic reduction figure honest about what stays custom. Deliver the report in chat; write it to a file only when the user names a destination.
+Retain the full contract, expose cross-slice prerequisites, and suggest implementation order by dependencies and risk. Estimate total reduction without double-counting overlapping alternatives. Return catalog candidates as the OSS topic specifies.
 
-Done when every finding appears in exactly one tier or in "checked and keep" — nothing dropped silently.
-
-## 4. Catalog candidates
-
-List every recommended package missing from [the catalog](oss-libraries.md), one line each in its format: the package and the hand-roll it retires. The writer adds only packages from recommendations the user approves.
+Discuss planned/empty modules separately only when the user requested architecture decisions; they are not code to refactor.

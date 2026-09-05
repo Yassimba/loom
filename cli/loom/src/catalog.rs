@@ -53,6 +53,9 @@ pub struct Resource {
     /// only); mise os filters decide which applies on each machine.
     #[serde(default)]
     pub companions: Vec<String>,
+    /// Shared skills supplied by this Pi package under skills/<name>/SKILL.md.
+    #[serde(default)]
+    pub bundled_skills: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

@@ -268,6 +268,9 @@
       "description": "ADHD-friendly output for Pi with a session mode toggle, status indicator, and restoration after compaction. By Ayoub G.",
       "installTarget": "i-have-adhd",
       "source": "git:github.com/ayghri/i-have-adhd@58494af57962b2d7a996b4d419474380a299af5e",
+      "bundledSkills": [
+        "i-have-adhd"
+      ],
       "nextAction": "Run /reload in Pi, then /i-have-adhd on to enable the mode or /i-have-adhd off to disable it."
     },
     {
@@ -316,6 +319,9 @@
       "description": "Ponytail modes and skills for Pi: prefer simple solutions and inject the active mode's instructions each turn. By Dietrich Gebert.",
       "installTarget": "@dietrichgebert/ponytail",
       "version": "4.9.0",
+      "bundledSkills": [
+        "ponytail"
+      ],
       "nextAction": "Run /reload in Pi, then /ponytail full to activate Ponytail or /ponytail off to disable it."
     },
     {
@@ -375,7 +381,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "blueprint",
-      "description": "Plan substantial code changes using atlas context and small projected overlays, with Mermaid fallback and Plannotator approval.",
+      "description": "Plan substantial code changes using atlas context and projected views in SVG/HTML or Mermaid and Plannotator approval.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
       "dependencies": [
@@ -432,6 +438,7 @@
       "installTarget": "code-review",
       "nextAction": "Ask your coding agent to use the code-review skill.",
       "dependencies": [
+        "system-atlas",
         "loom"
       ]
     },
@@ -559,11 +566,12 @@
       "kind": "skill",
       "group": "Coding",
       "label": "refactor",
-      "description": "Refactor code through five parallel reviews—ecosystem reuse, design patterns, tests, types.",
+      "description": "Five-angle refactor review with before/after proposals, annotation approval, and verified implementation.",
       "installTarget": "refactor",
       "nextAction": "Ask your coding agent to use the refactor skill.",
       "dependencies": [
-        "write-simply"
+        "write-simply",
+        "plannotator"
       ]
     },
     {
@@ -736,7 +744,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "explain-code-flow",
-      "description": "Explain a feature from system context to runtime detail, reusing atlas figures and facts. For a revision range, overlay the changed flow; use Mermaid when atlas coverage is missing.",
+      "description": "Explain a feature from system context to runtime detail, reusing atlas figures and facts. Show changed flows in polished SVG/HTML or economical Mermaid views.",
       "installTarget": "explain-code-flow",
       "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
       "dependencies": [
@@ -789,7 +797,8 @@
       "installTarget": "system-atlas",
       "nextAction": "Ask your coding agent to use the system-atlas skill.",
       "dependencies": [
-        "diagram-design"
+        "diagram-design",
+        "mermaid-skill"
       ]
     },
     {
@@ -1062,6 +1071,7 @@
       "installTarget": "plannotator",
       "nextAction": "Ask your coding agent to use the plannotator skill.",
       "dependencies": [
+        "system-atlas",
         "github:backnotprop/plannotator"
       ]
     },
@@ -1333,7 +1343,9 @@
       "installTarget": "pipx:confluence-markdown-exporter",
       "nextAction": "Run `cme config edit auth.confluence` to configure authentication.",
       "bin": "cme",
-      "companions": []
+      "companions": [
+        "uv"
+      ]
     },
     {
       "id": "tool:plannotator",

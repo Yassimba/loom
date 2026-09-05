@@ -5,6 +5,7 @@
       "name": "i-have-adhd",
       "source": "git:github.com/ayghri/i-have-adhd@58494af57962b2d7a996b4d419474380a299af5e",
       "label": "i-have-adhd",
+      "bundledSkills": ["i-have-adhd"],
       "description": "ADHD-friendly output for Pi with a session mode toggle, status indicator, and restoration after compaction. By Ayoub G.",
       "nextAction": "Run /reload in Pi, then /i-have-adhd on to enable the mode or /i-have-adhd off to disable it."
     },
@@ -12,6 +13,7 @@
       "name": "@dietrichgebert/ponytail",
       "version": "4.9.0",
       "label": "ponytail",
+      "bundledSkills": ["ponytail"],
       "description": "Ponytail modes and skills for Pi: prefer simple solutions and inject the active mode's instructions each turn. By Dietrich Gebert.",
       "nextAction": "Run /reload in Pi, then /ponytail full to activate Ponytail or /ponytail off to disable it."
     },
