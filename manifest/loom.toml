@@ -18,7 +18,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.20.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.20.0", tag_regex = "^loom-v" }
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v0.21.0", tag_regex = "^loom-v" }
 # core:end
 
 # claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
