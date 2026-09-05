@@ -46,6 +46,8 @@ pub enum SettingChange {
     /// Create a JSON config with curated defaults, but never replace an
     /// existing file.
     PiFffDefaults(Json),
+    /// Create the upstream Pi ADHD plugin's always-on flag without replacing it.
+    PiAdhdAlwaysOn,
     DiagramStyle(DiagramStyle),
 }
 
@@ -72,6 +74,7 @@ pub struct SettingsPaths {
     pub zed_settings: PathBuf,
     pub zed_keymap: PathBuf,
     pub pi_fff_config: PathBuf,
+    pub pi_adhd_flag: PathBuf,
     pub diagrams: PathBuf,
 }
 
@@ -101,19 +104,22 @@ impl SettingsPaths {
                 None => home_config_dir()?.join("zed"),
             }
         };
+        let home = dirs::home_dir().context("home directory is unavailable")?;
         let pi_agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
-            .unwrap_or(
-                dirs::home_dir()
-                    .context("home directory is unavailable")?
-                    .join(".pi/agent"),
-            );
+            .unwrap_or_else(|| home.join(".pi/agent"));
+        // Pi expands a leading ~ even when the shell leaves it quoted.
+        let pi_agent_dir = match pi_agent_dir.strip_prefix("~") {
+            Ok(relative) => home.join(relative),
+            Err(_) => pi_agent_dir,
+        };
         Ok(Self {
             herdr_config: herdr_base.join("herdr").join("config.toml"),
             zed_settings: zed_dir.join("settings.json"),
             zed_keymap: zed_dir.join("keymap.json"),
             pi_fff_config: pi_agent_dir.join("pi-fff.json"),
+            pi_adhd_flag: pi_agent_dir.join(".i-have-adhd-always"),
             diagrams: home_config_dir()?.join("loom/diagrams.json"),
         })
     }
@@ -131,6 +137,18 @@ fn home_config_dir() -> Result<PathBuf> {
     Ok(dirs::home_dir()
         .context("home directory is unavailable")?
         .join(".config"))
+}
+
+/// Offered only through the setup question, never through bulk setting selection.
+pub fn pi_adhd_setting() -> SettingSpec {
+    SettingSpec {
+        id: "pi:adhd-always-on".into(),
+        group: "Pi".into(),
+        label: "Always use ADHD-friendly responses in Pi".into(),
+        description: "Enable the i-have-adhd plugin for future Pi sessions. Existing session choices still win.".into(),
+        related_resource: Some("pi-package:i-have-adhd".into()),
+        change: SettingChange::PiAdhdAlwaysOn,
+    }
 }
 
 pub fn curated_settings() -> Vec<SettingSpec> {
@@ -230,6 +248,7 @@ impl SettingSpec {
             SettingChange::ZedValue { .. } => &paths.zed_settings,
             SettingChange::ZedKeymap { .. } => &paths.zed_keymap,
             SettingChange::PiFffDefaults(_) => &paths.pi_fff_config,
+            SettingChange::PiAdhdAlwaysOn => &paths.pi_adhd_flag,
             SettingChange::DiagramStyle(_) => &paths.diagrams,
         }
     }
@@ -246,6 +265,7 @@ impl SettingSpec {
     /// A short, review-screen friendly rendition of what gets written.
     pub fn change_summary(&self) -> Vec<String> {
         match &self.change {
+            SettingChange::PiAdhdAlwaysOn => vec!["Enable ADHD-friendly responses for future Pi sessions; leave existing settings unchanged".into()],
             SettingChange::DiagramStyle(style) => {
                 vec![format!("Personal diagram default: {}", style.value())]
             }
@@ -266,6 +286,13 @@ impl SettingSpec {
 }
 
 pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState {
+    if matches!(spec.change, SettingChange::PiAdhdAlwaysOn) {
+        return if spec.target_path(paths).exists() {
+            SettingState::Applied
+        } else {
+            SettingState::NotApplied
+        };
+    }
     let content = match fs::read_to_string(spec.target_path(paths)) {
         Ok(content) => content,
         Err(_) => return SettingState::NotApplied,
@@ -290,6 +317,7 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
             })
             .unwrap_or(false),
         SettingChange::PiFffDefaults(_) => true,
+        SettingChange::PiAdhdAlwaysOn => unreachable!(),
         SettingChange::DiagramStyle(style) => serde_json::from_str::<Json>(&content)
             .map(|value| value["style"] == style.value())
             .unwrap_or(false),
@@ -304,6 +332,21 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
 /// Apply the setting; returns false when the file already had it.
 pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> {
     let path = spec.target_path(paths);
+    if matches!(spec.change, SettingChange::PiAdhdAlwaysOn) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("could not create {}", parent.display()))?;
+        }
+        return match OpenOptions::new().write(true).create_new(true).open(path) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && path.exists() => {
+                Ok(false)
+            }
+            Err(error) => {
+                Err(error).with_context(|| format!("could not create {}", path.display()))
+            }
+        };
+    }
     if let SettingChange::DiagramStyle(style) = spec.change {
         return diagrams::write_style(path, style);
     }
@@ -334,7 +377,9 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
             SettingChange::HerdrKeyCommands(_) => String::new(),
             SettingChange::ZedValue { .. } => "{}\n".into(),
             SettingChange::ZedKeymap { .. } => "[]\n".into(),
-            SettingChange::PiFffDefaults(_) | SettingChange::DiagramStyle(_) => unreachable!(),
+            SettingChange::PiFffDefaults(_)
+            | SettingChange::DiagramStyle(_)
+            | SettingChange::PiAdhdAlwaysOn => unreachable!(),
         },
         Err(error) => {
             return Err(error).with_context(|| format!("could not read {}", path.display()))
@@ -346,7 +391,9 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
         SettingChange::ZedKeymap { context, bindings } => {
             apply_zed_keymap(&existing, context, bindings)?
         }
-        SettingChange::PiFffDefaults(_) | SettingChange::DiagramStyle(_) => unreachable!(),
+        SettingChange::PiFffDefaults(_)
+        | SettingChange::DiagramStyle(_)
+        | SettingChange::PiAdhdAlwaysOn => unreachable!(),
     };
     let Some(updated) = updated else {
         return Ok(false);
@@ -673,6 +720,49 @@ mod tests {
     }
 
     #[test]
+    fn adhd_flag_follows_the_pi_agent_directory() {
+        const MARKER: &str = "LOOM_TEST_ADHD_PATH";
+        if let Some(expected) = std::env::var_os(MARKER) {
+            let paths = SettingsPaths::detect().unwrap();
+            assert_eq!(
+                paths.pi_adhd_flag,
+                PathBuf::from(expected).join(".i-have-adhd-always")
+            );
+            return;
+        }
+        let home = dirs::home_dir().unwrap();
+        let absolute = std::env::temp_dir().join("custom pi agent");
+        let mut cases = vec![
+            (None, home.join(".pi/agent")),
+            (Some(PathBuf::new()), home.join(".pi/agent")),
+            (Some(absolute.clone()), absolute),
+            (Some(PathBuf::from("~/custom-pi")), home.join("custom-pi")),
+            (Some(PathBuf::from("~")), home.clone()),
+            (
+                Some(PathBuf::from("relative-pi")),
+                PathBuf::from("relative-pi"),
+            ),
+        ];
+        if cfg!(windows) {
+            cases.push((Some(PathBuf::from("~\\custom-pi")), home.join("custom-pi")));
+        }
+        for (override_dir, expected) in cases {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args([
+                    "--exact",
+                    "settings::tests::adhd_flag_follows_the_pi_agent_directory",
+                ])
+                .env(MARKER, expected)
+                .env_remove("PI_CODING_AGENT_DIR");
+            if let Some(override_dir) = override_dir {
+                command.env("PI_CODING_AGENT_DIR", override_dir);
+            }
+            assert!(command.status().unwrap().success());
+        }
+    }
+
+    #[test]
     fn pi_defaults_create_once_and_preserve_existing_files() {
         let root = std::env::temp_dir().join(format!(
             "loom-pi-fff-{}-{}",
@@ -687,6 +777,7 @@ mod tests {
             zed_settings: root.join("zed-settings.json"),
             zed_keymap: root.join("zed-keymap.json"),
             pi_fff_config: root.join("agent/pi-fff.json"),
+            pi_adhd_flag: root.join("agent/.i-have-adhd-always"),
             diagrams: root.join("diagrams.json"),
         };
         let fff = curated_settings()

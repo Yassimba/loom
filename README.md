@@ -30,6 +30,10 @@ The installer adds [mise](https://mise.jdx.dev), Node.js, and the `loom` command
 
 Select **Everything** for the full setup. You can also pick skill groups, tools, Pi packages, or individual items. The menu shows the full plan before it installs anything.
 
+Interactive `loom setup` also asks: **“Do you have ADHD and want ADHD-friendly responses in Pi?”** Choose **Yes — always enable** to install `i-have-adhd` and turn it on for future Pi sessions. **No — leave settings unchanged** preserves your current settings. This choice appears in Review; selecting Everything alone does not enable it.
+
+The preference uses Pi's `.i-have-adhd-always` flag in `~/.pi/agent` (or `PI_CODING_AGENT_DIR` when set). Run `/reload` in Pi afterwards. A saved off choice in an existing session still wins; run `/i-have-adhd on` there if needed. Remove the flag to stop enabling new sessions by default.
+
 ### 2. Check the install
 
 ```bash

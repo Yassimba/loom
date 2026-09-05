@@ -12,8 +12,8 @@ $ExpectedProfiles = @(
   (Join-Path $Documents "WindowsPowerShell\profile.ps1"),
   (Join-Path $Documents "PowerShell\profile.ps1")
 )
-$Skill = if ($env:LOOM_E2E_SKILL) { $env:LOOM_E2E_SKILL } else { "next" }
-$ExpectBeads = $Skill -eq "next"
+$Skill = if ($env:LOOM_E2E_SKILL) { $env:LOOM_E2E_SKILL } else { "implement" }
+$ExpectBeads = $Skill -eq "implement"
 
 $SetupArgs = @(
   "--skill", $Skill,

@@ -166,7 +166,7 @@ jobs:
           - name: Windows x64
             runner: windows-2025
             engine: powershell
-            skill: next
+            skill: implement
             tokei: required
           - name: Windows ARM64
             runner: windows-11-arm
