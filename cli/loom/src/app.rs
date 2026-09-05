@@ -441,43 +441,51 @@ pub(crate) fn detect_installed(
 
     resources
         .iter()
-        .map(|resource| match resource.kind {
-            // A tool is installed when mise manages it (it is in the
-            // selection) or its binary is on PATH from any other installer
-            // (brew, cargo, ...): both are honestly "installed".
-            ResourceKind::Tool => {
-                selected_tools.contains(&resource.install_target)
-                    || resource
-                        .bin
-                        .as_deref()
-                        .is_some_and(|bin| system.command_exists(bin))
+        .map(|resource| {
+            // This catalog row means “set up Feynman inside a chosen Vault.”
+            // A user-level package cannot satisfy a destination that has not
+            // been chosen yet, so keep the row actionable in the setup wizard.
+            if resource.id == "pi-package:@companion-ai/feynman" && resource.group == "Wiki" {
+                return false;
             }
-            ResourceKind::HerdrPlugin => herdr_plugins.as_ref().is_some_and(|output| {
-                output.contains(resource.id.trim_start_matches("herdr-plugin:"))
-            }),
-            ResourceKind::PiPackage => pi_packages.as_ref().is_some_and(|output| {
-                // `pi list` prints npm specs for registry installs and
-                // directory paths for local ones; accept either shape.
-                let unscoped = resource
-                    .install_target
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&resource.install_target);
-                let plain = unscoped.strip_prefix("pi-").unwrap_or(unscoped);
-                let last_component_is = |line: &str, name: &str| {
-                    line.ends_with(&format!("/{name}")) || line.ends_with(&format!("\\{name}"))
-                };
-                output.lines().map(str::trim).any(|line| {
-                    line.contains(&resource.install_target)
-                        || last_component_is(line, unscoped)
-                        || last_component_is(line, plain)
-                })
-            }),
-            ResourceKind::Skill => {
-                !skill_trees.is_empty()
-                    && skill_trees
-                        .iter()
-                        .all(|tree| crate::skills::skill_present_in(tree, &resource.install_target))
+            match resource.kind {
+                // A tool is installed when mise manages it (it is in the
+                // selection) or its binary is on PATH from any other installer
+                // (brew, cargo, ...): both are honestly "installed".
+                ResourceKind::Tool => {
+                    selected_tools.contains(&resource.install_target)
+                        || resource
+                            .bin
+                            .as_deref()
+                            .is_some_and(|bin| system.command_exists(bin))
+                }
+                ResourceKind::HerdrPlugin => herdr_plugins.as_ref().is_some_and(|output| {
+                    output.contains(resource.id.trim_start_matches("herdr-plugin:"))
+                }),
+                ResourceKind::PiPackage => pi_packages.as_ref().is_some_and(|output| {
+                    // `pi list` prints npm specs for registry installs and
+                    // directory paths for local ones; accept either shape.
+                    let unscoped = resource
+                        .install_target
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(&resource.install_target);
+                    let plain = unscoped.strip_prefix("pi-").unwrap_or(unscoped);
+                    let last_component_is = |line: &str, name: &str| {
+                        line.ends_with(&format!("/{name}")) || line.ends_with(&format!("\\{name}"))
+                    };
+                    output.lines().map(str::trim).any(|line| {
+                        line.contains(&resource.install_target)
+                            || last_component_is(line, unscoped)
+                            || last_component_is(line, plain)
+                    })
+                }),
+                ResourceKind::Skill => {
+                    !skill_trees.is_empty()
+                        && skill_trees.iter().all(|tree| {
+                            crate::skills::skill_present_in(tree, &resource.install_target)
+                        })
+                }
             }
         })
         .collect()
@@ -969,6 +977,56 @@ mod tests {
         fn current_dir(&self) -> Option<std::path::PathBuf> {
             Some(self.home.clone())
         }
+    }
+
+    struct GlobalFeynmanSystem;
+
+    impl System for GlobalFeynmanSystem {
+        fn command_exists(&self, name: &str) -> bool {
+            name == "pi"
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
+            Ok(crate::CommandResult {
+                success: command.program == "pi",
+                stdout: "User packages:\n  npm:@companion-ai/feynman@0.3.47\n".into(),
+                stderr: String::new(),
+            })
+        }
+    }
+
+    #[test]
+    fn global_feynman_does_not_satisfy_vault_local_setup() {
+        let root = temp_root("vault-feynman");
+        let system = GlobalFeynmanSystem;
+        let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
+        let resource = Resource {
+            id: "pi-package:@companion-ai/feynman".into(),
+            kind: ResourceKind::PiPackage,
+            group: "Wiki".into(),
+            label: "feynman".into(),
+            description: String::new(),
+            install_target: "@companion-ai/feynman".into(),
+            next_action: String::new(),
+            dependencies: Vec::new(),
+            bin: None,
+            version: Some("0.3.47".into()),
+            source: None,
+            windows_wsl: false,
+            companions: Vec::new(),
+        };
+        let status = PrerequisiteStatus {
+            pi: true,
+            herdr: false,
+            mise: true,
+        };
+
+        assert_eq!(
+            detect_installed(&[resource], status, &system, &destination),
+            [false]
+        );
     }
 
     #[test]

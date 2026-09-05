@@ -143,7 +143,7 @@ impl Wizard {
         let count = self.total_selected();
         if count > 0 {
             spans.push(Span::styled(
-                format!("{count} selected   "),
+                format!("{count} picked   "),
                 Style::new().fg(OK),
             ));
         }
@@ -445,6 +445,7 @@ impl Wizard {
                 Constraint::Min(30),
                 Constraint::Percentage(34),
             ])
+            .spacing(1)
             .areas(area);
             [Rect::default(), kinds, items, details]
         } else if profile_mode {
@@ -453,6 +454,7 @@ impl Wizard {
                 Constraint::Length(kinds_width),
                 Constraint::Min(30),
             ])
+            .spacing(1)
             .areas(area);
             [groups, kinds, items, Rect::default()]
         } else {
@@ -461,6 +463,7 @@ impl Wizard {
                 Constraint::Min(30),
                 Constraint::Percentage(34),
             ])
+            .spacing(1)
             .areas(area);
             [groups, Rect::default(), items, details]
         };
@@ -480,8 +483,8 @@ impl Wizard {
         let groups_focused = stage.focus == Pane::Groups && !searching;
         if groups_area.width > 0 {
             let title = match (narrow, profile_mode) {
-                (true, true) => " Profiles · → types ",
-                (false, true) => " Profiles ",
+                (true, true) => " Profiles · combine · → types ",
+                (false, true) => " Profiles · combine ",
                 (true, false) => " Groups · → items ",
                 (false, false) => " Groups ",
             };
@@ -983,7 +986,9 @@ impl Wizard {
         let [list_area, details_area] = if area.width < 70 {
             [area, Rect::new(area.x, area.y, 0, 0)]
         } else {
-            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(area)
+            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .spacing(1)
+                .areas(area)
         };
         let destination = self.skill_destination();
         let (global, project) = match self.skill_scope {
@@ -992,9 +997,9 @@ impl Wizard {
         };
         let mut items = vec![ListItem::new(Line::from(vec![
             Span::styled(format!(" {global} "), Style::new().fg(OK)),
-            Span::raw("Global    "),
+            Span::raw("All projects    "),
             Span::styled(format!("{project} "), Style::new().fg(OK)),
-            Span::raw("Project"),
+            Span::raw("This project"),
         ]))];
         let agent_width = SkillAgent::ALL
             .iter()
@@ -1023,7 +1028,7 @@ impl Wizard {
             .filter(|resource| resource.kind == ResourceKind::Skill)
             .count();
         let title = format!(
-            " Where do {} go? · {}/{} agents ",
+            " Agent skill destination · {} · {}/{} agents ",
             plural(skills, "skill"),
             self.selected_agents().len(),
             SkillAgent::ALL.len()
@@ -1035,14 +1040,31 @@ impl Wizard {
         frame.render_stateful_widget(list, list_area, &mut state);
 
         let mut details = vec![
-            Line::styled("Skill destination", Style::new().bold().fg(ACCENT)),
+            Line::styled("Agent skill destination", Style::new().bold().fg(ACCENT)),
             Line::from(""),
-            Line::from(
-                "Skills are copied into each chosen agent's skill tree. Global trees serve every \
-                 project; a project tree serves this repository only.",
-            ),
+            Line::from("This screen affects agent skills only."),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("All projects  ", Style::new().fg(ACCENT).dim()),
+                Span::raw("available in every repository"),
+            ]),
+            Line::from(vec![
+                Span::styled("This project  ", Style::new().fg(ACCENT).dim()),
+                Span::raw("only this repository"),
+            ]),
             Line::from(""),
         ];
+        if self
+            .expanded_selection()
+            .iter()
+            .any(|resource| resource.group == "Wiki")
+        {
+            details.push(Line::styled("Wiki setup is separate", Style::new().bold()));
+            details.push(Line::from(
+                "After Review, it stays inside the Vault you create or connect.",
+            ));
+            details.push(Line::from(""));
+        }
         if destination.agents.is_empty() {
             details.push(Line::styled(
                 "Pick at least one agent, or nothing can be installed.",
@@ -1151,6 +1173,10 @@ impl Wizard {
                     lines.push(Line::from(""));
                 }
             }
+            let wiki = expanded
+                .iter()
+                .filter(|resource| resource.group == "Wiki")
+                .collect::<Vec<_>>();
             for (kind, title) in [
                 (ResourceKind::Skill, "Skills"),
                 (ResourceKind::Tool, "Tools"),
@@ -1159,7 +1185,7 @@ impl Wizard {
             ] {
                 let of_kind = expanded
                     .iter()
-                    .filter(|resource| resource.kind == kind)
+                    .filter(|resource| resource.kind == kind && resource.group != "Wiki")
                     .collect::<Vec<_>>();
                 if of_kind.is_empty() {
                     continue;
@@ -1197,6 +1223,35 @@ impl Wizard {
                 }
                 lines.push(Line::from(""));
             }
+            if !wiki.is_empty() {
+                lines.push(heading("Vault setup", wiki.len()));
+                lines.push(Line::styled(
+                    "  → choose Create or Connect after this review",
+                    Style::new().fg(ACCENT),
+                ));
+                for resource in &wiki {
+                    let mut spans = vec![
+                        Span::styled("  + ", Style::new().fg(OK).bold()),
+                        Span::raw(format!("{} ", pad(&resource.label, label_width))),
+                    ];
+                    if !direct_ids.contains(&resource.id) {
+                        spans.push(Span::styled(
+                            format!(
+                                "needed by {}",
+                                parent_of(&resource.install_target)
+                                    .unwrap_or_else(|| "a picked capability".into())
+                            ),
+                            Style::new().dim(),
+                        ));
+                    }
+                    lines.push(Line::from(spans));
+                }
+                lines.push(Line::styled(
+                    "  Vault files get their own preview before anything changes.",
+                    Style::new().dim(),
+                ));
+                lines.push(Line::from(""));
+            }
             let settings = self.selected_settings();
             if !settings.is_empty() {
                 lines.push(heading("Settings", settings.len()));
@@ -1218,6 +1273,10 @@ impl Wizard {
                 Ok(_) => lines.push(Line::styled(
                     if self.model.dry_run {
                         "Dry run: enter prints this plan and exits."
+                    } else if !wiki.is_empty() && expanded.len() == wiki.len() {
+                        "Enter opens Vault setup. Esc goes back."
+                    } else if !wiki.is_empty() {
+                        "Enter installs these items, then opens Vault setup. Esc goes back."
                     } else {
                         "Enter installs all of this. Esc goes back."
                     },
@@ -1466,6 +1525,11 @@ fn bordered(title: &str, focused: bool) -> Block<'_> {
     Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(border_style)
+        .title_style(if focused {
+            Style::new().fg(ACCENT).bold()
+        } else {
+            Style::new().dim()
+        })
         .title(title.to_owned())
 }
 

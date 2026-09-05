@@ -341,7 +341,7 @@ fn stages_are_choose_where_review_install_and_where_needs_skills() {
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert_eq!(wizard.visible_stages(), [0, 1, 2, 3]);
     press(&mut wizard, &[KeyCode::Enter]);
-    assert_eq!(title(&wizard), "Where");
+    assert_eq!(title(&wizard), "Skill scope");
     press(&mut wizard, &[KeyCode::Enter]);
     assert_eq!(title(&wizard), "Review");
     press(&mut wizard, &[KeyCode::Esc, KeyCode::Esc]);
@@ -569,7 +569,7 @@ fn where_toggles_scope_and_agents_and_reports_exact_trees() {
     let mut wizard = wizard();
     go_to(&mut wizard, Row::Resource(3));
     press(&mut wizard, &[KeyCode::Char(' '), KeyCode::Enter]);
-    assert_eq!(title(&wizard), "Where");
+    assert_eq!(title(&wizard), "Skill scope");
     assert_eq!(cursor(&wizard), 1, "the first agent, not the scope row");
     press(&mut wizard, &[KeyCode::Home, KeyCode::Char(' ')]);
     assert_eq!(wizard.skill_scope, SkillScope::Project);
@@ -852,6 +852,11 @@ fn wiki_group_routes_to_the_vault_workflow_with_optional_feynman() {
     go_to_group(&mut wizard, "Knowledge & Wiki");
     press(&mut wizard, &[KeyCode::Char(' '), KeyCode::Enter]);
     assert_eq!(title(&wizard), "Review");
+    let review = screen(&mut wizard, 104, 26);
+    assert!(review.contains("Vault setup"));
+    assert!(review.contains("choose Create or Connect after this review"));
+    assert!(review.contains("Vault files get their own preview before anything changes"));
+    assert!(review.contains("Enter opens Vault setup"));
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
         Some(Action::Exit(WizardOutcome::WikiSelection { feynman: true }))
@@ -882,6 +887,25 @@ fn mixed_wiki_selection_installs_generic_resources_before_handoff() {
         .prerequisites
         .iter()
         .all(|step| !step.target.contains("claude-obsidian")));
+}
+
+#[test]
+fn mixed_skill_and_wiki_selection_explains_the_two_destinations() {
+    let mut model = model(ready());
+    model.resources = vec![
+        resource(ResourceKind::Skill, "Coding", "tdd"),
+        resource(ResourceKind::Tool, "Wiki", "claude-obsidian"),
+    ];
+    model.installed = vec![false; 2];
+    let mut wizard = Wizard::new(model);
+    wizard.selected = vec![true, true];
+
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert_eq!(title(&wizard), "Skill scope");
+    let scope = screen(&mut wizard, 104, 26);
+    assert!(scope.contains("This screen affects agent skills only"));
+    assert!(scope.contains("Wiki setup is separate"));
+    assert!(scope.contains("After Review"));
 }
 
 #[test]
@@ -1034,7 +1058,7 @@ fn where_scope_options_fit_a_standard_terminal() {
         .map(|cell| cell.symbol())
         .collect::<String>();
 
-    assert!(text.contains("(•) Global    ( ) Project"));
+    assert!(text.contains("(•) All projects    ( ) This project"));
 }
 
 #[test]

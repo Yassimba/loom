@@ -261,7 +261,7 @@ impl Stage {
     pub fn title(&self) -> &'static str {
         match self {
             Self::Choose(_) => "Choose",
-            Self::Where(_) => "Where",
+            Self::Where(_) => "Skill scope",
             Self::Review { .. } => "Review",
             Self::Install(_) => "Install",
         }

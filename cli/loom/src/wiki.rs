@@ -958,7 +958,7 @@ fn offer_obsidian_install(system: &dyn System) -> Result<()> {
 fn offer_finish_actions(system: &dyn System, vault: &Path) -> Result<()> {
     loop {
         let Some(action) = Select::new(
-            "Wiki ready",
+            "Vault ready",
             vec!["Done", "Open in Obsidian", "Launch Pi in the Vault"],
         )
         .prompt_skippable()?
@@ -1062,18 +1062,25 @@ pub fn run_interactive_with_default(
         offer_obsidian_install(system)?;
         println!("After installing, rerun `loom wiki`; or continue headless now.");
     }
+    println!(
+        "Wiki setup stays inside one Vault. Loom previews every file before changing anything."
+    );
     let actions = if cfg!(windows) {
-        vec!["Manage Vaults"]
+        vec!["Manage registered Vaults"]
     } else {
-        vec!["Create a Vault", "Adopt an existing Vault", "Manage Vaults"]
+        vec![
+            "Create a new Vault",
+            "Connect an existing Vault",
+            "Manage registered Vaults",
+        ]
     };
-    let action = Select::new("Wiki", actions).prompt_skippable()?;
+    let action = Select::new("Vault setup", actions).prompt_skippable()?;
     let Some(action) = action else {
         return Ok(true);
     };
     let current = system.current_dir().unwrap_or_else(|| PathBuf::from("."));
     match action {
-        "Create a Vault" => {
+        "Create a new Vault" => {
             let Some(parent) = pick_directory(current)? else {
                 return Ok(true);
             };
@@ -1084,7 +1091,7 @@ pub fn run_interactive_with_default(
                 valid_vault_name(&name),
                 "Vault name must be one folder name"
             );
-            let Some(feynman) = Confirm::new("Include Feynman research tools?")
+            let Some(feynman) = Confirm::new("Add Feynman research tools to this Vault?")
                 .with_default(feynman_default)
                 .prompt_skippable()?
             else {
@@ -1100,11 +1107,11 @@ pub fn run_interactive_with_default(
                 system,
             )
         }
-        "Adopt an existing Vault" => {
+        "Connect an existing Vault" => {
             let Some(vault) = pick_directory(current)? else {
                 return Ok(true);
             };
-            let Some(feynman) = Confirm::new("Include Feynman research tools?")
+            let Some(feynman) = Confirm::new("Add Feynman research tools to this Vault?")
                 .with_default(feynman_default)
                 .prompt_skippable()?
             else {
