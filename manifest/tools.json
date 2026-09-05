@@ -22,12 +22,6 @@
       "windowsSupport": "wsl"
     },
     {
-      "key": "npm:calldiff",
-      "label": "calldiff",
-      "description": "Diff call stacks across git commits — who-calls-whom across 22 languages (diff, tree, reach).",
-      "nextAction": "Run `calldiff diff` in a git repository."
-    },
-    {
       "key": "npm:@colbymchenry/codegraph",
       "label": "codegraph",
       "description": "Local semantic code index for coding agents — source, call paths, and change impact without file-by-file discovery.",

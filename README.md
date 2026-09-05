@@ -121,8 +121,8 @@ For work that is too large for one agent session, use `wayfinder` instead. It pu
 
 If the project uses Beads:
 
-- `whats-next` shows the next ready ticket without taking it.
-- `next` claims the next ready ticket and starts it.
+- `ticket-overview` previews the next ready ticket, maps the open roadmap, or shows the complete graph without changing it.
+- `implement` takes the next actionable ticket when you do not give it a spec or ticket.
 
 ### 4. Build one ticket: `implement`
 
@@ -156,7 +156,6 @@ If a test fails for an unclear reason, it routes the problem through `diagnosing
 | Remove code or make it simpler | [`cleanup`](skills/cleanup/SKILL.md) or [`ponytail`](skills/ponytail/SKILL.md) |
 | Understand how a feature works | [`explain-code-flow`](skills/explain-code-flow/SKILL.md) |
 | Understand a whole multi-repo product in one diagram page | [`system-atlas`](skills/system-atlas/SKILL.md) |
-| See how call paths changed between commits | [`calldiff`](skills/calldiff/SKILL.md) |
 | Walk through a large change in the browser | [`changeset-walkthrough`](skills/changeset-walkthrough/SKILL.md) |
 | Review a plan or diff with comments | [`plannotator`](skills/plannotator/SKILL.md) |
 | Design or improve a web interface | [`impeccable`](skills/impeccable/SKILL.md) |
@@ -305,12 +304,12 @@ or resolve that scope conflict manually.
 Loom includes three Pi packages from this repository:
 
 ```bash
-pi install npm:@yassimba/pi-openai-fast
+pi install npm:@yassimba/pi-fast
 pi install npm:@yassimba/pi-add-dir
 pi install npm:@yassimba/pi-skill-autocomplete
 ```
 
-- [`openai-fast`](plugins/openai-fast/) adds `/fast`, which requests the priority service tier for supported models.
+- [`pi-fast`](plugins/pi-fast/) adds `/fast` to turn priority requests on or off for OpenAI, Codex, and xAI.
 - [`add-dir`](plugins/pi-add-dir/) adds another directory and its root instructions to the current Pi session.
 - [`skill-autocomplete`](plugins/skill-autocomplete/) adds `$` skill completion anywhere in the editor.
 
@@ -368,7 +367,7 @@ scripts/sync-pi-extensions.sh link
 - [`i-have-adhd`](skills/i-have-adhd/SKILL.md) is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` under MIT.
 - [`ponytail`](skills/ponytail/SKILL.md) is adapted from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 under MIT.
 - [`diagram-design`](skills/diagram-design/SKILL.md) is adapted from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.12 at `4451ead` under MIT.
-- [`openai-fast`](plugins/openai-fast/) is adapted from [studioarray/pi-openai-fast](https://github.com/studioarray/pi-openai-fast) at `e82ed32` under MIT.
+- [`pi-fast`](plugins/pi-fast/) is adapted from [studioarray/pi-openai-fast](https://github.com/studioarray/pi-openai-fast) at `e82ed32` under MIT.
 - Pi subagents, web access, and rewind are adapted from [nicobailon's Pi packages](https://github.com/nicobailon). Anthropic sign-in is adapted from [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth).
 
 Each adapted package has its own `README.md` and `THIRD_PARTY_NOTICES.md` with the exact source and license.

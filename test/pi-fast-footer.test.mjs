@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noControlCharactersInRegex: ANSI escape sequences are the behavior under test.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FastFooter, fastColorToAnsi, renderFastLabel } from "../plugins/openai-fast/src/footer.ts";
+import { FastFooter, fastColorToAnsi, renderFastLabel } from "../plugins/pi-fast/src/footer.ts";
 
 const ANSI = { dim: "\x1b[38;5;8m", error: "\x1b[31m", warning: "\x1b[33m" };
 const THINKING_ANSI = { low: "\x1b[38;5;75m", high: "\x1b[38;5;147m" };
@@ -86,6 +86,10 @@ test("the fast label keeps its color inside the dim stats line", () => {
   assert.match(line, /gpt-5\.5 .*\x1b\[38;5;147mfast\x1b\[39m\x1b\[38;5;8m • high/);
 });
 
+test("uses Pi's max thinking level without downgrading it to off", () => {
+  assert.match(createFooter({ thinkingLevel: "max" }).render(120)[1], / • max/);
+});
+
 test("inactive Fast Mode renders the plain model label", () => {
   const footer = createFooter({ active: false, thinkingLevel: "xhigh" });
   const line = footer.render(120)[1];
@@ -156,14 +160,14 @@ test("colors the context usage when it runs hot and handles unknown usage", () =
 
 test("subscribes to branch changes and unsubscribes on dispose", () => {
   let renders = 0;
-  let unsubscribed = false;
+  let unsubscribed = 0;
   let trigger;
   const footer = createFooter({
     tui: { requestRender: () => renders++ },
     onBranchChange: (callback) => {
       trigger = callback;
       return () => {
-        unsubscribed = true;
+        unsubscribed++;
       };
     },
   });
@@ -171,7 +175,8 @@ test("subscribes to branch changes and unsubscribes on dispose", () => {
   assert.equal(renders, 1);
   assert.equal(footer.isOwnedByExtension(), true);
   footer.dispose();
-  assert.equal(unsubscribed, true);
+  footer.dispose();
+  assert.equal(unsubscribed, 1, "dispose is idempotent");
   assert.equal(footer.isOwnedByExtension(), false);
 });
 

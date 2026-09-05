@@ -41,9 +41,6 @@ python = "3.13.7"
 # manual install instruction and mise skips this entry.
 herdr = { version = "0.8.2", os = ["macos", "linux"] }
 
-# call-stack diffing for agentic code review
-"npm:calldiff" = "0.5.0"
-
 # local semantic code index for coding agents
 "npm:@colbymchenry/codegraph" = "1.6.0"
 

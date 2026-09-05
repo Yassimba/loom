@@ -25,7 +25,7 @@ case "$(uname -s)" in
 esac
 
 setup_args=(
-  --skill next
+  --skill implement
   --agent agents
   --agent claude
   --agent codex
@@ -90,7 +90,7 @@ for skill_root in \
   "${HOME}/.cursor/skills" \
   "${HOME}/.grok/skills" \
   "${HOME}/.pi/agent/skills"; do
-  test -f "$skill_root/next/SKILL.md"
+  test -f "$skill_root/implement/SKILL.md"
 done
 test -f "${HOME}/.config/opencode/plugins/loom-session-env.js"
 
@@ -108,7 +108,7 @@ case "$shell_name" in
     ;;
 esac
 
-skill_before=$(cksum <"${HOME}/.agents/skills/next/SKILL.md")
+skill_before=$(cksum <"${HOME}/.agents/skills/implement/SKILL.md")
 env PATH="$(dirname "$mise_bin"):$base_path" SHELL="$test_shell" \
   sh "$workspace/install.sh" "${setup_args[@]}" \
   >"$evidence_dir/rerun-stdout.txt" \
@@ -119,7 +119,7 @@ test "$(grep -Fxc "$activation" "$profile")" -eq 1
 grep -Fq 'beads_rust' "$selection"
 grep -Fq 'beads_viewer' "$selection"
 test "$(cksum <"$selection")" = "$selection_before"
-test "$(cksum <"${HOME}/.agents/skills/next/SKILL.md")" = "$skill_before"
+test "$(cksum <"${HOME}/.agents/skills/implement/SKILL.md")" = "$skill_before"
 manifest="${LOOM_REPO_DIR:-$workspace}/manifest/loom.toml"
 awk '/^# core:begin/{inside=1; next} /^# core:end/{inside=0} inside && /^[^#[:space:]].*=/{print}' "$manifest" |
   while IFS= read -r pin; do grep -Fqx "$pin" "$selection"; done
@@ -143,13 +143,13 @@ grep -Fq 'Selected resources and runtimes verified' "$evidence_dir/loom-status.t
 grep -Fq 'Done' "$evidence_dir/loom-init.txt"
 grep -Eq 'Up to date|refreshed' "$evidence_dir/loom-update.txt"
 
-find "${HOME}/.agents/skills/next" \
-  "${HOME}/.claude/skills/next" \
-  "${HOME}/.codex/skills/next" \
-  "${HOME}/.config/opencode/skills/next" \
-  "${HOME}/.cursor/skills/next" \
-  "${HOME}/.grok/skills/next" \
-  "${HOME}/.pi/agent/skills/next" \
+find "${HOME}/.agents/skills/implement" \
+  "${HOME}/.claude/skills/implement" \
+  "${HOME}/.codex/skills/implement" \
+  "${HOME}/.config/opencode/skills/implement" \
+  "${HOME}/.cursor/skills/implement" \
+  "${HOME}/.grok/skills/implement" \
+  "${HOME}/.pi/agent/skills/implement" \
   -type f -print | sort >"$evidence_dir/installed-files.txt"
 cp "$selection" "$evidence_dir/loom.toml"
 

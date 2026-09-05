@@ -1,3 +1,4 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type Component, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { type FastColorValue, resolveFastColorValue } from "./config.ts";
 
@@ -29,7 +30,7 @@ import { type FastColorValue, resolveFastColorValue } from "./config.ts";
  * SOFTWARE.
  */
 
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
 export type ColorMode = "truecolor" | "256color";
 
 export interface FooterTheme {
@@ -88,9 +89,6 @@ export interface FastLabelColors {
   vars: Readonly<Record<string, string>>;
 }
 
-// ---------------------------------------------------------------------------
-// Color rendering: hex or 256-index token → foreground ANSI sequence.
-
 const RESET_FG = "\x1b[39m";
 const CUBE = [0, 95, 135, 175, 215, 255];
 
@@ -128,24 +126,11 @@ export function fastColorToAnsi(color: FastColorValue, mode: ColorMode): string 
   const r = Number.parseInt(color.slice(1, 3), 16);
   const g = Number.parseInt(color.slice(3, 5), 16);
   const b = Number.parseInt(color.slice(5, 7), 16);
-  if ([r, g, b].some(Number.isNaN)) throw new Error(`Invalid color value: ${color}`);
+  if ([r, g, b].some(Number.isNaN))
+    throw new Error(
+      `Can't render color ${JSON.stringify(color)}. Use a hex color such as #00ffaa.`,
+    );
   return mode === "truecolor" ? `\x1b[38;2;${r};${g};${b}m` : `\x1b[38;5;${hexTo256(r, g, b)}m`;
-}
-
-// ---------------------------------------------------------------------------
-// The inline "fast" label.
-
-export function normalizeThinkingLevel(value: string | undefined): ThinkingLevel {
-  switch (value) {
-    case "minimal":
-    case "low":
-    case "medium":
-    case "high":
-    case "xhigh":
-      return value;
-    default:
-      return "off";
-  }
 }
 
 function themeMatchedFastLabel(theme: FooterTheme, thinkingLevel: ThinkingLevel): string {
@@ -154,7 +139,7 @@ function themeMatchedFastLabel(theme: FooterTheme, thinkingLevel: ThinkingLevel)
       const render = theme.getThinkingBorderColor?.(thinkingLevel);
       if (typeof render === "function") return render("fast");
     } catch {
-      // fall through to the dim label
+      // Use the dim label if the theme cannot supply a thinking-level color.
     }
   }
   return theme.fg("dim", "fast");
@@ -176,16 +161,15 @@ export function renderFastLabel(
   return themeMatchedFastLabel(theme, thinkingLevel);
 }
 
-// ---------------------------------------------------------------------------
-// Footer component: pi's default footer with the fast label added to the
-// model label. Owned by the extension while installed via ui.setFooter.
+// Keeps Pi's footer layout and adds "fast" beside the model name.
+// Pi calls dispose when another extension replaces this footer.
 
 export interface FastFooterOptions {
   getContext: () => FooterContext | undefined;
   footerData: FooterData;
   theme: FooterTheme;
   isFastActive: () => boolean;
-  getThinkingLevel: () => string | undefined;
+  getThinkingLevel: ExtensionAPI["getThinkingLevel"];
   fastLabelColors?: FastLabelColors | undefined;
   tui?: { requestRender(force?: boolean): void } | undefined;
 }
@@ -281,8 +265,7 @@ function formatWorkingDirectory(context: FooterContext, footerData: FooterData):
     : directory;
 }
 
-// The stats line is dim-wrapped as a whole; carve the colored fast label out
-// so its ANSI color survives the surrounding dim sequence.
+// Dim the stats around the fast label without overwriting the label's color.
 const ESC = "\u001b";
 const ANSI_FAST_LABEL = new RegExp(`${ESC}\\[[0-9;]*mfast${ESC}\\[39m`, "g");
 
@@ -299,13 +282,12 @@ function dimPreservingFastLabel(theme: FooterTheme, text: string): string {
 
 export class FastFooter implements Component {
   private readonly options: FastFooterOptions;
-  private readonly disposeCallbacks: Array<() => void> = [];
+  private unsubscribe: (() => void) | undefined;
   private ownedByExtension = true;
 
   constructor(options: FastFooterOptions) {
     this.options = options;
-    const unsubscribe = options.footerData.onBranchChange?.(() => this.invalidate());
-    if (typeof unsubscribe === "function") this.disposeCallbacks.push(unsubscribe);
+    this.unsubscribe = options.footerData.onBranchChange?.(() => this.invalidate());
   }
 
   invalidate(): void {
@@ -318,8 +300,8 @@ export class FastFooter implements Component {
 
   dispose(): void {
     this.ownedByExtension = false;
-    for (const dispose of this.disposeCallbacks) dispose();
-    this.disposeCallbacks.length = 0;
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
   }
 
   render(width: number): string[] {
@@ -328,7 +310,7 @@ export class FastFooter implements Component {
     const renderWidth = Math.max(0, Math.floor(width));
     const { theme, footerData } = this.options;
     const model = context.model;
-    const thinkingLevel = normalizeThinkingLevel(this.options.getThinkingLevel());
+    const thinkingLevel = this.options.getThinkingLevel();
 
     let modelLabel = model?.id || "no-model";
     if (this.options.isFastActive()) {

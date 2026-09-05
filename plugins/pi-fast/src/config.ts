@@ -2,19 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-export const DEFAULT_SUPPORTED_MODELS = [
-  "openai/gpt-5.4",
-  "openai/gpt-5.5",
-  "openai-codex/gpt-5.4",
-  "openai-codex/gpt-5.5",
-  "openai-codex/gpt-5.6-sol",
-  "openai-codex/gpt-5.6-terra",
-  "openai-codex/gpt-5.6-luna",
-  "xai/grok-4.3",
-  "xai/grok-4.5",
-  "xai/grok-4.6",
-  "xai/grok-build-0.1",
-] as const;
+export const DEFAULT_SUPPORTED_MODELS = ["openai/*", "openai-codex/*", "xai/*"] as const;
 
 export type FooterMode = "replace" | "status" | "off";
 export type FastColorValue = string | number;
@@ -53,15 +41,11 @@ export interface FastConfigResult {
   warnings: string[];
 }
 
-// ---------------------------------------------------------------------------
-// Color tokens: hex ("#rrggbb"), 256-color index (number or numeric string),
-// variable names resolving through footer.vars, or "" for terminal default.
+// Colors accept hex, a 256-color index, a name from footer.vars, or "" for the terminal default.
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const INTEGER_INDEX = /^\d+$/;
 const COLOR_VAR = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
-// Literals written by pre-fork releases; ignored so upgrades fall back to theme-matched.
-const LEGACY_COLOR_LITERALS = new Set(["#ff50be", "#d20000"]);
 
 export function normalizeFastColorValue(value: unknown): FastColorValue | undefined {
   if (typeof value === "number") {
@@ -76,7 +60,7 @@ export function normalizeFastColorValue(value: unknown): FastColorValue | undefi
   return COLOR_VAR.test(trimmed) ? trimmed : undefined;
 }
 
-/** Resolve variable references to a concrete color token, or explain why not. */
+/** Follows color variables until it finds a color, a missing name, or a loop. */
 export function resolveFastColorValue(
   value: FastColorValue,
   vars: Readonly<Record<string, string>>,
@@ -91,22 +75,21 @@ export function resolveFastColorValue(
     return { value };
   }
   if (visited.has(value)) {
-    return { error: `variable ${JSON.stringify(value)} resolves circularly` };
+    return { error: `color variable ${JSON.stringify(value)} refers back to itself` };
   }
   visited.add(value);
   const referenced = Object.hasOwn(vars, value) ? vars[value] : undefined;
   if (typeof referenced !== "string") {
-    return { error: `variable ${JSON.stringify(value)} is not defined` };
+    return { error: `define color variable ${JSON.stringify(value)} in footer.vars` };
   }
   const normalized = normalizeFastColorValue(referenced);
   if (normalized === undefined) {
-    return { error: "it is not a supported color token" };
+    return {
+      error: "use a hex color (#rrggbb), an index (0–255), a color variable, or an empty string",
+    };
   }
   return resolveFastColorValue(normalized, vars, visited);
 }
-
-// ---------------------------------------------------------------------------
-// Field validation shared by load-merge and write-sanitize.
 
 type JsonRecord = Record<string, unknown>;
 
@@ -131,20 +114,18 @@ function validModelKey(value: unknown): string | undefined {
     /\s/.test(trimmed) ||
     slash <= 0 ||
     slash === trimmed.length - 1 ||
-    /[*[\](){}?+|^$\\]/.test(trimmed);
+    /[*[\](){}?+|^$\\]/.test(trimmed.slice(slash + 1) === "*" ? trimmed.slice(0, slash) : trimmed);
   return invalid ? undefined : trimmed;
 }
 
-/** Returns the valid entries, or undefined when the value is not an array at all. */
+/** Keeps valid model entries. Returns undefined if the setting is not an array. */
 function readSupportedModels(
   value: unknown,
   path: string,
   warnings: string[],
 ): string[] | undefined {
   if (!Array.isArray(value)) {
-    warnings.push(
-      `Ignored supportedModels at ${path} because it must be an array of provider/model strings.`,
-    );
+    warnings.push(`Ignoring supportedModels in ${path}. Use an array such as ["openai/*"].`);
     return undefined;
   }
   const kept: string[] = [];
@@ -156,12 +137,12 @@ function readSupportedModels(
   }
   if (dropped.length > 0) {
     warnings.push(
-      `Ignored invalid supportedModels entries at ${path}: ${dropped.map(describe).join(", ")}.`,
+      `Ignoring these supportedModels entries in ${path}: ${dropped.map(describe).join(", ")}. Use provider/model or provider/*.`,
     );
   }
   if (value.length > 0 && kept.length === 0) {
     warnings.push(
-      `All supportedModels entries at ${path} were invalid; Fast Mode has no supported models from that config layer.`,
+      `None of the supportedModels entries in ${path} are valid. This list allows no models.`,
     );
   }
   return kept;
@@ -174,18 +155,16 @@ function readColor(
   path: string,
   warnings: string[],
 ): FastColorValue | undefined {
-  if (typeof value === "string" && LEGACY_COLOR_LITERALS.has(value.trim().toLowerCase())) {
-    return undefined;
-  }
   const normalized = normalizeFastColorValue(value);
   const resolution =
     normalized === undefined
-      ? { error: "it is not a supported color token" }
+      ? {
+          error:
+            "use a hex color (#rrggbb), an index (0–255), a color variable, or an empty string",
+        }
       : resolveFastColorValue(normalized, vars);
   if ("error" in resolution) {
-    warnings.push(
-      `Ignored invalid Fast label color ${field} at ${path}: ${describe(value)} (${resolution.error}).`,
-    );
+    warnings.push(`Ignoring ${field}=${describe(value)} in ${path}: ${resolution.error}.`);
     return undefined;
   }
   return normalized;
@@ -207,15 +186,10 @@ function mergeConfig(
 ): FastConfig {
   const next: FastConfig = {
     ...base,
-    supportedModels: [...base.supportedModels],
-    footer: { ...base.footer, vars: { ...base.footer.vars } },
+    footer: { ...base.footer },
   };
   if (typeof source.persistState === "boolean") next.persistState = source.persistState;
-  if (typeof source.desiredActive === "boolean") {
-    next.desiredActive = source.desiredActive;
-  } else if (!Object.hasOwn(source, "desiredActive") && typeof source.active === "boolean") {
-    next.desiredActive = source.active; // legacy field name
-  }
+  if (typeof source.desiredActive === "boolean") next.desiredActive = source.desiredActive;
   if (Object.hasOwn(source, "supportedModels")) {
     const models = readSupportedModels(source.supportedModels, path, warnings);
     if (models !== undefined) next.supportedModels = models;
@@ -245,12 +219,12 @@ function mergeFooterConfig(
 
 function sanitizeFooterRecord(source: JsonRecord, path: string, warnings: string[]): JsonRecord {
   const footer: JsonRecord = { ...source };
+  const vars = isRecord(source.vars) ? stringEntries(source.vars) : {};
   if (Object.hasOwn(footer, "mode") && !isFooterMode(footer.mode)) delete footer.mode;
   if (Object.hasOwn(footer, "vars")) {
-    if (isRecord(footer.vars)) footer.vars = stringEntries(footer.vars);
+    if (isRecord(source.vars)) footer.vars = vars;
     else delete footer.vars;
   }
-  const vars = isRecord(footer.vars) ? stringEntries(footer.vars) : {};
   for (const [key, field] of [
     ["darkFastColor", "footer.darkFastColor"],
     ["lightFastColor", "footer.lightFastColor"],
@@ -264,10 +238,9 @@ function sanitizeFooterRecord(source: JsonRecord, path: string, warnings: string
   return footer;
 }
 
-/** Sanitize a raw record before writing: keep unknown fields, drop invalid known ones. */
+/** Removes invalid settings before saving and leaves unknown fields unchanged. */
 function sanitizeRecord(source: JsonRecord, path: string, warnings: string[]): JsonRecord {
   const next: JsonRecord = { ...source };
-  delete next.active; // legacy field, superseded by desiredActive
   for (const field of ["persistState", "desiredActive"]) {
     if (Object.hasOwn(next, field) && typeof next[field] !== "boolean") delete next[field];
   }
@@ -283,13 +256,10 @@ function sanitizeRecord(source: JsonRecord, path: string, warnings: string[]): J
   return next;
 }
 
-// ---------------------------------------------------------------------------
-// File access.
-
 export function configPaths(cwd: string): { project: string; global: string } {
   return {
-    project: join(cwd, ".pi", "extensions", "pi-openai-fast.json"),
-    global: join(homedir(), ".pi", "agent", "extensions", "pi-openai-fast.json"),
+    project: join(cwd, ".pi", "extensions", "pi-fast.json"),
+    global: join(homedir(), ".pi", "agent", "extensions", "pi-fast.json"),
   };
 }
 
@@ -309,44 +279,37 @@ async function readRecord(path: string): Promise<ReadResult> {
     const parsed: unknown = JSON.parse(text);
     if (isRecord(parsed)) return { kind: "loaded", record: parsed };
   } catch {
-    // fall through to failed
+    // Invalid JSON is handled like an unreadable file.
   }
   return { kind: "failed" };
 }
 
-async function writeRecord(path: string, record: JsonRecord, warnings: string[]): Promise<boolean> {
+async function writeRecord(path: string, record: object, warnings: string[]): Promise<boolean> {
   try {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, `${JSON.stringify(record, null, 2)}\n`, "utf8");
     return true;
   } catch {
     warnings.push(
-      `Could not write pi-openai-fast config at ${path}; the config update was not saved.`,
+      `Couldn't save settings to ${path}. Check that the file and its directory are writable.`,
     );
     return false;
   }
 }
 
-function configToRecord(config: FastConfig): JsonRecord {
-  return {
-    persistState: config.persistState,
-    desiredActive: config.desiredActive,
-    supportedModels: [...config.supportedModels],
-    footer: { mode: config.footer.mode, vars: { ...config.footer.vars } },
-  };
-}
-
-/** Load global then project config (project wins). Writes defaults when neither exists. */
+/** Loads global settings, then project overrides. Creates global defaults if neither file exists. */
 export async function loadConfig(cwd: string): Promise<FastConfigResult> {
   const paths = configPaths(cwd);
   const warnings: string[] = [];
   let config = defaultFastConfig();
 
-  const layers = await Promise.all([readRecord(paths.global), readRecord(paths.project)]);
-  const [globalLayer, projectLayer] = layers;
+  const [globalLayer, projectLayer] = await Promise.all([
+    readRecord(paths.global),
+    readRecord(paths.project),
+  ]);
 
   if (globalLayer.kind === "missing" && projectLayer.kind === "missing") {
-    await writeRecord(paths.global, configToRecord(config), warnings);
+    await writeRecord(paths.global, config, warnings);
     return { config, warnings };
   }
   for (const [layer, path] of [
@@ -355,7 +318,7 @@ export async function loadConfig(cwd: string): Promise<FastConfigResult> {
   ] as const) {
     if (layer.kind === "failed") {
       warnings.push(
-        `Could not read pi-openai-fast config at ${path}; using defaults for that config layer.`,
+        `Couldn't load ${path}. Check that it is readable and contains a JSON object. Keeping other settings and defaults.`,
       );
     } else if (layer.kind === "loaded") {
       config = mergeConfig(config, layer.record, path, warnings);
@@ -364,7 +327,7 @@ export async function loadConfig(cwd: string): Promise<FastConfigResult> {
   return { config, warnings };
 }
 
-/** Persist the desiredActive preference into the project config if present, else global. */
+/** Saves the /fast choice to the project settings file if it exists, or to global settings otherwise. */
 export async function saveDesiredActive(
   cwd: string,
   desiredActive: boolean,
@@ -377,14 +340,14 @@ export async function saveDesiredActive(
 
   if (existing.kind === "failed") {
     warnings.push(
-      `Could not save Fast Mode preference because the config at ${target} could not be read as a JSON object and needs manual repair before saving Fast Mode preferences.`,
+      `Couldn't save your Fast Mode choice to ${target}. Check that the file is readable and contains a JSON object. The file was left unchanged.`,
     );
     return { ok: false, warnings };
   }
   const record =
     existing.kind === "loaded"
       ? sanitizeRecord(existing.record, target, warnings)
-      : configToRecord(defaultFastConfig());
+      : defaultFastConfig();
   record.desiredActive = desiredActive;
   const ok = await writeRecord(target, record, warnings);
   return { ok, warnings };

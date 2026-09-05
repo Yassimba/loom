@@ -15,7 +15,7 @@ set -euo pipefail
 # link only replaces a real path after proving it byte-for-byte identical.
 # Divergent copies, wrong symlinks, and legacy single-file conflicts are never
 # overwritten. Run `status` to see the logical names discovered from Pi package
-# manifests (for example: openai-fast).
+# manifests (for example: pi-fast).
 
 REPO="${PI_EXTENSIONS_REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
 PACKAGES="$REPO/plugins"
