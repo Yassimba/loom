@@ -48,10 +48,11 @@ fn line_key(line: &str) -> Option<&str> {
 /// Manifest keys that moved: a selection written under the old key follows
 /// the tool to its new key instead of being dropped as "no longer published".
 const RENAMED_KEYS: &[(&str, &str)] = &[
-    // The clean fork carries no patches, so install upstream's release.
+    // The fork ships figure-led Guided Reviews upstream lacks, so a selection
+    // made while loom installed upstream follows the tool back to the fork.
     (
-        "github:Yassimba/plannotator",
         "github:backnotprop/plannotator",
+        "github:Yassimba/plannotator",
     ),
     // loom-teams left the shared `github:` backend it collided with loom on.
     ("github:Yassimba/loom[exe=loom-teams]", "ubi:Yassimba/loom"),
@@ -361,14 +362,14 @@ gh = \"2.97.0\"
     }
 
     #[test]
-    fn plannotator_selection_moves_to_upstream() {
-        let old_key = "github:Yassimba/plannotator";
-        let current = format!("[tools]\n\"{old_key}\" = \"v0.27.9-loom.1\"\n");
+    fn plannotator_selection_moves_back_to_the_fork() {
+        let old_key = "github:backnotprop/plannotator";
+        let current = format!("[tools]\n\"{old_key}\" = \"v0.27.12\"\n");
         let rendered =
             render_selection(BUNDLED_MANIFEST, &current, &[current_key(old_key).into()]).unwrap();
-        assert!(rendered.contains("\"github:backnotprop/plannotator\" ="));
+        assert!(rendered.contains("\"github:Yassimba/plannotator\" ="));
         assert!(!rendered.contains(old_key));
-        assert!(!rendered.contains("v0.27.9-loom.1"));
+        assert!(!rendered.contains("= \"v0.27.12\""));
     }
 
     #[test]
