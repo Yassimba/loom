@@ -936,11 +936,13 @@ fn shared_global_and_project_copies_are_excluded_only_from_real_pi_discovery() {
         let result = pi_skill_discovery(&system.home, &project);
         assert_eq!(result["skills"].as_array().unwrap().len(), 1, "{result}");
         assert_eq!(
-            result["skills"][0]["filePath"],
+            PathBuf::from(result["skills"][0]["filePath"].as_str().unwrap())
+                .canonicalize()
+                .unwrap(),
             package
                 .join("skills/ponytail/SKILL.md")
-                .to_string_lossy()
-                .as_ref()
+                .canonicalize()
+                .unwrap()
         );
         assert!(
             !result["diagnostics"]
