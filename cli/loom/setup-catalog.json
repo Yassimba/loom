@@ -230,6 +230,16 @@
       "nextAction": "Run /autoresearch with an optimization target in Pi."
     },
     {
+      "id": "pi-package:@yassimba/pi-codegraph",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "CodeGraph prompt context",
+      "description": "Front-load relevant CodeGraph context into Pi prompts.",
+      "installTarget": "@yassimba/pi-codegraph",
+      "nextAction": "Install CodeGraph with `loom add --tool codegraph`, run `codegraph init` in a project, then reload Pi.",
+      "windowsWsl": true
+    },
+    {
       "id": "pi-package:@companion-ai/feynman",
       "kind": "pi-package",
       "group": "Wiki",

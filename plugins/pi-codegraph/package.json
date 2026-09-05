@@ -1,0 +1,50 @@
+{
+  "name": "@yassimba/pi-codegraph",
+  "version": "0.1.0",
+  "description": "Front-load relevant CodeGraph context into Pi prompts.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "codegraph"
+  ],
+  "files": [
+    "index.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yassimba/loom.git",
+    "directory": "plugins/pi-codegraph"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "loom": {
+    "catalog": {
+      "label": "CodeGraph prompt context",
+      "description": "Front-load relevant CodeGraph context into Pi prompts.",
+      "nextAction": "Install CodeGraph with `loom add --tool codegraph`, run `codegraph init` in a project, then reload Pi.",
+      "windowsSupport": "wsl"
+    }
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  }
+}
