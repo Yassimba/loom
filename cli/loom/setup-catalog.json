@@ -737,12 +737,10 @@
       "kind": "skill",
       "group": "Coding",
       "label": "show-me",
-      "description": "Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (ASCII box diagram), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.",
+      "description": "Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.",
       "installTarget": "show-me",
       "nextAction": "Ask your coding agent to use the show-me skill.",
-      "dependencies": [
-        "write-simply"
-      ]
+      "dependencies": []
     },
     {
       "id": "skill:system-atlas",

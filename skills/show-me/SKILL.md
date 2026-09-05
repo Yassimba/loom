@@ -1,30 +1,11 @@
 ---
 name: show-me
-description: Draw the current topic — the shape of code (pseudocode, call tree, component tree, file tree), what a change does to it (diff), how parts interact (ASCII box diagram), lineage (a call graph with its data), or a UI (one HTML file). Other skills invoke it for its chat formats.
+description: Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.
 ---
 
-# Show Me
+Help the user understand the current topic of conversation visually. Skip the preamble and keep prose brief. Pick the smallest view that makes the key point clear.
 
-1. Name the point the reader needs in one line.
-2. Pick the smallest view that makes it clear, from the table. Place the view next to that line; captions follow the `write-simply` register (invoke it via the Skill tool).
-
-| The point is…                                            | View                                      |
-| -------------------------------------------------------- | ----------------------------------------- |
-| Logic or an algorithm                                    | pseudocode                                |
-| Runtime control flow                                     | call tree                                 |
-| UI structure, with the state and module boundaries       | component tree                            |
-| File responsibility or a broad refactor                  | shallow file tree                         |
-| What changes, when the surrounding shape exists          | the same shape in a `diff` fence          |
-| Component interaction or data flow                       | ASCII box diagram or sequence             |
-| A call graph with the data on every hop                  | lineage — read `references/lineage.md`    |
-| A visual UI, layout, or state comparison                 | one HTML file — read `references/html.md` |
-| Most of it is new, or the reader needs a copyable target | the whole block                           |
-
-Keep only the calls, files, props, states, and boundaries that answer the current question.
-
-## Shapes
-
-Pseudocode:
+- Show logic or an algorithm as pseudocode:
 
 ```text
 on(save)
@@ -34,26 +15,26 @@ on(save)
   return fresh result
 ```
 
-Call tree:
+- Show runtime control flow as a call tree:
 
 ```text
-submit_form
-  create_session
-    persist_prompt
-    launch_agent
-  navigate_to_session
+submitForm
+  createSession
+    persistPrompt
+    launchAgent
+  navigateToSession
 ```
 
-Component tree, with the boundaries that matter:
+- Show UI structure as a component tree, including state and module boundaries that matter:
 
-```python
-SessionPage  # apps/example/routes/session.py
-  get_session_events()
-  SessionToolbar
-    RunSkillButton  # packages/ui
+```tsx
+<SessionPage> (apps/example/src/routes/session.tsx)
+  useSessionEvents()
+  <SessionToolbar>
+    <RunSkillButton> (packages/ui)
 ```
 
-File tree:
+- Show file responsibility or a broad refactor as a shallow file tree:
 
 ```text
 src/
@@ -62,39 +43,85 @@ src/
 └── transport/      # sends API requests
 ```
 
-Diff — any shape above, `+`/`-` on the lines that change, unchanged lines as context:
+- Show component interaction, control flow, or data flow with Mermaid:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI
+    participant Daemon
+    User->>UI: choose command
+    UI->>Daemon: send expanded prompt
+    Daemon-->>UI: stream result
+```
+
+- Use `diff` when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.
+
+For a component change:
 
 ```diff
- submit_form
-   create_session
-     persist_prompt
-+    expand_skill_mention
-     launch_agent
-   navigate_to_session
-+    subscribe_to_events
+ <SessionPage>
+   useSessionEvents()
+   <SessionToolbar>
++    <RunSkillButton />
+   <SessionTimeline>
++    <SkillResultCard />
 ```
 
-ASCII box diagram — components as boxes, labeled arrows for the flow:
+For a file-layout change:
 
-```text
-┌──────┐  choose command   ┌────┐  send expanded prompt  ┌────────┐
-│ User │ ────────────────▶ │ UI │ ─────────────────────▶ │ Daemon │
-└──────┘                   └────┘ ◀╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ └────────┘
-                                       stream result
+```diff
+ src/
+ ├── commands/
++│   └── show-me.ts       # expands the slash command
+ ├── sessions/
+-└── transport.ts
++└── transport/
++    ├── client.ts
++    └── stream.ts
 ```
 
-ASCII sequence — vertical lifelines when ordering over time is the point:
+For a call-tree or call-stack change:
 
-```text
-User          UI            Daemon
- │ choose cmd  │               │
- │────────────▶│ expanded      │
- │             │ prompt        │
- │             │──────────────▶│
- │             │◀╌╌╌╌╌╌╌╌╌╌╌╌╌╌│
- │             │ stream result │
+```diff
+ submitForm
+   createSession
+     persistPrompt
++    expandSkillMention
+     launchAgent
+-  navigateToSession
++  navigateToSession
++    subscribeToEvents
 ```
 
-## Done means
+For a state or control-flow change:
 
-The reader can answer their question from the view and its one-line caption, without the surrounding prose.
+```diff
+ on(save)
+-  write content
++  if content is unchanged
++    return cached result
++  write content
++  invalidate cache
+```
+
+- Show the whole block when most of it is new, when omitted context would hide ownership or order, or when the user needs a copyable target shape:
+
+```ts
+function expandSkill(command: string): string {
+  const skillName = command.slice(1)
+  return `use the ${skillName} skill`
+}
+```
+
+- For a visual UI, layout, state comparison, or concept too dense for Mermaid, write one focused HTML file — a diagram, an infographic, or a short slide deck, whichever fits the point. Match the product's colors, type, spacing, and components; use real labels and data; support desktop and mobile. Then open it for the user:
+
+```
+Bash(open path/to/show-me-{description}.html)
+```
+
+### guidance
+
+Place each visual next to the short text it supports. Keep only the calls, files, props, states, and boundaries needed to answer the user's current question or the options to resolve the current discussion point.
+
+You may use one of these, you may use several, it is unlikely you will use all of them. Use your judgement and don't overwhelm the user.
