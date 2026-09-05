@@ -97,4 +97,4 @@ uv = "0.12.7"
 
 # skill tooling (browser automation, diagram/slide export)
 "npm:agent-browser" = "0.36.0"
-"npm:@mermaid-js/mermaid-cli" = "11.16.0"
+"npm:@mermaid-js/mermaid-cli" = "11.17.0"
