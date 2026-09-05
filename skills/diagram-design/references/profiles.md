@@ -2,7 +2,7 @@
 
 Named profiles let one Diagram Design install serve several clients without repeatedly editing the installed `style-guide.md`. A profile is a complete style guide stored outside the install, so managed plugin updates cannot erase it.
 
-This file defines profile management for the `save`, `load`/`switch`, `list`, `show`, `update`, `reset`, and `delete` verbs. Diagram generation resolves profiles through `scripts/diagram_profile.py`; `scripts/build.py` calls that resolver automatically. The resolution contract below specifies their behavior rather than a manual generation procedure.
+This file is the source of truth for profile resolution and for the `save`, `load`/`switch`, `list`, `show`, `update`, `reset`, and `delete` verbs.
 
 ## Paths and terms
 
@@ -62,9 +62,9 @@ If the working copy is already customized and no pristine current-package copy c
 
 When a newer skill schema adds required rows, refresh only the missing structure in `default.md` from the newer pristine shipped guide. Preserve existing rows and metadata dates except for `updated`.
 
-## Resolver contract
+## Resolution before every generation
 
-The resolver reads the effective style guide for every build and keeps selections project-scoped.
+Resolve the effective style guide again for every diagram; do not cache a selection across projects.
 
 ### 1. Inspect the project marker
 
