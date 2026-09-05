@@ -1,0 +1,7 @@
+tools:
+  - pup
+
+upstream:
+  repository: https://github.com/DataDog/pup
+  path: skills
+  commit: a148d034feb82c5864733d43a046175e562cc4c3

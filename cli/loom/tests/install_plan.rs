@@ -83,7 +83,7 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
             },
             StepAction::Command(CommandSpec::new(
                 "pi",
-                ["install", "npm:@yassimba/pi-openai-fast"],
+                ["install", "npm:@yassimba/pi-openai-fast@latest"],
             )),
             StepAction::Command(CommandSpec::new(
                 "herdr",

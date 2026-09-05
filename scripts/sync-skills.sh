@@ -233,9 +233,9 @@ cmd_status() {
 
 cmd_deps() {
   command -v python3 >/dev/null || die "python3 not found (needed to read skills.sh.json)"
-  # Per-skill deps.yml sidecars declare the skills a skill invokes, so
-  # installers pull them in transitively. Every declared dep must itself be a
-  # shared skill at its stated path, and the graph must stay acyclic.
+  # Per-skill deps.yml sidecars declare invoked resources and optional immutable
+  # upstream provenance. Every declared dep must be shared at its stated path,
+  # the graph must stay acyclic, and provenance must be complete.
   python3 - "$REPO" <<'PYEOF' || die "deps.yml dependency validation failed"
 import json, re, sys
 from pathlib import Path
@@ -250,9 +250,17 @@ for f in repo.glob("skills/*/deps.yml"):
         m = re.search(rf"^{key}:\s*$((?:\n\s*-\s+[^\n]+)*)", text, re.M)
         return re.findall(r"-\s+([\w-]+)", m.group(1)) if m else []
     deps, tools = section("skills"), section("tools")
+    upstream = re.search(r"^upstream:\s*$", text, re.M)
     graph[skill] = deps
-    if not deps and not tools:
-        bad.append(f"{f.relative_to(repo)}: declares no deps — delete the file instead")
+    if upstream:
+        values = {
+            key: (match.group(1).strip() if (match := re.search(rf"^  {key}:\s*(.+)$", text, re.M)) else "")
+            for key in ("repository", "path", "commit")
+        }
+        if not all(values.values()) or not re.fullmatch(r"[0-9a-f]{40}", values["commit"]):
+            bad.append(f"{f.relative_to(repo)}: upstream needs repository, path, and a 40-character commit")
+    if not deps and not tools and not upstream:
+        bad.append(f"{f.relative_to(repo)}: declares neither deps nor upstream provenance — delete the file instead")
     for name in deps:
         if name not in shared:
             bad.append(f"{f.relative_to(repo)}: dep '{name}' is not a shared skill")
@@ -272,7 +280,7 @@ def visit(n):
     stack.pop()
 for n in list(graph): visit(n)
 for b in bad: print("  invalid  " + b)
-if not bad: print(f"  ok       {len(graph)} deps.yml sidecars: deps shared, paths exist, graph acyclic")
+if not bad: print(f"  ok       {len(graph)} deps.yml sidecars: deps valid, provenance complete, graph acyclic")
 sys.exit(1 if bad else 0)
 PYEOF
 }

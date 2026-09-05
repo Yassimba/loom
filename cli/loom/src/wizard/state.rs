@@ -720,7 +720,9 @@ impl Wizard {
         }
         let selected = self.expanded_selection();
         let has_wiki = selected.iter().any(|resource| resource.group == "Wiki");
-        let only_wiki = has_wiki && selected.iter().all(|resource| resource.group == "Wiki");
+        let only_wiki = has_wiki
+            && selected.iter().all(|resource| resource.group == "Wiki")
+            && self.selected_settings().is_empty();
         if only_wiki && !self.model.dry_run {
             return Some(Action::Exit(WizardOutcome::WikiSelection {
                 feynman: selected

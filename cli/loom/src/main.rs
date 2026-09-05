@@ -100,6 +100,8 @@ enum WikiCommand {
         #[arg(long)]
         feynman: bool,
         #[arg(long)]
+        confluence: bool,
+        #[arg(long)]
         yes: bool,
     },
     /// Adopt an existing Obsidian Vault
@@ -107,6 +109,8 @@ enum WikiCommand {
         path: PathBuf,
         #[arg(long)]
         feynman: bool,
+        #[arg(long)]
+        confluence: bool,
         #[arg(long)]
         yes: bool,
     },
@@ -290,46 +294,63 @@ fn main() -> Result<()> {
             None => loom::wiki::run_interactive(&system)?,
             Some(command) => {
                 let request = match command {
-                    WikiCommand::Create { path, feynman, yes } => WikiRequest {
+                    WikiCommand::Create {
+                        path,
+                        feynman,
+                        confluence,
+                        yes,
+                    } => WikiRequest {
                         operation: WikiOperation::Create,
                         vault: path,
                         feynman,
+                        confluence,
                         yes,
                     },
-                    WikiCommand::Adopt { path, feynman, yes } => WikiRequest {
+                    WikiCommand::Adopt {
+                        path,
+                        feynman,
+                        confluence,
+                        yes,
+                    } => WikiRequest {
                         operation: WikiOperation::Adopt,
                         vault: path,
                         feynman,
+                        confluence,
                         yes,
                     },
                     WikiCommand::Status => WikiRequest {
                         operation: WikiOperation::Status,
                         vault: PathBuf::new(),
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Repair { path } => WikiRequest {
                         operation: WikiOperation::Repair,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Unregister { path } => WikiRequest {
                         operation: WikiOperation::Unregister,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Open { path } => WikiRequest {
                         operation: WikiOperation::Open,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                     WikiCommand::Launch { path } => WikiRequest {
                         operation: WikiOperation::Launch,
                         vault: path,
                         feynman: false,
+                        confluence: false,
                         yes: true,
                     },
                 };
@@ -541,6 +562,7 @@ mod tests {
             "create",
             "/tmp/knowledge",
             "--feynman",
+            "--confluence",
             "--yes",
         ])
         .unwrap();
@@ -550,6 +572,7 @@ mod tests {
             Some(Command::Wiki {
                 command: Some(WikiCommand::Create {
                     feynman: true,
+                    confluence: true,
                     yes: true,
                     ..
                 })

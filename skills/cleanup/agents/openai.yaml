@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cleanup"
+  short_description: "Happy-path-first refactor with deep modules and typed invariants"
+  default_prompt: "Use $cleanup to refactor this code with happy-path-first, evidence-driven design."

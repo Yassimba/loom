@@ -1,3 +1,8 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
   - improve-codebase-architecture
+
+upstream:
+  repository: https://github.com/mattpocock/skills
+  path: skills/engineering/diagnosing-bugs
+  commit: 3cca18b368ae95cdbdebbff572ccafa662551015

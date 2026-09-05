@@ -305,6 +305,35 @@ test("personal skills cannot enter the setup catalog", async () => {
   await assert.rejects(buildSetupCatalog(repoRoot), /reviewed skill not found: private/);
 });
 
+test("a provenance-only deps file is accepted", async () => {
+  const repoRoot = await createCatalogFixture();
+  await writeFile(
+    join(repoRoot, "skills", "helper", "deps.yml"),
+    `upstream:
+  repository: https://github.com/example/skills
+  path: skills/helper
+  commit: ${"a".repeat(40)}
+`,
+  );
+
+  const helper = (await buildSetupCatalog(repoRoot)).find(({ id }) => id === "skill:helper");
+
+  assert.deepEqual(helper.dependencies, []);
+});
+
+test("incomplete upstream provenance is rejected", async () => {
+  const repoRoot = await createCatalogFixture();
+  await writeFile(
+    join(repoRoot, "skills", "helper", "deps.yml"),
+    "upstream:\n  repository: https://github.com/example/skills\n",
+  );
+
+  await assert.rejects(
+    buildSetupCatalog(repoRoot),
+    /upstream must contain repository, path, and commit/,
+  );
+});
+
 test("a dependency cycle fails catalog generation", async () => {
   const repoRoot = await createCatalogFixture();
   await writeFile(join(repoRoot, "skills", "helper", "deps.yml"), "skills:\n  - reviewed\n");

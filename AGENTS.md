@@ -93,12 +93,14 @@ A skill whose flow invokes another skill (`Run a /grilling session`, `route
 through /diagnosing-bugs`) declares it in a per-skill `deps.yml` next to its
 SKILL.md, as a bare skill name, so installers pull deps in transitively (the
 catalog generator bakes the graph into `cli/loom/setup-catalog.json` for the CLI).
-Declare invocations only — not soft "if installed" mentions or pointers.
-`sync-skills.sh deps` validates the sidecars: every dep must be a shared skill
-at its stated path and the graph must stay acyclic. On this machine the agent
-trees are symlinked into the repo (`sync-skills.sh link`); `loom update`
-never writes through those symlinks, so keep using `pull` before `link` for
-divergences.
+Declare invocations only — not soft "if installed" mentions or pointers. An
+imported skill records immutable provenance in the same file under `upstream`,
+with `repository`, repository-relative `path`, and full `commit` SHA; a
+provenance-only `deps.yml` is valid. `sync-skills.sh deps` validates the
+sidecars: every dep must be a shared skill at its stated path, provenance must
+be complete, and the graph must stay acyclic. On this machine the agent trees
+are symlinked into the repo (`sync-skills.sh link`); `loom update` never writes
+through those symlinks, so keep using `pull` before `link` for divergences.
 
 <!-- loom:section:project-setup hash:267500200da2cf72 -->
 

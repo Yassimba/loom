@@ -4,5 +4,6 @@
   "plugins/openai-fast": "1.1.0",
   "plugins/pi-add-dir": "0.2.1",
   "plugins/skill-autocomplete": "0.1.0",
-  "plugins/pi-codegraph": "0.1.0"
+  "plugins/pi-codegraph": "0.1.0",
+  "plugins/pi-loom": "0.1.0"
 }

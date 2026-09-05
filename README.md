@@ -1,8 +1,14 @@
+<p align="center">
+  <img src="assets/loom-logo.svg" width="160" height="160" alt="Loom's woven purple logo">
+</p>
+
 # Loom
 
 Loom weaves an entire opinionated setup together for agentic engineering. One installer gives your coding agents the skills, tools, Pi packages, and project instructions used across the full engineering workflow.
 
 Use Loom with Pi (recommended), Claude Code, Codex, OpenCode, Cursor, Grok, or any agent that reads an Agent Skills folder.
+
+The optional [pi-loom extension](plugins/pi-loom/README.md) adds a Loom header and startup update notice to Pi. Reusable logo and icon files live in [assets/](assets/README.md).
 
 ## Start here
 
@@ -138,7 +144,7 @@ If a test fails for an unclear reason, it routes the problem through `diagnosing
 | When you need to... | Use... |
 | --- | --- |
 | Find the cause of a bug before fixing it | [`diagnosing-bugs`](skills/diagnosing-bugs/SKILL.md) |
-| Remove code or make it simpler | [`refactor`](skills/refactor/SKILL.md) or [`ponytail`](skills/ponytail/SKILL.md) |
+| Remove code or make it simpler | [`cleanup`](skills/cleanup/SKILL.md) or [`ponytail`](skills/ponytail/SKILL.md) |
 | Understand how a feature works | [`explain-code-flow`](skills/explain-code-flow/SKILL.md) |
 | Understand a whole multi-repo product in one diagram page | [`system-atlas`](skills/system-atlas/SKILL.md) |
 | See how call paths changed between commits | [`calldiff`](skills/calldiff/SKILL.md) |
@@ -194,7 +200,7 @@ loom wiki
 
 Create makes a new Vault. Adopt requires an existing directory with `.obsidian/`. Loom shows the exact `claude-obsidian` changed paths and applies only the reviewed plan hash. Obsidian is optional: Loom can open its official download page, but never runs Homebrew, Winget, Snap, Flatpak, or another OS package manager.
 
-Wiki setup also installs QMD, registers the Vault's Markdown files, and builds search embeddings. Each Vault gets a separate named index; setup prints its `qmd --index ... query "your question"` command. The first embedding run may download a model. Repair and `loom update` refresh the index and embeddings. This is a snapshot, not a file watcher; rerun repair after editing notes to refresh search. Unregistering a Vault leaves its QMD index intact.
+Wiki setup also installs QMD and its Vault-local skill, registers the Vault's Markdown files, and builds search embeddings. The capability screen can optionally add Feynman and the Confluence Markdown exporter; scripted setup uses `--feynman` and `--confluence`. Each Vault gets a separate named index; setup prints its `qmd --index ... query "your question"` command. The first embedding run may download a model. Repair and `loom update` refresh the index and embeddings. This is a snapshot, not a file watcher; rerun repair after editing notes to refresh search. Unregistering a Vault leaves its QMD index intact.
 
 Wiki skills are available only inside the Vault. Loom keeps exact-pinned Python and `claude-obsidian` product code outside it, then writes project-local Pi state below ignored `.pi/`. Optional Feynman is also installed there, not globally.
 

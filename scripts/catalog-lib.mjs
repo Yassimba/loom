@@ -57,8 +57,27 @@ async function indexSkillDirectories(repoRoot) {
   return index;
 }
 
-// skills/<name>/deps.yml — the skills this skill invokes; installers pull
-// them in transitively. Validated against the reviewed set by the caller.
+function readUpstream(value, depsPath) {
+  const upstream = value?.upstream;
+  if (upstream === undefined) return undefined;
+  const complete =
+    typeof upstream === "object" &&
+    upstream !== null &&
+    typeof upstream.repository === "string" &&
+    upstream.repository.length > 0 &&
+    typeof upstream.path === "string" &&
+    upstream.path.length > 0 &&
+    typeof upstream.commit === "string" &&
+    /^[0-9a-f]{40}$/.test(upstream.commit);
+  if (!complete) {
+    throw new Error(`deps.yml upstream must contain repository, path, and commit: ${depsPath}`);
+  }
+  return upstream;
+}
+
+// skills/<name>/deps.yml — invoked resources plus optional immutable upstream
+// provenance. Installers pull resource dependencies transitively; provenance
+// stays in the source sidecar for audits and refreshes.
 async function readSkillDependencies(skillRoot) {
   const depsPath = join(skillRoot, "deps.yml");
   let raw;
@@ -71,10 +90,13 @@ async function readSkillDependencies(skillRoot) {
   const value = parse(raw);
   const skills = value?.skills ?? [];
   const tools = value?.tools ?? [];
+  const upstream = readUpstream(value, depsPath);
   const names = (list) =>
     Array.isArray(list) && list.every((name) => typeof name === "string" && name.length > 0);
-  if (!names(skills) || !names(tools) || skills.length + tools.length === 0) {
-    throw new Error(`deps.yml must hold non-empty skills and/or tools lists of names: ${depsPath}`);
+  if (!names(skills) || !names(tools) || (skills.length + tools.length === 0 && !upstream)) {
+    throw new Error(
+      `deps.yml must hold non-empty skills/tools lists or upstream provenance: ${depsPath}`,
+    );
   }
   return { skills, tools };
 }

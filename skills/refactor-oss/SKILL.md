@@ -50,5 +50,10 @@ Apply only the picks. Append every adopted package the catalog does not yet list
 
 Done when the code passes the repository's checks and tests, and every adopted package appears in the catalog.
 
+# Anti-Patterns
+
+Over-customizing: Wrapping a library so heavily it loses its benefits
+Dependency bloat: Installing a massive package for one small feature
+
 Task / scope:
 $ARGUMENTS

@@ -2,3 +2,8 @@
 skills:
   - domain-modeling
   - grilling
+
+upstream:
+  repository: https://github.com/mattpocock/skills
+  path: skills/engineering/grill-with-docs
+  commit: 3cca18b368ae95cdbdebbff572ccafa662551015

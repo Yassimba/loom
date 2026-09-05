@@ -864,6 +864,26 @@ fn wiki_group_routes_to_the_vault_workflow_with_optional_feynman() {
 }
 
 #[test]
+fn wiki_selection_applies_picked_settings_before_handoff() {
+    let mut model = model(ready());
+    model.resources = vec![resource(ResourceKind::Tool, "Wiki", "claude-obsidian")];
+    model.profiles.clear();
+    model.installed = vec![false];
+    model.settings[0].related_resource = None;
+    let mut wizard = Wizard::new(model);
+    wizard.selected[0] = true;
+    wizard.setting_on[0] = true;
+
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert_eq!(title(&wizard), "Review");
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::StartInstall)
+    ));
+    assert_eq!(wizard.begin_install().unwrap().settings.len(), 1);
+}
+
+#[test]
 fn mixed_wiki_selection_installs_generic_resources_before_handoff() {
     let mut model = model(ready());
     model.resources = vec![

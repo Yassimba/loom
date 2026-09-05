@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/DietrichGebert/ponytail
+  path: skills/ponytail
+  commit: 974d940a1c5344210874150b98ff0d2c861fab6a

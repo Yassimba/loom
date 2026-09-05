@@ -1,3 +1,8 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
   - write-simply
+
+upstream:
+  repository: https://github.com/softaworks/agent-toolkit
+  path: skills/crafting-effective-readmes
+  commit: 3027f20f3181758385a1bb8c022d4041dfb4de84

@@ -3,3 +3,8 @@ skills:
   - codebase-design
   - domain-modeling
   - grilling
+
+upstream:
+  repository: https://github.com/mattpocock/skills
+  path: skills/engineering/improve-codebase-architecture
+  commit: 3cca18b368ae95cdbdebbff572ccafa662551015

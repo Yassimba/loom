@@ -15,6 +15,7 @@ pub mod ui;
 pub mod uninstall;
 pub mod update;
 pub mod wiki;
+mod wiki_tui;
 pub mod wizard;
 
 pub use catalog::{Catalog, Profile, Resource, ResourceKind};

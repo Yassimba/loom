@@ -66,6 +66,7 @@ fn request(operation: WikiOperation, vault: impl AsRef<Path>) -> WikiRequest {
         operation,
         vault: vault.as_ref().to_path_buf(),
         feynman: false,
+        confluence: false,
         yes: true,
     }
 }
