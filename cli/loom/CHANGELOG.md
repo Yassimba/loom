@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.21.0](https://github.com/Yassimba/loom/compare/loom-v0.20.0...loom-v0.21.0) (2026-09-05)
+
+
+### Features
+
+* expand Loom setup and shared catalog ([87b8a7b](https://github.com/Yassimba/loom/commit/87b8a7baa6615be88441474bc17f5a39838d7841))
+* **loom:** expand wiki setup and skill management ([b1db405](https://github.com/Yassimba/loom/commit/b1db405bebe1ea4874852721a8bb4109b0af297a))
+* **loom:** improve wiki setup and skill management ([369b89e](https://github.com/Yassimba/loom/commit/369b89e09aa7093a69c62929fac922967a3833b8))
+* **skills:** consolidate refactor reviews into one skill ([33421a8](https://github.com/Yassimba/loom/commit/33421a83017d6710b7433ac3f466d6870fcb777a))
+
+
+### Bug Fixes
+
+* **ci:** unblock cross-platform release checks ([eabc973](https://github.com/Yassimba/loom/commit/eabc97377e5b0562b2dccb180272bbf19de29a6d))
+* **loom:** install confluence skill in vault ([20c549b](https://github.com/Yassimba/loom/commit/20c549b90caee0fa2bb348898084bb2041bc6b5e))
+
 ## [0.20.0](https://github.com/Yassimba/loom/compare/loom-v0.19.1...loom-v0.20.0) (2026-09-05)
 
 
