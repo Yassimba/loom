@@ -7,6 +7,7 @@ Features: per-repo colour, collapsed level-3 zooms, collapsed build/deploy/test
 figures per section, hover glossary terms, sidebar search, figure progress marker,
 and per-diagram maximize and zoom controls.
 """
+from datetime import date
 import html
 import json
 import re
@@ -273,7 +274,7 @@ def main():
 <nav aria-label="Table of contents"><div class="nav-head"><h1>{html.escape(TITLE)}</h1><div class="sub">{n} diagrams · {len(secs)} sections</div><button class="toc-mobile-toggle" type="button" aria-expanded="false" aria-controls="table-of-contents">Browse contents</button><div class="toc-status" aria-live="polite"><span>Now viewing</span><strong>Introduction</strong></div></div><ol class="toc-root" id="table-of-contents">{''.join(toc)}</ol></nav>
 <main>
 <div class="location-bar" role="navigation" aria-label="Current location"><span class="location-section">{html.escape(TITLE)}</span><span class="location-separator" aria-hidden="true">/</span><strong class="location-current">Introduction</strong></div>
-<header class="hero"><div class="eyebrow">{html.escape(EYEBROW)} · generated {__import__('datetime').date.today()}</div>
+<header class="hero"><div class="eyebrow">{html.escape(EYEBROW)} · generated {date.today()}</div>
 <h1>{html.escape(TITLE)}</h1>
 <p>{html.escape(INTRO)} Each repository keeps one colour on this page: in the sidebar, the section rule and the border of its overview figures. Overview figures are open; detail zooms and build-and-deploy figures sit behind a "Show" line. Dotted words show their meaning on hover. A glossary sits at the bottom.</p>
 <div class="legend">{''.join(legend)}</div></header>
