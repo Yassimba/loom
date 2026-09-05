@@ -15,6 +15,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const MANIFEST_IN_REPO: &str = "manifest/loom.toml";
+const BUNDLED_MANIFEST: &str = include_str!("../../../manifest/loom.toml");
 const CORE_BEGIN: &str = "# core:begin";
 const CORE_END: &str = "# core:end";
 
@@ -47,6 +48,11 @@ fn line_key(line: &str) -> Option<&str> {
 /// Manifest keys that moved: a selection written under the old key follows
 /// the tool to its new key instead of being dropped as "no longer published".
 const RENAMED_KEYS: &[(&str, &str)] = &[
+    // The clean fork carries no patches, so install upstream's release.
+    (
+        "github:Yassimba/plannotator",
+        "github:backnotprop/plannotator",
+    ),
     // loom-teams left the shared `github:` backend it collided with loom on.
     ("github:Yassimba/loom[exe=loom-teams]", "ubi:Yassimba/loom"),
     // Pi moved npm scopes; extensions built for the new scope cannot load
@@ -125,11 +131,19 @@ fn render_selection(manifest: &str, current: &str, keys: &[String]) -> Result<St
                 // A key the published manifest no longer carries keeps its
                 // current line: this binary may simply predate a rename
                 // (a newer loom maps it), and dropping it would uninstall
-                // the tool on the next prune.
+                // the tool on the next prune. A newly requested key can come
+                // from this binary's reviewed manifest when main is briefly
+                // behind the release or a local build.
                 if let Some(line) = current.lines().find(|line| line_key(line) == Some(key)) {
                     out.push_str(line);
                     out.push('\n');
                     kept.push(key.as_str());
+                } else if let Some(line) = BUNDLED_MANIFEST
+                    .lines()
+                    .find(|line| line_key(line) == Some(key))
+                {
+                    out.push_str(line);
+                    out.push('\n');
                 }
             }
         }
@@ -300,12 +314,29 @@ gh = \"2.97.0\"
     }
 
     #[test]
+    fn newly_requested_key_falls_back_to_the_bundled_exact_pin() {
+        let rendered = render_selection(MANIFEST, "", &["python".into()]).unwrap();
+        assert!(rendered.contains("python = \"3.13.7\""));
+    }
+
+    #[test]
     fn renamed_keys_follow_the_tool() {
         assert_eq!(
             current_key("github:Yassimba/loom[exe=loom-teams]"),
             "ubi:Yassimba/loom"
         );
         assert_eq!(current_key("gh"), "gh");
+    }
+
+    #[test]
+    fn plannotator_selection_moves_to_upstream() {
+        let old_key = "github:Yassimba/plannotator";
+        let current = format!("[tools]\n\"{old_key}\" = \"v0.27.9-loom.1\"\n");
+        let rendered =
+            render_selection(BUNDLED_MANIFEST, &current, &[current_key(old_key).into()]).unwrap();
+        assert!(rendered.contains("\"github:backnotprop/plannotator\" ="));
+        assert!(!rendered.contains(old_key));
+        assert!(!rendered.contains("v0.27.9-loom.1"));
     }
 
     #[test]

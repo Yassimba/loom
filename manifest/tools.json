@@ -156,10 +156,10 @@
       "nextAction": "Run `cme config edit auth.confluence` to configure authentication."
     },
     {
-      "key": "github:Yassimba/plannotator",
+      "key": "github:backnotprop/plannotator",
       "label": "plannotator",
-      "description": "Browser-based plan and code review for coding agents, with figure-led Guided Reviews: one document, a code peek, and in-app guides drawn by the changeset-walkthrough skill. The plannotator skills drive it.",
-      "nextAction": "In Claude Code run `/plugin marketplace add Yassimba/plannotator` and `/plugin install plannotator@plannotator`, then restart. Pick changeset-walkthrough in loom to get the figure-led guides."
+      "description": "Browser-based plan and code review, document annotation, and Guided Reviews for coding agents. The plannotator skill drives it.",
+      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart."
     },
     {
       "key": "github:AgriciDaniel/claude-obsidian",

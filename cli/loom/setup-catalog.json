@@ -635,6 +635,18 @@
       ]
     },
     {
+      "id": "skill:write-readme",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "write-readme",
+      "description": "Use when writing or improving README files. Not all READMEs are the same — provides templates and guidance matched to your audience and project type.",
+      "installTarget": "write-readme",
+      "nextAction": "Ask your coding agent to use the write-readme skill.",
+      "dependencies": [
+        "write-simply"
+      ]
+    },
+    {
       "id": "skill:wayfinder",
       "kind": "skill",
       "group": "Coding",
@@ -753,6 +765,16 @@
       "dependencies": [
         "diagram-design"
       ]
+    },
+    {
+      "id": "skill:ponytail",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ponytail",
+      "description": "Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the task needs to exist at all (YAGNI), reach for the standard library before custom code, native platform features before dependencies, one line before fifty. Supports intensity levels: lite, full (default), ultra. Use on ANY coding task: writing, adding, refactoring, fixing, reviewing, or designing code, and choosing libraries or dependencies. Also use whenever the user says \"ponytail\", \"be lazy\", \"lazy mode\", \"simplest solution\", \"minimal solution\", \"yagni\", \"do less\", or \"shortest path\", or complains about over-engineering, bloat, boilerplate, or unnecessary dependencies. Do NOT use for non-coding requests (general knowledge, prose, translation, summaries, recipes).\n",
+      "installTarget": "ponytail",
+      "nextAction": "Ask your coding agent to use the ponytail skill.",
+      "dependencies": []
     },
     {
       "id": "skill:impeccable",
@@ -1034,18 +1056,6 @@
       "dependencies": []
     },
     {
-      "id": "skill:write-readme",
-      "kind": "skill",
-      "group": "General",
-      "label": "write-readme",
-      "description": "Use when writing or improving README files. Not all READMEs are the same — provides templates and guidance matched to your audience and project type.",
-      "installTarget": "write-readme",
-      "nextAction": "Ask your coding agent to use the write-readme skill.",
-      "dependencies": [
-        "write-simply"
-      ]
-    },
-    {
       "id": "skill:write-simply",
       "kind": "skill",
       "group": "General",
@@ -1082,96 +1092,14 @@
     {
       "id": "skill:plannotator",
       "kind": "skill",
-      "group": "Plannotator",
+      "group": "General",
       "label": "plannotator",
-      "description": "Reference for using the Plannotator CLI: plan review, code review, annotating files, URLs, folders, and running local apps, annotating the last assistant message, browsing archived plan decisions, and exporting or sharing Guided Reviews. Invoke when asked to use Plannotator for anything not covered by a more specific plannotator-* skill.",
+      "description": "Use Plannotator for plan and code review, annotating files, URLs, folders, local apps, or the latest assistant message, browsing archived decisions, and exporting or sharing Guided Reviews.",
       "installTarget": "plannotator",
       "nextAction": "Ask your coding agent to use the plannotator skill.",
       "dependencies": [
-        "github:Yassimba/plannotator"
+        "github:backnotprop/plannotator"
       ]
-    },
-    {
-      "id": "skill:plannotator-review",
-      "kind": "skill",
-      "group": "Plannotator",
-      "label": "plannotator-review",
-      "description": "Open Plannotator's browser-based code review UI for the current worktree or a pull request URL, then act on the feedback that comes back.",
-      "installTarget": "plannotator-review",
-      "nextAction": "Ask your coding agent to use the plannotator-review skill.",
-      "dependencies": [
-        "github:Yassimba/plannotator"
-      ]
-    },
-    {
-      "id": "skill:plannotator-annotate",
-      "kind": "skill",
-      "group": "Plannotator",
-      "label": "plannotator-annotate",
-      "description": "Open Plannotator's annotation UI for a markdown file, plain-text config file (.yaml, .json, .toml, .ini, .csv, .log, …), HTML file, URL, or folder and then respond to the returned annotations.",
-      "installTarget": "plannotator-annotate",
-      "nextAction": "Ask your coding agent to use the plannotator-annotate skill.",
-      "dependencies": [
-        "github:Yassimba/plannotator"
-      ]
-    },
-    {
-      "id": "skill:plannotator-last",
-      "kind": "skill",
-      "group": "Plannotator",
-      "label": "plannotator-last",
-      "description": "Open Plannotator on the latest rendered assistant message and use the returned annotations to revise that message or continue.",
-      "installTarget": "plannotator-last",
-      "nextAction": "Ask your coding agent to use the plannotator-last skill.",
-      "dependencies": [
-        "github:Yassimba/plannotator"
-      ]
-    },
-    {
-      "id": "skill:plannotator-compound",
-      "kind": "skill",
-      "group": "Plannotator",
-      "label": "plannotator-compound",
-      "description": "Analyze a user's Plannotator plan archive to extract denial patterns, feedback taxonomy, evolution over time, and actionable prompt improvements — then produce a polished HTML dashboard report. Falls back to Claude Code ExitPlanMode denial reasons when Plannotator data is unavailable.\n",
-      "installTarget": "plannotator-compound",
-      "nextAction": "Ask your coding agent to use the plannotator-compound skill.",
-      "dependencies": [
-        "github:Yassimba/plannotator"
-      ]
-    },
-    {
-      "id": "skill:plannotator-setup-goal",
-      "kind": "skill",
-      "group": "Plannotator",
-      "label": "plannotator-setup-goal",
-      "description": "Turn an idea or objective into a goal package for /goal. Interviews the user, builds a reviewed fact sheet via Plannotator, then explores the codebase to produce an execution plan.",
-      "installTarget": "plannotator-setup-goal",
-      "nextAction": "Ask your coding agent to use the plannotator-setup-goal skill.",
-      "dependencies": [
-        "github:Yassimba/plannotator"
-      ]
-    },
-    {
-      "id": "skill:plannotator-visual-explainer",
-      "kind": "skill",
-      "group": "Plannotator",
-      "label": "plannotator-visual-explainer",
-      "description": "Generate self-contained HTML visualizations with Plannotator theming. Use for implementation plans, PR explainers, architecture diagrams, data tables, slide decks, and any visual explanation of technical concepts. Plans and PR explainers follow Plannotator's prescriptive approach; all other visual content delegates to nicobailon/visual-explainer.\n",
-      "installTarget": "plannotator-visual-explainer",
-      "nextAction": "Ask your coding agent to use the plannotator-visual-explainer skill.",
-      "dependencies": [
-        "github:Yassimba/plannotator"
-      ]
-    },
-    {
-      "id": "skill:ponytail",
-      "kind": "skill",
-      "group": "Ponytail",
-      "label": "ponytail",
-      "description": "Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the task needs to exist at all (YAGNI), reach for the standard library before custom code, native platform features before dependencies, one line before fifty. Supports intensity levels: lite, full (default), ultra. Use on ANY coding task: writing, adding, refactoring, fixing, reviewing, or designing code, and choosing libraries or dependencies. Also use whenever the user says \"ponytail\", \"be lazy\", \"lazy mode\", \"simplest solution\", \"minimal solution\", \"yagni\", \"do less\", or \"shortest path\", or complains about over-engineering, bloat, boilerplate, or unnecessary dependencies. Do NOT use for non-coding requests (general knowledge, prose, translation, summaries, recipes).\n",
-      "installTarget": "ponytail",
-      "nextAction": "Ask your coding agent to use the ponytail skill.",
-      "dependencies": []
     },
     {
       "id": "herdr-plugin:annotate",
@@ -1437,9 +1365,9 @@
       "kind": "tool",
       "group": "Tools",
       "label": "plannotator",
-      "description": "Browser-based plan and code review for coding agents, with figure-led Guided Reviews: one document, a code peek, and in-app guides drawn by the changeset-walkthrough skill. The plannotator skills drive it.",
-      "installTarget": "github:Yassimba/plannotator",
-      "nextAction": "In Claude Code run `/plugin marketplace add Yassimba/plannotator` and `/plugin install plannotator@plannotator`, then restart. Pick changeset-walkthrough in loom to get the figure-led guides.",
+      "description": "Browser-based plan and code review, document annotation, and Guided Reviews for coding agents. The plannotator skill drives it.",
+      "installTarget": "github:backnotprop/plannotator",
+      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart.",
       "bin": "plannotator",
       "companions": []
     },

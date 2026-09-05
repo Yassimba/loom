@@ -32,6 +32,7 @@
         "to-spec",
         "to-tickets",
         "update-docstrings",
+        "write-readme",
         "wayfinder",
         "whats-next",
         "calldiff",
@@ -41,7 +42,8 @@
         "improve-codebase-architecture",
         "literate-programming",
         "show-me",
-        "system-atlas"
+        "system-atlas",
+        "ponytail"
       ]
     },
     {
@@ -61,7 +63,7 @@
     },
     {
       "title": "General",
-      "description": "Interviewing, teaching, writing, and note-taking — skills for the work around the code.",
+      "description": "Interviewing, teaching, writing, review, and note-taking — skills for the work around the code.",
       "skills": [
         "explain-simply",
         "grill-me",
@@ -76,29 +78,11 @@
         "loom",
         "teach",
         "write-documentation",
-        "write-readme",
         "write-simply",
         "writing-for-agents",
-        "wtf"
+        "wtf",
+        "plannotator"
       ]
-    },
-    {
-      "title": "Plannotator",
-      "description": "Plan and code review in the browser with the plannotator CLI: review diffs, annotate files or URLs, revisit the last reply, mine the plan archive, build goal packages, and render visual explainers.",
-      "skills": [
-        "plannotator",
-        "plannotator-review",
-        "plannotator-annotate",
-        "plannotator-last",
-        "plannotator-compound",
-        "plannotator-setup-goal",
-        "plannotator-visual-explainer"
-      ]
-    },
-    {
-      "title": "Ponytail",
-      "description": "Build less: choose YAGNI, stdlib, and native features before adding code, then audit what can still be removed.",
-      "skills": ["ponytail"]
     }
   ]
 }
