@@ -38,6 +38,7 @@ fn loom(home: &std::path::Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_loom"));
     command
         .env("HOME", home)
+        .env("USERPROFILE", home)
         .env("XDG_CONFIG_HOME", home.join(".config"))
         .env("MISE_CONFIG_DIR", home.join(".config/mise"))
         .current_dir(home)

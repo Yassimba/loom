@@ -82,7 +82,7 @@ function Install-MiseRelease {
     $TmpChecksums = Join-Path $TmpDirectory "SHASUMS256.txt"
     Get-Url $Asset.browser_download_url $TmpArchive
     Get-Url $Checksums.browser_download_url $TmpChecksums
-    $ChecksumLine = Get-Content $TmpChecksums | Where-Object { $_.EndsWith($AssetName) } | Select-Object -First 1
+    $ChecksumLine = Get-Content -Encoding UTF8 $TmpChecksums | Where-Object { $_.EndsWith($AssetName) } | Select-Object -First 1
     if (-not $ChecksumLine) { throw "$Name`: mise checksum is missing for $AssetName" }
     $Expected = ($ChecksumLine -split '\s+')[0]
     $Actual = (Get-FileHash -Path $TmpArchive -Algorithm SHA256).Hash
@@ -115,7 +115,7 @@ $PendingMise = Join-Path $HOME ".config\loom\bootstrap-mise-pending.json"
 Restore-AtomicPath $PendingMise
 if ((Get-Command mise -ErrorAction SilentlyContinue) -and (Test-Path $PendingMise)) {
   try {
-    $Pending = Get-Content $PendingMise -Raw | ConvertFrom-Json
+    $Pending = Get-Content -Encoding UTF8 $PendingMise -Raw | ConvertFrom-Json
     $MiseInstalledByLoom = $true
     $MiseInstallMethod = [string]$Pending.manager
     $MisePathAdded = [bool]$Pending.pathAdded
@@ -178,7 +178,7 @@ Restore-AtomicPath $Selection
 $TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
 try {
   Get-Url $ManifestUrl $TmpManifest
-  $lines = Get-Content $TmpManifest
+  $lines = Get-Content -Encoding UTF8 $TmpManifest
   $begin = -1
   $end = -1
   for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -192,7 +192,7 @@ try {
     $updated = [System.Collections.Generic.List[string]]::new()
     $inserted = $false
     $skippingCore = $false
-    foreach ($line in Get-Content $Selection) {
+    foreach ($line in Get-Content -Encoding UTF8 $Selection) {
       if ($line.StartsWith("# core:begin")) { $skippingCore = $true; continue }
       if ($skippingCore) {
         if ($line.StartsWith("# core:end")) { $skippingCore = $false }
@@ -239,7 +239,7 @@ $Profiles = @(
 $ChangedProfiles = @()
 foreach ($ProfilePath in $Profiles) {
   Restore-AtomicPath $ProfilePath
-  $ProfileContent = if (Test-Path $ProfilePath) { [string](Get-Content $ProfilePath -Raw) } else { "" }
+  $ProfileContent = if (Test-Path $ProfilePath) { [string](Get-Content -Encoding UTF8 $ProfilePath -Raw) } else { "" }
   if (-not $ProfileContent.Contains($Activation)) {
     $ExistingProfile = $ProfileContent.TrimEnd("`r", "`n")
     $ProfileLines = if ($ExistingProfile) { @($ExistingProfile, $Activation) } else { @($Activation) }

@@ -35,6 +35,7 @@ fn late_init_failure_still_records_completed_project_writes() {
             "--yes",
         ])
         .env("HOME", &home)
+        .env("USERPROFILE", &home)
         .env("XDG_CONFIG_HOME", home.join(".config"))
         .env("LOOM_REPO_DIR", repo)
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))

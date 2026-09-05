@@ -18,6 +18,7 @@ fn setup_and_uninstall_never_claim_a_preexisting_copy_in_another_agent_tree() {
         let mut command = Command::new(env!("CARGO_BIN_EXE_loom"));
         command
             .env("HOME", &home)
+            .env("USERPROFILE", &home)
             .env("XDG_CONFIG_HOME", home.join(".config"))
             .env("LOOM_REPO_DIR", &repo)
             .current_dir(&project)

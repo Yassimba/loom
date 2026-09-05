@@ -157,6 +157,8 @@ exit 64
 test("the PowerShell bootstrap persists mise activation idempotently", async () => {
   const script = await readFile(join(repoRoot, "install.ps1"), "utf8");
 
+  assert.match(script, /Get-Content -Encoding UTF8 \$TmpManifest/);
+  assert.match(script, /Get-Content -Encoding UTF8 \$Selection/);
   assert.match(script, /\$MiseCommand = \(Get-Command mise/);
   assert.match(script, /\$Activation = ".*\$MiseExe' activate pwsh\)/);
   assert.match(script, /\.Contains\(\$Activation\)/);

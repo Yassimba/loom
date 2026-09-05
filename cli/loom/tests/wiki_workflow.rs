@@ -89,7 +89,14 @@ fn unregister_removes_only_machine_state_and_preserves_vault_files() {
 fn launch_uses_the_registered_vault_as_pi_working_directory() {
     let (home, vault, system) = fixture("launch", true);
 
-    assert!(run_wiki(&request(WikiOperation::Launch, &vault), &system).unwrap());
+    let result = run_wiki(&request(WikiOperation::Launch, &vault), &system);
+    if cfg!(windows) {
+        assert!(result.unwrap_err().to_string().contains("WSL2"));
+        assert!(system.commands.lock().unwrap().is_empty());
+        fs::remove_dir_all(home).unwrap();
+        return;
+    }
+    assert!(result.unwrap());
     let commands = system.commands.into_inner().unwrap();
     assert_eq!(commands.len(), 1);
     assert_eq!(commands[0].program, "pi");
