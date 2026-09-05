@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-fast",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Turn priority requests on or off for OpenAI, Codex, and xAI in Pi",
   "license": "MIT",
   "type": "module",

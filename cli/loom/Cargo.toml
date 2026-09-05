@@ -1,6 +1,6 @@
 [package]
 name = "loom"
-version = "0.21.0"
+version = "1.0.0"
 edition = "2021"
 description = "Install and manage Yassimba's curated agent skills, Pi packages, and Herdr plugins"
 license = "MIT"
