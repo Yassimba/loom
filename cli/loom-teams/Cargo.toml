@@ -9,7 +9,7 @@ publish = false
 anyhow = "1"
 base64 = "0.23"
 clap = { version = "4", features = ["derive"] }
-chromiumoxide = { version = "0.7", features = ["tokio-runtime"], default-features = false }
+chromiumoxide = { version = "0.9", features = ["tokio-runtime"], default-features = false }
 futures = "0.3"
 jiff = "0.2"
 percent-encoding = "2"
