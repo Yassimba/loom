@@ -13,7 +13,7 @@ chromiumoxide = { version = "0.7", features = ["tokio-runtime"], default-feature
 futures = "0.3"
 jiff = "0.2"
 percent-encoding = "2"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.13", features = ["json", "rustls-tls"], default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
