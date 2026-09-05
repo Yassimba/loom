@@ -26,7 +26,7 @@ node = "24.20.0"
 # whole product, so `mise where github:AgriciDaniel/claude-obsidian` is the
 # product root its skills resolve scripts from.
 "github:AgriciDaniel/claude-obsidian" = "v2.1.1"
-python = "3.13.7"
+python = "3.14.7"
 
 # teams calendar CLI (export meetings as JSON, find slots). Same GitHub
 # releases as loom, but through the ubi backend: mise keys an install by
