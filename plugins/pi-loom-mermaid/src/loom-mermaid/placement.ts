@@ -42,6 +42,7 @@ export function brandesKoepf(
   const conflicts = markConflicts(g, pos, realCount)
 
   const runs: number[][] = []
+  const roots: number[][] = []
   for (const fromBottom of [false, true]) {
     for (const fromRight of [false, true]) {
       const layers = fromBottom ? [...g.layers].reverse() : g.layers
@@ -54,23 +55,42 @@ export function brandesKoepf(
       for (const row of view.layers) row.forEach((v, i) => (vpos[v] = i))
       // Mirrored runs see the pair the other way round.
       const gap = fromRight ? (l: number, r: number) => sep(r, l) : sep
-      const x = compact(view, vpos, size, gap, alignVertically(view, vpos, conflicts))
+      const alignment = alignVertically(view, vpos, conflicts)
+      const x = compact(view, vpos, size, gap, alignment)
       runs.push(fromRight ? x.map((c) => -c) : x)
+      roots.push(alignment.root)
     }
   }
-  const centers = straightest(runs, g, size, realCount).map((c, v) => c + offset(v))
+  const chosen = straightest(runs, g, size, realCount)
+  const centers = runs[chosen].map((c, v) => c + offset(v))
+  const root = roots[chosen]
 
-  // Rounding and offsets can shave a cell off a separation; one
-  // left-to-right pass per layer restores it and pins the origin at 0.
-  let min = Number.POSITIVE_INFINITY
-  for (const row of g.layers) {
-    for (let i = 1; i < row.length; i++) {
-      const [u, w] = [row[i - 1], row[i]]
-      const gap = size[u] / 2 + sep(u, w) + size[w] / 2
-      centers[w] = Math.max(centers[w], centers[u] + gap)
-    }
-    for (const v of row) min = Math.min(min, centers[v] - size[v] / 2)
+  // Rounding, offsets and the class shifts of the compaction can shave a
+  // cell off a separation; sweeping each layer left to right restores it,
+  // moving a whole aligned block so the run's straight segments stay
+  // straight, until every layer holds. Then pin the origin at 0.
+  const members = new Map<number, number[]>()
+  for (let v = 0; v < n; v++) {
+    const list = members.get(root[v])
+    if (list) list.push(v)
+    else members.set(root[v], [v])
   }
+  for (let pass = 0; pass < n; pass++) {
+    let moved = false
+    for (const row of g.layers) {
+      for (let i = 1; i < row.length; i++) {
+        const [u, w] = [row[i - 1], row[i]]
+        const gap = size[u] / 2 + sep(u, w) + size[w] / 2
+        const deficit = centers[u] + gap - centers[w]
+        if (deficit <= 0) continue
+        for (const m of members.get(root[w]) ?? [w]) centers[m] += deficit
+        moved = true
+      }
+    }
+    if (!moved) break
+  }
+  let min = Number.POSITIVE_INFINITY
+  for (const row of g.layers) for (const v of row) min = Math.min(min, centers[v] - size[v] / 2)
   if (!Number.isFinite(min)) min = 0
   return centers.map((c) => Math.max(0, Math.round(c - min)))
 }
@@ -202,7 +222,7 @@ function straightest(
   g: LayeredGraph,
   size: number[],
   realCount: number,
-): number[] {
+): number {
   // A kinked chain segment costs most (a bus track in every band it jogs
   // through), a kinked edge between boxes next; the jog where a long edge
   // leaves or reaches its box is the natural place for it to step aside.
@@ -210,7 +230,7 @@ function straightest(
     const virtual = Number(v >= realCount) + Number(w >= realCount)
     return virtual === 2 ? 8 : virtual === 1 ? 1 : 4
   }
-  const scored = runs.map((x) => {
+  const scored = runs.map((x, index) => {
     let bends = 0
     for (let v = 0; v < g.down.length; v++) {
       for (const w of g.down[v]) bends += weight(v, w) * Math.abs(x[v] - x[w])
@@ -221,7 +241,7 @@ function straightest(
       lo = Math.min(lo, c - size[v] / 2)
       hi = Math.max(hi, c + size[v] / 2)
     })
-    return { x, bends, width: hi - lo }
+    return { index, bends, width: hi - lo }
   })
   const narrowest = Math.min(...scored.map((s) => s.width))
   let best = scored[0]
@@ -231,5 +251,5 @@ function straightest(
       best = s
     }
   }
-  return [...best.x]
+  return best.index
 }

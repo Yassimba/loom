@@ -111,6 +111,8 @@ interface RoutePlan {
   fwdEntryX: number[]
   /** Per edge: render the label left of the arrowhead instead of right. */
   edgeLabelLeft: boolean[]
+  /** Where a chain-routed edge's label sits beside its long vertical, if it moved off the head row. */
+  edgeLabelAt: ({ row: number; x: number } | null)[]
 }
 
 // ------------------------------------------------------------------ ranking
@@ -470,12 +472,16 @@ export function assignPositions(
   sep: number,
   pad: (node: number) => number = () => 0,
   offset: (v: number) => number = () => 0,
+  padLeft: (node: number) => number = () => 0,
 ): number[] {
   const n = size.length
   const all = [...size]
   while (all.length < layered.up.length) all.push(1)
+  // `pad(v)` reserves cells right of `v` for a label: a real node's arrival
+  // labels when a chain follows it, or a chain node's own edge label;
+  // `padLeft(v)` the same on its left.
   const sepOf = (left: number, right: number): number =>
-    left < n && right < n ? sep : 1 + (left < n && right >= n ? pad(left) : 0)
+    left < n && right < n ? sep : 1 + (left >= n || right >= n ? pad(left) : 0) + padLeft(right)
   return brandesKoepf(layered, all, sepOf, n, offset)
 }
 
@@ -852,13 +858,16 @@ function placeTd(
   // Arrival labels hang right of a box's entry heads (forward: above the
   // top, back: below the bottom), on rows a chain column passes through: a
   // chain placed right of a box keeps clear of them.
-  const labelPad = new Array<number>(graph.nodes.length).fill(0)
-  for (const e of graph.edges) {
-    if (e.from === e.to) continue
-    const parts = ranks[e.to] > ranks[e.from] ? [e.label, e.cardTo] : [edgeText(e)]
-    for (const part of parts) {
-      if (part != null) labelPad[e.to] = Math.max(labelPad[e.to], Math.min(stringWidth(part), MAX_LABEL) + 1)
-    }
+  const headPad = (skip: (i: number) => boolean): number[] => {
+    const pad = new Array<number>(layered.up.length).fill(0)
+    graph.edges.forEach((e, i) => {
+      if (e.from === e.to || skip(i)) return
+      const parts = ranks[e.to] > ranks[e.from] ? [e.label, e.cardTo] : [edgeText(e)]
+      for (const part of parts) {
+        if (part != null) pad[e.to] = Math.max(pad[e.to], Math.min(stringWidth(part), MAX_LABEL) + 1)
+      }
+    })
+    return pad
   }
   // A back edge leaves the source's top and enters the target's bottom two
   // cells off centre, clear of the forward exits and arrivals that own the
@@ -872,7 +881,52 @@ function placeTd(
   // The chain, aligned with an endpoint's centre by Brandes–Köpf, then
   // shifts to that endpoint's port so it runs straight from it.
   const isBack = (e: Edge): boolean => e.from !== e.to && ranks[e.to] < ranks[e.from]
-  const first = assignPositions(layered, sizes.layW, GAP_X, (node) => labelPad[node])
+  const allAtHead = headPad(() => false)
+  const first = assignPositions(layered, sizes.layW, GAP_X, (node) => allAtHead[node])
+  // An edge with a chain carries its label beside the chain's vertical
+  // (dagre's label dummy), on whichever chain node has slack enough beside
+  // it in the first placement, nearest the middle; the node then reserves
+  // that width. Without such slack the label stays at the head row, where
+  // it shares the target's row and costs nothing.
+  const chainLabel = new Map<number, { edge: number; w: number; side: number }>()
+  const labelNode = new Array<number>(graph.edges.length).fill(-1)
+  const layerOf = new Array<number>(layered.up.length).fill(0)
+  layered.layers.forEach((row, r) => {
+    for (const v of row) layerOf[v] = r
+  })
+  const extent = (v: number): number => (v < graph.nodes.length ? sizes.layW[v] : 1)
+  const slack = (v: number, side: number): number => {
+    const row = layered.layers[layerOf[v]]
+    const u = row[row.indexOf(v) + side]
+    if (u === undefined) return 0
+    const reserved = side < 0 ? allAtHead[u] : 0
+    return Math.abs(first[u] - first[v]) - half(extent(u)) - half(extent(v)) - 1 - reserved
+  }
+  graph.edges.forEach((e, i) => {
+    const chain = layered.chains[i]
+    const text = edgeText(e)
+    if (chain.length === 0 || text === null) return
+    const w = Math.min(stringWidth(text), MAX_LABEL)
+    const mid = chain.length >> 1
+    let best: { v: number; side: number; dist: number } | null = null
+    chain.forEach((v, k) => {
+      for (const side of [1, -1]) {
+        if (slack(v, side) < w + 1 || chainLabel.has(v)) continue
+        const dist = Math.abs(k - mid)
+        if (best === null || dist < best.dist) best = { v, side, dist }
+      }
+    })
+    if (best === null) return
+    const { v, side } = best as { v: number; side: number }
+    labelNode[i] = v
+    chainLabel.set(v, { edge: i, w, side })
+  })
+  const labelPad = headPad((i) => labelNode[i] !== -1)
+  const labelPadLeft = new Array<number>(layered.up.length).fill(0)
+  for (const [v, { w, side }] of chainLabel) {
+    if (side > 0) labelPad[v] = w + 1
+    else labelPadLeft[v] = w + 1
+  }
   /** Forward bus rows in the band below rank `r` whose span covers column `p`. */
   const busOver = (r: number, p: number): number =>
     graph.edges.filter((e) => {
@@ -917,6 +971,7 @@ function placeTd(
     GAP_X,
     (node) => labelPad[node],
     (v) => shift.get(v) ?? 0,
+    (node) => labelPadLeft[node],
   )
   const boxL = (j: number): number => sat(centers[j], half(sizes.boxW[j]))
   const boxR = (j: number): number => boxL(j) + sizes.boxW[j] - 1
@@ -927,7 +982,7 @@ function placeTd(
   let margin = 0
   graph.edges.forEach((e, i) => {
     const text = edgeText(e)
-    if (!isBack(e) || entrySide[i] >= 0 || text === null) return
+    if (!isBack(e) || entrySide[i] >= 0 || text === null || labelNode[i] !== -1) return
     margin = Math.max(margin, Math.min(stringWidth(text), MAX_LABEL) + 1 - port(e.to, -1))
   })
   for (let v = 0; v < centers.length; v++) centers[v] += margin
@@ -948,6 +1003,7 @@ function placeTd(
   const fwdEntryX = new Array<number>(graph.nodes.length).fill(-1)
   const edgeLabelLeft = new Array<boolean>(graph.edges.length).fill(false)
   const labelW = (e: Edge): number => {
+    if (labelNode[graph.edges.indexOf(e)] !== -1) return -1
     const parts = [e.label, e.cardTo].filter((p) => p != null) as string[]
     return parts.length === 0
       ? -1
@@ -1141,10 +1197,20 @@ function placeTd(
     }
   })
 
+  const edgeLabelAt = graph.edges.map((_, i) => {
+    const v = labelNode[i]
+    if (v === -1) return null
+    const { w, side } = chainLabel.get(v) as { w: number; side: number }
+    const r = layerOf[v]
+    return { row: rankY[r] + half(rankH[r]), x: side > 0 ? centers[v] + 2 : centers[v] - 1 - w }
+  })
   let contentW = diagramW
   for (const e of graph.edges) {
     if (e.from === e.to) continue
-    if (ranks[e.to] > ranks[e.from]) {
+    const at = edgeLabelAt[graph.edges.indexOf(e)]
+    if (at !== null) {
+      contentW = Math.max(contentW, at.x + (chainLabel.get(labelNode[graph.edges.indexOf(e)])?.w ?? 0))
+    } else if (ranks[e.to] > ranks[e.from]) {
       const parts = [e.label, e.cardTo].filter((part) => part != null) as string[]
       const entry = Math.max(placed[e.to].cx, edgeEntryX[graph.edges.indexOf(e)])
       for (const part of parts) {
@@ -1177,6 +1243,7 @@ function placeTd(
     skipRoute,
     fwdEntryX,
     edgeLabelLeft,
+    edgeLabelAt,
   }
 }
 
@@ -1312,6 +1379,7 @@ function placeLr(
     skipRoute,
     fwdEntryX: new Array<number>(graph.nodes.length).fill(-1),
     edgeLabelLeft: new Array<boolean>(graph.edges.length).fill(false),
+    edgeLabelAt: graph.edges.map(() => null),
   }
 }
 
@@ -1455,9 +1523,9 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
       if (adjacent)
         routeForward(canvas, from, to, edge, bus, plan.fwdEntryX[edge.to], plan.edgeLabelLeft[i])
       else if (to.rank > from.rank) {
-        routeSkip(canvas, from, to, edge, plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i])
+        routeSkip(canvas, from, to, edge, plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i], plan.edgeLabelAt[i])
       } else {
-        routeBackChain(canvas, from, to, edge, plan.edgeExitX[i], plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i])
+        routeBackChain(canvas, from, to, edge, plan.edgeExitX[i], plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i], plan.edgeLabelAt[i])
       }
     } else if (adjacent) {
       routeForwardLr(canvas, from, to, edge, bus)
@@ -1841,6 +1909,7 @@ function routeBackChain(
   entryX: number,
   route: { bus: number; at: number }[],
   labelLeft: boolean,
+  labelAt: { row: number; x: number } | null,
 ): void {
   const fy = from.y
   const headRow = to.y + to.h
@@ -1861,7 +1930,8 @@ function routeBackChain(
   if (edge.headFrom !== 'none') canvas.set(exitX, fy, headGlyph(edge.headFrom, '▼'), 'edge')
 
   const text = edgeText(edge)
-  if (text !== null) {
+  if (text !== null && labelAt !== null) placeLabel(canvas, text, labelAt.row, labelAt.x)
+  else if (text !== null) {
     const start = labelLeft ? sat(entryX, Math.min(stringWidth(text), MAX_LABEL)) : entryX + 1
     placeLabel(canvas, text, headRow, start)
   }
@@ -1905,6 +1975,7 @@ function routeSkip(
   entryX: number,
   route: { bus: number; at: number }[],
   labelLeft: boolean,
+  labelAt: { row: number; x: number } | null,
 ): void {
   const bx = from.cx
   const bottom = from.y + from.h - 1
@@ -1926,7 +1997,8 @@ function routeSkip(
   if (edge.headFrom !== 'none') canvas.set(bx, bottom, headGlyph(edge.headFrom, '▲'), 'edge')
 
   const text = edgeText(edge)
-  if (text !== null) {
+  if (text !== null && labelAt !== null) placeLabel(canvas, text, labelAt.row, labelAt.x)
+  else if (text !== null) {
     const start = labelLeft ? sat(entryX, Math.min(stringWidth(text), MAX_LABEL)) : entryX + 1
     placeLabel(canvas, text, headRow, start)
   }
