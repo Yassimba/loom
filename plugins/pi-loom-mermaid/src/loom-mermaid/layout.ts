@@ -1112,6 +1112,43 @@ function placeTd(
     chainLabel[i] = { v, w, side }
     taken.add(v)
   })
+  // Side entry (port assignment as in Hegemann and Wolff, GD 2023): a
+  // skip whose chain comes down well outside the target box, alone —
+  // no other arrival jogging in — enters through the facing side on the
+  // centre row rather than hooking across the band above into the top.
+  // One per side; plain boxes only (a class box's side rows are
+  // compartment rules). Decided on a coordinate set: once on the first
+  // placement, to reserve room for a head label on the side leg, and
+  // again on the final one.
+  const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
+  const sideEntries = (x: number[]): number[] => {
+    const out = new Array<number>(graph.edges.length).fill(0)
+    const taken = new Set<string>()
+    const bl = (j: number): number => sat(x[j], half(sizes.boxW[j]))
+    const br = (j: number): number => bl(j) + sizes.boxW[j] - 1
+    graph.edges.forEach((e, i) => {
+      if (!isSkip(e) || extras[e.to].kind !== 'plain') return
+      const last = layered.chains[i].at(-1)
+      if (last === undefined) return
+      const col = x[last]
+      const side = col <= bl(e.to) - 3 ? -1 : col >= br(e.to) + 3 ? 1 : 0
+      if (side === 0 || taken.has(`${e.to}:${side}`)) return
+      const othersJog = graph.edges.some(
+        (o, k) =>
+          k !== i && o.to === e.to && o.from !== o.to && ranks[o.from] < ranks[o.to] && Math.abs(x[layered.chains[k].at(-1) ?? o.from] - x[e.to]) > 1,
+      )
+      if (othersJog) return
+      // A blank cell between the leg and every other box on the rank, or
+      // the leg would read as leaving that box.
+      const blocked = byRank[ranks[e.to]].some(
+        (j) => j !== e.to && Math.min(col, x[e.to]) - 1 < br(j) && Math.max(col, x[e.to]) + 1 > bl(j),
+      )
+      if (blocked) return
+      taken.add(`${e.to}:${side}`)
+      out[i] = side
+    })
+    return out
+  }
   const labelPad = headPad((i) => chainLabel[i] !== null)
   const labelPadLeft = new Array<number>(layered.up.length).fill(0)
   for (const label of chainLabel) {
@@ -1119,6 +1156,16 @@ function placeTd(
     if (label.side > 0) labelPad[label.v] = label.w + 1
     else labelPadLeft[label.v] = label.w + 1
   }
+  // A side entry's head label rides its leg: the chain's last node keeps
+  // that much room on its box side.
+  sideEntries(first).forEach((side, i) => {
+    const text = edgeText(graph.edges[i])
+    if (side === 0 || text === null || chainLabel[i] !== null) return
+    const v = layered.chains[i].at(-1) as number
+    const w = labelCols(text, maxLabel) + 3
+    if (side > 0) labelPadLeft[v] = Math.max(labelPadLeft[v], w)
+    else labelPad[v] = Math.max(labelPad[v], w)
+  })
   /** Forward bus rows in the band below rank `r` whose span covers column `p`. */
   const busOver = (r: number, p: number): number =>
     graph.edges.filter((e) => {
@@ -1192,7 +1239,6 @@ function placeTd(
   // arrival, placed at their sources' mean; each skip gets its own. Whatever falls outside the top
   // spreads over the room left beside the straight drops. A label that
   // does not fit before the next entry renders left of its arrow.
-  const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
   const isFwd = (e: Edge): boolean => e.from !== e.to && ranks[e.to] === ranks[e.from] + 1
   const edgeEntryX = new Array<number>(graph.edges.length).fill(-1)
   const edgeLabelLeft = new Array<boolean>(graph.edges.length).fill(false)
@@ -1202,39 +1248,7 @@ function placeTd(
     const parts = arrivalParts(e)
     return parts.length === 0 ? -1 : Math.max(...parts.map((p) => labelCols(p, maxLabel)))
   }
-  // Side entry (port assignment as in Hegemann and Wolff, GD 2023): an
-  // unlabelled skip whose chain comes down well outside the target box
-  // enters through the side facing it, on the centre row, rather than
-  // hooking across the band above into the top. One per side; a labelled
-  // arrival keeps the top, where its label has room.
-  const sideEntry = new Array<number>(graph.edges.length).fill(0)
-  const sideTaken = new Set<string>()
-  graph.edges.forEach((e, i) => {
-    // A label beside the chain stays there; one that would sit at the head
-    // keeps the top, where it has room.
-    if (!isSkip(e) || (edgeText(e) !== null && chainLabel[i] === null) || extras[e.to].kind !== 'plain') return
-    const last = layered.chains[i].at(-1)
-    if (last === undefined) return
-    const col = centers[last]
-    const side = col <= boxL(e.to) - 3 ? -1 : col >= boxR(e.to) + 3 ? 1 : 0
-    if (side === 0 || sideTaken.has(`${e.to}:${side}`)) return
-    // Only a lone detour takes the side: with other arrivals jogging in
-    // from the band, the skip joins their head instead.
-    const othersJog = graph.edges.some(
-      (o, k) => k !== i && o.to === e.to && o.from !== o.to && ranks[o.from] < ranks[o.to] && Math.abs(centers[layered.chains[k].at(-1) ?? o.from] - centers[e.to]) > 1,
-    )
-    if (othersJog) return
-    // The chain column must be clear of boxes on the target's rank between
-    // the column and the box side, or the side leg would cut through one.
-    // ... with a blank cell either side of the leg's column, or the leg
-    // would read as leaving the neighbouring box.
-    const blocked = byRank[ranks[e.to]].some(
-      (j) => j !== e.to && Math.min(col, centers[e.to]) - 1 < boxR(j) && Math.max(col, centers[e.to]) + 1 > boxL(j),
-    )
-    if (blocked) return
-    sideTaken.add(`${e.to}:${side}`)
-    sideEntry[i] = side
-  })
+  const sideEntry = sideEntries(centers)
   const into: number[][] = graph.nodes.map(() => [])
   graph.edges.forEach((e, i) => {
     if ((isSkip(e) && sideEntry[i] === 0) || isFwd(e)) into[e.to].push(i)
@@ -2009,9 +2023,15 @@ function chainRoute(
   const points = jogPoints([from.cx, from.y + from.h - 1], jogs, true)
   if (side !== 0) {
     // Down the chain column to the target's centre row, then across into
-    // its side. A label beside the chain stays where the chain put it.
-    points.push([entryX, to.cy], [side < 0 ? to.x - 1 : to.x + to.w, to.cy])
-    return { points, labels: labelAt === null ? [] : fitted([{ text: edgeText(edge) ?? '', row: labelAt.row, x: labelAt.x }], max) }
+    // its side. A label beside the chain stays where the chain put it;
+    // otherwise it interrupts the side leg, the way a lane label does.
+    const head = side < 0 ? to.x - 1 : to.x + to.w
+    points.push([entryX, to.cy], [head, to.cy])
+    const text = edgeText(edge)
+    if (labelAt !== null) return { points, labels: fitted([{ text: text ?? '', row: labelAt.row, x: labelAt.x }], max) }
+    const laneLabel =
+      text === null ? undefined : { text: ` ${fitLabel(text, max)} `, y: to.cy, lo: Math.min(entryX, head), hi: Math.max(entryX, head) }
+    return { points, labels: [], laneLabel }
   }
   const headRow = to.y - 1
   points.push([entryX, headRow])
