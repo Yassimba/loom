@@ -139,7 +139,7 @@ grep -Fq 'loom setup' "$evidence_dir/rerun-stdout.txt"
 grep -Fq 'Everything selected is already set up; no changes made' "$evidence_dir/rerun-stdout.txt"
 grep -Fq 'next run `loom status` to verify the setup' "$evidence_dir/bootstrap-stdout.txt"
 grep -Fq 'next run `loom init` inside your first project' "$evidence_dir/bootstrap-stdout.txt"
-grep -Fq 'Selected resources and runtimes verified' "$evidence_dir/loom-status.txt"
+grep -Fq 'Selected resources and runtimes checked' "$evidence_dir/loom-status.txt"
 grep -Fq 'Done' "$evidence_dir/loom-init.txt"
 grep -Eq 'Up to date|refreshed' "$evidence_dir/loom-update.txt"
 
