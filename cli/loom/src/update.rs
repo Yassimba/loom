@@ -200,12 +200,15 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             }
             let active = running.join(" + ");
             if out.is_terminal() || active != last_active {
-                out.progress(progress_status(
-                    total - running.len(),
-                    total,
-                    &running,
-                    started.elapsed().as_secs(),
-                ));
+                out.progress(
+                    progress_status(
+                        total - running.len(),
+                        total,
+                        &running,
+                        started.elapsed().as_secs(),
+                    ),
+                    (started.elapsed().as_millis() / 100) as usize,
+                );
                 last_active = active;
             }
         }
