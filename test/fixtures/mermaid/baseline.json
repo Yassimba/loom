@@ -13,6 +13,13 @@
     "crossings": 0,
     "area": 1518
   },
+  "concentrate": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 3,
+    "area": 392
+  },
   "cycles": {
     "brokenLinks": 0,
     "edgeOverText": 0,

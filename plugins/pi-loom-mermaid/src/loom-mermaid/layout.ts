@@ -229,14 +229,23 @@ function dfsDag(
 export interface Layered extends LayeredGraph {
   /** Per edge, its virtual nodes from source to target; empty unless it skips ranks. */
   chains: number[][]
+  /** Virtual nodes on more than one chain (a concentrated trunk). */
+  shared: Set<number>
 }
 
 /**
  * Split each edge into unit-rank segments: forward adjacent edges and the
  * ones `interior` accepts take part, the rest run around the outside and
  * are left out. A chain is listed in the edge's own direction, so a back
- * edge's runs up the ranks. Naive normalisation is bounded by
- * MAX_EDGES × MAX_NODES virtual nodes, small enough here.
+ * edge's runs up the ranks.
+ *
+ * Edges leaving one node share virtual nodes for as long as they all
+ * continue (dot's `concentrate`): the fan runs as one trunk that splits
+ * where the first target arrives, one column per rank instead of one per
+ * edge. Edges arriving at one node share the same way on their last
+ * ranks. A node is never shared both ways, which would join two edges
+ * with neither end in common and read as a third. Naive normalisation is
+ * bounded by MAX_EDGES × MAX_NODES virtual nodes, small enough here.
  */
 function normalize(
   byRank: number[][],
@@ -250,27 +259,63 @@ function normalize(
   const down: number[][] = Array.from({ length: n }, () => [])
   const link = (a: number, b: number, upward: boolean): void => {
     const [hi, lo] = upward ? [b, a] : [a, b]
+    if (down[hi].includes(lo)) return
     down[hi].push(lo)
     up[lo].push(hi)
   }
   const chains: number[][] = edges.map(() => [])
+  const owners = new Map<number, number>()
+  const shared = new Set<number>()
+  const trunks = new Map<string, number>()
+  const takes = (e: Edge): boolean =>
+    e.from !== e.to && (ranks[e.to] === ranks[e.from] + 1 || interior(e))
+  // How far from each end a group of edges keeps company: the second
+  // nearest endpoint among edges sharing that end, since sharing needs two.
+  const reach = (key: 'from' | 'to'): Map<number, number> => {
+    const other = key === 'from' ? 'to' : 'from'
+    const ends = new Map<number, number[]>()
+    for (const e of edges) {
+      if (!takes(e)) continue
+      const list = ends.get(e[key]) ?? []
+      list.push(ranks[e[other]])
+      ends.set(e[key], list)
+    }
+    const out = new Map<number, number>()
+    for (const [node, rs] of ends) {
+      const d = rs.map((r) => Math.abs(r - ranks[node])).sort((a, b) => a - b)
+      if (d.length > 1) out.set(node, d[1])
+    }
+    return out
+  }
+  const fromReach = reach('from')
+  const toReach = reach('to')
   edges.forEach((e, i) => {
-    if (e.from === e.to || !(ranks[e.to] === ranks[e.from] + 1 || interior(e))) return
+    if (!takes(e)) return
     const upward = ranks[e.to] < ranks[e.from]
     const step = upward ? -1 : 1
+    const span = Math.abs(ranks[e.to] - ranks[e.from])
+    const headEnd = Math.min(fromReach.get(e.from) ?? 0, span) - 1
+    const tailStart = span - Math.min(toReach.get(e.to) ?? 0, span) + 1
     let prev = e.from
-    for (let r = ranks[e.from] + step; r !== ranks[e.to]; r += step) {
-      const v = up.length
-      up.push([])
-      down.push([])
-      layers[r].push(v)
+    for (let k = 1; k < span; k++) {
+      const r = ranks[e.from] + step * k
+      const key = k <= headEnd ? `f${e.from}@${r}` : k >= tailStart && k > headEnd ? `t${e.to}@${r}` : null
+      let v = key === null ? undefined : trunks.get(key)
+      if (v === undefined) {
+        v = up.length
+        up.push([])
+        down.push([])
+        layers[r].push(v)
+        if (key !== null) trunks.set(key, v)
+        owners.set(v, i)
+      } else shared.add(v)
       chains[i].push(v)
       link(prev, v, upward)
       prev = v
     }
     link(prev, e.to, upward)
   })
-  return { layers, up, down, chains }
+  return { layers, up, down, chains, shared }
 }
 
 /**
@@ -809,9 +854,9 @@ function clearPorts(
   backExit: (node: number) => number[],
 ): void {
   const n = graph.nodes.length
-  const ends = new Map<number, [number, number]>()
+  const ends = new Map<number, number[]>()
   graph.edges.forEach((e, i) => {
-    for (const v of layered.chains[i]) ends.set(v, [e.from, e.to])
+    for (const v of layered.chains[i]) ends.set(v, [...(ends.get(v) ?? []), e.from, e.to])
   })
   layered.layers.forEach((row, r) => {
     /** Port column → the node owning it; a chain's own endpoints are no conflict. */
@@ -911,7 +956,7 @@ function placeTd(
     let best: { v: number; side: number; dist: number } | null = null
     chain.forEach((v, k) => {
       for (const side of [1, -1]) {
-        if (slack(v, side) < w + 1 || chainLabel.has(v)) continue
+        if (slack(v, side) < w + 1 || chainLabel.has(v) || layered.shared.has(v)) continue
         const dist = Math.abs(k - mid)
         if (best === null || dist < best.dist) best = { v, side, dist }
       }
