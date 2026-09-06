@@ -1044,6 +1044,7 @@ function placeTd(
   sizes: NodeSizes,
   graph: Graph,
   placed: Placed[],
+  extras: NodeExtra[],
 ): Plan {
   const maxLabel = sizes.maxLabel
   // Arrival labels hang right of a box's entry heads (forward: above the
@@ -1201,9 +1202,38 @@ function placeTd(
     const parts = arrivalParts(e)
     return parts.length === 0 ? -1 : Math.max(...parts.map((p) => labelCols(p, maxLabel)))
   }
+  // Side entry (port assignment as in Hegemann and Wolff, GD 2023): an
+  // unlabelled skip whose chain comes down well outside the target box
+  // enters through the side facing it, on the centre row, rather than
+  // hooking across the band above into the top. One per side; a labelled
+  // arrival keeps the top, where its label has room.
+  const sideEntry = new Array<number>(graph.edges.length).fill(0)
+  const sideTaken = new Set<string>()
+  graph.edges.forEach((e, i) => {
+    if (!isSkip(e) || edgeText(e) !== null || extras[e.to].kind !== 'plain') return
+    const last = layered.chains[i].at(-1)
+    if (last === undefined) return
+    const col = centers[last]
+    const side = col <= boxL(e.to) - 3 ? -1 : col >= boxR(e.to) + 3 ? 1 : 0
+    if (side === 0 || sideTaken.has(`${e.to}:${side}`)) return
+    // Only a lone detour takes the side: with other arrivals jogging in
+    // from the band, the skip joins their head instead.
+    const othersJog = graph.edges.some(
+      (o, k) => k !== i && o.to === e.to && o.from !== o.to && ranks[o.from] < ranks[o.to] && Math.abs(centers[layered.chains[k].at(-1) ?? o.from] - centers[e.to]) > 1,
+    )
+    if (othersJog) return
+    // The chain column must be clear of boxes on the target's rank between
+    // the column and the box side, or the side leg would cut through one.
+    const blocked = byRank[ranks[e.to]].some(
+      (j) => j !== e.to && Math.min(col, centers[e.to]) < boxR(j) && Math.max(col, centers[e.to]) > boxL(j),
+    )
+    if (blocked) return
+    sideTaken.add(`${e.to}:${side}`)
+    sideEntry[i] = side
+  })
   const into: number[][] = graph.nodes.map(() => [])
   graph.edges.forEach((e, i) => {
-    if (isSkip(e) || isFwd(e)) into[e.to].push(i)
+    if ((isSkip(e) && sideEntry[i] === 0) || isFwd(e)) into[e.to].push(i)
   })
   graph.nodes.forEach((_, t) => {
     const entries = into[t]
@@ -1342,6 +1372,11 @@ function placeTd(
     const exit = port(e.from, exitSide[i])
     edgeExitX[i] = Math.abs(exit - next) <= 1 ? next : exit
   })
+  // A side entry's chain ends on its own column; the route turns into the
+  // box from there.
+  graph.edges.forEach((e, i) => {
+    if (sideEntry[i] !== 0) edgeEntryX[i] = centers[layered.chains[i].at(-1) as number]
+  })
   const jogs = chainJogs(graph, ranks, layered, centers, (e, i) => {
     if (isSkip(e)) return { exit: centers[e.from], entry: edgeEntryX[i] }
     return isBack(e) ? { exit: edgeExitX[i], entry: edgeEntryX[i] } : null
@@ -1443,7 +1478,7 @@ function placeTd(
       return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel)
     }
     if (isSkip(edge)) {
-      return chainRoute(from, to, edge, edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel)
+      return chainRoute(from, to, edge, edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel, sideEntry[i])
     }
     return forwardRoute(from, to, edge, bandEnd[from.rank] + edgeBus[i], edgeEntryX[i], edgeLabelLeft[i], maxLabel)
   })
@@ -1816,7 +1851,7 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
   }))
 
   const plan = vertical
-    ? placeTd(ranks, maxRank, byRank, layered, sizes, graph, placed)
+    ? placeTd(ranks, maxRank, byRank, layered, sizes, graph, placed, extras)
     : placeLr(ranks, maxRank, byRank, layered, sizes, graph, placed, extras)
 
   if (plan.canvasW * plan.canvasH > MAX_CANVAS_CELLS) return null
@@ -1959,9 +1994,16 @@ function chainRoute(
   labelLeft: boolean,
   labelAt: LabelAt,
   max: number,
+  side = 0,
 ): Route {
-  const headRow = to.y - 1
   const points = jogPoints([from.cx, from.y + from.h - 1], jogs, true)
+  if (side !== 0) {
+    // Down the chain column to the target's centre row, then across into
+    // its side.
+    points.push([entryX, to.cy], [side < 0 ? to.x - 1 : to.x + to.w, to.cy])
+    return { points, labels: [] }
+  }
+  const headRow = to.y - 1
   points.push([entryX, headRow])
   return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt, max) }
 }
