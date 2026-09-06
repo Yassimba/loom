@@ -11,7 +11,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1518
+    "area": 1584
   },
   "concentrate": {
     "brokenLinks": 0,
@@ -60,7 +60,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1020
+    "area": 1156
   },
   "parallel-edges": {
     "brokenLinks": 0,
@@ -95,14 +95,21 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 572
+    "area": 624
   },
   "state-lr": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 602
+    "area": 688
+  },
+  "subgraphs-lr": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 3,
+    "area": 8326
   },
   "unicode-wide": {
     "brokenLinks": 0,

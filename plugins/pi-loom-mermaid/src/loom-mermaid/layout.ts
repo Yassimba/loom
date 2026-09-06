@@ -11,7 +11,7 @@
  */
 
 import type { Canvas } from './canvas.ts'
-import type { Edge } from './graph.ts'
+import type { Anchor, Edge } from './graph.ts'
 import type { Graph } from './graph.ts'
 import { fitLabel, type Limits, wrapLabel } from './labels.ts'
 import { brandesKoepf, type LayeredGraph } from './placement.ts'
@@ -69,6 +69,8 @@ interface NodeSizes {
   layH: number[]
   extraH: number[]
   selfLabelW: number[]
+  /** Cells of a frame's top border taken by its title (0 for other boxes). */
+  titleW: number[]
   /** Edge labels are fitted to this many columns. */
   maxLabel: number
 }
@@ -91,6 +93,122 @@ export interface Route {
   labels: { text: string; row: number; x: number }[]
   /** A lane label that slides along its run to a clear stretch (left-to-right lanes). */
   laneLabel?: LaneLabel
+  /**
+   * Cells needing junction bits beyond what the segments give: frame border
+   * cells pierced on the way to an inner node (`v` / `h`, the run's
+   * direction there) and bundle joins where a straight run meets the shared
+   * bus (`j`, so it reads as a tee rather than a hop).
+   */
+  through?: Through[]
+}
+
+/**
+ * A cross-frame edge end resolved against the frame's contents: the box the
+ * route leaves or enters (frame-local coordinates, the frame's corner at
+ * 0,0) and the border cells crossed. Preferably the inner node itself, with
+ * a straight stub to the frame border through blank padding or nested
+ * borders; else the frame border at the inner node's column or row. Ports
+ * on one side of one frame never share a coordinate: a second edge is
+ * nudged a cell over, inside its box, else falls back to the frame border.
+ */
+type Through = [number, number, 'v' | 'h' | 'j']
+
+interface Port {
+  box: Omit<Placed, 'rank'>
+  through: Through[]
+  /** The inner node's own coordinate on this side, before any nudge. */
+  wanted: number
+}
+
+type Side = 'top' | 'bottom' | 'left' | 'right'
+
+function framePort(
+  sub: Canvas,
+  fw: number,
+  fh: number,
+  titleW: number,
+  a: Anchor,
+  side: Side,
+  used: Set<string>,
+): Port {
+  const ox = 1 + half(fw - 2 - sub.w)
+  const oy = 1 + half(fh - 2 - sub.h)
+  const ax = a.x + ox
+  const ay = a.y + oy
+  const vertical = side === 'bottom' || side === 'top'
+  const anchorC = vertical ? ax + half(a.w) : ay + half(a.h)
+  // The top border carries the title; no port lands on it.
+  const nearest = (lo: number, hi: number): number[] => {
+    const out: number[] = []
+    for (let d = 0; d <= hi - lo; d++) {
+      if (anchorC + d <= hi) out.push(anchorC + d)
+      if (d > 0 && anchorC - d >= lo) out.push(anchorC - d)
+    }
+    return out.filter((c) => !used.has(`${side}:${c}`) && (side !== 'top' || c > titleW))
+  }
+  // Walk from the cell past the inner box to the cell inside the frame
+  // border; blank cells pass, a nested frame border is pierced. A box within
+  // a cell of the border takes no stub: a one-cell pierce reads as noise,
+  // the border port beside it says the same.
+  const stub = (c: number): Through[] | null => {
+    const through: Through[] = []
+    const [from, to] =
+      side === 'bottom'
+        ? [ay + a.h, fh - 2]
+        : side === 'top'
+          ? [ay - 1, 1]
+          : side === 'right'
+            ? [ax + a.w, fw - 2]
+            : [ax - 1, 1]
+    const step = side === 'left' || side === 'top' ? -1 : 1
+    if ((to - from) * step < 1) return null
+    for (let k = from; k !== to + step; k += step) {
+      const [x, y] = vertical ? [c - ox, k - oy] : [k - ox, c - oy]
+      if (x < 0 || y < 0 || x >= sub.w || y >= sub.h) continue
+      const i = sub.idx(x, y)
+      if (!sub.occupied[i] && sub.ch[i] === ' ') continue
+      // The first cell holds the arrowhead, so it must be free.
+      if (k !== from && sub.role[i] === 'border' && sub.ch[i] === (vertical ? '─' : '│')) {
+        through.push(vertical ? [c, k, 'v'] : [k, c, 'h'])
+        continue
+      }
+      return null
+    }
+    const border = side === 'bottom' ? fh - 1 : side === 'right' ? fw - 1 : 0
+    through.push(vertical ? [c, border, 'v'] : [border, c, 'h'])
+    return through
+  }
+  for (const c of vertical ? nearest(ax + 1, ax + a.w - 2) : nearest(ay + 1, ay + a.h - 2)) {
+    const through = stub(c)
+    if (through === null) continue
+    used.add(`${side}:${c}`)
+    const box = { x: ax, y: ay, w: a.w, h: a.h, cx: ax + half(a.w), cy: ay + half(a.h) }
+    if (vertical) box.cx = c
+    else box.cy = c
+    return { box, through, wanted: anchorC }
+  }
+  const [c] = vertical ? nearest(1, fw - 2) : nearest(1, fh - 2)
+  const at = c ?? anchorC
+  used.add(`${side}:${at}`)
+  const box = { x: 0, y: 0, w: fw, h: fh, cx: half(fw), cy: half(fh) }
+  if (vertical) box.cx = at
+  else box.cy = at
+  return { box, through: [], wanted: anchorC }
+}
+
+/** A port translated to where its frame landed. */
+function portAt(port: Port, frame: Placed): Placed & { through: Through[] } {
+  const b = port.box
+  return {
+    x: frame.x + b.x,
+    y: frame.y + b.y,
+    w: b.w,
+    h: b.h,
+    cx: frame.x + b.cx,
+    cy: frame.y + b.cy,
+    rank: frame.rank,
+    through: port.through.map(([x, y, k]) => [frame.x + x, frame.y + y, k]),
+  }
 }
 
 /** A lane label waiting for every route to land before claiming its spot. */
@@ -541,6 +659,8 @@ interface TrackSpan {
   /** A labelled lane refuses endpoint sharing in `packTracks`: the label
    * would appear to cover every edge merged onto the row. */
   labeled?: boolean
+  /** Spans with one key run as one trunk: every edge between two frames shares a bus. */
+  bundle?: string
 }
 
 /** Spans merged onto one track because they share an endpoint. */
@@ -641,6 +761,7 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
     const host = hypers.find((h) =>
       h.members.some(
         (m) =>
+          (span.bundle !== undefined && m.bundle === span.bundle) ||
           (m.from === span.from && m.up[0] === span.up[0]) ||
           (m.to === span.to && m.down[0] === span.down[0]),
       ),
@@ -652,8 +773,9 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
     host.members.push(span)
     host.start = Math.min(host.start, span.start)
     host.end = Math.max(host.end, span.end)
-    host.up.push(...span.up)
-    host.down.push(...span.down)
+    // One arm per coordinate: edges sharing a port share the arm.
+    for (const c of span.up) if (!host.up.includes(c)) host.up.push(c)
+    for (const c of span.down) if (!host.down.includes(c)) host.down.push(c)
   }
   return hypers
 }
@@ -725,22 +847,25 @@ function busSpans(
   r: number,
   exact: boolean,
   entry: (edge: number) => number = (i) => centers[graph.edges[i].to],
+  exit: (edge: number) => number = (i) => centers[graph.edges[i].from],
+  bundle: (edge: number) => string | undefined = () => undefined,
 ): TrackSpan[] {
   const out: TrackSpan[] = []
   graph.edges.forEach((e, i) => {
-    const jogs = exact
-      ? centers[e.from] !== centers[e.to]
-      : Math.abs(centers[e.from] - centers[e.to]) > 1
+    const jogs =
+      bundle(i) !== undefined ||
+      (exact ? exit(i) !== entry(i) : Math.abs(centers[e.from] - centers[e.to]) > 1)
     if (e.from !== e.to && ranks[e.to] === ranks[e.from] + 1 && ranks[e.from] === r && jogs) {
-      const arrive = exact ? centers[e.to] : entry(i)
+      const arrive = entry(i)
       out.push({
-        start: Math.min(centers[e.from], arrive),
-        end: Math.max(centers[e.from], arrive),
+        start: Math.min(exit(i), arrive),
+        end: Math.max(exit(i), arrive),
         from: e.from,
         to: e.to,
         edge: i,
-        up: [centers[e.from]],
+        up: [exit(i)],
         down: [arrive],
+        bundle: bundle(i),
       })
     }
   })
@@ -749,12 +874,11 @@ function busSpans(
 
 /** Left-to-right edges skipping a rank or running backwards that go around
  * in a lane below the diagram. */
-function laneSpans(graph: Graph, ranks: number[], placed: Placed[]): TrackSpan[] {
+function laneSpans(graph: Graph, ranks: number[], ends: (i: number) => [Placed, Placed]): TrackSpan[] {
   const out: TrackSpan[] = []
   graph.edges.forEach((e, i) => {
     if (e.from === e.to || ranks[e.to] === ranks[e.from] + 1) return
-    const pf = placed[e.from]
-    const pt = placed[e.to]
+    const [pf, pt] = ends(i)
     const a = Math.min(pf.cx, pt.cx)
     const b = Math.max(pf.cx, pt.cx)
     out.push({
@@ -1288,12 +1412,71 @@ function placeLr(
   sizes: NodeSizes,
   graph: Graph,
   placed: Placed[],
+  extras: NodeExtra[],
 ): Plan {
   const colW = byRank.map((row) =>
     row.length === 0 ? 0 : Math.max(...row.map((i) => sizes.boxW[i])),
   )
 
-  const centers = assignPositions(layered, sizes.layH, 1)
+  // Cross-frame ends port at the inner node: forward edges through the
+  // frame's sides, laned ones through its bottom. Sides are tried first so
+  // a skip can prove itself straight on its port row; the final pass then
+  // resolves every end for real, with lane-bound ones on the bottom.
+  type Ends = [Port | null, Port | null]
+  // Edges leaving (or entering) one inner node through one side share its
+  // port, so a fan draws one stem instead of a row of parallel ones.
+  const resolve = (sides: (i: number) => [Side, Side] | null): Ends[] => {
+    const used = graph.nodes.map(() => new Set<string>())
+    const shared = new Map<string, Port>()
+    return graph.edges.map((e, i): Ends => {
+      const s = sides(i)
+      if (s === null) return [null, null]
+      const port = (n: number, a: Anchor | undefined, side: Side, out: boolean): Port | null => {
+        const extra = extras[n]
+        if (a === undefined || extra.kind !== 'frame') return null
+        const key = `${n}:${side}:${a.node}:${out}`
+        let p = shared.get(key)
+        if (p === undefined) {
+          p = framePort(extra.sub, sizes.boxW[n], sizes.boxH[n], sizes.titleW[n], a, side, used[n])
+          // A port on the frame border names no node beyond its row, and
+          // a column not even that (a rank stacks nodes on one column), so
+          // edges wanting the same row share a side port and every edge
+          // shares a top or bottom one.
+          if (p.through.length === 0) {
+            const vertical = side === 'top' || side === 'bottom'
+            const fallbackKey = `${n}:${side}:${out}:${vertical ? '' : p.wanted}`
+            const prior = shared.get(fallbackKey)
+            if (prior !== undefined) {
+              used[n].delete(`${side}:${vertical ? p.box.cx : p.box.cy}`)
+              p = prior
+            } else shared.set(fallbackKey, p)
+          }
+          shared.set(key, p)
+        }
+        return p
+      }
+      return [port(e.from, e.fromAnchor, s[0], true), port(e.to, e.toAnchor, s[1], false)]
+    })
+  }
+  const forward = (e: Edge): boolean => e.from !== e.to && ranks[e.to] > ranks[e.from]
+  let ends = resolve((i) => (forward(graph.edges[i]) ? ['right', 'left'] : null))
+  // A node whose incoming edges all leave their frames at one row off the
+  // frame's centre sits that far off its own aligned position, so the
+  // edges run straight rather than jog to it (`[*]` after a composite
+  // state, a frame beside a frame).
+  const delta = (i: number, end: 0 | 1): number => {
+    const p = ends[i][end]
+    const node = end === 0 ? graph.edges[i].from : graph.edges[i].to
+    return p === null ? 0 : p.box.cy - half(sizes.boxH[node])
+  }
+  const align = new Map<number, number>()
+  graph.nodes.forEach((_, v) => {
+    const wants = graph.edges.flatMap((e, i) =>
+      e.to === v && e.from !== v && ranks[e.from] + 1 === ranks[v] ? [delta(i, 0) - delta(i, 1)] : [],
+    )
+    if (wants.length > 0 && wants[0] !== 0 && wants.every((w) => w === wants[0])) align.set(v, wants[0])
+  })
+  const centers = assignPositions(layered, sizes.layH, 1, undefined, (v) => align.get(v) ?? 0)
 
   // A skip whose target entry row crosses no box on any intermediate rank
   // runs straight through the diagram into the target's left side, exiting
@@ -1301,34 +1484,52 @@ function placeLr(
   // (No entry spreading or local returns here: LR boxes are three rows tall,
   // so the centre row is the only usable port on a side.)
   const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
-  // A back-edge target's bottom-entry `▲` stub sits one row below its box;
+  const boxTop = (i: number): number => sat(centers[i], half(sizes.boxH[i]))
+  // A back-edge target's top-entry `▼` stub sits one row above its box;
   // a straight run through that cell would appear to carry the arrival.
   const stubRows = new Set<number>()
   for (const e of graph.edges) {
     if (e.from === e.to || ranks[e.to] >= ranks[e.from]) continue
-    const t = e.to
-    stubRows.add(sat(centers[t], half(sizes.boxH[t] + sizes.extraH[t])) + sizes.boxH[t])
+    stubRows.add(boxTop(e.to) - 1)
+  }
+  const exitRow = (i: number): number => {
+    const p = ends[i][0]
+    return p === null ? centers[graph.edges[i].from] : boxTop(graph.edges[i].from) + p.box.cy
+  }
+  const entryRow = (i: number): number => {
+    const p = ends[i][1]
+    return p === null ? centers[graph.edges[i].to] : boxTop(graph.edges[i].to) + p.box.cy
   }
   // A skip whose target row crosses no box on any intermediate rank runs
   // straight through the diagram into the target's left side; otherwise
   // the bottom lane. (No chains here: LR back edges must lane, and a
   // diagram mixing interior skips with laned returns crosses itself.)
   const edgeStraight = new Array<boolean>(graph.edges.length).fill(false)
-  const clearRow = (e: Edge): boolean =>
-    !stubRows.has(centers[e.to]) &&
+  const clearRow = (e: Edge, row: number): boolean =>
+    !stubRows.has(row) &&
     graph.nodes.every(
       (_, j) =>
         ranks[j] <= ranks[e.from] ||
         ranks[j] >= ranks[e.to] ||
-        Math.abs(centers[j] - centers[e.to]) > half(sizes.boxH[j] + sizes.extraH[j]),
+        Math.abs(centers[j] - row) > half(sizes.boxH[j] + sizes.extraH[j]),
     )
-  const entryY = graph.edges.map((e) => (isSkip(e) && clearRow(e) ? centers[e.to] : -1))
-  const jogs = chainJogs(graph, ranks, layered, centers, (e, i) =>
-    entryY[i] === -1 ? null : { exit: centers[e.from], entry: entryY[i] },
-  )
   graph.edges.forEach((e, i) => {
-    if (isSkip(e) && entryY[i] !== -1) edgeStraight[i] = true
+    if (isSkip(e) && clearRow(e, entryRow(i))) edgeStraight[i] = true
   })
+  ends = resolve((i) => {
+    const e = graph.edges[i]
+    if (e.from === e.to) return null
+    if (ranks[e.to] === ranks[e.from] + 1 || edgeStraight[i]) return ['right', 'left']
+    return ranks[e.to] < ranks[e.from] ? ['top', 'top'] : ['bottom', 'bottom']
+  })
+  // Every edge between two frames rides one bus: a trunk that fans out at
+  // each end to the ports, instead of a column per edge.
+  const bundleOf = (i: number): string | undefined =>
+    ends[i][0] !== null && ends[i][1] !== null ? `${graph.edges[i].from}>${graph.edges[i].to}` : undefined
+  const entryY = graph.edges.map((_, i) => (edgeStraight[i] ? entryRow(i) : -1))
+  const jogs = chainJogs(graph, ranks, layered, centers, (e, i) =>
+    entryY[i] === -1 ? null : { exit: exitRow(i), entry: entryY[i] },
+  )
   const jogTrack = new Map<ChainJog, number>()
 
   // Left-to-right edge labels sit in the gap after their source's column, so
@@ -1349,7 +1550,7 @@ function placeLr(
   const edgeBus = new Array<number>(graph.edges.length).fill(0)
   const busTracks = new Array<number>(maxRank + 1).fill(0)
   for (let r = 0; r < maxRank; r++) {
-    const spans = busSpans(graph, ranks, centers, r, true)
+    const spans = busSpans(graph, ranks, centers, r, true, entryRow, exitRow, bundleOf)
     const bandJogs = jogs.filter((j) => j.band === r)
     spans.push(...bandJogs)
     if (spans.length === 0) continue
@@ -1361,7 +1562,10 @@ function placeLr(
 
   const rankX = new Array<number>(maxRank + 1).fill(0)
   for (let r = 1; r <= maxRank; r++) {
-    const gap = Math.max(GAP_X + 1, bandLabel[r - 1] + 3, busTracks[r - 1] + 1)
+    // Buses start one column clear of the rank's right edge and end one
+    // clear of the arrowheads, so a frame border and a bus never read as a
+    // double wall and a head never sits on a bus.
+    const gap = Math.max(GAP_X + 1, bandLabel[r - 1] + 3, busTracks[r - 1] + 3)
     rankX[r] = rankX[r - 1] + colW[r - 1] + gap
   }
   const selfTails = byRank[maxRank]
@@ -1370,7 +1574,7 @@ function placeLr(
   const canvasW =
     rankX[maxRank] + colW[maxRank] + (selfTails.length === 0 ? 0 : Math.max(...selfTails))
   const bandEnd = Array.from({ length: maxRank + 1 }, (_, r) => rankX[r] + colW[r])
-  const skipRoute = skipRoutes(graph, jogs, (j) => bandEnd[j.band] + (jogTrack.get(j) ?? 0))
+  const skipRoute = skipRoutes(graph, jogs, (j) => bandEnd[j.band] + 1 + (jogTrack.get(j) ?? 0))
 
   let diagramH = 1
   for (let v = graph.nodes.length; v < centers.length; v++) diagramH = Math.max(diagramH, centers[v] + 1)
@@ -1380,31 +1584,53 @@ function placeLr(
       const w = sizes.boxW[idx]
       const h = sizes.boxH[idx]
       const cy = centers[idx]
-      const y = sat(cy, half(h + sizes.extraH[idx]))
+      const y = sat(cy, half(h))
       placed[idx] = { x, y, w, h, cx: x + half(w), cy: y + half(h), rank: r }
       diagramH = Math.max(diagramH, y + h + sizes.extraH[idx])
     }
   })
 
-  const edgeLane = new Array<number>(graph.edges.length).fill(0)
-  const lanes = laneSpans(graph, ranks, placed).filter((s) => !edgeStraight[s.edge])
-  let canvasH = diagramH
-  let laneBase = 0
-  if (lanes.length > 0) {
-    const { assigned, count } = packTracks(lanes)
-    for (const [idx, slot] of assigned) edgeLane[idx] = slot
-    canvasH = diagramH + 1 + count
-    laneBase = diagramH + 1
+  const endsOf = (i: number): [Placed, Placed] => {
+    const e = graph.edges[i]
+    const [pf, pt] = ends[i]
+    return [
+      pf === null ? placed[e.from] : portAt(pf, placed[e.from]),
+      pt === null ? placed[e.to] : portAt(pt, placed[e.to]),
+    ]
   }
+  // Returns run in lanes above the diagram, skips below, so a reciprocal
+  // pair never stacks and a lane's side says its direction. Above-lanes
+  // push everything down once their count is known (`topH`).
+  const edgeLane = new Array<number>(graph.edges.length).fill(0)
+  const lanes = laneSpans(graph, ranks, endsOf).filter((s) => !edgeStraight[s.edge])
+  const isBack = (i: number): boolean => ranks[graph.edges[i].to] < ranks[graph.edges[i].from]
+  const above = packTracks(lanes.filter((s) => isBack(s.edge)))
+  const below = packTracks(lanes.filter((s) => !isBack(s.edge)))
+  const topH = above.count === 0 ? 0 : above.count + 1
+  for (const [idx, slot] of above.assigned) edgeLane[idx] = above.count - 1 - slot
+  for (const [idx, slot] of below.assigned) edgeLane[idx] = slot
+  const canvasH = topH + diagramH + (below.count === 0 ? 0 : 1 + below.count)
+  const laneBase = topH + diagramH + 1
+  for (const p of placed) {
+    p.y += topH
+    p.cy += topH
+  }
+  for (const js of skipRoute) for (const j of js) j.at += topH
 
   const routes = graph.edges.map((edge, i): Route => {
-    const from = placed[edge.from]
-    const to = placed[edge.to]
     const max = sizes.maxLabel
-    if (edge.from === edge.to) return selfRoute(from, edge, max)
-    if (to.rank === from.rank + 1) return forwardRouteLr(from, to, edge, bandEnd[from.rank] + edgeBus[i], max)
-    if (to.rank > from.rank && edgeStraight[i]) return skipRouteLr(from, to, edge, skipRoute[i], max)
-    return laneRoute(from, to, edge, laneBase + edgeLane[i], max)
+    if (edge.from === edge.to) return selfRoute(placed[edge.from], edge, max)
+    const [from, to] = endsOf(i)
+    const through = ends[i].flatMap((p, k) => (p === null ? [] : portAt(p, placed[k === 0 ? edge.from : edge.to]).through))
+    const route =
+      to.rank === from.rank + 1
+        ? forwardRouteLr(from, to, edge, bandEnd[from.rank] + 1 + edgeBus[i], max, bundleOf(i) !== undefined)
+        : to.rank > from.rank && edgeStraight[i]
+          ? skipRouteLr(from, to, edge, skipRoute[i], max)
+          : isBack(i)
+            ? laneRoute(from, to, edge, edgeLane[i], max, true)
+            : laneRoute(from, to, edge, laneBase + edgeLane[i], max)
+    return through.length === 0 ? route : { ...route, through: [...(route.through ?? []), ...through] }
   })
   return { canvasW, canvasH, routes }
 }
@@ -1474,9 +1700,23 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
   const widest = (lines: string[]): number =>
     Math.max(1, lines.length === 0 ? 1 : Math.max(...lines.map(stringWidth)))
 
+  // Left-to-right returns port through a frame's top border, beside the
+  // title: leave a column per return touching the frame.
+  const topPorts = graph.nodes.map((_, i) =>
+    vertical
+      ? 0
+      : graph.edges.filter((e) => ranks[e.to] < ranks[e.from] && (e.from === i || e.to === i)).length,
+  )
   const boxW = extras.map((extra, i) => {
     if (extra.kind === 'frame') {
-      return Math.max(extra.sub.w + 2, stringWidth(fitLabel(graph.nodes[i].label, limits.wrap)) + 4)
+      // Fitted here for good: paint would otherwise stretch the title back
+      // over the columns reserved beside it.
+      const reserve = topPorts[i] > 0 ? topPorts[i] + 1 : 0
+      if (reserve > 0) {
+        graph.nodes[i].label = fitLabel(graph.nodes[i].label, Math.max(limits.wrap, extra.sub.w - reserve))
+      }
+      // A blank column inside each side keeps inner boxes off the border.
+      return Math.max(extra.sub.w + 4, stringWidth(graph.nodes[i].label) + 4 + reserve)
     }
     if (extra.kind === 'compartments') return widest(extra.sections.flat()) + 2 * PAD + 2
     return widest(wrapped[i]) + 2 * PAD + 2
@@ -1507,9 +1747,15 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
     boxW,
     boxH,
     layW: boxW.map((w, i) => w + (selfLabelW[i] > 0 ? 2 * (selfLabelW[i] + 3) : 0)),
-    layH: boxH.map((h, i) => h + extraH[i]),
+    // Loop room on both sides, so a looped box stays centred on its row.
+    layH: boxH.map((h, i) => h + 2 * extraH[i]),
     extraH,
     selfLabelW,
+    titleW: extras.map((extra, i) =>
+      extra.kind === 'frame' && graph.nodes[i].label !== ''
+        ? stringWidth(fitLabel(graph.nodes[i].label, sat(boxW[i], 4))) + 2
+        : 0,
+    ),
     maxLabel: limits.label,
   }
 
@@ -1525,7 +1771,7 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
 
   const plan = vertical
     ? placeTd(ranks, maxRank, byRank, layered, sizes, graph, placed)
-    : placeLr(ranks, maxRank, byRank, layered, sizes, graph, placed)
+    : placeLr(ranks, maxRank, byRank, layered, sizes, graph, placed, extras)
 
   if (plan.canvasW * plan.canvasH > MAX_CANVAS_CELLS) return null
   return { w: plan.canvasW, h: plan.canvasH, placed, routes: plan.routes, labels: wrapped }
@@ -1679,13 +1925,13 @@ function chainRoute(
  * column. The verb keeps its usual spot above the line; cardinalities hug
  * their own ends on the rows above the departure and arrival cells.
  */
-function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: number): Route {
+function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: number, bundled = false): Route {
   const rx = from.x + from.w - 1
   const ry = from.cy
   const ly = to.cy
   const headCol = to.x - 1
   const points: [number, number][] =
-    ry === ly
+    ry === ly && !bundled
       ? [
           [rx, ry],
           [headCol, ly],
@@ -1702,7 +1948,10 @@ function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: 
   if (edge.cardTo !== undefined) {
     labels.push({ text: edge.cardTo, row: sat(ly, 1), x: sat(headCol, stringWidth(edge.cardTo)) })
   }
-  return { points, labels: fitted(labels, max) }
+  const route: Route = { points, labels: fitted(labels, max) }
+  // A bundled edge meets the shared bus where it joins and leaves it.
+  if (bundled) route.through = [[bus, ry, 'j'], [bus, ly, 'j']]
+  return route
 }
 
 /**
@@ -1730,15 +1979,15 @@ function skipRouteLr(from: Placed, to: Placed, edge: Edge, jogs: Jog[], max: num
  * to the neighbouring lane once several stack — and waits until every
  * route landed so it can dodge the verticals that cross this row.
  */
-function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number, max: number): Route {
+function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number, max: number, top = false): Route {
   const sx = from.cx
-  const sy = from.y + from.h - 1
+  const sy = top ? from.y : from.y + from.h - 1
   const tx = to.cx
   const points: [number, number][] = [
     [sx, sy],
     [sx, laneY],
     [tx, laneY],
-    [tx, to.y + to.h],
+    [tx, top ? to.y - 1 : to.y + to.h],
   ]
   const text = edgeText(edge)
   const laneLabel =

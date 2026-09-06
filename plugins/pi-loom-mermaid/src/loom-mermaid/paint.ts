@@ -175,7 +175,16 @@ function drawFrame(canvas: Canvas, p: Placed, title: string, sub: Canvas, mirror
     // Mirrored: the bottom border becomes the top after the flip.
     drawTextOverEdges(canvas, ` ${t} `, p.x + 1, mirrored ? p.y + p.h - 1 : p.y, 'text')
   }
-  canvas.blit(sub, p.x + 1 + half(p.w - 2 - sub.w), p.y + 1 + half(p.h - 2 - sub.h))
+  // Padding between border and contents stays free for port stubs.
+  for (let y = p.y + 1; y < p.y + p.h - 1; y++) {
+    for (let x = p.x + 1; x < p.x + p.w - 1; x++) canvas.occupied[canvas.idx(x, y)] = 0
+  }
+  canvas.blit(sub, ...frameOrigin(p, sub))
+}
+
+/** Where a frame's sub-canvas is stamped: centred inside the border. */
+export function frameOrigin(p: Placed, sub: Canvas): [number, number] {
+  return [p.x + 1 + half(p.w - 2 - sub.w), p.y + 1 + half(p.h - 2 - sub.h)]
 }
 
 // ------------------------------------------------------------------- routing
@@ -215,6 +224,8 @@ function drawRoute(canvas: Canvas, edge: Edge, route: Route): void {
   const leave = toward(points[0], points[1])
   const arrive = toward(points[points.length - 2], points[points.length - 1])
   canvas.junction(sx, sy, leave)
+  // Frame borders a cross-frame route passes straight through.
+  for (const [x, y, kind] of route.through ?? []) canvas.junction(x, y, kind === 'v' ? U | D : kind === 'h' ? L | R : 0)
   for (let k = 0; k + 1 < points.length; k++) {
     const [x0, y0] = points[k]
     const [x1, y1] = points[k + 1]
