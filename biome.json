@@ -6,7 +6,14 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["plugins/**", "scripts/**", "test/**", "*.json", "!**/*.generated.*"]
+    "includes": [
+      "plugins/**",
+      "scripts/**",
+      "test/**",
+      "*.json",
+      "!**/*.generated.*",
+      "!plugins/pi-loom-mermaid/src/loom-mermaid"
+    ]
   },
   "formatter": {
     "enabled": true,

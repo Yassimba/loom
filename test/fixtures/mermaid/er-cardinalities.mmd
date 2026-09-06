@@ -1,0 +1,7 @@
+erDiagram
+  CUSTOMER ||--o{ ORDER : places
+  ORDER ||--|{ LINE_ITEM : contains
+  PRODUCT ||--o{ LINE_ITEM : "ordered in"
+  CUSTOMER }|..|{ ADDRESS : uses
+  ORDER }o--|| INVOICE : "billed by"
+  WAREHOUSE ||--o{ PRODUCT : stocks

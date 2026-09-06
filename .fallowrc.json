@@ -4,9 +4,15 @@
     "plugins/*/src/index.ts",
     "plugins/*/src/*/index.ts",
     "manifest/opencode/plugins/*.js",
-    "test/pi-skill-discovery.mjs"
+    "test/pi-skill-discovery.mjs",
+    "scripts/mermaid-compare.ts"
   ],
-  "ignorePatterns": ["skills/**", "drafts/**", "**/*.generated.*"],
+  "ignorePatterns": [
+    "skills/**",
+    "drafts/**",
+    "**/*.generated.*",
+    "plugins/pi-loom-mermaid/src/loom-mermaid/**"
+  ],
   "ignoreDependencies": [],
   "ignoreExportsUsedInFile": true,
   "health": {

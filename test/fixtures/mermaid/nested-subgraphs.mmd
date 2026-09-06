@@ -1,0 +1,14 @@
+flowchart TD
+  In[Request] --> API
+  subgraph Cluster
+    subgraph API
+      GW[Gateway] --> Auth
+      Auth --> Svc[Service]
+    end
+    subgraph Data
+      Svc --> DB[(Postgres)]
+      Svc --> Cache
+    end
+  end
+  DB --> Out[Response]
+  Cache --> Out

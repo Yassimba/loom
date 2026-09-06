@@ -706,13 +706,14 @@ fn installed_bundle_skips_only_pi_and_preserves_skill_only_and_filtered_installs
             execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
         assert!(report.failures.is_empty(), "{report:?}");
         assert!(system.tree().join("ponytail/SKILL.md").is_file());
-        assert_eq!(
-            system
-                .home
-                .join(".pi/agent/skills/ponytail/SKILL.md")
-                .is_file(),
-            settings != Some(PONYTAIL_SETTINGS)
-        );
+        assert!(system
+            .home
+            .join(".agents/skills/ponytail/SKILL.md")
+            .is_file());
+        assert!(!system
+            .home
+            .join(".pi/agent/skills/ponytail/SKILL.md")
+            .exists());
     }
 }
 
@@ -733,9 +734,9 @@ fn record_owned_skill(home: &Path, path: &Path) {
 }
 
 #[test]
-fn bundled_skills_reconcile_only_unchanged_owned_copies() {
+fn pi_install_migrates_only_unchanged_owned_legacy_copies() {
     for edited in [false, true] {
-        let system = SkillInstallSystem::new("bundled-reconcile", &[]);
+        let system = SkillInstallSystem::new("bundled-reconcile", &["ponytail"]);
         let package = install_ponytail_package(&system.home, PONYTAIL_SETTINGS);
         let path = system.home.join(".pi/agent/skills/ponytail");
         fs::create_dir_all(&path).unwrap();
@@ -762,10 +763,10 @@ fn bundled_skills_reconcile_only_unchanged_owned_copies() {
             edited
         );
         assert!(package.join("skills/ponytail/SKILL.md").is_file());
-        assert!(
-            system.commands.lock().unwrap().is_empty(),
-            "bundled-only needs no repo download"
-        );
+        assert!(system
+            .home
+            .join(".agents/skills/ponytail/SKILL.md")
+            .is_file());
     }
 }
 
@@ -877,8 +878,13 @@ fn unrelated_failed_pi_package_does_not_block_standalone_skills() {
     assert!(system
         .skills
         .home
-        .join(".pi/agent/skills/ponytail/SKILL.md")
+        .join(".agents/skills/ponytail/SKILL.md")
         .is_file());
+    assert!(!system
+        .skills
+        .home
+        .join(".pi/agent/skills/ponytail/SKILL.md")
+        .exists());
 }
 
 fn pi_skill_discovery(home: &Path, project: &Path) -> serde_json::Value {

@@ -233,6 +233,15 @@
       "windowsWsl": true
     },
     {
+      "id": "pi-package:@yassimba/pi-loom-mermaid",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "Colored Mermaid diagrams",
+      "description": "Render Mermaid diagrams with per-node colors in Pi using classDef styles.",
+      "installTarget": "@yassimba/pi-loom-mermaid",
+      "nextAction": "Set markdown.mermaid to off in Pi settings, run /reload, then use classDef styles in a Mermaid block."
+    },
+    {
       "id": "pi-package:@yassimba/pi-fast",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -288,6 +297,16 @@
       "nextAction": "Start Pi to see the Loom header and available Loom updates."
     },
     {
+      "id": "pi-package:pi-markdown-preview",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "markdown-preview",
+      "description": "Preview Pi responses and local Markdown, LaTeX, code, and diffs in the terminal, browser, or as PDF. By Oliver Maclaren.",
+      "installTarget": "pi-markdown-preview",
+      "version": "0.16.0",
+      "nextAction": "Install Pandoc and a Chromium-based browser, run /reload in Pi, then use /preview."
+    },
+    {
       "id": "pi-package:pi-mcp-adapter",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -305,6 +324,9 @@
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
       "installTarget": "@plannotator/pi-extension",
       "version": "0.27.12",
+      "bundledSkills": [
+        "plannotator"
+      ],
       "nextAction": "Run /reload in Pi, then /plannotator-plan-mode to write and review a plan, or /plannotator-review to review code."
     },
     {
@@ -1035,7 +1057,7 @@
       "nextAction": "Ask your coding agent to use the plannotator skill.",
       "dependencies": [
         "system-atlas",
-        "github:backnotprop/plannotator"
+        "github:Yassimba/plannotator"
       ]
     },
     {
@@ -1305,7 +1327,7 @@
       "group": "Tools",
       "label": "plannotator",
       "description": "Browser-based plan and code review, document annotation, and Guided Reviews for coding agents. The plannotator skill drives it.",
-      "installTarget": "github:backnotprop/plannotator",
+      "installTarget": "github:Yassimba/plannotator",
       "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart.",
       "bin": "plannotator",
       "companions": []

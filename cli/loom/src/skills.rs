@@ -114,14 +114,16 @@ impl SkillAgent {
     }
 
     pub(crate) fn global_skill_tree(self, home: &Path) -> PathBuf {
-        self.global_agent_dir(home).join("skills")
+        match self {
+            Self::Pi => home.join(".agents").join("skills"),
+            _ => self.global_agent_dir(home).join("skills"),
+        }
     }
 
     pub(crate) fn project_skill_tree(self, root: &Path) -> PathBuf {
         match self {
             Self::Claude => root.join(".claude").join("skills"),
-            Self::AgentsStandard | Self::Codex => root.join(".agents").join("skills"),
-            Self::Pi => root.join(".pi").join("skills"),
+            Self::AgentsStandard | Self::Codex | Self::Pi => root.join(".agents").join("skills"),
             Self::OpenCode => root.join(".opencode").join("skills"),
             Self::Cursor => root.join(".cursor").join("skills"),
             Self::Grok => root.join(".grok").join("skills"),
@@ -239,10 +241,12 @@ pub(crate) fn skill_present_in(tree: &Path, name: &str) -> bool {
 /// Existing global skill trees, used for backward-compatible detection and
 /// update inventory.
 pub fn detect_skill_trees(home: &Path) -> Vec<PathBuf> {
+    let mut seen = HashSet::new();
     SkillAgent::ALL
         .into_iter()
         .filter(|agent| agent.global_agent_dir(home).is_dir())
         .map(|agent| agent.global_skill_tree(home))
+        .filter(|tree| seen.insert(tree.clone()))
         .collect()
 }
 
@@ -320,7 +324,7 @@ pub fn expand_skill_dependencies(
         if agents.contains(&SkillAgent::Pi)
             && matches!(
                 resource.install_target.as_str(),
-                "plannotator" | "github:backnotprop/plannotator"
+                "plannotator" | "github:Yassimba/plannotator"
             )
         {
             dependencies.push("@plannotator/pi-extension".into());
@@ -427,6 +431,22 @@ pub(crate) fn install_skills(
         reports.push(report);
     }
     crate::bundled_skills::exclude_shared(destination, skills)?;
+    if destination.agents.contains(&SkillAgent::Pi) {
+        let root = match destination.scope {
+            SkillScope::Global => &destination.home,
+            SkillScope::Project => &destination.project_root,
+        };
+        let shared = root.join(".agents/skills");
+        let legacy = match destination.scope {
+            SkillScope::Global => destination.home.join(".pi/agent/skills"),
+            SkillScope::Project => destination.project_root.join(".pi/skills"),
+        };
+        for name in skills {
+            if shared.join(name).join("SKILL.md").is_file() {
+                crate::bundled_skills::reconcile_copy(&destination.home, &legacy.join(name))?;
+            }
+        }
+    }
     Ok(reports)
 }
 
@@ -780,11 +800,26 @@ mod tests {
             trees,
             vec![
                 home.join(".claude").join("skills"),
-                home.join(".pi").join("agent").join("skills"),
+                home.join(".agents").join("skills"),
                 home.join(".config").join("opencode").join("skills"),
             ]
         );
         fs::remove_dir_all(&home).ok();
+    }
+
+    #[test]
+    fn pi_uses_the_portable_agents_skill_tree() {
+        let home = Path::new("/tmp/loom-home");
+        let project = Path::new("/tmp/loom-project");
+
+        assert_eq!(
+            SkillAgent::Pi.global_skill_tree(home),
+            home.join(".agents/skills")
+        );
+        assert_eq!(
+            SkillAgent::Pi.project_skill_tree(project),
+            project.join(".agents/skills")
+        );
     }
 
     #[test]
@@ -806,7 +841,6 @@ mod tests {
             vec![
                 project.join(".claude/skills"),
                 project.join(".agents/skills"),
-                project.join(".pi/skills"),
                 project.join(".opencode/skills"),
                 project.join(".cursor/skills"),
                 project.join(".grok/skills"),
@@ -945,7 +979,7 @@ mod tests {
             .iter()
             .find(|r| r.install_target == "@plannotator/pi-extension")
             .unwrap();
-        for target in ["plannotator", "github:backnotprop/plannotator"] {
+        for target in ["plannotator", "github:Yassimba/plannotator"] {
             let selected = catalog
                 .resources
                 .iter()

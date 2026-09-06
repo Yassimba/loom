@@ -158,7 +158,7 @@
       "companions": ["uv"]
     },
     {
-      "key": "github:backnotprop/plannotator",
+      "key": "github:Yassimba/plannotator",
       "label": "plannotator",
       "description": "Browser-based plan and code review, document annotation, and Guided Reviews for coding agents. The plannotator skill drives it.",
       "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart."

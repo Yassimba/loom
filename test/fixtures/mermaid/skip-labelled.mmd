@@ -1,0 +1,7 @@
+flowchart TD
+  A[Receive order] --> B[Validate payment]
+  B --> C[Reserve stock]
+  C --> D[Pack]
+  D --> E[Ship]
+  A -->|payment already captured, skip validation| D
+  B -->|out of stock| F[Notify customer]

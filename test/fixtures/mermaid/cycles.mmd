@@ -1,0 +1,10 @@
+flowchart TD
+  Start --> Fetch
+  Fetch --> Parse
+  Parse --> Validate
+  Validate -->|invalid| Fetch
+  Validate -->|ok| Store
+  Store --> Index
+  Index -->|reindex| Parse
+  Index --> Done
+  Done -->|next batch| Start

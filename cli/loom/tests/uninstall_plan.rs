@@ -55,7 +55,11 @@ impl System for FakeSystem {
         self.commands.lock().unwrap().push(shown.clone());
         Ok(CommandResult {
             success: !shown.contains("broken"),
-            stdout: String::new(),
+            stdout: if shown == "pi list" {
+                "npm:pi-markdown-preview".into()
+            } else {
+                String::new()
+            },
             stderr: if shown.contains("broken") {
                 "nope".into()
             } else {
@@ -314,6 +318,41 @@ fn executor_removes_dependents_first_and_keeps_failed_receipts() {
     assert!(!state.resources.contains_key("tool:pi"));
     assert!(state.resources.contains_key("foundation:node"));
     assert_eq!(InstallState::load(&home).unwrap(), state);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn pi_uninstall_uses_a_package_source() {
+    let home = temp_home("pi-source");
+    let mut state = state(vec![owned(
+        "pi-package:preview",
+        OwnershipScope::Global,
+        &[],
+        Receipt::Manager {
+            manager: "pi".into(),
+            target: "pi-markdown-preview".into(),
+        },
+    )]);
+    state.save(&home).unwrap();
+    let plan = build_uninstall_plan(
+        &state,
+        &UninstallRequest::default(),
+        Path::new("/work"),
+        |_| ReceiptStatus::Clean,
+    )
+    .unwrap();
+    let system = FakeSystem {
+        home: home.clone(),
+        commands: Mutex::new(Vec::new()),
+    };
+
+    let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
+
+    assert_eq!(
+        system.commands.into_inner().unwrap(),
+        vec!["pi list", "pi uninstall npm:pi-markdown-preview"]
+    );
+    assert_eq!(report.removed, vec!["pi-package:preview"]);
     std::fs::remove_dir_all(home).unwrap();
 }
 

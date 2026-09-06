@@ -88,10 +88,10 @@ for skill_root in \
   "${HOME}/.codex/skills" \
   "${HOME}/.config/opencode/skills" \
   "${HOME}/.cursor/skills" \
-  "${HOME}/.grok/skills" \
-  "${HOME}/.pi/agent/skills"; do
+  "${HOME}/.grok/skills"; do
   test -f "$skill_root/implement/SKILL.md"
 done
+test ! -e "${HOME}/.pi/agent/skills/implement"
 test -f "${HOME}/.config/opencode/plugins/loom-session-env.js"
 
 case "$shell_name" in
@@ -149,7 +149,6 @@ find "${HOME}/.agents/skills/implement" \
   "${HOME}/.config/opencode/skills/implement" \
   "${HOME}/.cursor/skills/implement" \
   "${HOME}/.grok/skills/implement" \
-  "${HOME}/.pi/agent/skills/implement" \
   -type f -print | sort >"$evidence_dir/installed-files.txt"
 cp "$selection" "$evidence_dir/loom.toml"
 

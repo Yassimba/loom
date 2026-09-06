@@ -3,13 +3,20 @@
 The clean baseline is upstream **v0.27.12**, commit
 `96313ab228ede843203d38d9d2a86e1c87e18c81`, on
 `Yassimba/plannotator:loom/v0.27.12`, preserved as the baseline branch.
-The default branch, `loom/current`, carries the fork's CI and sync automation.
-There are no runtime patches. `origin` is the fork and `upstream` is
+The default branch, `loom/current`, carries the fork's CI and sync automation
+plus the figure-led Guided Review patches (`sections[].diagrams` as inline
+SVG with `data-code` bindings, the document layout with a code peek, and
+`plannotator guide import`). `origin` is the fork and `upstream` is
 `backnotprop/plannotator`.
 
-Loom installs the upstream release through `manifest/loom.toml` while there
-are no patches. Keep using upstream's Claude plugin too. A fork branch does
-not need its own binary release until it changes runtime behavior.
+Loom installs the fork's release (`v0.27.12-loom.N`) through
+`manifest/loom.toml`; `cli/loom/src/manifest.rs` moves a selection made
+under the upstream key back to the fork. Keep using upstream's Claude
+plugin. Cut a fork release only when `loom/current` changes runtime
+behavior: tag `v<upstream>-loom.N` on `loom/current`, compile the six
+binaries with `bun build --compile` per target as `release.yml` does, and
+create the GitHub release by hand (upstream's release workflow refuses tags
+that are not on `main`).
 
 ## Small changes
 
@@ -19,8 +26,8 @@ configuration and extension points. Send generally useful fixes upstream;
 drop patches once upstream contains them. Keep Loom-specific agent guidance
 in Loom's skills rather than changing Plannotator's application prompts.
 
-Do not merge the old fork's `main` into the clean branch. It contains the
-retired Guided Review customizations. Leave upstream version files, lockfiles,
+Do not merge the old fork's `main` into `loom/current`: its Guided Review
+work was rebased onto v0.27.12 and merged through PR #2 instead. Leave upstream version files, lockfiles,
 and publishing workflows alone unless the change actually requires them.
 
 ## Automatic upstream updates
