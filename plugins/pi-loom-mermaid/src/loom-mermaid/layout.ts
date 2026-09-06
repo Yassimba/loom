@@ -1210,7 +1210,9 @@ function placeTd(
   const sideEntry = new Array<number>(graph.edges.length).fill(0)
   const sideTaken = new Set<string>()
   graph.edges.forEach((e, i) => {
-    if (!isSkip(e) || edgeText(e) !== null || extras[e.to].kind !== 'plain') return
+    // A label beside the chain stays there; one that would sit at the head
+    // keeps the top, where it has room.
+    if (!isSkip(e) || (edgeText(e) !== null && chainLabel[i] === null) || extras[e.to].kind !== 'plain') return
     const last = layered.chains[i].at(-1)
     if (last === undefined) return
     const col = centers[last]
@@ -1999,9 +2001,9 @@ function chainRoute(
   const points = jogPoints([from.cx, from.y + from.h - 1], jogs, true)
   if (side !== 0) {
     // Down the chain column to the target's centre row, then across into
-    // its side.
+    // its side. A label beside the chain stays where the chain put it.
     points.push([entryX, to.cy], [side < 0 ? to.x - 1 : to.x + to.w, to.cy])
-    return { points, labels: [] }
+    return { points, labels: labelAt === null ? [] : fitted([{ text: edgeText(edge) ?? '', row: labelAt.row, x: labelAt.x }], max) }
   }
   const headRow = to.y - 1
   points.push([entryX, headRow])
