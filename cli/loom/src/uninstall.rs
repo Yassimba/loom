@@ -827,6 +827,13 @@ fn remove_receipt(
                     target.clone(),
                     "--yes".into(),
                 ]
+            } else if manager == "pi" {
+                let source = if target.contains(':') || target.starts_with(['.', '/']) {
+                    target.clone()
+                } else {
+                    format!("npm:{target}")
+                };
+                vec!["uninstall".into(), source]
             } else {
                 vec!["uninstall".into(), target.clone()]
             };

@@ -6,7 +6,12 @@
     "manifest/opencode/plugins/*.js",
     "test/pi-skill-discovery.mjs"
   ],
-  "ignorePatterns": ["skills/**", "drafts/**", "**/*.generated.*"],
+  "ignorePatterns": [
+    "skills/**",
+    "drafts/**",
+    "**/*.generated.*",
+    "plugins/pi-loom-mermaid/src/loom-mermaid/**"
+  ],
   "ignoreDependencies": [],
   "ignoreExportsUsedInFile": true,
   "health": {

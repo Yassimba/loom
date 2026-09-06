@@ -154,20 +154,20 @@ If a test fails for an unclear reason, it routes the problem through `diagnosing
 
 ## Other useful skills
 
-| When you need to... | Use... |
-| --- | --- |
-| Find the cause of a bug before fixing it | [`diagnosing-bugs`](skills/diagnosing-bugs/SKILL.md) |
-| Remove code or make it simpler | [`cleanup`](skills/cleanup/SKILL.md) or [`ponytail`](skills/ponytail/SKILL.md) |
-| Understand how a feature works | [`explain-code-flow`](skills/explain-code-flow/SKILL.md) |
-| Understand a whole multi-repo product in one diagram page | [`system-atlas`](skills/system-atlas/SKILL.md) |
-| Walk through a large change in the browser | [`changeset-walkthrough`](skills/changeset-walkthrough/SKILL.md) |
-| Review a plan or diff with comments | [`plannotator`](skills/plannotator/SKILL.md) |
-| Design or improve a web interface | [`impeccable`](skills/impeccable/SKILL.md) |
-| Draw a diagram | [`diagram-design`](skills/diagram-design/SKILL.md) or [`mermaid-skill`](skills/mermaid-skill/SKILL.md) |
-| Build browser slides | [`frontend-slides`](skills/frontend-slides/SKILL.md) |
-| Write a README or guide | [`write-readme`](skills/write-readme/SKILL.md) or [`write-documentation`](skills/write-documentation/SKILL.md) |
-| Make prose shorter and clearer | [`write-simply`](skills/write-simply/SKILL.md) |
-| Work with Datadog | the `dd-*` skills for logs, APM, monitors, docs, and live debugging |
+| When you need to...                                       | Use...                                                                                                         |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Find the cause of a bug before fixing it                  | [`diagnosing-bugs`](skills/diagnosing-bugs/SKILL.md)                                                           |
+| Remove code or make it simpler                            | [`cleanup`](skills/cleanup/SKILL.md) or [`ponytail`](skills/ponytail/SKILL.md)                                 |
+| Understand how a feature works                            | [`explain-code-flow`](skills/explain-code-flow/SKILL.md)                                                       |
+| Understand a whole multi-repo product in one diagram page | [`system-atlas`](skills/system-atlas/SKILL.md)                                                                 |
+| Walk through a large change in the browser                | [`changeset-walkthrough`](skills/changeset-walkthrough/SKILL.md)                                               |
+| Review a plan or diff with comments                       | [`plannotator`](skills/plannotator/SKILL.md)                                                                   |
+| Design or improve a web interface                         | [`impeccable`](skills/impeccable/SKILL.md)                                                                     |
+| Draw a diagram                                            | [`diagram-design`](skills/diagram-design/SKILL.md) or [`mermaid-skill`](skills/mermaid-skill/SKILL.md)         |
+| Build browser slides                                      | [`frontend-slides`](skills/frontend-slides/SKILL.md)                                                           |
+| Write a README or guide                                   | [`write-readme`](skills/write-readme/SKILL.md) or [`write-documentation`](skills/write-documentation/SKILL.md) |
+| Make prose shorter and clearer                            | [`write-simply`](skills/write-simply/SKILL.md)                                                                 |
+| Work with Datadog                                         | the `datadog` skill for logs, APM, monitors, docs, and live debugging                                          |
 
 Browse the full list in [`skills.sh.json`](skills.sh.json) or in the `loom add` menu.
 
@@ -359,15 +359,13 @@ scripts/sync-pi-extensions.sh link
 
 - Several coding skills are adapted from [Matt Pocock's skills](https://github.com/mattpocock/skills).
 - [`research`](skills/research/SKILL.md) is adapted from [Matt Pocock's research skill](https://github.com/mattpocock/skills).
-- The `dd-*` skills are adapted from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 under Apache 2.0.
+- The `datadog` skill is adapted from [DataDog/pup](https://github.com/DataDog/pup) v1.10.5 under Apache 2.0.
 - [`impeccable`](skills/impeccable/SKILL.md) is adapted from [pbakaus/impeccable](https://github.com/pbakaus/impeccable) v4.1.2 under Apache 2.0.
 - [`i-have-adhd`](skills/i-have-adhd/SKILL.md) is adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) v0.2.0 at `cbe69fb` under MIT.
 - [`ponytail`](skills/ponytail/SKILL.md) is adapted from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.9.0 under MIT.
 - [`diagram-design`](skills/diagram-design/SKILL.md) is adapted from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.12 at `4451ead` under MIT.
-- [`pi-fast`](plugins/pi-fast/) is adapted from [studioarray/pi-openai-fast](https://github.com/studioarray/pi-openai-fast) at `e82ed32` under MIT.
-- Pi subagents, web access, and rewind are adapted from [nicobailon's Pi packages](https://github.com/nicobailon). Anthropic sign-in is adapted from [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth).
-
-Each adapted package has its own `README.md` and `THIRD_PARTY_NOTICES.md` with the exact source and license.
+- Pi subagents, web access, and rewind are adapted from [nicobailon's Pi packages](https://github.com/nicobailon).
+- Anthropic sign-in is adapted from [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth).
 
 ## License
 

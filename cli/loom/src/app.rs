@@ -648,7 +648,7 @@ fn record_install_ownership(
                 .collect::<std::result::Result<Vec<_>, String>>()?,
             ResourceKind::PiPackage => vec![Receipt::Manager {
                 manager: "pi".into(),
-                target: resource.install_target.clone(),
+                target: resource.pi_install_spec(),
             }],
             ResourceKind::HerdrPlugin => vec![Receipt::Manager {
                 manager: "herdr".into(),

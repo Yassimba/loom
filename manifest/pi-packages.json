@@ -55,6 +55,13 @@
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
     },
     {
+      "name": "pi-markdown-preview",
+      "version": "0.16.0",
+      "label": "markdown-preview",
+      "description": "Preview Pi responses and local Markdown, LaTeX, code, and diffs in the terminal, browser, or as PDF. By Oliver Maclaren.",
+      "nextAction": "Install Pandoc and a Chromium-based browser, run /reload in Pi, then use /preview."
+    },
+    {
       "name": "pi-subagents",
       "version": "0.65.1",
       "label": "subagents",

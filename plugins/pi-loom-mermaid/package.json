@@ -1,0 +1,57 @@
+{
+  "name": "@yassimba/pi-loom-mermaid",
+  "version": "0.1.0",
+  "description": "Render colored Mermaid diagrams in Pi with lovely-mermaid.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "mermaid",
+    "terminal"
+  ],
+  "files": [
+    "index.ts",
+    "src",
+    "README.md",
+    "LICENSE",
+    "LOVELY-MERMAID-LICENSE",
+    "UPSTREAM.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yassimba/loom.git",
+    "directory": "plugins/pi-loom-mermaid"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "loom": {
+    "catalog": {
+      "label": "Colored Mermaid diagrams",
+      "description": "Render Mermaid diagrams with per-node colors in Pi using classDef styles.",
+      "nextAction": "Set markdown.mermaid to off in Pi settings, run /reload, then use classDef styles in a Mermaid block."
+    }
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  }
+}
