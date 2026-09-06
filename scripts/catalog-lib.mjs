@@ -339,16 +339,36 @@ export async function readToolCatalog(repoRoot) {
     // Per-OS variant keys installed alongside the primary; mise os filters
     // decide which actually applies on each machine.
     companions: tool.companions ?? [],
+    ...(tool.dependencies ? { dependencies: tool.dependencies } : {}),
     ...(tool.windowsSupport === "wsl" ? { windowsWsl: true } : {}),
   }));
 }
 
+async function readMcpCatalog(repoRoot) {
+  const manifest = JSON.parse(
+    await readFile(join(repoRoot, "manifest", "mcp-servers.json"), "utf8"),
+  );
+  return manifest.servers.map((server) => ({
+    id: `mcp-server:${server.name}`,
+    kind: "mcp-server",
+    group: "MCP servers",
+    label: server.name,
+    description: server.description,
+    installTarget: server.name,
+    version: server.version,
+    source: server.source,
+    ...(server.dependencies ? { dependencies: server.dependencies } : {}),
+    nextAction: server.nextAction,
+  }));
+}
+
 export async function buildSetupCatalog(repoRoot) {
-  const [piPackages, skills, herdrPlugins, tools] = await Promise.all([
+  const [piPackages, skills, herdrPlugins, tools, mcpServers] = await Promise.all([
     readPiPackageCatalog(repoRoot),
     readReviewedSkillCatalog(repoRoot),
     readHerdrPluginCatalog(repoRoot),
     readToolCatalog(repoRoot),
+    readMcpCatalog(repoRoot),
   ]);
   const sharedNames = new Set(skills.map((skill) => skill.installTarget));
   for (const pkg of piPackages) {
@@ -399,7 +419,7 @@ export async function buildSetupCatalog(repoRoot) {
         },
       ]
     : [];
-  return [...piPackages, ...skills, ...herdrPlugins, ...tools, ...obsidian];
+  return [...piPackages, ...skills, ...herdrPlugins, ...tools, ...obsidian, ...mcpServers];
 }
 
 async function readProfileCatalog(repoRoot, resources) {

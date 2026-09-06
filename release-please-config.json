@@ -23,10 +23,6 @@
       "release-type": "node",
       "component": "skill-autocomplete"
     },
-    "plugins/pi-codegraph": {
-      "release-type": "node",
-      "component": "pi-codegraph"
-    },
     "plugins/pi-loom": {
       "release-type": "node",
       "component": "pi-loom"

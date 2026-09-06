@@ -38,6 +38,7 @@ pub struct Selectors {
     pub pi_packages: Vec<String>,
     pub herdr_plugins: Vec<String>,
     pub tools: Vec<String>,
+    pub mcp_servers: Vec<String>,
 }
 
 impl Selectors {
@@ -46,6 +47,7 @@ impl Selectors {
             && self.pi_packages.is_empty()
             && self.herdr_plugins.is_empty()
             && self.tools.is_empty()
+            && self.mcp_servers.is_empty()
     }
 }
 
@@ -167,6 +169,10 @@ pub fn install_selected(
     if resources.is_empty() {
         println!("Nothing selected; no changes made.");
         return Ok(true);
+    }
+    // Preflight before installed filtering: conflicts must not become silent no-ops.
+    if resources.iter().any(|r| r.kind == ResourceKind::McpServer) {
+        build_install_plan(&resources, status, platform, &destination)?;
     }
     let installed = detect_installed(&resources, status, system, &destination);
     let resources = resources
@@ -454,6 +460,7 @@ pub(crate) fn detect_installed(
                 return false;
             }
             match resource.kind {
+                ResourceKind::McpServer => crate::mcp::configured(destination, system),
                 // A tool is installed when mise manages it (it is in the
                 // selection) or its binary is on PATH from any other installer
                 // (brew, cargo, ...): both are honestly "installed".
@@ -625,12 +632,13 @@ fn record_install_ownership(
             ResourceKind::PiPackage => dependencies.push("tool:pi".into()),
             ResourceKind::HerdrPlugin => dependencies.push("tool:herdr".into()),
             ResourceKind::Tool => dependencies.push("core:mise".into()),
-            ResourceKind::Skill => {}
+            ResourceKind::Skill | ResourceKind::McpServer => {}
         }
         dependencies.push("core:loom".into());
         dependencies.sort();
         dependencies.dedup();
         let receipts = match resource.kind {
+            ResourceKind::McpServer => Vec::new(),
             ResourceKind::Skill => destination
                 .trees()
                 .into_iter()
@@ -797,7 +805,15 @@ fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
             .unwrap_or_else(|| target.to_owned())
     };
     for target in &report.installed {
-        out.row(Mark::Ok, &label(target), "installed");
+        out.row(
+            Mark::Ok,
+            &label(target),
+            if target == "mcp-server:sem" {
+                "configured; live health not checked"
+            } else {
+                "installed"
+            },
+        );
     }
     for failure in &report.failures {
         out.row(Mark::Bad, &label(&failure.target), &failure.message);
@@ -818,6 +834,7 @@ pub fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec
         (ResourceKind::PiPackage, &selectors.pi_packages),
         (ResourceKind::HerdrPlugin, &selectors.herdr_plugins),
         (ResourceKind::Tool, &selectors.tools),
+        (ResourceKind::McpServer, &selectors.mcp_servers),
     ] {
         for value in values {
             let matches = catalog

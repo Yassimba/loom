@@ -1,0 +1,12 @@
+{
+  "servers": [
+    {
+      "name": "sem",
+      "version": "0.24.0",
+      "source": "https://github.com/Ataraxy-Labs/sem/releases/tag/v0.24.0",
+      "description": "Semantic code search, diffs, and change impact through Pi’s MCP gateway. Tools are discovered on request.",
+      "dependencies": ["pi-mcp-adapter"],
+      "nextAction": "Restart Pi in the selected project and open /mcp to check Sem. Tool exposure is gateway-only; first launch may discover metadata."
+    }
+  ]
+}

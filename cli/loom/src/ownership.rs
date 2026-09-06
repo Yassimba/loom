@@ -17,7 +17,7 @@ const INIT_FILES: &[&str] = &[
     "ai-docs/agents/editor.md",
     crate::diagrams::PROJECT_PATH,
 ];
-const INIT_TREES: &[&str] = &[".beads", ".codegraph"];
+const INIT_TREES: &[&str] = &[".beads"];
 
 #[derive(Clone, Debug)]
 struct FileSnapshot {
@@ -65,31 +65,10 @@ pub fn snapshot_project(root: &Path) -> ProjectSnapshot {
 }
 
 pub fn restore_project(
-    system: &dyn crate::System,
+    _system: &dyn crate::System,
     snapshot: ProjectSnapshot,
 ) -> Result<(), String> {
     let mut failures = Vec::new();
-    let codegraph = snapshot.root.join(".codegraph");
-    let created_codegraph = snapshot.trees.get(&codegraph) == Some(&false) && codegraph.exists();
-    if created_codegraph {
-        for command in [
-            crate::CommandSpec::new("codegraph", ["uninit"]),
-            crate::CommandSpec::new("codegraph", ["uninstall", "--yes", "--location", "local"]),
-        ] {
-            match system.run(&command) {
-                Ok(result) if result.success => {}
-                Ok(result) => failures.push(format!(
-                    "{} failed during rollback: {}",
-                    command.display(),
-                    crate::install::command_failure_message(&result)
-                )),
-                Err(error) => failures.push(format!(
-                    "{} failed during rollback: {error}",
-                    command.display()
-                )),
-            }
-        }
-    }
     for (path, previous) in snapshot.files {
         let symlink_target = previous.symlink_target.as_ref().map(|target| {
             if target.is_absolute() {
@@ -158,23 +137,6 @@ pub fn record_project_changes(home: &Path, before: &ProjectSnapshot) -> Result<(
     }
     for (path, existed) in &before.trees {
         if !existed && path.is_dir() {
-            if path.file_name().is_some_and(|name| name == ".codegraph") {
-                receipts.extend([
-                    Receipt::Command {
-                        program: "codegraph".into(),
-                        args: vec!["uninit".into()],
-                    },
-                    Receipt::Command {
-                        program: "codegraph".into(),
-                        args: vec![
-                            "uninstall".into(),
-                            "--yes".into(),
-                            "--location".into(),
-                            "local".into(),
-                        ],
-                    },
-                ]);
-            }
             receipts.push(Receipt::Path {
                 digest: digest_path(path)?,
                 path: path.clone(),
@@ -247,6 +209,11 @@ pub enum Receipt {
         digest: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         before: Option<String>,
+    },
+    McpEntry {
+        path: PathBuf,
+        name: String,
+        digest: String,
     },
     PiSkillExclusion {
         path: PathBuf,
@@ -434,15 +401,17 @@ impl InstallState {
     pub fn load(home: &Path) -> Result<Self, String> {
         let path = home.join(STATE_PATH);
         crate::fs_tx::recover(&path)?;
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Self {
-                    schema_version: 1,
-                    resources: BTreeMap::new(),
-                })
-            }
-            Err(error) => return Err(format!("could not read {}: {error}", path.display())),
+        Self::inspect(home)
+    }
+
+    /// Validate live or recoverable state without changing files during preflight.
+    pub fn inspect(home: &Path) -> Result<Self, String> {
+        let path = home.join(STATE_PATH);
+        let Some(text) = crate::fs_tx::read_recoverable(&path)? else {
+            return Ok(Self {
+                schema_version: 1,
+                resources: BTreeMap::new(),
+            });
         };
         let state: Self = serde_json::from_str(&text)
             .map_err(|error| format!("could not parse {}: {error}", path.display()))?;
@@ -498,6 +467,14 @@ impl InstallState {
 
 fn same_contribution(left: &Receipt, right: &Receipt) -> bool {
     match (left, right) {
+        (
+            Receipt::McpEntry {
+                path: a, name: x, ..
+            },
+            Receipt::McpEntry {
+                path: b, name: y, ..
+            },
+        ) => same_path(a, b) && x == y,
         (
             Receipt::Manager {
                 manager: a,
@@ -727,9 +704,34 @@ mod tests {
         let backup = home.join(".config/loom/.install-state.json.loom-old");
         fs::rename(&path, &backup).unwrap();
 
+        let before = fs::read(&backup).unwrap();
+        assert_eq!(InstallState::inspect(&home).unwrap(), state);
+        assert!(!path.exists());
+        assert_eq!(fs::read(&backup).unwrap(), before);
         assert_eq!(InstallState::load(&home).unwrap(), state);
         assert!(path.is_file());
         assert!(!backup.exists());
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn inspect_rejects_invalid_live_or_pending_ledger_without_recovery() {
+        let home = temp_home("inspect-invalid-ledger");
+        let path = home.join(STATE_PATH);
+        let backup = path.with_file_name(".install-state.json.loom-old");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        for invalid in ["not JSON", r#"{"schemaVersion":2,"resources":{}}"#] {
+            fs::write(&backup, invalid).unwrap();
+            assert!(InstallState::inspect(&home).is_err());
+            assert!(!path.exists());
+            assert_eq!(fs::read_to_string(&backup).unwrap(), invalid);
+            fs::write(&path, invalid).unwrap();
+            fs::write(&backup, r#"{"schemaVersion":1,"resources":{}}"#).unwrap();
+            assert!(InstallState::inspect(&home).is_err());
+            assert_eq!(fs::read_to_string(&path).unwrap(), invalid);
+            assert!(backup.is_file());
+            fs::remove_file(&path).unwrap();
+        }
         fs::remove_dir_all(home).unwrap();
     }
 
@@ -782,33 +784,6 @@ mod tests {
 
         fs::rename(tree.join("a"), tree.join("b")).unwrap();
         assert_ne!(digest_path(&tree).unwrap(), first);
-        fs::remove_dir_all(home).unwrap();
-    }
-
-    #[test]
-    fn new_codegraph_state_records_its_command_inverses_before_the_tree() {
-        let home = temp_home("codegraph");
-        let project = home.join("project");
-        fs::create_dir_all(&project).unwrap();
-        let snapshot = snapshot_project(&project);
-        fs::create_dir(project.join(".codegraph")).unwrap();
-
-        record_project_changes(&home, &snapshot).unwrap();
-
-        let state = InstallState::load(&home).unwrap();
-        let receipts = &state.resources.values().next().unwrap().receipts;
-        assert!(matches!(
-            &receipts[0],
-            Receipt::Command { program, args }
-                if program == "codegraph" && args == &["uninit"]
-        ));
-        assert!(matches!(
-            &receipts[1],
-            Receipt::Command { program, args }
-                if program == "codegraph"
-                    && args == &["uninstall", "--yes", "--location", "local"]
-        ));
-        assert!(matches!(receipts[2], Receipt::Path { .. }));
         fs::remove_dir_all(home).unwrap();
     }
 

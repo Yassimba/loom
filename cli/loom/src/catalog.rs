@@ -8,6 +8,7 @@ pub enum ResourceKind {
     Skill,
     PiPackage,
     HerdrPlugin,
+    McpServer,
     Tool,
 }
 
@@ -18,6 +19,7 @@ impl fmt::Display for ResourceKind {
             Self::PiPackage => write!(formatter, "Pi package"),
             Self::HerdrPlugin => write!(formatter, "Herdr plugin"),
             Self::Tool => write!(formatter, "Tool"),
+            Self::McpServer => write!(formatter, "MCP server"),
         }
     }
 }

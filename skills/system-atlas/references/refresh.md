@@ -8,8 +8,7 @@ as creation, limited to affected topics and new coverage.
    creates a sibling staging directory. `status: unchanged` means stop: no
    semantic work or rendering is needed.
 2. Read the returned changed paths, affected topics, and unmapped paths. Inspect
-   source at the captured commits, not a dirty worktree. CodeGraph helps when
-   its indexed source matches that revision; verify elsewhere with `git show`.
+   source at the captured commits, not a dirty worktree; verify with `git show`.
    Investigate additions for new features, deletions/renames for retired or
    moved facts, and callers/contracts for effects in unchanged files/repos.
 3. Update only affected records and figures in the stage. Expand the topic set

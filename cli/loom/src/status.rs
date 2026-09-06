@@ -44,6 +44,7 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
     let skills_healthy = print_skill_trees(system, &style);
     style.blank();
     style.section("Integrations");
+    let mcp_healthy = print_mcp(system, &style);
     print_opencode_adapter(system, &style);
     style.blank();
     style.section("Runtimes");
@@ -73,15 +74,49 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
     for check in &checks {
         style.row(check.health.mark(), check.name, style.muted(&check.detail));
     }
-    let healthy = resources_healthy
+    let healthy = mcp_healthy
+        && resources_healthy
         && skills_healthy
         && checks.iter().all(|check| check.health != Health::Bad);
     if healthy {
-        style.verdict(true, "Selected resources and runtimes verified");
+        style.verdict(true, "Selected resources and runtimes checked");
         style.hint("optional managers are installed on demand by `loom setup`");
     } else {
         style.verdict(false, "Some checks need attention");
         style.next("repair the failed managers, then run `loom status` again");
+    }
+    healthy
+}
+
+fn print_mcp(system: &dyn System, style: &Out) -> bool {
+    let Some(home) = system.home_dir() else {
+        return false;
+    };
+    let Ok(state) = crate::ownership::InstallState::load(&home) else {
+        return false;
+    };
+    let mut healthy = true;
+    for owned in state.resources.values() {
+        for receipt in &owned.receipts {
+            if let crate::ownership::Receipt::McpEntry { path, name, digest } = receipt {
+                let present = crate::mcp::entry_status(path, name, digest)
+                    == crate::uninstall::ReceiptStatus::Clean;
+                let (scope, root) = match &owned.scope {
+                    crate::ownership::OwnershipScope::Global => {
+                        (crate::SkillScope::Global, home.as_path())
+                    }
+                    crate::ownership::OwnershipScope::Project { root } => {
+                        (crate::SkillScope::Project, root.as_path())
+                    }
+                };
+                let destination =
+                    crate::SkillDestination::new(vec![crate::SkillAgent::Pi], scope, &home, root);
+                let configured = present && crate::mcp::configured(&destination, system);
+                healthy &= configured;
+                style.row(if configured { Mark::Ok } else { Mark::Bad }, name,
+                    format!("{} — {}", tidy_path(path, &home), if configured { "gateway configured; live health not checked (use /mcp in Pi)" } else { "config changed/missing or prerequisite unavailable; inspect /mcp or retry loom add --mcp-server sem --agent pi" }));
+            }
+        }
     }
     healthy
 }

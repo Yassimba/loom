@@ -130,7 +130,22 @@ fn run_install_job(
         &mut |index, status| {
             let status = match status {
                 StepStatus::Running => ExecStatus::Running,
-                StepStatus::Prepared | StepStatus::Installed => ExecStatus::Ok("installed".into()),
+                StepStatus::Prepared | StepStatus::Installed => {
+                    let step = job
+                        .plan
+                        .prerequisites
+                        .iter()
+                        .chain(&job.plan.resources)
+                        .nth(index);
+                    ExecStatus::Ok(
+                        if step.is_some_and(|s| s.target == "mcp-server:sem") {
+                            "configured; live health not checked"
+                        } else {
+                            "installed"
+                        }
+                        .into(),
+                    )
+                }
                 StepStatus::Failed(message) => ExecStatus::Failed(message),
                 StepStatus::Skipped(message) => ExecStatus::Skipped(message),
             };

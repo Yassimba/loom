@@ -162,6 +162,8 @@ fn uninstall_wizard_selection(
                 crate::ResourceKind::Skill
             } else if id.contains("pi-package:") {
                 crate::ResourceKind::PiPackage
+            } else if id.contains("mcp-server:") {
+                crate::ResourceKind::McpServer
             } else if id.contains("herdr-plugin:") {
                 crate::ResourceKind::HerdrPlugin
             } else {
@@ -507,6 +509,7 @@ fn receipt_status_on_system(receipt: &Receipt, system: &dyn System, home: &Path)
 
 pub fn receipt_status(receipt: &Receipt) -> ReceiptStatus {
     match receipt {
+        Receipt::McpEntry { path, name, digest } => crate::mcp::entry_status(path, name, digest),
         Receipt::Path { path, digest, .. } => {
             if !path.exists() {
                 ReceiptStatus::Missing
@@ -819,6 +822,9 @@ fn remove_receipt(
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
     match receipt {
+        Receipt::McpEntry { path, name, digest } => {
+            crate::mcp::remove_entry(path, name, digest).map_err(|e| e.to_string())?
+        }
         Receipt::Manager { manager, target } => {
             let args = if manager == "herdr" {
                 vec![

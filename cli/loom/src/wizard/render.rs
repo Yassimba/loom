@@ -674,7 +674,9 @@ impl Wizard {
         } else {
             let counts = self.item_counts(items);
             let actionable = counts.available + counts.picked;
-            let (mark, style) = if actionable == 0 && counts.required == 0 {
+            let (mark, style) = if actionable == 0 && counts.unavailable > 0 {
+                (" ! ", Style::new().fg(WARN))
+            } else if actionable == 0 && counts.required == 0 {
                 (" ✓ ", Style::new().fg(OK).dim())
             } else if counts.picked == 0 && counts.required == 0 {
                 (OFF, Style::new().dim())
@@ -734,6 +736,7 @@ impl Wizard {
                 ResourceKind::Tool => "Tool",
                 ResourceKind::PiPackage => "Pi package",
                 ResourceKind::HerdrPlugin => "Herdr plugin",
+                ResourceKind::McpServer => "MCP server",
             },
             Row::Setting(_) => "Setting",
         }
@@ -922,6 +925,18 @@ impl Wizard {
             lines.push(field("pulls in", resource.dependencies.join(", "), WARN));
         }
         match resource.kind {
+            ResourceKind::McpServer => {
+                lines.push(field(
+                    "via",
+                    "Pi MCP gateway · tools discovered on request".into(),
+                    ACCENT,
+                ));
+                lines.push(field(
+                    "agents",
+                    "Pi supported; other agent adapters not yet verified".into(),
+                    WARN,
+                ));
+            }
             ResourceKind::Skill => {
                 let destination = self.skill_destination();
                 let trees = destination.trees();
@@ -1057,7 +1072,12 @@ impl Wizard {
             .max()
             .unwrap_or(0);
         for (agent, on) in SkillAgent::ALL.iter().zip(&self.agent_on) {
-            let (mark, style) = mark_for(*on);
+            let unsupported = self.has_mcp() && !self.has_skills() && *agent != SkillAgent::Pi;
+            let (mark, style) = if unsupported {
+                (" - ", Style::new().dim())
+            } else {
+                mark_for(*on)
+            };
             let tree = match self.skill_scope {
                 crate::SkillScope::Global => agent.global_skill_tree(&destination.home),
                 crate::SkillScope::Project => agent.project_skill_tree(&destination.project_root),
@@ -1067,7 +1087,16 @@ impl Wizard {
                 Span::styled(format!(" {mark} "), style),
                 Span::raw(format!("{} ", pad(agent.label(), agent_width))),
                 Span::styled(
-                    cut(&tidy(&tree, &destination.home), tree_room),
+                    cut(
+                        &if unsupported {
+                            "MCP not yet verified".into()
+                        } else if self.has_mcp() && *agent == SkillAgent::Pi {
+                            crate::mcp::config_path(&destination).display().to_string()
+                        } else {
+                            tidy(&tree, &destination.home)
+                        },
+                        tree_room,
+                    ),
                     Style::new().dim(),
                 ),
             ])));
@@ -1078,7 +1107,7 @@ impl Wizard {
             .filter(|resource| resource.kind == ResourceKind::Skill)
             .count();
         let title = format!(
-            " Agent skill destination · {} · {}/{} agents ",
+            " Where · {} · {}/{} agents ",
             plural(skills, "skill"),
             self.selected_agents().len(),
             SkillAgent::ALL.len()
@@ -1090,9 +1119,13 @@ impl Wizard {
         frame.render_stateful_widget(list, list_area, &mut state);
 
         let mut details = vec![
-            Line::styled("Agent skill destination", Style::new().bold().fg(ACCENT)),
+            Line::styled("Agent destination", Style::new().bold().fg(ACCENT)),
             Line::from(""),
-            Line::from("This screen affects agent skills only."),
+            Line::from(if self.has_mcp() {
+                "Scope applies to skills and MCP config. Sem and the auto-selected Pi gateway are machine-wide. MCP goes to Pi only; other selected agents receive skills."
+            } else {
+                "This screen affects agent skills only."
+            }),
             Line::from(""),
             Line::from(vec![
                 Span::styled("All projects  ", Style::new().fg(ACCENT).dim()),
@@ -1122,7 +1155,16 @@ impl Wizard {
             ));
         } else {
             details.push(Line::styled("Will write to", Style::new().bold()));
-            for tree in destination.trees() {
+            if self.has_mcp() {
+                details.push(Line::from(
+                    crate::mcp::config_path(&destination).display().to_string(),
+                ));
+            }
+            for tree in destination
+                .trees()
+                .into_iter()
+                .filter(|_| self.has_skills())
+            {
                 details.push(Line::styled(
                     format!("  {}", tidy(&tree, &destination.home)),
                     Style::new().dim(),
@@ -1244,6 +1286,7 @@ impl Wizard {
                 (ResourceKind::Tool, "Tools"),
                 (ResourceKind::PiPackage, "Pi packages"),
                 (ResourceKind::HerdrPlugin, "Herdr plugins"),
+                (ResourceKind::McpServer, "MCP servers"),
             ] {
                 let of_kind = expanded
                     .iter()
@@ -1253,6 +1296,16 @@ impl Wizard {
                     continue;
                 }
                 lines.push(heading(title, of_kind.len()));
+                if kind == ResourceKind::McpServer {
+                    lines.push(Line::from(format!(
+                        "  → {}",
+                        crate::mcp::config_path(&self.skill_destination()).display()
+                    )));
+                    lines.push(Line::from(
+                        "  Machine-wide Sem v0.24.0 via mise; Pi gateway is selected automatically.",
+                    ));
+                    lines.push(Line::from(crate::mcp::EXPOSURE_NOTE));
+                }
                 if kind == ResourceKind::Skill {
                     let destination = self.skill_destination();
                     if destination.agents.is_empty() {

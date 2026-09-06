@@ -262,7 +262,7 @@ impl Stage {
     pub fn title(&self) -> &'static str {
         match self {
             Self::Choose(_) => "Choose",
-            Self::Where(_) => "Skill scope",
+            Self::Where(_) => "Where",
             Self::Responses { .. } => "Pi responses",
             Self::Review { .. } => "Review",
             Self::Install(_) => "Install",
@@ -351,8 +351,18 @@ impl Wizard {
             .collect();
         let skill_scope = model.skill_destination.scope;
         let uninstalling = model.purpose == WizardPurpose::Uninstall;
+        let mut selected = vec![uninstalling; model.resources.len()];
+        if !uninstalling && model.status.pi {
+            if let Some(index) = model
+                .resources
+                .iter()
+                .position(|resource| resource.install_target == "pi-mcp-adapter")
+            {
+                selected[index] = true;
+            }
+        }
         let mut wizard = Self {
-            selected: vec![uninstalling; model.resources.len()],
+            selected,
             setting_on: vec![false; model.settings.len()],
             agent_on,
             skill_scope,
@@ -439,6 +449,12 @@ impl Wizard {
             .any(|resource| resource.kind == ResourceKind::Skill)
     }
 
+    pub(crate) fn has_mcp(&self) -> bool {
+        self.selection()
+            .iter()
+            .any(|resource| resource.kind == ResourceKind::McpServer)
+    }
+
     pub(super) fn included_note(&self, index: usize) -> Option<String> {
         let skill = &self.model.resources[index];
         if self.model.purpose != WizardPurpose::Install || skill.kind != ResourceKind::Skill {
@@ -468,6 +484,10 @@ impl Wizard {
             return false;
         }
         let resource = &self.model.resources[index];
+        // Keep MCP selectable across scope changes; configuration is not live health.
+        if resource.kind == ResourceKind::McpServer {
+            return false;
+        }
         if resource.kind == ResourceKind::Skill {
             let destination = self.skill_destination();
             let unchanged_destination = destination.scope == self.model.skill_destination.scope
@@ -667,7 +687,12 @@ impl Wizard {
         if installed.len() == self.model.installed.len() {
             self.model.installed = installed;
             for (index, present) in self.model.installed.iter().enumerate() {
-                if *present && self.model.resources[index].kind != ResourceKind::Skill {
+                if *present
+                    && !matches!(
+                        self.model.resources[index].kind,
+                        ResourceKind::Skill | ResourceKind::McpServer
+                    )
+                {
                     self.selected[index] = false;
                 }
             }
@@ -736,7 +761,10 @@ impl Wizard {
     /// Where only exists when skills are going somewhere.
     pub(crate) fn stage_visible(&self, index: usize) -> bool {
         match index {
-            WHERE => self.model.purpose == WizardPurpose::Install && self.has_skills(),
+            WHERE => {
+                self.model.purpose == WizardPurpose::Install
+                    && (self.has_skills() || self.has_mcp())
+            }
             RESPONSES => {
                 self.model.purpose == WizardPurpose::Install
                     && self.model.mode == crate::app::SelectionMode::Setup
@@ -782,6 +810,12 @@ impl Wizard {
 
     fn entered_stage(&mut self) {
         self.search = None;
+        if self.stage_index == WHERE && self.has_mcp() && !self.has_skills() {
+            self.agent_on = SkillAgent::ALL
+                .iter()
+                .map(|a| *a == SkillAgent::Pi)
+                .collect();
+        }
         if let Stage::Review { scroll } = &mut self.stages[self.stage_index] {
             *scroll = 0;
         }
@@ -1160,6 +1194,11 @@ impl Wizard {
                 SkillScope::Global => SkillScope::Project,
                 SkillScope::Project => SkillScope::Global,
             };
+        } else if self.has_mcp()
+            && !self.has_skills()
+            && SkillAgent::ALL.get(cursor - 1) != Some(&SkillAgent::Pi)
+        {
+            // Non-Pi adapters are unverified, not selectable MCP destinations.
         } else if let Some(on) = self.agent_on.get_mut(cursor - 1) {
             *on = !*on;
         }
@@ -1508,6 +1547,7 @@ fn profile_kinds(model: &Model, rows: &[Row], bulk_rows: &[Row]) -> Vec<KindGrou
         (ResourceKind::Tool, "Tools"),
         (ResourceKind::PiPackage, "Pi packages"),
         (ResourceKind::HerdrPlugin, "Herdr plugins"),
+        (ResourceKind::McpServer, "MCP servers"),
     ] {
         let visible = rows
             .iter()
@@ -1595,6 +1635,7 @@ fn resource_groups(model: &Model) -> Vec<Group> {
         (ResourceKind::Tool, "Tools"),
         (ResourceKind::PiPackage, "Pi packages"),
         (ResourceKind::HerdrPlugin, "Herdr plugins"),
+        (ResourceKind::McpServer, "MCP servers"),
     ] {
         push_group(
             title.into(),

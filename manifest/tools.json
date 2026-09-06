@@ -2,6 +2,18 @@
   "comment": "Wizard metadata for the optional (non-core) tools in loom.toml. Keys must match the manifest's tool keys exactly; the catalog generator validates both directions.",
   "tools": [
     {
+      "key": "github:Ataraxy-Labs/sem[exe=sem]",
+      "label": "sem",
+      "description": "Semantic code search, diffs, and change impact. Binary prerequisite for Sem MCP.",
+      "nextAction": "For agent access, select MCP servers → sem in loom add."
+    },
+    {
+      "key": "github:zzet/gortex[exe=gortex]",
+      "label": "gortex",
+      "description": "Local repository graph and code intelligence for Pi and Zed.",
+      "nextAction": "Run `loom init --gortex` in a repository to configure Pi and Zed, start Gortex, and track it."
+    },
+    {
       "key": "ubi:Yassimba/loom",
       "label": "loom-teams",
       "bin": "loom-teams",
@@ -12,7 +24,8 @@
       "key": "npm:@earendil-works/pi-coding-agent",
       "label": "pi",
       "description": "The Pi coding agent. Required by Pi packages — selecting any of them pulls Pi in automatically.",
-      "nextAction": "Run `pi` in a project to start the agent."
+      "nextAction": "Run `pi` in a project to start the agent.",
+      "dependencies": ["pi-mcp-adapter"]
     },
     {
       "key": "herdr",
@@ -20,12 +33,6 @@
       "description": "Terminal multiplexer for coding agents (macOS/Linux; use WSL2 on Windows).",
       "nextAction": "Run `herdr` to start the multiplexer.",
       "windowsSupport": "wsl"
-    },
-    {
-      "key": "npm:@colbymchenry/codegraph",
-      "label": "codegraph",
-      "description": "Local semantic code index for coding agents — source, call paths, and change impact without file-by-file discovery.",
-      "nextAction": "Run `loom init` in a project to wire agents and build its index."
     },
     {
       "key": "github:rtk-ai/rtk",
