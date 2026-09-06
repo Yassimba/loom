@@ -174,9 +174,54 @@ function dfsDag(
 }
 
 /**
- * Reorder nodes within each rank to minimise edge crossings (barycenter
- * sweeps): alternate down/up passes sort each rank by the mean position of its
- * neighbours, keeping whichever ordering crossed least.
+ * The layered graph crossing reduction works on: every real node plus one
+ * virtual node per intermediate rank of each forward edge spanning more than
+ * one rank (the edge becomes a chain of unit segments). Ids below `n` are
+ * real; `up[id]` / `down[id]` list unit-segment neighbours.
+ */
+interface Layered {
+  layers: number[][]
+  up: number[][]
+  down: number[][]
+}
+
+/**
+ * Split each forward edge into unit-rank segments. Naive normalisation is
+ * bounded by MAX_EDGES × MAX_NODES virtual nodes, small enough here.
+ */
+function normalize(byRank: number[][], edges: Edge[], ranks: number[]): Layered {
+  const n = ranks.length
+  const layers = byRank.map((row) => [...row])
+  const up: number[][] = Array.from({ length: n }, () => [])
+  const down: number[][] = Array.from({ length: n }, () => [])
+  const link = (a: number, b: number): void => {
+    down[a].push(b)
+    up[b].push(a)
+  }
+  for (const e of edges) {
+    if (e.from === e.to || ranks[e.to] <= ranks[e.from]) continue
+    let prev = e.from
+    for (let r = ranks[e.from] + 1; r < ranks[e.to]; r++) {
+      const v = up.length
+      up.push([])
+      down.push([])
+      layers[r].push(v)
+      link(prev, v)
+      prev = v
+    }
+    link(prev, e.to)
+  }
+  return { layers, up, down }
+}
+
+/**
+ * Reorder nodes within each rank to minimise edge crossings.
+ *
+ * Long edges are normalised into virtual-node chains first, so every
+ * boundary crossing is visible to the count and a long edge is ordered as
+ * one coherent chain. Alternate down/up barycenter sweeps are each followed
+ * by adjacent-transposition cleanup; sweeping stops after two rounds without
+ * improvement, keeping whichever ordering crossed least.
  *
  * `trailing` nodes must end their rank (lane endpoints: the strip they exit
  * toward lies past the rank's last box, so anything ordered beyond them
@@ -190,74 +235,123 @@ export function orderRanks(
   trailing: boolean[] = [],
 ): void {
   const n = ranks.length
+  const isTrailing = (v: number): boolean => trailing[v] ?? false
   const partition = (row: number[]): void => {
-    row.sort((a, b) => Number(trailing[a] ?? false) - Number(trailing[b] ?? false))
+    row.sort((a, b) => Number(isTrailing(a)) - Number(isTrailing(b)))
   }
   for (const row of byRank) partition(row)
   if (byRank.length < 2 || n < 3) return
 
-  const parents: number[][] = Array.from({ length: n }, () => [])
-  const children: number[][] = Array.from({ length: n }, () => [])
-  for (const e of edges) {
-    if (e.from !== e.to && ranks[e.to] > ranks[e.from]) {
-      parents[e.to].push(e.from)
-      children[e.from].push(e.to)
-    }
-  }
-
-  const pos = new Array<number>(n).fill(0)
+  const { layers, up, down } = normalize(byRank, edges, ranks)
+  const pos = new Array<number>(up.length).fill(0)
   const reindex = (row: number[]): void => {
     for (let i = 0; i < row.length; i++) pos[row[i]] = i
   }
-  for (const row of byRank) reindex(row)
+  for (const row of layers) reindex(row)
+  const total = (): number => {
+    let sum = 0
+    for (let r = 0; r + 1 < layers.length; r++) sum += crossingsBetween(layers[r], down, pos)
+    return sum
+  }
 
-  let best = byRank.map((row) => [...row])
-  let bestCrossings = countCrossings(edges, ranks, pos)
-  if (bestCrossings === 0) return
-
-  for (let it = 0; it < 8; it++) {
-    // Alternate sweeping down (sort by parents) and up (sort by children).
-    const rows = it % 2 === 0 ? byRank.slice(1) : byRank.slice(0, -1).reverse()
-    const neigh = it % 2 === 0 ? parents : children
+  let best = layers.map((row) => [...row])
+  let bestCrossings = total()
+  let stale = 0
+  for (let it = 0; bestCrossings > 0 && stale < 2 && it < 24; it++) {
+    const downward = it % 2 === 0
+    const rows = downward ? layers.slice(1) : layers.slice(0, -1).reverse()
+    const neigh = downward ? up : down
     for (const row of rows) {
       sortByBarycenter(row, neigh, pos)
       partition(row)
       reindex(row)
     }
-    const crossings = countCrossings(edges, ranks, pos)
+    transpose(layers, up, down, pos, isTrailing)
+    const crossings = total()
     if (crossings < bestCrossings) {
       bestCrossings = crossings
-      best = byRank.map((row) => [...row])
-    }
-    if (bestCrossings === 0) break
+      best = layers.map((row) => [...row])
+      stale = 0
+    } else stale++
   }
 
-  for (let i = 0; i < byRank.length; i++) byRank[i].splice(0, byRank[i].length, ...best[i])
+  for (let i = 0; i < byRank.length; i++) {
+    byRank[i].splice(0, byRank[i].length, ...best[i].filter((v) => v < n))
+  }
 }
 
 function sortByBarycenter(row: number[], neigh: number[][], pos: number[]): void {
-  const keyed = row.map((v) => ({
-    key:
-      neigh[v].length === 0 ? pos[v] : neigh[v].reduce((s, u) => s + pos[u], 0) / neigh[v].length,
-    v,
-  }))
+  const key = (v: number): number =>
+    neigh[v].length === 0 ? pos[v] : neigh[v].reduce((s, u) => s + pos[u], 0) / neigh[v].length
+  const keyed = row.map((v) => ({ key: key(v), v }))
   keyed.sort((a, b) => a.key - b.key)
   for (let i = 0; i < keyed.length; i++) row[i] = keyed[i].v
 }
 
-export function countCrossings(edges: Edge[], ranks: number[], pos: number[]): number {
-  const adjacent = edges
-    .filter((e) => e.from !== e.to && ranks[e.to] === ranks[e.from] + 1)
-    .map((e) => [ranks[e.from], pos[e.from], pos[e.to]] as const)
-  let crossings = 0
-  for (let i = 0; i < adjacent.length; i++) {
-    const a = adjacent[i]
-    for (let j = i + 1; j < adjacent.length; j++) {
-      const b = adjacent[j]
-      if (a[0] === b[0] && ((a[1] < b[1] && a[2] > b[2]) || (a[1] > b[1] && a[2] < b[2]))) {
-        crossings++
+/**
+ * Swap adjacent nodes while that lowers the crossings with both neighbouring
+ * layers (Gansner et al.'s transpose step). Never swaps across the
+ * trailing boundary.
+ */
+function transpose(
+  layers: number[][],
+  up: number[][],
+  down: number[][],
+  pos: number[],
+  isTrailing: (v: number) => boolean,
+): void {
+  let improved = true
+  for (let guard = 0; improved && guard < 8; guard++) {
+    improved = false
+    for (const row of layers) {
+      for (let i = 0; i + 1 < row.length; i++) {
+        const v = row[i]
+        const w = row[i + 1]
+        if (isTrailing(v) !== isTrailing(w)) continue
+        const before = pairCrossings(v, w, up, pos) + pairCrossings(v, w, down, pos)
+        const after = pairCrossings(w, v, up, pos) + pairCrossings(w, v, down, pos)
+        if (after < before) {
+          row[i] = w
+          row[i + 1] = v
+          pos[w] = i
+          pos[v] = i + 1
+          improved = true
+        }
       }
     }
+  }
+}
+
+/** Crossings among the segments of `v` and `w` if `v` sits left of `w`. */
+function pairCrossings(v: number, w: number, neigh: number[][], pos: number[]): number {
+  let count = 0
+  for (const a of neigh[v]) for (const b of neigh[w]) if (pos[a] > pos[b]) count++
+  return count
+}
+
+/**
+ * Crossings between `row` and the layer below it: segments sorted by their
+ * upper end, then inversions of the lower ends counted with a Fenwick tree
+ * (Barth, Mutzel and Jünger's O(M log N) method).
+ */
+function crossingsBetween(row: number[], down: number[][], pos: number[]): number {
+  const lower: number[] = []
+  let width = 0
+  for (const v of row) {
+    const ends = down[v].map((u) => pos[u]).sort((a, b) => a - b)
+    for (const p of ends) {
+      lower.push(p)
+      width = Math.max(width, p + 1)
+    }
+  }
+  const tree = new Array<number>(width + 1).fill(0)
+  let crossings = 0
+  for (let i = 0; i < lower.length; i++) {
+    // Earlier segments ending right of this one cross it.
+    let greater = i
+    for (let k = lower[i] + 1; k > 0; k -= k & -k) greater -= tree[k]
+    crossings += greater
+    for (let k = lower[i] + 1; k <= width; k += k & -k) tree[k]++
   }
   return crossings
 }
