@@ -263,7 +263,6 @@ function normalize(
     up[lo].push(hi)
   }
   const chains: number[][] = edges.map(() => [])
-  const owners = new Map<number, number>()
   const shared = new Set<number>()
   const trunks = new Map<string, number>()
   const takes = (e: Edge): boolean =>
@@ -307,7 +306,6 @@ function normalize(
         down.push([])
         layers[r].push(v)
         if (key !== null) trunks.set(key, v)
-        owners.set(v, i)
       } else shared.add(v)
       chains[i].push(v)
       link(prev, v, upward)
@@ -546,9 +544,8 @@ interface TrackSpan {
   edge: number
   up: number[]
   down: number[]
-  /** A labelled lane refuses endpoint sharing: the label would appear to
-   * cover every edge merged onto the row. Bus spans never set this — their
-   * labels sit at the separate arrival ends, so fan merging stays safe. */
+  /** A labelled lane refuses endpoint sharing in `packTracks`: the label
+   * would appear to cover every edge merged onto the row. */
   labeled?: boolean
 }
 
@@ -647,17 +644,13 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
   )
   const hypers: Hyper[] = []
   for (const span of sorted) {
-    const host =
-      span.labeled === true
-        ? undefined
-        : hypers.find((h) =>
-            h.members.some(
-              (m) =>
-                m.labeled !== true &&
-                ((m.from === span.from && m.up[0] === span.up[0]) ||
-                  (m.to === span.to && m.down[0] === span.down[0])),
-            ),
-          )
+    const host = hypers.find((h) =>
+      h.members.some(
+        (m) =>
+          (m.from === span.from && m.up[0] === span.up[0]) ||
+          (m.to === span.to && m.down[0] === span.down[0]),
+      ),
+    )
     if (host === undefined) {
       hypers.push({ members: [span], start: span.start, end: span.end, up: [...span.up], down: [...span.down] })
       continue
@@ -938,8 +931,9 @@ function placeTd(
   // it in the first placement, nearest the middle; the node then reserves
   // that width. Without such slack the label stays at the head row, where
   // it shares the target's row and costs nothing.
-  const chainLabel = new Map<number, { edge: number; w: number; side: number }>()
-  const labelNode = new Array<number>(graph.edges.length).fill(-1)
+  /** Per edge, the chain node carrying its label, the label width and side (+1 right, -1 left). */
+  const chainLabel: ({ v: number; w: number; side: number } | null)[] = graph.edges.map(() => null)
+  const taken = new Set<number>()
   const layerOf = new Array<number>(layered.up.length).fill(0)
   layered.layers.forEach((row, r) => {
     for (const v of row) layerOf[v] = r
@@ -961,21 +955,22 @@ function placeTd(
     let best: { v: number; side: number; dist: number } | null = null
     chain.forEach((v, k) => {
       for (const side of [1, -1]) {
-        if (slack(v, side) < w + 1 || chainLabel.has(v) || layered.shared.has(v)) continue
+        if (slack(v, side) < w + 1 || taken.has(v) || layered.shared.has(v)) continue
         const dist = Math.abs(k - mid)
         if (best === null || dist < best.dist) best = { v, side, dist }
       }
     })
     if (best === null) return
     const { v, side } = best as { v: number; side: number }
-    labelNode[i] = v
-    chainLabel.set(v, { edge: i, w, side })
+    chainLabel[i] = { v, w, side }
+    taken.add(v)
   })
-  const labelPad = headPad((i) => labelNode[i] !== -1)
+  const labelPad = headPad((i) => chainLabel[i] !== null)
   const labelPadLeft = new Array<number>(layered.up.length).fill(0)
-  for (const [v, { w, side }] of chainLabel) {
-    if (side > 0) labelPad[v] = w + 1
-    else labelPadLeft[v] = w + 1
+  for (const label of chainLabel) {
+    if (label === null) continue
+    if (label.side > 0) labelPad[label.v] = label.w + 1
+    else labelPadLeft[label.v] = label.w + 1
   }
   /** Forward bus rows in the band below rank `r` whose span covers column `p`. */
   const busOver = (r: number, p: number): number =>
@@ -1032,7 +1027,7 @@ function placeTd(
   let margin = 0
   graph.edges.forEach((e, i) => {
     const text = edgeText(e)
-    if (!isBack(e) || entrySide[i] >= 0 || text === null || labelNode[i] !== -1) return
+    if (!isBack(e) || entrySide[i] >= 0 || text === null || chainLabel[i] !== null) return
     margin = Math.max(margin, Math.min(stringWidth(text), MAX_LABEL) + 1 - port(e.to, -1))
   })
   for (let v = 0; v < centers.length; v++) centers[v] += margin
@@ -1053,10 +1048,10 @@ function placeTd(
   const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
   const isFwd = (e: Edge): boolean => e.from !== e.to && ranks[e.to] === ranks[e.from] + 1
   const edgeEntryX = new Array<number>(graph.edges.length).fill(-1)
-  const edgeStraight = new Array<boolean>(graph.edges.length).fill(false)
   const edgeLabelLeft = new Array<boolean>(graph.edges.length).fill(false)
-  const labelW = (e: Edge): number => {
-    if (labelNode[graph.edges.indexOf(e)] !== -1) return -1
+  const labelW = (i: number): number => {
+    if (chainLabel[i] !== null) return -1
+    const e = graph.edges[i]
     const parts = [e.label, e.cardTo].filter((p) => p != null) as string[]
     return parts.length === 0
       ? -1
@@ -1073,25 +1068,21 @@ function placeTd(
     const left = boxL(t)
     const right = boxR(t)
     const arrives = (i: number): number => centers[layered.chains[i].at(-1) ?? graph.edges[i].from]
-    type Item = { slot: number; w: number; edge: number; key: number }
-    const over = (i: number): boolean => {
-      const k = arrives(i)
-      return k > left && k < right
-    }
-    const fwdCols = entries.filter((i) => isFwd(graph.edges[i])).map(arrives)
-    const flanked = (i: number): boolean =>
-      fwdCols.some((c) => c <= left) && fwdCols.some((c) => c >= right)
-    const jogging = entries.filter((i) => isFwd(graph.edges[i]) && (!over(i) || flanked(i)))
-    let items: Item[] = entries
-      .filter((i) => !jogging.includes(i))
-      .map((i) => ({ slot: 0, w: labelW(graph.edges[i]), edge: i, key: arrives(i) }))
+    /** One entry: a single edge, or the forwards merged onto one arrival. */
+    type Item = { slot: number; w: number; edges: number[]; key: number }
+    const item = (edges: number[], key: number): Item => ({
+      slot: 0,
+      w: Math.max(...edges.map(labelW)),
+      edges,
+      key,
+    })
+    const fwds = entries.filter((i) => isFwd(graph.edges[i]))
+    const over = (i: number): boolean => arrives(i) > left && arrives(i) < right
+    const flanked = fwds.some((i) => arrives(i) <= left) && fwds.some((i) => arrives(i) >= right)
+    const jogging = fwds.filter((i) => !over(i) || flanked)
+    let items: Item[] = entries.filter((i) => !jogging.includes(i)).map((i) => item([i], arrives(i)))
     if (jogging.length > 0) {
-      items.push({
-        slot: 0,
-        w: Math.max(...jogging.map((i) => labelW(graph.edges[i]))),
-        edge: -1,
-        key: jogging.reduce((a, i) => a + centers[graph.edges[i].from], 0) / jogging.length,
-      })
+      items.push(item(jogging, jogging.reduce((a, i) => a + centers[graph.edges[i].from], 0) / jogging.length))
     }
     // Slots: an arrival at most a cell off centre snaps to it (routeForward
     // straightens such a jog), other in-range arrivals keep their column,
@@ -1101,7 +1092,7 @@ function placeTd(
     // next slot leaves room, else left when the cells behind the cursor
     // allow. Null when the top runs out of room.
     const walk = (list: Item[]): { cols: number[]; lefts: boolean[] } | null => {
-      list.sort((a, b) => a.key - b.key || a.edge - b.edge)
+      list.sort((a, b) => a.key - b.key || a.edges[0] - b.edges[0])
       const fixed = list.filter((it) => it.key > left && it.key < right)
       for (const item of fixed) item.slot = Math.abs(item.key - cx) <= 1 ? cx : item.key
       const spread = (group: Item[], lo: number, hi: number): void => {
@@ -1139,20 +1130,16 @@ function placeTd(
       }
       return { cols, lefts }
     }
-    const fwds = entries.filter((i) => isFwd(graph.edges[i]))
     let fit = walk(items)
     // No room for a head each: every forward merges into one arrival on
     // the centre and the skips spread around it.
     if (fit === null && fwds.length > jogging.length) {
-      items = [
-        ...items.filter((it) => it.edge !== -1 && !isFwd(graph.edges[it.edge])),
-        { slot: 0, w: Math.max(...fwds.map((i) => labelW(graph.edges[i]))), edge: -1, key: cx },
-      ]
+      items = [...items.filter((it) => !fwds.includes(it.edges[0])), item(fwds, cx)]
       fit = walk(items)
     }
     if (fit !== null) {
-      items.forEach((item, i) => {
-        for (const ei of item.edge === -1 ? (fwds.length > jogging.length && fit.cols.length === items.length && items.some((it) => it.edge === -1 && it.key === cx) ? fwds : jogging) : [item.edge]) {
+      items.forEach((it, i) => {
+        for (const ei of it.edges) {
           edgeEntryX[ei] = fit.cols[i]
           edgeLabelLeft[ei] = fit.lefts[i]
         }
@@ -1161,7 +1148,7 @@ function placeTd(
     }
     // Legacy: forwards merge on the centre; a skip lands past the arrival
     // labels, or left of centre with its own label flipped left.
-    const reach = fwds.length > 0 ? Math.max(cx, ...fwds.map((i) => cx + 1 + labelW(graph.edges[i]))) : -1
+    const reach = fwds.length > 0 ? Math.max(cx, ...fwds.map((i) => cx + 1 + labelW(i))) : -1
     for (const si of entries) {
       if (isFwd(graph.edges[si])) {
         edgeEntryX[si] = cx
@@ -1197,10 +1184,6 @@ function placeTd(
   const jogs = chainJogs(graph, ranks, layered, centers, (e, i) => {
     if (isSkip(e)) return { exit: centers[e.from], entry: edgeEntryX[i] }
     return isBack(e) ? { exit: edgeExitX[i], entry: edgeEntryX[i] } : null
-  })
-  for (const j of jogs) edgeStraight[j.edge] = true
-  graph.edges.forEach((e, i) => {
-    if (isBack(e)) edgeStraight[i] = true
   })
   const jogTrack = new Map<ChainJog, number>()
 
@@ -1261,22 +1244,21 @@ function placeTd(
     }
   })
 
-  const edgeLabelAt = graph.edges.map((_, i) => {
-    const v = labelNode[i]
-    if (v === -1) return null
-    const { w, side } = chainLabel.get(v) as { w: number; side: number }
+  const edgeLabelAt = chainLabel.map((label) => {
+    if (label === null) return null
+    const { v, w, side } = label
     const r = layerOf[v]
     return { row: rankY[r] + half(rankH[r]), x: side > 0 ? centers[v] + 2 : centers[v] - 1 - w }
   })
   let contentW = diagramW
-  for (const e of graph.edges) {
-    if (e.from === e.to) continue
-    const at = edgeLabelAt[graph.edges.indexOf(e)]
-    if (at !== null) {
-      contentW = Math.max(contentW, at.x + (chainLabel.get(labelNode[graph.edges.indexOf(e)])?.w ?? 0))
+  graph.edges.forEach((e, i) => {
+    if (e.from === e.to) return
+    const label = chainLabel[i]
+    if (label !== null) {
+      contentW = Math.max(contentW, (edgeLabelAt[i] as { x: number }).x + label.w)
     } else if (ranks[e.to] > ranks[e.from]) {
       const parts = [e.label, e.cardTo].filter((part) => part != null) as string[]
-      const entry = Math.max(placed[e.to].cx, edgeEntryX[graph.edges.indexOf(e)])
+      const entry = Math.max(placed[e.to].cx, edgeEntryX[i])
       for (const part of parts) {
         const lw = Math.min(stringWidth(part), MAX_LABEL)
         contentW = Math.max(contentW, entry + 2 + lw)
@@ -1288,10 +1270,10 @@ function placeTd(
       const text = edgeText(e)
       if (text !== null) {
         // routeBackChain starts the label right of the entry column.
-        contentW = Math.max(contentW, edgeEntryX[graph.edges.indexOf(e)] + 2 + Math.min(stringWidth(text), MAX_LABEL))
+        contentW = Math.max(contentW, edgeEntryX[i] + 2 + Math.min(stringWidth(text), MAX_LABEL))
       }
     }
-  }
+  })
 
   return {
     canvasW: contentW,
@@ -1303,7 +1285,7 @@ function placeTd(
     edgeLane: new Array<number>(graph.edges.length).fill(0),
     edgeEntryX,
     edgeExitX,
-    edgeStraight,
+    edgeStraight: new Array<boolean>(graph.edges.length).fill(false),
     skipRoute,
     edgeLabelLeft,
     edgeLabelAt,
