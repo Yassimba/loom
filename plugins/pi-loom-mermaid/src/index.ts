@@ -62,7 +62,7 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
     .map((token) => {
       if (!isMermaid(token)) return token.raw;
       const styledSource = withDiffClasses(token.text);
-      const art = render(styledSource.source);
+      const art = render(styledSource.source, { maxWidth: context.availableWidth });
       if (!art || art.width > context.availableWidth) return token.raw;
       return `${dimDefaultBorders(toAnsi(art), styledSource.dimSgr).map(codeSpan).join("  \n")}\n`;
     })

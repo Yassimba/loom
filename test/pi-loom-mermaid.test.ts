@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { transformMermaidMarkdown } from "../plugins/pi-loom-mermaid/src/index.ts";
 import { render } from "../plugins/pi-loom-mermaid/src/loom-mermaid/index.ts";
@@ -36,4 +37,23 @@ test("vendored renderer handles every advertised diagram kind", () => {
   ];
 
   for (const source of diagrams) assert.ok(render(source), source.split("\n", 1)[0]);
+});
+
+test("a diagram wider than the space is laid out again with tighter labels", () => {
+  const source = readFileSync(
+    new URL("./fixtures/mermaid/skip-labelled.mmd", import.meta.url),
+    "utf8",
+  );
+  const loose = render(source);
+  const fitted = render(source, { maxWidth: 45 });
+  assert.ok(loose && fitted);
+  assert.ok(loose.width > 45);
+  assert.ok(fitted.width <= 45);
+  assert.equal(render(source)?.width, loose.width, "limits are restored after a retry");
+
+  const output = transformMermaidMarkdown(`\`\`\`mermaid\n${source}\`\`\``, {
+    messageType: "assistant",
+    availableWidth: 45,
+  });
+  assert.doesNotMatch(output, /```mermaid/, "fits instead of falling back to source");
 });

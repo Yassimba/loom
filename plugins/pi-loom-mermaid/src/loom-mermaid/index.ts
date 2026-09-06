@@ -1,5 +1,6 @@
-import { stripControls } from './labels.ts'
-import { diagramFor } from './registry.ts'
+import type { Canvas } from './canvas.ts'
+import { LIMITS, stripControls, withLimits } from './labels.ts'
+import { type Diagram, diagramFor } from './registry.ts'
 import { frontmatterTitle } from './statements.ts'
 import type { MermaidArt } from './types.ts'
 import { stringWidth } from './width.ts'
@@ -18,11 +19,13 @@ export type { MermaidArt, Role, Span } from './types.ts'
  * `timeline` and `gitGraph`.
  *
  * The diagram is laid out at whatever size it needs; `art.width` reports the
- * columns that turned out to be. Deciding what to do when that exceeds the
+ * columns that turned out to be. Given `maxWidth`, a diagram wider than that
+ * is laid out again with progressively tighter label limits and the first
+ * fit is returned. Deciding what to do when even the tightest exceeds the
  * space at hand is the caller's — `sourceBox` is the usual answer:
  *
  * ```ts
- * const art = render(src)
+ * const art = render(src, { maxWidth: cols })
  * show(art && art.width <= cols ? art : sourceBox(src, cols))
  * ```
  *
@@ -36,12 +39,23 @@ export type { MermaidArt, Role, Span } from './types.ts'
  * Everything given up on is listed in `art.warnings` — advisory only, never a
  * reason to withhold the art.
  */
-export function render(src: string): MermaidArt | null {
+export function render(src: string, options: { maxWidth?: number } = {}): MermaidArt | null {
   src = stripControls(src)
   if (src.trim() === '') return null
-  const drawn = diagramFor(src)?.render(src) ?? null
+  const diagram = diagramFor(src)
+  if (diagram === null) return null
+  // Too wide for the space given: lay out again with shorter labels and
+  // tighter wrapping, tightest last, and keep the first that fits (else
+  // the tightest, for the caller to judge against `art.width`).
+  let drawn: ReturnType<Diagram['render']> = null
+  let art: ReturnType<Canvas['toLines']> = { plain: [], styled: [], width: 0 }
+  for (const limits of LIMITS) {
+    drawn = withLimits(limits, () => diagram.render(src))
+    if (drawn === null) return null
+    art = drawn.canvas.toLines()
+    if (options.maxWidth === undefined || art.width <= options.maxWidth) break
+  }
   if (drawn === null) return null
-  const art = drawn.canvas.toLines()
 
   // A frontmatter `title:` is centred above the art, in the `title` role.
   const title = frontmatterTitle(src)
