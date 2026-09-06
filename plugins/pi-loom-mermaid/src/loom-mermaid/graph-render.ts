@@ -7,6 +7,7 @@
 import { Canvas } from './canvas.ts'
 import type { Edge, Node } from './graph.ts'
 import { Graph } from './graph.ts'
+import type { Limits } from './labels.ts'
 import { layout, type NodeExtra } from './layout.ts'
 import { orient, paint } from './paint.ts'
 
@@ -14,19 +15,19 @@ import { orient, paint } from './paint.ts'
 export type CanvasResult = Canvas | null
 
 /** Flowchart and state diagrams: plain boxes, no extra content. */
-export function layoutFlowchart(graph: Graph): CanvasResult {
+export function layoutFlowchart(graph: Graph, limits: Limits): CanvasResult {
   const extras: NodeExtra[] = graph.nodes.map(() => ({ kind: 'plain' }))
-  const canvas = layoutCanvas(graph, extras)
+  const canvas = layoutCanvas(graph, extras, limits)
   return canvas && orient(canvas, graph)
 }
 
 /** Class and ER diagrams: boxes divided into title / attribute / method rows. */
-export function layoutClass(graph: Graph): CanvasResult {
+export function layoutClass(graph: Graph, limits: Limits): CanvasResult {
   const extras: NodeExtra[] = graph.nodes.map((node) => ({
     kind: 'compartments',
     sections: node.sections ?? [[node.label]],
   }))
-  const canvas = layoutCanvas(graph, extras)
+  const canvas = layoutCanvas(graph, extras, limits)
   return canvas && orient(canvas, graph)
 }
 
@@ -45,7 +46,7 @@ interface ScopeItem {
  * canvas. An edge is drawn in the innermost scope containing both endpoints;
  * one crossing a subgraph boundary attaches to the frame instead of the node.
  */
-export function layoutGrouped(graph: Graph): CanvasResult {
+export function layoutGrouped(graph: Graph, limits: Limits): CanvasResult {
   // A node whose id matches a subgraph id stands in for that subgraph.
   const proxy = new Map<number, number>()
   graph.groups.forEach((g, gi) => {
@@ -114,7 +115,7 @@ export function layoutGrouped(graph: Graph): CanvasResult {
     if (g.parent === null) visit(gi)
   })
 
-  const canvas = buildScope(graph, null, scopeEdges, directNodes, keep)
+  const canvas = buildScope(graph, null, scopeEdges, directNodes, keep, limits)
   return canvas && orient(canvas, graph)
 }
 
@@ -124,6 +125,7 @@ function buildScope(
   scopeEdges: Map<number | null, [ScopeItem, ScopeItem, number][]>,
   directNodes: Map<number | null, number[]>,
   keep: boolean[],
+  limits: Limits,
 ): CanvasResult {
   const items: ScopeItem[] = (directNodes.get(scope) ?? []).map((i) => ({ group: false, i }))
   const childGroups = graph.groups
@@ -148,7 +150,7 @@ function buildScope(
       })
       extras.push({ kind: 'plain' })
     } else {
-      const sub = buildScope(graph, item.i, scopeEdges, directNodes, keep)
+      const sub = buildScope(graph, item.i, scopeEdges, directNodes, keep, limits)
       if (sub === null) return null
       nodes.push({ label: graph.groups[item.i].label, shape: 'rect' })
       extras.push({ kind: 'frame', sub })
@@ -181,12 +183,12 @@ function buildScope(
   const synth = new Graph(graph.dir)
   synth.nodes = nodes
   synth.edges = edges
-  return layoutCanvas(synth, extras)
+  return layoutCanvas(synth, extras, limits)
 }
 
 /** Lay out and paint one scope. */
-function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
-  const lay = layout(graph, extras)
+function layoutCanvas(graph: Graph, extras: NodeExtra[], limits: Limits): CanvasResult {
+  const lay = layout(graph, extras, limits)
   return lay === null ? null : paint(graph, extras, lay)
 }
 

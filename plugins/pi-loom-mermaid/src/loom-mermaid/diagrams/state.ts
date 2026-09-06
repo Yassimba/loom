@@ -29,10 +29,10 @@ import {
 export const state: Diagram = {
   kind: 'state',
   headers: ['statediagram', 'statediagram-v2'],
-  render(src) {
+  render(src, limits) {
     const graph = parseState(src)
     if (graph === null) return null
-    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph) : layoutGrouped(graph)
+    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph, limits) : layoutGrouped(graph, limits)
     if (canvas === null) return null
     return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
   },

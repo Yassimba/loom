@@ -35,10 +35,10 @@ import {
 export const flowchart: Diagram = {
   kind: 'flowchart',
   headers: ['graph', 'flowchart'],
-  render(src) {
+  render(src, limits) {
     const graph = parseGraph(src)
     if (graph === null) return null
-    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph) : layoutGrouped(graph)
+    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph, limits) : layoutGrouped(graph, limits)
     if (canvas === null) return null
     return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
   },

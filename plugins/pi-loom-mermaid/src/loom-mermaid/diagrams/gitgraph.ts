@@ -10,7 +10,7 @@
 
 import { Canvas, D, drawText, U } from '../canvas.ts'
 import { MAX_EDGES } from '../graph.ts'
-import { cleanLabel, fitLabel, MAX_LABEL } from '../labels.ts'
+import { cleanLabel, fitLabel, type Limits } from '../labels.ts'
 import type { Diagram } from '../registry.ts'
 import { headerKind, statementsOf, words } from '../statements.ts'
 import { stringWidth } from '../width.ts'
@@ -26,8 +26,8 @@ interface GitCommit {
 export const gitgraph: Diagram = {
   kind: 'gitgraph',
   headers: ['gitgraph', 'gitgraph:'],
-  render(src) {
-    const model = parseGitGraph(src)
+  render(src, limits) {
+    const model = parseGitGraph(src, limits)
     if (model === null) return null
     const { branches, commits, forkAt, warnings } = model
     const laneCount = branches.length
@@ -127,7 +127,10 @@ export const gitgraph: Diagram = {
   },
 }
 
-function parseGitGraph(src: string): {
+function parseGitGraph(
+  src: string,
+  limits: Limits,
+): {
   branches: string[]
   commits: GitCommit[]
   forkAt: (number | null)[]
@@ -155,7 +158,7 @@ function parseGitGraph(src: string): {
     const first = words(st)[0]?.toLowerCase() ?? ''
     const rest = st.slice(words(st)[0]?.length ?? 0).trim()
     if (first === 'commit') {
-      const attrs = commitAttrs(rest)
+      const attrs = commitAttrs(rest, limits.label)
       heads[cur] = commits.length
       commits.push({ lane: cur, id: attrs.id ?? `c${auto++}`, tag: attrs.tag, mergeFrom: null })
     } else if (first === 'branch') {
@@ -186,11 +189,11 @@ function parseGitGraph(src: string): {
       }
       // An unnamed merge shows no id — the `⇐ branch` marker already says
       // what it is, and an invented id would collide with authored ones.
-      const attrs = commitAttrs(after)
+      const attrs = commitAttrs(after, limits.label)
       heads[cur] = commits.length
       commits.push({ lane: cur, id: attrs.id ?? '', tag: attrs.tag, mergeFrom: lane })
     } else if (first === 'cherry-pick') {
-      const attrs = commitAttrs(rest)
+      const attrs = commitAttrs(rest, limits.label)
       heads[cur] = commits.length
       commits.push({
         lane: cur,
@@ -218,10 +221,10 @@ function nameToken(rest: string): { name: string | undefined; after: string } {
 }
 
 /** `id: "x" tag: "v1" …` key/value pairs trailing a commit or merge. */
-function commitAttrs(rest: string): { id: string | null; tag: string | null } {
+function commitAttrs(rest: string, max: number): { id: string | null; tag: string | null } {
   const out = { id: null as string | null, tag: null as string | null }
   for (const m of rest.matchAll(/(id|tag)\s*:\s*"([^"]*)"/gi)) {
-    out[m[1].toLowerCase() as 'id' | 'tag'] = fitLabel(cleanLabel(m[2]), MAX_LABEL)
+    out[m[1].toLowerCase() as 'id' | 'tag'] = fitLabel(cleanLabel(m[2]), max)
   }
   return out
 }

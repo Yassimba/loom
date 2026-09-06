@@ -28,10 +28,10 @@ import {
 export const classDiagram: Diagram = {
   kind: 'class',
   headers: ['classdiagram', 'classdiagram-v2'],
-  render(src) {
+  render(src, limits) {
     const graph = parseClass(src)
     if (graph === null) return null
-    const canvas = layoutClass(graph)
+    const canvas = layoutClass(graph, limits)
     if (canvas === null) return null
     return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
   },

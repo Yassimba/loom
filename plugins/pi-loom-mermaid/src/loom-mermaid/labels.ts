@@ -1,15 +1,12 @@
 import { measured, stringWidth } from './width.ts'
 
-/** Node labels wrap to at most this many display columns per line ... */
-export let WRAP_WIDTH = 24
-/** ... and at most this many lines; overflow is truncated with an ellipsis. */
-export let MAX_LINES = 4
-/** Edge labels are truncated to this many columns. */
-export let MAX_LABEL = 28
-
-interface Limits {
+/** How much text a diagram shows before wrapping or truncating. */
+export interface Limits {
+  /** Node labels wrap to at most this many display columns per line ... */
   wrap: number
+  /** ... and at most this many lines; overflow is truncated with an ellipsis. */
   lines: number
+  /** Edge labels are truncated to this many columns. */
   label: number
 }
 
@@ -20,18 +17,7 @@ export const LIMITS: Limits[] = [
   { wrap: 16, lines: 3, label: 16 },
   { wrap: 12, lines: 2, label: 10 },
 ]
-
-/** Run `fn` with the label limits set to `limits`; importers see the live
- * bindings, so every measurement inside follows. Restored afterwards. */
-export function withLimits<T>(limits: Limits, fn: () => T): T {
-  const saved: Limits = { wrap: WRAP_WIDTH, lines: MAX_LINES, label: MAX_LABEL }
-  ;[WRAP_WIDTH, MAX_LINES, MAX_LABEL] = [limits.wrap, limits.lines, limits.label]
-  try {
-    return fn()
-  } finally {
-    ;[WRAP_WIDTH, MAX_LINES, MAX_LABEL] = [saved.wrap, saved.lines, saved.label]
-  }
-}
+export const DEFAULT_LIMITS: Limits = LIMITS[0]
 
 /**
  * Identifier-boundary characters preferred as break points when a single word

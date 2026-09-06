@@ -13,7 +13,7 @@
 import type { Canvas } from './canvas.ts'
 import type { Edge } from './graph.ts'
 import type { Graph } from './graph.ts'
-import { fitLabel, MAX_LABEL, MAX_LINES, WRAP_WIDTH, wrapLabel } from './labels.ts'
+import { fitLabel, type Limits, wrapLabel } from './labels.ts'
 import { brandesKoepf, type LayeredGraph } from './placement.ts'
 import { stringWidth } from './width.ts'
 
@@ -34,12 +34,12 @@ export const half = (n: number): number => Math.floor(n / 2)
  * per-end placement (lanes, self-loops). Forward routes place `cardFrom` /
  * `cardTo` at their own ends instead.
  */
-/** Columns a label takes once fitted to MAX_LABEL. */
-const labelCols = (text: string): number => Math.min(stringWidth(text), MAX_LABEL)
+/** Columns a label takes once fitted to `max`. */
+const labelCols = (text: string, max: number): number => Math.min(stringWidth(text), max)
 
 /** Where a label starts: right of its arrow, or ending just left of it. */
-const labelStart = (arrowX: number, text: string, left: boolean): number =>
-  left ? sat(arrowX, labelCols(text)) : arrowX + 1
+const labelStart = (arrowX: number, text: string, left: boolean, max: number): number =>
+  left ? sat(arrowX, labelCols(text, max)) : arrowX + 1
 
 /** The label parts drawn at a forward edge's arrival: verb and target cardinality. */
 const arrivalParts = (e: Edge): string[] => [e.label, e.cardTo].filter((p) => p != null) as string[]
@@ -69,6 +69,8 @@ interface NodeSizes {
   layH: number[]
   extraH: number[]
   selfLabelW: number[]
+  /** Edge labels are fitted to this many columns. */
+  maxLabel: number
 }
 
 /** What to draw inside a node box. */
@@ -103,7 +105,7 @@ export interface LaneLabel {
 interface Plan {
   canvasW: number
   canvasH: number
-  routes: (Route | null)[]
+  routes: Route[]
 }
 
 // ------------------------------------------------------------------ ranking
@@ -890,6 +892,7 @@ function placeTd(
   graph: Graph,
   placed: Placed[],
 ): Plan {
+  const maxLabel = sizes.maxLabel
   // Arrival labels hang right of a box's entry heads (forward: above the
   // top, back: below the bottom), on rows a chain column passes through: a
   // chain placed right of a box keeps clear of them.
@@ -898,7 +901,7 @@ function placeTd(
     graph.edges.forEach((e, i) => {
       if (e.from === e.to || skip(i)) return
       const parts = ranks[e.to] > ranks[e.from] ? arrivalParts(e) : [edgeText(e) ?? '']
-      for (const part of parts) pad[e.to] = Math.max(pad[e.to], part === '' ? 0 : labelCols(part) + 1)
+      for (const part of parts) pad[e.to] = Math.max(pad[e.to], part === '' ? 0 : labelCols(part, maxLabel) + 1)
     })
     return pad
   }
@@ -940,7 +943,7 @@ function placeTd(
     const chain = layered.chains[i]
     const text = edgeText(e)
     if (chain.length === 0 || text === null) return
-    const w = labelCols(text)
+    const w = labelCols(text, maxLabel)
     const mid = chain.length >> 1
     let best: { v: number; side: number; dist: number } | null = null
     chain.forEach((v, k) => {
@@ -1018,7 +1021,7 @@ function placeTd(
   graph.edges.forEach((e, i) => {
     const text = edgeText(e)
     if (!isBack(e) || entrySide[i] >= 0 || text === null || chainLabel[i] !== null) return
-    margin = Math.max(margin, labelCols(text) + 1 - port(e.to, -1))
+    margin = Math.max(margin, labelCols(text, maxLabel) + 1 - port(e.to, -1))
   })
   for (let v = 0; v < centers.length; v++) centers[v] += margin
   clearPorts(graph, layered, centers, sizes.layW, (node) =>
@@ -1043,7 +1046,7 @@ function placeTd(
     if (chainLabel[i] !== null) return -1
     const e = graph.edges[i]
     const parts = arrivalParts(e)
-    return parts.length === 0 ? -1 : Math.max(...parts.map(labelCols))
+    return parts.length === 0 ? -1 : Math.max(...parts.map((p) => labelCols(p, maxLabel)))
   }
   const into: number[][] = graph.nodes.map(() => [])
   graph.edges.forEach((e, i) => {
@@ -1247,7 +1250,7 @@ function placeTd(
       const parts = arrivalParts(e)
       const entry = Math.max(placed[e.to].cx, edgeEntryX[i])
       for (const part of parts) {
-        const lw = labelCols(part)
+        const lw = labelCols(part, maxLabel)
         contentW = Math.max(contentW, entry + 2 + lw)
       }
       if (e.cardFrom !== undefined) {
@@ -1257,20 +1260,22 @@ function placeTd(
       const text = edgeText(e)
       if (text !== null) {
         // routeBackChain starts the label right of the entry column.
-        contentW = Math.max(contentW, edgeEntryX[i] + 2 + labelCols(text))
+        contentW = Math.max(contentW, edgeEntryX[i] + 2 + labelCols(text, maxLabel))
       }
     }
   })
 
-  const routes = graph.edges.map((edge, i): Route | null => {
-    if (edge.from === edge.to) return null
+  const routes = graph.edges.map((edge, i): Route => {
     const from = placed[edge.from]
     const to = placed[edge.to]
+    if (edge.from === edge.to) return selfRoute(from, edge, maxLabel)
     if (isBack(edge)) {
-      return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i])
+      return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel)
     }
-    if (isSkip(edge)) return chainRoute(from, to, edge, edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i])
-    return forwardRoute(from, to, edge, bandEnd[from.rank] + edgeBus[i], edgeEntryX[i], edgeLabelLeft[i])
+    if (isSkip(edge)) {
+      return chainRoute(from, to, edge, edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel)
+    }
+    return forwardRoute(from, to, edge, bandEnd[from.rank] + edgeBus[i], edgeEntryX[i], edgeLabelLeft[i], maxLabel)
   })
   return { canvasW: contentW, canvasH, routes }
 }
@@ -1334,7 +1339,7 @@ function placeLr(
   graph.edges.forEach((e, i) => {
     if (e.from === e.to) return
     if (ranks[e.to] !== ranks[e.from] + 1 && !edgeStraight[i]) return
-    const verb = e.label === null ? 0 : labelCols(e.label)
+    const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel)
     const cards = [e.cardFrom, e.cardTo]
       .filter((c) => c !== undefined)
       .reduce((w, c) => w + stringWidth(c as string) + 1, 0)
@@ -1392,13 +1397,14 @@ function placeLr(
     laneBase = diagramH + 1
   }
 
-  const routes = graph.edges.map((edge, i): Route | null => {
-    if (edge.from === edge.to) return null
+  const routes = graph.edges.map((edge, i): Route => {
     const from = placed[edge.from]
     const to = placed[edge.to]
-    if (to.rank === from.rank + 1) return forwardRouteLr(from, to, edge, bandEnd[from.rank] + edgeBus[i])
-    if (to.rank > from.rank && edgeStraight[i]) return skipRouteLr(from, to, edge, skipRoute[i])
-    return laneRoute(from, to, edge, laneBase + edgeLane[i])
+    const max = sizes.maxLabel
+    if (edge.from === edge.to) return selfRoute(from, edge, max)
+    if (to.rank === from.rank + 1) return forwardRouteLr(from, to, edge, bandEnd[from.rank] + edgeBus[i], max)
+    if (to.rank > from.rank && edgeStraight[i]) return skipRouteLr(from, to, edge, skipRoute[i], max)
+    return laneRoute(from, to, edge, laneBase + edgeLane[i], max)
   })
   return { canvasW, canvasH, routes }
 }
@@ -1414,12 +1420,12 @@ export interface Layout {
   w: number
   h: number
   placed: Placed[]
-  routes: (Route | null)[]
+  routes: Route[]
   labels: string[][]
 }
 
 /** Rank, order, place and route a graph. Null when it is empty or over the cell cap. */
-export function layout(graph: Graph, extras: NodeExtra[]): Layout | null {
+export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layout | null {
   const n = graph.nodes.length
   if (n === 0) return null
 
@@ -1464,13 +1470,13 @@ export function layout(graph: Graph, extras: NodeExtra[]): Layout | null {
   }
   const layered = orderRanks(byRank, graph.edges, ranks, interior, inLane)
 
-  const wrapped = graph.nodes.map((node) => wrapLabel(node.label, WRAP_WIDTH, MAX_LINES))
+  const wrapped = graph.nodes.map((node) => wrapLabel(node.label, limits.wrap, limits.lines))
   const widest = (lines: string[]): number =>
     Math.max(1, lines.length === 0 ? 1 : Math.max(...lines.map(stringWidth)))
 
   const boxW = extras.map((extra, i) => {
     if (extra.kind === 'frame') {
-      return Math.max(extra.sub.w + 2, stringWidth(fitLabel(graph.nodes[i].label, WRAP_WIDTH)) + 4)
+      return Math.max(extra.sub.w + 2, stringWidth(fitLabel(graph.nodes[i].label, limits.wrap)) + 4)
     }
     if (extra.kind === 'compartments') return widest(extra.sections.flat()) + 2 * PAD + 2
     return widest(wrapped[i]) + 2 * PAD + 2
@@ -1492,7 +1498,7 @@ export function layout(graph: Graph, extras: NodeExtra[]): Layout | null {
     extraH[e.from] = 2
     const text = edgeText(e)
     if (text !== null) {
-      selfLabelW[e.from] = Math.max(selfLabelW[e.from], labelCols(text))
+      selfLabelW[e.from] = Math.max(selfLabelW[e.from], labelCols(text, limits.label))
     }
   }
   for (let i = 0; i < n; i++) if (extraH[i] > 0) boxW[i] = Math.max(boxW[i], 7)
@@ -1504,6 +1510,7 @@ export function layout(graph: Graph, extras: NodeExtra[]): Layout | null {
     layH: boxH.map((h, i) => h + extraH[i]),
     extraH,
     selfLabelW,
+    maxLabel: limits.label,
   }
 
   const placed: Placed[] = Array.from({ length: n }, () => ({
@@ -1526,6 +1533,20 @@ export function layout(graph: Graph, extras: NodeExtra[]): Layout | null {
 
 type Jog = { bus: number; at: number }
 type LabelAt = { row: number; x: number } | null
+
+/** Route labels with their text fitted to `max` columns, as painted. */
+const fitted = (labels: Route['labels'], max: number): Route['labels'] =>
+  labels.map((l) => ({ ...l, text: fitLabel(l.text, max) }))
+
+/**
+ * A self loop: no corners — paint draws the stub below the box — and its
+ * label beside the box on the loop's first row.
+ */
+function selfRoute(p: Placed, edge: Edge, max: number): Route {
+  const text = edgeText(edge)
+  const labels = text === null ? [] : [{ text: fitLabel(text, max), row: p.y + p.h, x: p.x + p.w + 1 }]
+  return { points: [], labels }
+}
 
 /**
  * Corners of a path that follows its chain's jogs from `start`: each jog
@@ -1550,7 +1571,15 @@ function jogPoints(start: [number, number], jogs: Jog[], vertical: boolean): [nu
  * above the head, falling back beside the target card when the gap has no
  * spare row.
  */
-function forwardRoute(from: Placed, to: Placed, edge: Edge, bus: number, entryX: number, labelLeft: boolean): Route {
+function forwardRoute(
+  from: Placed,
+  to: Placed,
+  edge: Edge,
+  bus: number,
+  entryX: number,
+  labelLeft: boolean,
+  max: number,
+): Route {
   const tx = entryX === -1 ? to.cx : entryX
   const bx = Math.abs(from.cx - tx) <= 1 ? tx : from.cx
   const by = from.y + from.h - 1
@@ -1569,8 +1598,8 @@ function forwardRoute(from: Placed, to: Placed, edge: Edge, bus: number, entryX:
         ]
   const labels: Route['labels'] = []
   if (edge.cardFrom === undefined && edge.cardTo === undefined) {
-    if (edge.label !== null) labels.push({ text: edge.label, row: headRow, x: labelStart(tx, edge.label, labelLeft) })
-    return { points, labels }
+    if (edge.label !== null) labels.push({ text: edge.label, row: headRow, x: labelStart(tx, edge.label, labelLeft, max) })
+    return { points, labels: fitted(labels, max) }
   }
   const srcRow = by + 1
   if (edge.cardFrom !== undefined) labels.push({ text: edge.cardFrom, row: srcRow, x: bx + 1 })
@@ -1583,14 +1612,22 @@ function forwardRoute(from: Placed, to: Placed, edge: Edge, bus: number, entryX:
       labels.push({ text: edge.label, row: headRow, x })
     }
   }
-  return { points, labels }
+  return { points, labels: fitted(labels, max) }
 }
 
 /** A chain-routed edge's label: beside its chain when it has a spot there, else at the head. */
-function chainLabel(edge: Edge, headRow: number, entryX: number, labelLeft: boolean, labelAt: LabelAt): Route['labels'] {
+function chainLabel(
+  edge: Edge,
+  headRow: number,
+  entryX: number,
+  labelLeft: boolean,
+  labelAt: LabelAt,
+  max: number,
+): Route['labels'] {
   const text = edgeText(edge)
   if (text === null) return []
-  return [labelAt === null ? { text, row: headRow, x: labelStart(entryX, text, labelLeft) } : { text, ...labelAt }]
+  const at = labelAt ?? { row: headRow, x: labelStart(entryX, text, labelLeft, max) }
+  return [{ text: fitLabel(text, max), ...at }]
 }
 
 /**
@@ -1607,11 +1644,12 @@ function backChainRoute(
   jogs: Jog[],
   labelLeft: boolean,
   labelAt: LabelAt,
+  max: number,
 ): Route {
   const headRow = to.y + to.h
   const points = jogPoints([exitX, from.y], jogs, true)
   points.push([entryX, headRow])
-  return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt) }
+  return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt, max) }
 }
 
 /**
@@ -1628,11 +1666,12 @@ function chainRoute(
   jogs: Jog[],
   labelLeft: boolean,
   labelAt: LabelAt,
+  max: number,
 ): Route {
   const headRow = to.y - 1
   const points = jogPoints([from.cx, from.y + from.h - 1], jogs, true)
   points.push([entryX, headRow])
-  return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt) }
+  return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt, max) }
 }
 
 /**
@@ -1640,7 +1679,7 @@ function chainRoute(
  * column. The verb keeps its usual spot above the line; cardinalities hug
  * their own ends on the rows above the departure and arrival cells.
  */
-function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number): Route {
+function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: number): Route {
   const rx = from.x + from.w - 1
   const ry = from.cy
   const ly = to.cy
@@ -1663,7 +1702,7 @@ function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number): Rout
   if (edge.cardTo !== undefined) {
     labels.push({ text: edge.cardTo, row: sat(ly, 1), x: sat(headCol, stringWidth(edge.cardTo)) })
   }
-  return { points, labels }
+  return { points, labels: fitted(labels, max) }
 }
 
 /**
@@ -1674,7 +1713,7 @@ function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number): Rout
  * labels sit — the gap before the target belongs to the arrivals that end
  * there.
  */
-function skipRouteLr(from: Placed, to: Placed, edge: Edge, jogs: Jog[]): Route {
+function skipRouteLr(from: Placed, to: Placed, edge: Edge, jogs: Jog[], max: number): Route {
   const rx = from.x + from.w - 1
   const ry = from.cy
   const points = jogPoints([rx, ry], jogs, false)
@@ -1682,7 +1721,7 @@ function skipRouteLr(from: Placed, to: Placed, edge: Edge, jogs: Jog[]): Route {
   const text = edgeText(edge)
   const labels: Route['labels'] = []
   if (text !== null) labels.push({ text, row: sat(jogs[0]?.at ?? to.cy, 1), x: (jogs[0]?.bus ?? rx) + 1 })
-  return { points, labels }
+  return { points, labels: fitted(labels, max) }
 }
 
 /**
@@ -1691,7 +1730,7 @@ function skipRouteLr(from: Placed, to: Placed, edge: Edge, jogs: Jog[]): Route {
  * to the neighbouring lane once several stack — and waits until every
  * route landed so it can dodge the verticals that cross this row.
  */
-function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number): Route {
+function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number, max: number): Route {
   const sx = from.cx
   const sy = from.y + from.h - 1
   const tx = to.cx
@@ -1705,6 +1744,6 @@ function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number): Route {
   const laneLabel =
     text === null
       ? undefined
-      : { text: ` ${fitLabel(text, MAX_LABEL)} `, y: laneY, lo: Math.min(sx, tx), hi: Math.max(sx, tx) }
+      : { text: ` ${fitLabel(text, max)} `, y: laneY, lo: Math.min(sx, tx), hi: Math.max(sx, tx) }
   return { points, labels: [], laneLabel }
 }

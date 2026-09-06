@@ -17,7 +17,7 @@ import {
   U,
 } from './canvas.ts'
 import type { Edge, Graph, Head, Shape } from './graph.ts'
-import { fitLabel, MAX_LABEL } from './labels.ts'
+import { fitLabel } from './labels.ts'
 import {
   edgeText,
   half,
@@ -58,8 +58,9 @@ export function paint(graph: Graph, extras: NodeExtra[], lay: Layout): Canvas {
     canvas.curStyle =
       edge.line === 'dotted' ? STY_DOT : edge.line === 'thick' ? STY_THICK : STY_SOLID
     const route = routes[i]
-    if (route === null) routeSelf(canvas, placed[edge.from], edge)
+    if (route.points.length === 0) drawSelfLoop(canvas, placed[edge.from], edge)
     else drawRoute(canvas, edge, route)
+    for (const { text, row, x } of route.labels) placeLabel(canvas, text, row, x)
   })
   flushLabels(canvas)
   placeLaneLabels(canvas, routes.flatMap((r) => (r?.laneLabel === undefined ? [] : [r.laneLabel])))
@@ -225,11 +226,10 @@ function drawRoute(canvas: Canvas, edge: Edge, route: Route): void {
   if (edge.headFrom !== 'none') {
     canvas.set(sx, sy, headGlyph(edge.headFrom, ARROW[toward(points[1], points[0])]), 'edge')
   }
-  for (const { text, row, x } of route.labels) placeLabel(canvas, text, row, x)
 }
 
 /** A self-edge: a stub loop hanging below the box. */
-function routeSelf(canvas: Canvas, p: Placed, edge: Edge): void {
+function drawSelfLoop(canvas: Canvas, p: Placed, edge: Edge): void {
   const bottom = p.y + p.h - 1
   const exitX = p.cx + 1
   const retX = p.x + p.w - 2
@@ -248,8 +248,6 @@ function routeSelf(canvas: Canvas, p: Placed, edge: Edge): void {
   for (let x = exitX + 1; x < retX; x++) canvas.set(x, bottom + 2, h, 'edge')
   canvas.set(retX, bottom + 2, br, 'edge')
   canvas.set(retX, bottom + 1, headGlyph(edge.headTo, '▲'), 'edge')
-  const selfText = edgeText(edge)
-  if (selfText !== null) placeLabel(canvas, selfText, bottom + 1, p.x + p.w + 1)
 }
 
 /**
@@ -309,9 +307,8 @@ function flushLabels(canvas: Canvas): void {
 
 function writeLabel(canvas: Canvas, label: string, row: number, startX: number): void {
   if (row >= canvas.h) return
-  const text = fitLabel(label, MAX_LABEL)
   let x = startX
-  for (const [c, cw] of measured(text)) {
+  for (const [c, cw] of measured(label)) {
     if (cw === 0) continue
     if (x + cw > canvas.w) break
     let blocked = false

@@ -170,9 +170,16 @@ export interface FixtureResult {
   deterministic: boolean;
 }
 
+type Limits = { wrap: number; lines: number; label: number };
+/** The renderer's default label limits; the baseline renderer ignores the argument. */
+const DEFAULT_LIMITS: Limits = { wrap: 24, lines: 4, label: 28 };
+
 interface Registry {
   diagramFor(src: string): {
-    render(src: string): { canvas: CanvasLike & { toLines(): { plain: string[] } } } | null;
+    render(
+      src: string,
+      limits: Limits,
+    ): { canvas: CanvasLike & { toLines(): { plain: string[] } } } | null;
   } | null;
 }
 
@@ -183,7 +190,7 @@ export async function loadRegistry(root: string): Promise<Registry> {
 
 export function renderFixture(registry: Registry, name: string, src: string): FixtureResult {
   const draw = (): { canvas: CanvasLike & { toLines(): { plain: string[] } } } | null =>
-    registry.diagramFor(src)?.render(src) ?? null;
+    registry.diagramFor(src)?.render(src, DEFAULT_LIMITS) ?? null;
   const t0 = performance.now();
   const first = draw();
   const ms = performance.now() - t0;

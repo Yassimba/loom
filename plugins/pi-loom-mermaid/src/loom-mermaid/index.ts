@@ -1,5 +1,5 @@
 import type { Canvas } from './canvas.ts'
-import { LIMITS, stripControls, withLimits } from './labels.ts'
+import { LIMITS, stripControls } from './labels.ts'
 import { type Diagram, diagramFor } from './registry.ts'
 import { frontmatterTitle } from './statements.ts'
 import type { MermaidArt } from './types.ts'
@@ -50,7 +50,7 @@ export function render(src: string, options: { maxWidth?: number } = {}): Mermai
   let drawn: ReturnType<Diagram['render']> = null
   let art: ReturnType<Canvas['toLines']> = { plain: [], styled: [], width: 0 }
   for (const limits of LIMITS) {
-    drawn = withLimits(limits, () => diagram.render(src))
+    drawn = diagram.render(src, limits)
     if (drawn === null) return null
     art = drawn.canvas.toLines()
     if (options.maxWidth === undefined || art.width <= options.maxWidth) break

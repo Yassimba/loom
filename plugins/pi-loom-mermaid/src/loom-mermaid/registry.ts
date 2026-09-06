@@ -17,7 +17,7 @@ import { pie } from './diagrams/pie.ts'
 import { sequence } from './diagrams/sequence.ts'
 import { state } from './diagrams/state.ts'
 import { timeline } from './diagrams/timeline.ts'
-import { stripControls } from './labels.ts'
+import { type Limits, stripControls } from './labels.ts'
 import { headerKind, statementsOf } from './statements.ts'
 
 /** A diagram type this renderer draws. */
@@ -40,8 +40,11 @@ export interface Diagram {
    * proper rejects at the grammar stage.
    */
   headers: string[]
-  /** Parse and lay out; `null` means nothing was drawn. */
-  render(src: string): {
+  /** Parse and lay out within `limits`; `null` means nothing was drawn. */
+  render(
+    src: string,
+    limits: Limits,
+  ): {
     canvas: Canvas
     warnings: string[]
     classDefs: Record<string, Record<string, string>>

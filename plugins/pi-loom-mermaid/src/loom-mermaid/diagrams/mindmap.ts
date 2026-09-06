@@ -6,7 +6,7 @@
 
 import { Canvas, drawText } from '../canvas.ts'
 import { MAX_NODES } from '../graph.ts'
-import { cleanLabel, fitLabel, srcLines, WRAP_WIDTH } from '../labels.ts'
+import { cleanLabel, fitLabel, type Limits, srcLines } from '../labels.ts'
 import type { Diagram } from '../registry.ts'
 import { frontmatterEnd } from '../statements.ts'
 import { stringWidth } from '../width.ts'
@@ -19,8 +19,8 @@ interface MindNode {
 export const mindmap: Diagram = {
   kind: 'mindmap',
   headers: ['mindmap'],
-  render(src) {
-    const parsed = parseMindmap(src)
+  render(src, limits) {
+    const parsed = parseMindmap(src, limits)
     if (parsed === null) return null
     const { roots, warnings } = parsed
 
@@ -45,7 +45,7 @@ export const mindmap: Diagram = {
   },
 }
 
-function parseMindmap(src: string): { roots: MindNode[]; warnings: string[] } | null {
+function parseMindmap(src: string, limits: Limits): { roots: MindNode[]; warnings: string[] } | null {
   const lines = srcLines(src).slice(frontmatterEnd(srcLines(src)))
   const headerAt = lines.findIndex((l) => l.trim() !== '')
   if (headerAt === -1 || lines[headerAt].trim().toLowerCase() !== 'mindmap') return null
@@ -74,7 +74,7 @@ function parseMindmap(src: string): { roots: MindNode[]; warnings: string[] } | 
       break
     }
     count++
-    const node: MindNode = { text: fitLabel(text, WRAP_WIDTH), children: [] }
+    const node: MindNode = { text: fitLabel(text, limits.wrap), children: [] }
     while (stack.length > 0 && stack[stack.length - 1].indent >= indent) stack.pop()
     if (stack.length === 0) roots.push(node)
     else stack[stack.length - 1].node.children.push(node)

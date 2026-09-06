@@ -6,7 +6,7 @@
 
 import { Canvas, drawText } from '../canvas.ts'
 import { MAX_EDGES } from '../graph.ts'
-import { decodeHtmlEntities, fitLabel, MAX_LABEL } from '../labels.ts'
+import { decodeHtmlEntities, fitLabel, type Limits } from '../labels.ts'
 import type { Diagram } from '../registry.ts'
 import { headerKind, nonEmpty, statementsOf, words } from '../statements.ts'
 import { stringWidth } from '../width.ts'
@@ -22,8 +22,8 @@ interface Row {
 export const timeline: Diagram = {
   kind: 'timeline',
   headers: ['timeline'],
-  render(src) {
-    const parsed = parseTimeline(src)
+  render(src, limits) {
+    const parsed = parseTimeline(src, limits)
     if (parsed === null) return null
     const { title, rows, warnings } = parsed
 
@@ -59,6 +59,7 @@ export const timeline: Diagram = {
 
 function parseTimeline(
   src: string,
+  limits: Limits,
 ): { title: string | null; rows: Row[]; warnings: string[] } | null {
   const statements = statementsOf(src)
   if (headerKind(statements) !== 'timeline') return null
@@ -81,13 +82,13 @@ function parseTimeline(
     }
     if (first === 'section') {
       const name = st.slice(st.toLowerCase().indexOf('section') + 7).trim()
-      rows.push({ period: '', event: clean(name), section: true })
+      rows.push({ period: '', event: clean(name, limits.label), section: true })
       lastPeriod = false
       continue
     }
     // `period : event : event`; a statement of only `: event`s continues the
     // previous period (the `;`-split form of mermaid's multi-line events).
-    const parts = st.split(':').map((p) => clean(p))
+    const parts = st.split(':').map((p) => clean(p, limits.label))
     const period = parts.shift() ?? ''
     if (period === '' && parts.length > 0 && lastPeriod) {
       for (const event of parts) rows.push({ period: '', event })
@@ -113,4 +114,4 @@ function parseTimeline(
   return rows.length === 0 ? null : { title, rows, warnings }
 }
 
-const clean = (s: string): string => fitLabel(decodeHtmlEntities(s.trim()), MAX_LABEL)
+const clean = (s: string, max: number): string => fitLabel(decodeHtmlEntities(s.trim()), max)

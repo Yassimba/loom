@@ -15,10 +15,10 @@ import { firstWord, headerKind, nonEmpty, splitOnce, statementsOf } from '../sta
 export const sequence: Diagram = {
   kind: 'sequence',
   headers: ['sequencediagram'],
-  render(src) {
+  render(src, limits) {
     const seq = parseSequence(src)
     if (seq === null) return null
-    const canvas = layoutSequence(seq)
+    const canvas = layoutSequence(seq, limits)
     if (canvas === null) return null
     return { canvas, warnings: seq.warnings, classDefs: {} }
   },
