@@ -1226,8 +1226,10 @@ function placeTd(
     if (othersJog) return
     // The chain column must be clear of boxes on the target's rank between
     // the column and the box side, or the side leg would cut through one.
+    // ... with a blank cell either side of the leg's column, or the leg
+    // would read as leaving the neighbouring box.
     const blocked = byRank[ranks[e.to]].some(
-      (j) => j !== e.to && Math.min(col, centers[e.to]) < boxR(j) && Math.max(col, centers[e.to]) > boxL(j),
+      (j) => j !== e.to && Math.min(col, centers[e.to]) - 1 < boxR(j) && Math.max(col, centers[e.to]) + 1 > boxL(j),
     )
     if (blocked) return
     sideTaken.add(`${e.to}:${side}`)
@@ -1264,18 +1266,24 @@ function placeTd(
     // An unlabelled skip arriving beside a jogging fan joins it: one head
     // for the fan-in rather than a second `▼` a cell over (edge
     // concentration, as dot's `concentrate`).
+    // An unlabelled skip joins the fan-in too: the jogging fan when there
+    // is one, else the straight drop on the centre (its last jog then ends
+    // on the centre column).
+    const centreDrop = fwds.find((i) => over(i) && Math.abs(arrives(i) - cx) <= 1 && !jogging.includes(i))
+    const host = jogging.length > 0 ? jogging : centreDrop === undefined ? [] : [centreDrop]
+    // Only edges drawn alike may share a head: a dotted association and a
+    // solid inheritance arrow are two things.
+    const alike = (i: number, k: number): boolean =>
+      graph.edges[i].line === graph.edges[k].line && graph.edges[i].headTo === graph.edges[k].headTo
     const joins = entries.filter(
-      (i) =>
-        isSkip(graph.edges[i]) &&
-        edgeText(graph.edges[i]) === null &&
-        jogging.length > 0 &&
-        (arrives(i) <= left || arrives(i) >= right),
+      (i) => isSkip(graph.edges[i]) && edgeText(graph.edges[i]) === null && host.length > 0 && host.every((k) => alike(i, k)),
     )
-    const merged = [...jogging, ...joins]
+    if (process.env.DBG && graph.nodes[t].label.startsWith('CLI c')) console.error(left, cx, right, entries.map((i) => [graph.nodes[graph.edges[i].from].label, arrives(i), isSkip(graph.edges[i]), over(i)]), 'jog', jogging, 'drop', centreDrop, 'joins', joins)
+    const merged = [...host, ...joins]
     let items: Item[] = entries.filter((i) => !merged.includes(i)).map((i) => item([i], arrives(i)))
     if (merged.length > 0) {
-      const drop = jogging.find((i) => over(i) && Math.abs(arrives(i) - cx) <= 1)
-      items.push(item(merged, drop === undefined ? jogging.reduce((a, i) => a + centers[graph.edges[i].from], 0) / jogging.length : cx))
+      const drop = host.find((i) => over(i) && Math.abs(arrives(i) - cx) <= 1)
+      items.push(item(merged, drop === undefined ? host.reduce((a, i) => a + centers[graph.edges[i].from], 0) / host.length : cx))
     }
     // Slots: an arrival at most a cell off centre snaps to it (routeForward
     // straightens such a jog), other in-range arrivals keep their column,
