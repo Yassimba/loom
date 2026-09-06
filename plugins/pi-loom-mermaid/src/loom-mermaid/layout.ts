@@ -49,6 +49,16 @@ export const half = (n: number): number => Math.floor(n / 2)
  * per-end placement (lanes, self-loops). Forward routes place `cardFrom` /
  * `cardTo` at their own ends instead.
  */
+/** Columns a label takes once fitted to MAX_LABEL. */
+const labelCols = (text: string): number => Math.min(stringWidth(text), MAX_LABEL)
+
+/** Where a label starts: right of its arrow, or ending just left of it. */
+const labelStart = (arrowX: number, text: string, left: boolean): number =>
+  left ? sat(arrowX, labelCols(text)) : arrowX + 1
+
+/** The label parts drawn at a forward edge's arrival: verb and target cardinality. */
+const arrivalParts = (e: Edge): string[] => [e.label, e.cardTo].filter((p) => p != null) as string[]
+
 function edgeText(edge: Edge): string | null {
   const joined = [edge.cardFrom ?? '', edge.label ?? '', edge.cardTo ?? '']
     .filter((part) => part !== '')
@@ -77,7 +87,7 @@ interface NodeSizes {
 }
 
 /** What to draw inside a node box. */
-export type NodeExtra =
+type NodeExtra =
   | { kind: 'plain' }
   | { kind: 'frame'; sub: Canvas }
   | { kind: 'compartments'; sections: string[][] }
@@ -129,7 +139,7 @@ interface RoutePlan {
  * (mirrored: nodes move later) shortens edges while that removes more
  * virtual chain nodes than it adds.
  */
-export function computeRanks(graph: Graph): number[] {
+function computeRanks(graph: Graph): number[] {
   const n = graph.nodes.length
   const children: number[][] = Array.from({ length: n }, () => [])
   const indeg = new Array<number>(n).fill(0)
@@ -225,7 +235,7 @@ function dfsDag(
  * one rank (the edge becomes a chain of unit segments). Ids below `n` are
  * real; `up[id]` / `down[id]` list unit-segment neighbours.
  */
-export interface Layered extends LayeredGraph {
+interface Layered extends LayeredGraph {
   /** Per edge, its virtual nodes from source to target; empty unless it skips ranks. */
   chains: number[][]
   /** Virtual nodes on more than one chain (a concentrated trunk). */
@@ -509,7 +519,7 @@ function crossingsBetween(row: number[], down: number[][], pos: number[]): numbe
  * one blank cell from whatever neighbours it — plus `pad(left)` cells when
  * it follows a real node, room for that node's arrival labels.
  */
-export function assignPositions(
+function assignPositions(
   layered: Layered,
   size: number[],
   sep: number,
@@ -568,7 +578,7 @@ interface Hyper {
  * broken greedily, and a run's track is its longest dependency path. Runs
  * two cells apart share a track.
  */
-export function assignTracks(spans: TrackSpan[]): { assigned: [number, number][]; count: number } {
+function assignTracks(spans: TrackSpan[]): { assigned: [number, number][]; count: number } {
   const hypers = mergeShared(spans)
   const n = hypers.length
   const overlaps = (a: Hyper, b: Hyper): boolean => a.start <= b.end + 1 && b.start <= a.end + 1
@@ -607,7 +617,7 @@ export function assignTracks(spans: TrackSpan[]): { assigned: [number, number][]
  * the inner lane never reaches cross nothing. Lanes trade crossings for
  * height, where `assignTracks`' dependency chains would cost a track each.
  */
-export function packTracks(spans: TrackSpan[]): { assigned: [number, number][]; count: number } {
+function packTracks(spans: TrackSpan[]): { assigned: [number, number][]; count: number } {
   const sorted = [...spans].sort(
     (a, b) =>
       a.end - a.start - (b.end - b.start) ||
@@ -905,10 +915,8 @@ function placeTd(
     const pad = new Array<number>(layered.up.length).fill(0)
     graph.edges.forEach((e, i) => {
       if (e.from === e.to || skip(i)) return
-      const parts = ranks[e.to] > ranks[e.from] ? [e.label, e.cardTo] : [edgeText(e)]
-      for (const part of parts) {
-        if (part != null) pad[e.to] = Math.max(pad[e.to], Math.min(stringWidth(part), MAX_LABEL) + 1)
-      }
+      const parts = ranks[e.to] > ranks[e.from] ? arrivalParts(e) : [edgeText(e) ?? '']
+      for (const part of parts) pad[e.to] = Math.max(pad[e.to], part === '' ? 0 : labelCols(part) + 1)
     })
     return pad
   }
@@ -950,7 +958,7 @@ function placeTd(
     const chain = layered.chains[i]
     const text = edgeText(e)
     if (chain.length === 0 || text === null) return
-    const w = Math.min(stringWidth(text), MAX_LABEL)
+    const w = labelCols(text)
     const mid = chain.length >> 1
     let best: { v: number; side: number; dist: number } | null = null
     chain.forEach((v, k) => {
@@ -1028,7 +1036,7 @@ function placeTd(
   graph.edges.forEach((e, i) => {
     const text = edgeText(e)
     if (!isBack(e) || entrySide[i] >= 0 || text === null || chainLabel[i] !== null) return
-    margin = Math.max(margin, Math.min(stringWidth(text), MAX_LABEL) + 1 - port(e.to, -1))
+    margin = Math.max(margin, labelCols(text) + 1 - port(e.to, -1))
   })
   for (let v = 0; v < centers.length; v++) centers[v] += margin
   clearPorts(graph, layered, centers, sizes.layW, (node) =>
@@ -1052,10 +1060,8 @@ function placeTd(
   const labelW = (i: number): number => {
     if (chainLabel[i] !== null) return -1
     const e = graph.edges[i]
-    const parts = [e.label, e.cardTo].filter((p) => p != null) as string[]
-    return parts.length === 0
-      ? -1
-      : Math.max(...parts.map((p) => Math.min(stringWidth(p), MAX_LABEL)))
+    const parts = arrivalParts(e)
+    return parts.length === 0 ? -1 : Math.max(...parts.map(labelCols))
   }
   const into: number[][] = graph.nodes.map(() => [])
   graph.edges.forEach((e, i) => {
@@ -1257,10 +1263,10 @@ function placeTd(
     if (label !== null) {
       contentW = Math.max(contentW, (edgeLabelAt[i] as { x: number }).x + label.w)
     } else if (ranks[e.to] > ranks[e.from]) {
-      const parts = [e.label, e.cardTo].filter((part) => part != null) as string[]
+      const parts = arrivalParts(e)
       const entry = Math.max(placed[e.to].cx, edgeEntryX[i])
       for (const part of parts) {
-        const lw = Math.min(stringWidth(part), MAX_LABEL)
+        const lw = labelCols(part)
         contentW = Math.max(contentW, entry + 2 + lw)
       }
       if (e.cardFrom !== undefined) {
@@ -1270,7 +1276,7 @@ function placeTd(
       const text = edgeText(e)
       if (text !== null) {
         // routeBackChain starts the label right of the entry column.
-        contentW = Math.max(contentW, edgeEntryX[i] + 2 + Math.min(stringWidth(text), MAX_LABEL))
+        contentW = Math.max(contentW, edgeEntryX[i] + 2 + labelCols(text))
       }
     }
   })
@@ -1351,7 +1357,7 @@ function placeLr(
   graph.edges.forEach((e, i) => {
     if (e.from === e.to) return
     if (ranks[e.to] !== ranks[e.from] + 1 && !edgeStraight[i]) return
-    const verb = e.label === null ? 0 : Math.min(stringWidth(e.label), MAX_LABEL)
+    const verb = e.label === null ? 0 : labelCols(e.label)
     const cards = [e.cardFrom, e.cardTo]
       .filter((c) => c !== undefined)
       .reduce((w, c) => w + stringWidth(c as string) + 1, 0)
@@ -1430,7 +1436,7 @@ function placeLr(
 // -------------------------------------------------------------------- canvas
 
 /** Rank, place, draw and route a graph onto a fresh canvas. */
-export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
+function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
   const n = graph.nodes.length
   if (n === 0) return null
 
@@ -1503,7 +1509,7 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
     extraH[e.from] = 2
     const text = edgeText(e)
     if (text !== null) {
-      selfLabelW[e.from] = Math.max(selfLabelW[e.from], Math.min(stringWidth(text), MAX_LABEL))
+      selfLabelW[e.from] = Math.max(selfLabelW[e.from], labelCols(text))
     }
   }
   for (let i = 0; i < n; i++) if (extraH[i] > 0) boxW[i] = Math.max(boxW[i], 7)
@@ -1587,7 +1593,7 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
 }
 
 /** Apply the direction flip a finished canvas needs for `BT` / `RL`. */
-export function orient(canvas: Canvas, graph: Graph): Canvas {
+function orient(canvas: Canvas, graph: Graph): Canvas {
   if (graph.dir === 'up') canvas.flipVertical()
   else if (graph.dir === 'left') canvas.flipHorizontal()
   return canvas
@@ -1919,8 +1925,7 @@ function routeForward(
 
   if (edge.cardFrom === undefined && edge.cardTo === undefined) {
     if (edge.label !== null) {
-      const start = labelLeft ? sat(tx, Math.min(stringWidth(edge.label), MAX_LABEL)) : tx + 1
-      placeLabel(canvas, edge.label, headRow, start)
+      placeLabel(canvas, edge.label, headRow, labelStart(tx, edge.label, labelLeft))
     }
     return
   }
@@ -1982,8 +1987,7 @@ function routeBackChain(
   const text = edgeText(edge)
   if (text !== null && labelAt !== null) placeLabel(canvas, text, labelAt.row, labelAt.x)
   else if (text !== null) {
-    const start = labelLeft ? sat(entryX, Math.min(stringWidth(text), MAX_LABEL)) : entryX + 1
-    placeLabel(canvas, text, headRow, start)
+    placeLabel(canvas, text, headRow, labelStart(entryX, text, labelLeft))
   }
 }
 
@@ -2049,8 +2053,7 @@ function routeSkip(
   const text = edgeText(edge)
   if (text !== null && labelAt !== null) placeLabel(canvas, text, labelAt.row, labelAt.x)
   else if (text !== null) {
-    const start = labelLeft ? sat(entryX, Math.min(stringWidth(text), MAX_LABEL)) : entryX + 1
-    placeLabel(canvas, text, headRow, start)
+    placeLabel(canvas, text, headRow, labelStart(entryX, text, labelLeft))
   }
 }
 
@@ -2213,16 +2216,13 @@ function placeLaneLabels(canvas: Canvas, labels: LaneLabel[]): void {
  * row, a label across a return climbing past it) and stops short of a box
  * or other text.
  */
-let pendingLabels: { label: string; row: number; x: number }[] = []
-
-function placeLabel(_canvas: Canvas, label: string, row: number, x: number): void {
-  pendingLabels.push({ label, row, x })
+/** Queue a label to be written after every line, so it interrupts them. */
+function placeLabel(canvas: Canvas, label: string, row: number, x: number): void {
+  canvas.labels.push({ label, row, x })
 }
 
 function flushLabels(canvas: Canvas): void {
-  const queued = pendingLabels
-  pendingLabels = []
-  for (const { label, row, x } of queued) writeLabel(canvas, label, row, x)
+  for (const { label, row, x } of canvas.labels.splice(0)) writeLabel(canvas, label, row, x)
 }
 
 function writeLabel(canvas: Canvas, label: string, row: number, startX: number): void {

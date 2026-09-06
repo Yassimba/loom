@@ -38,7 +38,7 @@ export const state: Diagram = {
   },
 }
 
-export function parseState(src: string): Graph | null {
+function parseState(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !state.headers.includes(kind)) return null

@@ -44,7 +44,7 @@ export const flowchart: Diagram = {
   },
 }
 
-export function parseGraph(src: string): Graph | null {
+function parseGraph(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !flowchart.headers.includes(kind)) return null

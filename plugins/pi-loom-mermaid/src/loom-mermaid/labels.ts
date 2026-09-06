@@ -7,7 +7,7 @@ export let MAX_LINES = 4
 /** Edge labels are truncated to this many columns. */
 export let MAX_LABEL = 28
 
-export interface Limits {
+interface Limits {
   wrap: number
   lines: number
   label: number
@@ -41,7 +41,7 @@ export function withLimits<T>(limits: Limits, fn: () => T): T {
  * `third_party/mermaid-to-svg/src/text_wrap.rs`; the two renderers are
  * deliberately independent, so keep these in sync.
  */
-export const LABEL_BREAK_CHARS = ['_', '-', '.', '/']
+const LABEL_BREAK_CHARS = ['_', '-', '.', '/']
 
 /**
  * ASCII-only case folding, matching Rust's `to_ascii_lowercase`.
@@ -82,7 +82,7 @@ export function srcLines(src: string): string[] {
 const ALNUM = /[\p{Alphabetic}\p{N}]/u
 
 /** Matches Rust's `char::is_alphanumeric`. */
-export const isAlphanumeric = (c: string): boolean => ALNUM.test(c)
+const isAlphanumeric = (c: string): boolean => ALNUM.test(c)
 
 /** Characters allowed in a bare node/state/class identifier. */
 export const isIdChar = (c: string): boolean => isAlphanumeric(c) || c === '_'
@@ -154,7 +154,7 @@ export function decodeHtmlEntities(s: string): string {
 }
 
 /** Strip markdown emphasis from a `` `backtick` `` label string. */
-export function stripMarkdown(s: string): string {
+function stripMarkdown(s: string): string {
   const noCode = [...s].filter((c) => c !== '`').join('')
   const noStrong = noCode.replaceAll('**', '').replaceAll('__', '')
   const chars = [...noStrong]
@@ -220,7 +220,7 @@ function htmlTagAt(chars: string[], start: number): { name: string; end: number 
   return chars[i] === '>' ? { name, end: i + 1 } : null
 }
 
-export function stripHtmlTags(s: string): string {
+function stripHtmlTags(s: string): string {
   const chars = [...s]
   let out = ''
   let i = 0

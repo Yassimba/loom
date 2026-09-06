@@ -24,7 +24,7 @@ export const sequence: Diagram = {
   },
 }
 
-export type SeqHead = 'arrow' | 'cross'
+type SeqHead = 'arrow' | 'cross'
 
 /** Message operators, longest-first so `-->>` wins over `-->`. */
 const SEQ_OPS: [string, boolean, SeqHead][] = [
@@ -58,7 +58,7 @@ export type SeqItem =
   | { kind: 'divider'; text: string }
 
 /** A hot span of one lifeline: item indices, `to === null` while still open. */
-export interface Activation {
+interface Activation {
   at: number
   from: number
   to: number | null
@@ -117,7 +117,7 @@ export class Sequence {
   }
 }
 
-export function parseSequence(src: string): Sequence | null {
+function parseSequence(src: string): Sequence | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !sequence.headers.includes(kind)) return null

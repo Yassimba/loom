@@ -32,10 +32,10 @@ export const STY_SOLID = 4
  * is two edges crossing, drawn as a hop (`╫`) rather than a junction
  * (`┼`), so an edge can be followed through a dense band.
  */
-export const PASS_V = 1
-export const PASS_H = 2
-export const JOINED = 4
-export const HOP = '╫'
+const PASS_V = 1
+const PASS_H = 2
+const JOINED = 4
+const HOP = '╫'
 export class Canvas {
   readonly w: number
   readonly h: number
@@ -49,6 +49,8 @@ export class Canvas {
   style: Uint8Array
   occupied: Uint8Array
   pass: Uint8Array
+  /** Edge labels queued by the layout, written after every line. */
+  labels: { label: string; row: number; x: number }[] = []
   curStyle: number = STY_SOLID
   /** Author classes stamped on cells painted while set, like `curStyle`. */
   curTag: string | undefined
@@ -334,7 +336,7 @@ export function drawTextOverEdges(
   }
 }
 
-export function maskChar(mask: number): string {
+function maskChar(mask: number): string {
   switch (mask) {
     case 0:
       return ' '

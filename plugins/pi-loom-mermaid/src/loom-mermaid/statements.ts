@@ -16,7 +16,7 @@ function flushStatement(cur: string, out: string[]): string {
  *
  * Quoted spans are opaque, so a label may contain `;` and `%%`.
  */
-export function splitStatements(line: string, out: string[]): void {
+function splitStatements(line: string, out: string[]): void {
   const chars = [...line]
   let cur = ''
   let inQuotes = false

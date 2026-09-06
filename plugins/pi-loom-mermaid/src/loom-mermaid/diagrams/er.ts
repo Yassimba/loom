@@ -24,7 +24,7 @@ export const er: Diagram = {
   },
 }
 
-export function parseEr(src: string): Graph | null {
+function parseEr(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !er.headers.includes(kind)) return null
@@ -175,7 +175,7 @@ function erCard(tok: string): string | null {
 }
 
 /** ER attributes are `type name`; a trailing quoted comment is dropped. */
-export function pushErAttribute(node: Node, raw: string): void {
+function pushErAttribute(node: Node, raw: string): void {
   const attrs = (node.sections as string[][])[1]
   const parts: string[] = []
   for (const tok of words(raw)) {

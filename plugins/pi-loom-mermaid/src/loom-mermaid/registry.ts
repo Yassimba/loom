@@ -48,7 +48,7 @@ export interface Diagram {
   } | null
 }
 
-export const DIAGRAMS: Diagram[] = [
+const DIAGRAMS: Diagram[] = [
   flowchart,
   state,
   classDiagram,

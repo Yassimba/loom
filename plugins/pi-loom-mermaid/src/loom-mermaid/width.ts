@@ -42,7 +42,7 @@ function codePointWidth(cp: number): number {
  * Zero is a real answer — a soft hyphen or zero-width space occupies nothing,
  * and callers skip painting such a cluster rather than reserving a cell.
  */
-export function clusterWidth(cluster: string): number {
+function clusterWidth(cluster: string): number {
   let w = 0
   let vs16 = false
   let regional = 0

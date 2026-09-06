@@ -27,7 +27,7 @@ export type Head =
 
 export type LineKind = 'solid' | 'dotted' | 'thick'
 
-export type Dir = 'down' | 'up' | 'right' | 'left'
+type Dir = 'down' | 'up' | 'right' | 'left'
 
 export interface Node {
   label: string

@@ -57,7 +57,7 @@ const CLASS_OPS: [string, Head, Head, LineKind][] = [
 
 const MAX_CLASS_OP = 4
 
-export function parseClass(src: string): Graph | null {
+function parseClass(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !classDiagram.headers.includes(kind)) return null
@@ -201,7 +201,7 @@ function setAnnotation(node: Node, annotation: string): void {
 }
 
 /** Add a member to the attribute or method compartment, eliding past the cap. */
-export function pushMember(node: Node, raw: string): void {
+function pushMember(node: Node, raw: string): void {
   const sections = node.sections as string[][]
   if (raw.startsWith('<<')) {
     const split = splitOnce(raw.slice(2), '>>')
