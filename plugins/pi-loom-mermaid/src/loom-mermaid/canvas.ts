@@ -274,7 +274,11 @@ export class Canvas {
       styled.push(spans)
       // Only ASCII spaces, which is all a blank cell ever holds. Trimming `\s`
       // would eat a trailing NBSP that `styled` keeps, desyncing the two.
-      plain.push(plainRow.replace(/ +$/, ''))
+      // (A ` +$` regex backtracks quadratically on a row of mostly spaces:
+      // it was more than half the render time of a 500-edge diagram.)
+      let cut = plainRow.length
+      while (cut > 0 && plainRow[cut - 1] === ' ') cut--
+      plain.push(plainRow.slice(0, cut))
     }
     let first = 0
     while (first < plain.length && plain[first] === '') first++
