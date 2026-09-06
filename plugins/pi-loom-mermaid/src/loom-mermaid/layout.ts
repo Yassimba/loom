@@ -316,23 +316,49 @@ export function orderRanks(
 
   let best = layers.map((row) => [...row])
   let bestCrossings = total()
-  let stale = 0
-  for (let it = 0; bestCrossings > 0 && stale < 2 && it < 24; it++) {
-    const downward = it % 2 === 0
-    const rows = downward ? layers.slice(1) : layers.slice(0, -1).reverse()
-    const neigh = downward ? up : down
-    for (const row of rows) {
-      sortByBarycenter(row, neigh, pos)
-      partition(row)
-      reindex(row)
+  const sweep = (): void => {
+    let stale = 0
+    let current = total()
+    for (let it = 0; current > 0 && stale < 2 && it < 24; it++) {
+      const downward = it % 2 === 0
+      const rows = downward ? layers.slice(1) : layers.slice(0, -1).reverse()
+      const neigh = downward ? up : down
+      for (const row of rows) {
+        sortByMedian(row, neigh, pos)
+        partition(row)
+        reindex(row)
+      }
+      transpose(layers, up, down, pos, isTrailing)
+      const crossings = total()
+      if (crossings < current) {
+        current = crossings
+        stale = 0
+      } else stale++
+      if (crossings < bestCrossings) {
+        bestCrossings = crossings
+        best = layers.map((row) => [...row])
+      }
     }
-    transpose(layers, up, down, pos, isTrailing)
-    const crossings = total()
-    if (crossings < bestCrossings) {
-      bestCrossings = crossings
-      best = layers.map((row) => [...row])
-      stale = 0
-    } else stale++
+  }
+  // The sweeps settle into a local minimum shaped by the starting order:
+  // declaration order first, then a few seeded shuffles, best kept.
+  let seed = 0x9e3779b9
+  const random = (): number => {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
+    return seed / 0x100000000
+  }
+  for (let restart = 0; restart < 4 && bestCrossings > 0; restart++) {
+    if (restart > 0) {
+      for (const row of layers) {
+        for (let i = row.length - 1; i > 0; i--) {
+          const j = Math.floor(random() * (i + 1))
+          ;[row[i], row[j]] = [row[j], row[i]]
+        }
+        partition(row)
+        reindex(row)
+      }
+    }
+    sweep()
   }
 
   for (let i = 0; i < byRank.length; i++) {
@@ -341,9 +367,23 @@ export function orderRanks(
   return { ...layered, layers: best }
 }
 
-function sortByBarycenter(row: number[], neigh: number[][], pos: number[]): void {
-  const key = (v: number): number =>
-    neigh[v].length === 0 ? pos[v] : neigh[v].reduce((s, u) => s + pos[u], 0) / neigh[v].length
+/**
+ * Sort a rank by each node's weighted median neighbour position (Gansner
+ * et al.): the median for an odd count, the mean of the two middle ones
+ * for two, otherwise the two middle ones weighted toward the side whose
+ * neighbours spread less. A node without neighbours keeps its place.
+ */
+function sortByMedian(row: number[], neigh: number[][], pos: number[]): void {
+  const key = (v: number): number => {
+    const p = neigh[v].map((u) => pos[u]).sort((a, b) => a - b)
+    const m = p.length >> 1
+    if (p.length === 0) return pos[v]
+    if (p.length % 2 === 1) return p[m]
+    if (p.length === 2) return (p[0] + p[1]) / 2
+    const left = p[m - 1] - p[0]
+    const right = p[p.length - 1] - p[m]
+    return left + right === 0 ? (p[m - 1] + p[m]) / 2 : (p[m - 1] * right + p[m] * left) / (left + right)
+  }
   const keyed = row.map((v) => ({ key: key(v), v }))
   keyed.sort((a, b) => a.key - b.key)
   for (let i = 0; i < keyed.length; i++) row[i] = keyed[i].v
