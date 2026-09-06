@@ -190,10 +190,12 @@ function compact(
 }
 
 /**
- * The run whose segments bend least (sum of cross-axis offsets), narrowest
- * on a tie. Brandes–Köpf balance the four by averaging medians, which
- * splits the difference wherever the runs disagree and leaves a chain
- * kinked by a cell or two; on a cell grid one consistent run reads better.
+ * The run whose segments bend least (weighted sum of cross-axis offsets)
+ * among those no wider than the narrowest run plus a fifth. Brandes–Köpf
+ * balance the four by averaging medians, which splits the difference
+ * wherever the runs disagree and leaves a chain kinked by a cell or two;
+ * on a cell grid one consistent run reads better. On a large graph a
+ * straighter run can be much wider, and width is what a terminal lacks.
  */
 function straightest(
   runs: number[][],
@@ -208,9 +210,7 @@ function straightest(
     const virtual = Number(v >= realCount) + Number(w >= realCount)
     return virtual === 2 ? 8 : virtual === 1 ? 1 : 4
   }
-  let best = runs[0]
-  let bestKey = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY]
-  for (const x of runs) {
+  const scored = runs.map((x) => {
     let bends = 0
     for (let v = 0; v < g.down.length; v++) {
       for (const w of g.down[v]) bends += weight(v, w) * Math.abs(x[v] - x[w])
@@ -221,11 +221,15 @@ function straightest(
       lo = Math.min(lo, c - size[v] / 2)
       hi = Math.max(hi, c + size[v] / 2)
     })
-    const key = [bends, hi - lo]
-    if (key[0] < bestKey[0] || (key[0] === bestKey[0] && key[1] < bestKey[1])) {
-      best = x
-      bestKey = key
+    return { x, bends, width: hi - lo }
+  })
+  const narrowest = Math.min(...scored.map((s) => s.width))
+  let best = scored[0]
+  for (const s of scored) {
+    if (s.width > narrowest * 1.2) continue
+    if (best.width > narrowest * 1.2 || s.bends < best.bends || (s.bends === best.bends && s.width < best.width)) {
+      best = s
     }
   }
-  return [...best]
+  return [...best.x]
 }
