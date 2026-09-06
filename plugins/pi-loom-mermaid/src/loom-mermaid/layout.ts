@@ -1133,7 +1133,7 @@ function placeTd(
           cursor = x + 2
         } else {
           lefts.push(false)
-          cursor = w >= 0 ? x + w + 2 : x + 1
+          cursor = w >= 0 ? x + w + 2 : x + 2
         }
         cols.push(x)
       }
@@ -1167,14 +1167,14 @@ function placeTd(
         edgeEntryX[si] = cx
         continue
       }
+      // A gap of one cell keeps two heads apart; with no room for that
+      // on either side, the skip merges onto the centre arrow.
       const clear = reach === -1 ? cx + 2 : reach + 2
-      const capped = Math.min(clear, right - 1)
-      if (capped > Math.max(cx, reach)) {
-        edgeEntryX[si] = capped
-      } else {
-        edgeEntryX[si] = Math.max(left + 1, cx - 2)
+      if (clear <= right - 1) edgeEntryX[si] = clear
+      else if (cx - 2 >= left + 1) {
+        edgeEntryX[si] = cx - 2
         edgeLabelLeft[si] = true
-      }
+      } else edgeEntryX[si] = cx
     }
   })
   // Every skip and back edge runs through the interior along the column its
