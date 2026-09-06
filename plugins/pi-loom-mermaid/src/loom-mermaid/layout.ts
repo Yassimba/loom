@@ -108,7 +108,6 @@ interface RoutePlan {
    */
   skipRoute: { bus: number; at: number }[][]
   /** Per node: the forward cluster's entry column, or -1 for the centre. */
-  fwdEntryX: number[]
   /** Per edge: render the label left of the arrowhead instead of right. */
   edgeLabelLeft: boolean[]
   /** Where a chain-routed edge's label sits beside its long vertical, if it moved off the head row. */
@@ -269,8 +268,9 @@ function normalize(
   const trunks = new Map<string, number>()
   const takes = (e: Edge): boolean =>
     e.from !== e.to && (ranks[e.to] === ranks[e.from] + 1 || interior(e))
-  // How far from each end a group of edges keeps company: the second
-  // nearest endpoint among edges sharing that end, since sharing needs two.
+  // How far from each end a group of edges keeps company: up to the
+  // second farthest endpoint among edges sharing that end, since sharing
+  // needs two.
   const reach = (key: 'from' | 'to'): Map<number, number> => {
     const other = key === 'from' ? 'to' : 'from'
     const ends = new Map<number, number[]>()
@@ -283,7 +283,7 @@ function normalize(
     const out = new Map<number, number>()
     for (const [node, rs] of ends) {
       const d = rs.map((r) => Math.abs(r - ranks[node])).sort((a, b) => a - b)
-      if (d.length > 1) out.set(node, d[1])
+      if (d.length > 1) out.set(node, d[d.length - 2])
     }
     return out
   }
@@ -651,7 +651,12 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
       span.labeled === true
         ? undefined
         : hypers.find((h) =>
-            h.members.some((m) => m.labeled !== true && (m.from === span.from || m.to === span.to)),
+            h.members.some(
+              (m) =>
+                m.labeled !== true &&
+                ((m.from === span.from && m.up[0] === span.up[0]) ||
+                  (m.to === span.to && m.down[0] === span.down[0])),
+            ),
           )
     if (host === undefined) {
       hypers.push({ members: [span], start: span.start, end: span.end, up: [...span.up], down: [...span.down] })
@@ -732,7 +737,7 @@ function busSpans(
   centers: number[],
   r: number,
   exact: boolean,
-  entry: (node: number) => number = (node) => centers[node],
+  entry: (edge: number) => number = (i) => centers[graph.edges[i].to],
 ): TrackSpan[] {
   const out: TrackSpan[] = []
   graph.edges.forEach((e, i) => {
@@ -740,7 +745,7 @@ function busSpans(
       ? centers[e.from] !== centers[e.to]
       : Math.abs(centers[e.from] - centers[e.to]) > 1
     if (e.from !== e.to && ranks[e.to] === ranks[e.from] + 1 && ranks[e.from] === r && jogs) {
-      const arrive = exact ? centers[e.to] : entry(e.to)
+      const arrive = exact ? centers[e.to] : entry(i)
       out.push({
         start: Math.min(centers[e.from], arrive),
         end: Math.max(centers[e.from], arrive),
@@ -1035,17 +1040,20 @@ function placeTd(
     graph.edges.flatMap((e, i) => (isBack(e) && e.from === node ? [port(node, exitSide[i])] : [])),
   )
 
-  // Top-entry geometry, derivable before placement. A node's entries — the
-  // merged forward cluster plus each skip — spread evenly across the box top
-  // (two entries land at ~1/3 and ~2/3). A forward arrival aligned with its
-  // source stays at centre so chains keep no kinks, and the skips spread
-  // over the right half instead. A label that does not fit before the next
-  // entry renders left of its arrow. A skip whose entry column crosses no
-  // box on any intermediate rank drops straight instead of taking a lane.
+  // Top-entry geometry, derivable before placement. A node's entries land
+  // across the box top in the order they arrive from (a forward by its
+  // source's column, a skip by the column its chain comes down), so no
+  // approach crosses another on the way in. A forward arrival whose source
+  // sits over the box top keeps its own head and drops straight, unless
+  // forwards jog in from both sides of it (their shared bus would cross
+  // the drop); the forwards jogging in from outside merge into one
+  // arrival, placed at their sources' mean; each skip gets its own. Whatever falls outside the top
+  // spreads over the room left beside the straight drops. A label that
+  // does not fit before the next entry renders left of its arrow.
   const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
+  const isFwd = (e: Edge): boolean => e.from !== e.to && ranks[e.to] === ranks[e.from] + 1
   const edgeEntryX = new Array<number>(graph.edges.length).fill(-1)
   const edgeStraight = new Array<boolean>(graph.edges.length).fill(false)
-  const fwdEntryX = new Array<number>(graph.nodes.length).fill(-1)
   const edgeLabelLeft = new Array<boolean>(graph.edges.length).fill(false)
   const labelW = (e: Edge): number => {
     if (labelNode[graph.edges.indexOf(e)] !== -1) return -1
@@ -1054,100 +1062,111 @@ function placeTd(
       ? -1
       : Math.max(...parts.map((p) => Math.min(stringWidth(p), MAX_LABEL)))
   }
-  const skipsInto: number[][] = graph.nodes.map(() => [])
-  const fwdsInto: number[][] = graph.nodes.map(() => [])
+  const into: number[][] = graph.nodes.map(() => [])
   graph.edges.forEach((e, i) => {
-    if (e.from === e.to) return
-    if (isSkip(e)) skipsInto[e.to].push(i)
-    else if (ranks[e.to] === ranks[e.from] + 1) fwdsInto[e.to].push(i)
+    if (isSkip(e) || isFwd(e)) into[e.to].push(i)
   })
   graph.nodes.forEach((_, t) => {
-    const skips = skipsInto[t]
-    if (skips.length === 0) return
-    const fwds = fwdsInto[t]
+    const entries = into[t]
+    if (entries.length === 0) return
     const cx = centers[t]
     const left = boxL(t)
     const right = boxR(t)
-    const hasFwd = fwds.length > 0
-    const aligned = hasFwd && fwds.some((i) => Math.abs(centers[graph.edges[i].from] - cx) <= 1)
-    // Entries land in the order they arrive from: a skip by the column its
-    // chain comes down, the forward cluster by its sources' mean — so no
-    // approach has to cross another on the way in.
-    const arrives = (si: number): number => centers[layered.chains[si].at(-1) ?? graph.edges[si].from]
-    const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length
-    type Item = { slot: number; w: number; skip: number | null; key: number }
-    const items: Item[] = skips.map((si) => ({
-      slot: 0,
-      w: labelW(graph.edges[si]),
-      skip: si,
-      key: arrives(si),
-    }))
-    if (hasFwd) {
+    const arrives = (i: number): number => centers[layered.chains[i].at(-1) ?? graph.edges[i].from]
+    type Item = { slot: number; w: number; edge: number; key: number }
+    const over = (i: number): boolean => {
+      const k = arrives(i)
+      return k > left && k < right
+    }
+    const fwdCols = entries.filter((i) => isFwd(graph.edges[i])).map(arrives)
+    const flanked = (i: number): boolean =>
+      fwdCols.some((c) => c <= left) && fwdCols.some((c) => c >= right)
+    const jogging = entries.filter((i) => isFwd(graph.edges[i]) && (!over(i) || flanked(i)))
+    let items: Item[] = entries
+      .filter((i) => !jogging.includes(i))
+      .map((i) => ({ slot: 0, w: labelW(graph.edges[i]), edge: i, key: arrives(i) }))
+    if (jogging.length > 0) {
       items.push({
-        slot: cx,
-        w: Math.max(...fwds.map((i) => labelW(graph.edges[i]))),
-        skip: null,
-        key: aligned ? cx : mean(fwds.map((i) => centers[graph.edges[i].from])),
+        slot: 0,
+        w: Math.max(...jogging.map((i) => labelW(graph.edges[i]))),
+        edge: -1,
+        key: jogging.reduce((a, i) => a + centers[graph.edges[i].from], 0) / jogging.length,
       })
     }
-    items.sort((a, b) => a.key - b.key || (a.skip ?? -1) - (b.skip ?? -1))
-    const spread = (group: Item[], lo: number, hi: number): void => {
-      group.forEach((item, i) => {
-        item.slot = lo + Math.round(((hi - lo) * (i + 1)) / (group.length + 1))
-      })
-    }
-    if (hasFwd && aligned) {
-      // The forward cluster keeps the centre so chains stay straight; skips
-      // spread over whichever half they arrive on.
-      spread(items.filter((it) => it.skip !== null && it.key < cx), left, cx)
-      spread(items.filter((it) => it.skip !== null && it.key >= cx), cx, right)
-    } else spread(items, left, right)
-    // A skip whose chain column already falls inside the box top enters
-    // there and drops straight; the spread only decides the rest.
-    for (const item of items) {
-      if (item.skip !== null && item.key > left && item.key < right) item.slot = item.key
-    }
-    // Walk left to right with a cursor over the free head-row cells: each
-    // entry lands at its slot (or past the previous label), its own label
-    // going right when the next slot leaves room, else left when the cells
-    // behind the cursor allow. Overflow falls back to the legacy rule.
-    const cols: number[] = []
-    const lefts: boolean[] = []
-    let cursor = left
-    let fits = true
-    for (const [i, item] of items.entries()) {
-      const x = Math.max(item.slot, cursor)
-      if (x > right - 1) {
-        fits = false
-        break
+    // Slots: an arrival at most a cell off centre snaps to it (routeForward
+    // straightens such a jog), other in-range arrivals keep their column,
+    // the rest spread evenly over the top. Then walk left to right with a
+    // cursor over the free head-row cells: each entry lands at its slot
+    // (or past the previous label), its own label going right when the
+    // next slot leaves room, else left when the cells behind the cursor
+    // allow. Null when the top runs out of room.
+    const walk = (list: Item[]): { cols: number[]; lefts: boolean[] } | null => {
+      list.sort((a, b) => a.key - b.key || a.edge - b.edge)
+      const fixed = list.filter((it) => it.key > left && it.key < right)
+      for (const item of fixed) item.slot = Math.abs(item.key - cx) <= 1 ? cx : item.key
+      const spread = (group: Item[], lo: number, hi: number): void => {
+        group.forEach((item, i) => {
+          const at = lo + Math.round(((hi - lo) * (i + 1)) / (group.length + 1))
+          item.slot = Math.max(left + 1, Math.min(right - 1, at))
+        })
       }
-      const next = items[i + 1]?.slot ?? Number.MAX_SAFE_INTEGER
-      const w = item.w
-      if (w >= 0 && x + w + 2 > next && x - cursor >= w) {
-        lefts.push(true)
-        cursor = x + 2
-      } else {
-        lefts.push(false)
-        cursor = w >= 0 ? x + w + 2 : x + 2
-      }
-      cols.push(x)
-    }
-    if (fits) {
-      items.forEach((item, i) => {
-        if (item.skip === null) {
-          fwdEntryX[t] = cols[i]
-          if (lefts[i]) for (const fi of fwds) edgeLabelLeft[fi] = true
+      spread(
+        list.filter((it) => it.key <= left),
+        left,
+        fixed.length > 0 ? Math.max(left, fixed[0].slot - 2) : right,
+      )
+      spread(
+        list.filter((it) => it.key >= right),
+        fixed.length > 0 ? Math.min(right, fixed[fixed.length - 1].slot + 2) : left,
+        right,
+      )
+      const cols: number[] = []
+      const lefts: boolean[] = []
+      let cursor = left
+      for (const [i, item] of list.entries()) {
+        const x = Math.max(item.slot, cursor)
+        if (x > right - 1) return null
+        const next = list[i + 1]?.slot ?? Number.MAX_SAFE_INTEGER
+        const w = item.w
+        if (w >= 0 && x + w + 2 > next && x - cursor >= w) {
+          lefts.push(true)
+          cursor = x + 2
         } else {
-          edgeEntryX[item.skip] = cols[i]
-          edgeLabelLeft[item.skip] = lefts[i]
+          lefts.push(false)
+          cursor = w >= 0 ? x + w + 2 : x + 1
+        }
+        cols.push(x)
+      }
+      return { cols, lefts }
+    }
+    const fwds = entries.filter((i) => isFwd(graph.edges[i]))
+    let fit = walk(items)
+    // No room for a head each: every forward merges into one arrival on
+    // the centre and the skips spread around it.
+    if (fit === null && fwds.length > jogging.length) {
+      items = [
+        ...items.filter((it) => it.edge !== -1 && !isFwd(graph.edges[it.edge])),
+        { slot: 0, w: Math.max(...fwds.map((i) => labelW(graph.edges[i]))), edge: -1, key: cx },
+      ]
+      fit = walk(items)
+    }
+    if (fit !== null) {
+      items.forEach((item, i) => {
+        for (const ei of item.edge === -1 ? (fwds.length > jogging.length && fit.cols.length === items.length && items.some((it) => it.edge === -1 && it.key === cx) ? fwds : jogging) : [item.edge]) {
+          edgeEntryX[ei] = fit.cols[i]
+          edgeLabelLeft[ei] = fit.lefts[i]
         }
       })
       return
     }
-    // Legacy: forward stays centred; a skip lands past the arrival labels,
-    // or left of centre with its own label flipped left.
-    const reach = hasFwd ? Math.max(cx, ...fwds.map((i) => cx + 1 + labelW(graph.edges[i]))) : -1
-    for (const si of skips) {
+    // Legacy: forwards merge on the centre; a skip lands past the arrival
+    // labels, or left of centre with its own label flipped left.
+    const reach = fwds.length > 0 ? Math.max(cx, ...fwds.map((i) => cx + 1 + labelW(graph.edges[i]))) : -1
+    for (const si of entries) {
+      if (isFwd(graph.edges[si])) {
+        edgeEntryX[si] = cx
+        continue
+      }
       const clear = reach === -1 ? cx + 2 : reach + 2
       const capped = Math.min(clear, right - 1)
       if (capped > Math.max(cx, reach)) {
@@ -1188,8 +1207,8 @@ function placeTd(
   const edgeBus = new Array<number>(graph.edges.length).fill(0)
   const busTracks = new Array<number>(maxRank + 1).fill(0)
   for (let r = 0; r < maxRank; r++) {
-    const spans = busSpans(graph, ranks, centers, r, false, (t) =>
-      fwdEntryX[t] === -1 ? centers[t] : fwdEntryX[t],
+    const spans = busSpans(graph, ranks, centers, r, false, (i) =>
+      edgeEntryX[i] === -1 ? centers[graph.edges[i].to] : edgeEntryX[i],
     )
     const bandJogs = jogs.filter((j) => j.band === r)
     spans.push(...bandJogs)
@@ -1286,7 +1305,6 @@ function placeTd(
     edgeExitX,
     edgeStraight,
     skipRoute,
-    fwdEntryX,
     edgeLabelLeft,
     edgeLabelAt,
   }
@@ -1422,7 +1440,6 @@ function placeLr(
     edgeExitX: new Array<number>(graph.edges.length).fill(-1),
     edgeStraight,
     skipRoute,
-    fwdEntryX: new Array<number>(graph.nodes.length).fill(-1),
     edgeLabelLeft: new Array<boolean>(graph.edges.length).fill(false),
     edgeLabelAt: graph.edges.map(() => null),
   }
@@ -1566,7 +1583,7 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
     const lane = plan.laneBase + plan.edgeLane[i]
     if (vertical) {
       if (adjacent)
-        routeForward(canvas, from, to, edge, bus, plan.fwdEntryX[edge.to], plan.edgeLabelLeft[i])
+        routeForward(canvas, from, to, edge, bus, plan.edgeEntryX[i], plan.edgeLabelLeft[i])
       else if (to.rank > from.rank) {
         routeSkip(canvas, from, to, edge, plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i], plan.edgeLabelAt[i])
       } else {
