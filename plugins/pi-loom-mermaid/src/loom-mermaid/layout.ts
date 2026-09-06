@@ -403,61 +403,159 @@ export function assignPositions(
 
 // ------------------------------------------------------------------- tracks
 
-/** A span competing for a track: the covered coordinate range plus its edge. */
+/**
+ * A span competing for a track: the covered coordinate range, the arms
+ * that reach it from either side, and its edge. In a band between ranks,
+ * `up` arms come from the earlier rank and `down` arms lead on to the
+ * later one (in a lane strip both arms are `up`).
+ */
 interface TrackSpan {
   start: number
   end: number
   from: number
   to: number
   edge: number
+  up: number[]
+  down: number[]
   /** A labelled lane refuses endpoint sharing: the label would appear to
    * cover every edge merged onto the row. Bus spans never set this — their
    * labels sit at the separate arrival ends, so fan merging stays safe. */
   labeled?: boolean
 }
 
+/** Spans merged onto one track because they share an endpoint. */
+interface Hyper {
+  members: TrackSpan[]
+  start: number
+  end: number
+  up: number[]
+  down: number[]
+}
+
 /**
- * Pack spans into as few parallel tracks as possible.
- *
- * Two spans share a track when they are two cells apart, or when they share an
- * endpoint — edges fanning out of one node deliberately reuse a single row so
- * a merge draws one arrowhead rather than a stack of them.
+ * Order spans onto parallel tracks, nearest the earlier rank first, so
+ * that arms cross as few other spans' runs as possible (Sander's segment
+ * ordering, as in ELK's orthogonal router): spans that share an endpoint
+ * merge into one run — edges fanning out of one node draw one `┴` origin
+ * rather than a stack of them — then every two runs that overlap are
+ * compared both ways, the cheaper order becomes a dependency, cycles are
+ * broken greedily, and a run's track is its longest dependency path. Runs
+ * two cells apart share a track.
  */
-export function assignTracks(
-  spans: TrackSpan[],
-  shortestFirst = false,
-): { assigned: [number, number][]; count: number } {
-  // Lanes pack shortest-first: a span contained in another takes the inner
-  // track, so exits and entries at rows the inner lane never reaches cross
-  // nothing. Buses keep the start-ordered packing.
-  const sorted = [...spans].sort(
-    (a, b) =>
-      (shortestFirst ? a.end - a.start - (b.end - b.start) : 0) ||
-      a.start - b.start ||
-      a.end - b.end ||
-      a.from - b.from ||
-      a.to - b.to ||
-      a.edge - b.edge,
-  )
-  const tracks: TrackSpan[][] = []
-  const assigned: [number, number][] = []
-  for (const span of sorted) {
-    let slot = tracks.findIndex((members) =>
-      members.every(
-        (m) =>
-          m.end + 2 <= span.start ||
-          span.end + 2 <= m.start ||
-          ((m.from === span.from || m.to === span.to) && !m.labeled && !span.labeled),
-      ),
-    )
-    if (slot === -1) {
-      tracks.push([])
-      slot = tracks.length - 1
+export function assignTracks(spans: TrackSpan[]): { assigned: [number, number][]; count: number } {
+  const hypers = mergeShared(spans)
+  const n = hypers.length
+  const overlaps = (a: Hyper, b: Hyper): boolean => a.start <= b.end + 1 && b.start <= a.end + 1
+  /** Crossings when `a` runs on the track nearer the earlier rank than `b`. */
+  const crossings = (a: Hyper, b: Hyper): number =>
+    a.down.filter((x) => b.start < x && x < b.end).length +
+    b.up.filter((x) => a.start < x && x < a.end).length
+  const weight: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(-1))
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (!overlaps(hypers[i], hypers[j])) continue
+      const ij = crossings(hypers[i], hypers[j])
+      const ji = crossings(hypers[j], hypers[i])
+      // Equal: keep the earlier-starting run nearer, the packing order.
+      if (ij < ji || (ij === ji && hypers[i].start <= hypers[j].start)) weight[i][j] = ji - ij
+      else weight[j][i] = ij - ji
     }
-    tracks[slot].push(span)
-    assigned.push([span.edge, slot])
   }
-  return { assigned, count: tracks.length }
+  const order = greedyAcyclic(weight)
+  const track = new Array<number>(n).fill(0)
+  for (const v of order) {
+    for (let u = 0; u < n; u++) {
+      if (weight[u][v] >= 0 && track[u] + 1 > track[v]) track[v] = track[u] + 1
+    }
+  }
+  const assigned: [number, number][] = []
+  hypers.forEach((h, i) => {
+    for (const m of h.members) assigned.push([m.edge, track[i]])
+  })
+  return { assigned, count: n === 0 ? 0 : Math.max(...track) + 1 }
+}
+
+function mergeShared(spans: TrackSpan[]): Hyper[] {
+  const sorted = [...spans].sort(
+    (a, b) => a.start - b.start || a.end - b.end || a.from - b.from || a.to - b.to || a.edge - b.edge,
+  )
+  const hypers: Hyper[] = []
+  for (const span of sorted) {
+    const host =
+      span.labeled === true
+        ? undefined
+        : hypers.find((h) =>
+            h.members.some((m) => m.labeled !== true && (m.from === span.from || m.to === span.to)),
+          )
+    if (host === undefined) {
+      hypers.push({ members: [span], start: span.start, end: span.end, up: [...span.up], down: [...span.down] })
+      continue
+    }
+    host.members.push(span)
+    host.start = Math.min(host.start, span.start)
+    host.end = Math.max(host.end, span.end)
+    host.up.push(...span.up)
+    host.down.push(...span.down)
+  }
+  return hypers
+}
+
+/**
+ * Eades–Lin–Smyth greedy cycle removal on a weighted dependency matrix:
+ * returns a vertex order; dependencies pointing backwards in it are
+ * dropped (set to -1). Sinks go last, sources first, else the vertex with
+ * the largest outgoing-minus-incoming weight goes first.
+ */
+function greedyAcyclic(weight: number[][]): number[] {
+  const n = weight.length
+  const alive = new Array<boolean>(n).fill(true)
+  const head: number[] = []
+  const tail: number[] = []
+  const sum = (v: number, incoming: boolean): number => {
+    let total = 0
+    for (let u = 0; u < n; u++) {
+      const w = incoming ? weight[u][v] : weight[v][u]
+      if (alive[u] && w >= 0) total += w + 1
+    }
+    return total
+  }
+  let left = n
+  while (left > 0) {
+    let progressed = false
+    for (let v = 0; v < n; v++) {
+      if (!alive[v]) continue
+      if (sum(v, false) === 0) {
+        tail.push(v)
+        alive[v] = false
+        left--
+        progressed = true
+      } else if (sum(v, true) === 0) {
+        head.push(v)
+        alive[v] = false
+        left--
+        progressed = true
+      }
+    }
+    if (progressed || left === 0) continue
+    let best = -1
+    let bestScore = Number.NEGATIVE_INFINITY
+    for (let v = 0; v < n; v++) {
+      if (!alive[v]) continue
+      const score = sum(v, false) - sum(v, true)
+      if (score > bestScore) {
+        bestScore = score
+        best = v
+      }
+    }
+    head.push(best)
+    alive[best] = false
+    left--
+  }
+  const order = [...head, ...tail.reverse()]
+  const pos = new Array<number>(n).fill(0)
+  order.forEach((v, i) => (pos[v] = i))
+  for (let u = 0; u < n; u++) for (let v = 0; v < n; v++) if (weight[u][v] >= 0 && pos[u] > pos[v]) weight[u][v] = -1
+  return order
 }
 
 /** Forward edges crossing the band between rank `r` and `r + 1` that must
@@ -468,6 +566,7 @@ function busSpans(
   centers: number[],
   r: number,
   exact: boolean,
+  entry: (node: number) => number = (node) => centers[node],
 ): TrackSpan[] {
   const out: TrackSpan[] = []
   graph.edges.forEach((e, i) => {
@@ -475,12 +574,15 @@ function busSpans(
       ? centers[e.from] !== centers[e.to]
       : Math.abs(centers[e.from] - centers[e.to]) > 1
     if (e.from !== e.to && ranks[e.to] === ranks[e.from] + 1 && ranks[e.from] === r && jogs) {
+      const arrive = exact ? centers[e.to] : entry(e.to)
       out.push({
-        start: Math.min(centers[e.from], centers[e.to]),
-        end: Math.max(centers[e.from], centers[e.to]),
+        start: Math.min(centers[e.from], arrive),
+        end: Math.max(centers[e.from], arrive),
         from: e.from,
         to: e.to,
         edge: i,
+        up: [centers[e.from]],
+        down: [arrive],
       })
     }
   })
@@ -497,7 +599,16 @@ function laneSpans(graph: Graph, ranks: number[], placed: Placed[]): TrackSpan[]
     const pt = placed[e.to]
     const a = Math.min(pf.cx, pt.cx)
     const b = Math.max(pf.cx, pt.cx)
-    out.push({ start: a, end: b, from: e.from, to: e.to, edge: i, labeled: edgeText(e) !== null })
+    out.push({
+      start: a,
+      end: b,
+      from: e.from,
+      to: e.to,
+      edge: i,
+      up: [pf.cx, pt.cx],
+      down: [],
+      labeled: edgeText(e) !== null,
+    })
   })
   return out
 }
@@ -543,6 +654,8 @@ function chainJogs(
         from: ids[k],
         to: ids[k + 1],
         edge: i,
+        up: [upward ? stops[k + 1] : stops[k]],
+        down: [upward ? stops[k] : stops[k + 1]],
       })
     }
   })
@@ -854,7 +967,9 @@ function placeTd(
   const edgeBus = new Array<number>(graph.edges.length).fill(0)
   const busTracks = new Array<number>(maxRank + 1).fill(0)
   for (let r = 0; r < maxRank; r++) {
-    const spans = busSpans(graph, ranks, centers, r, false)
+    const spans = busSpans(graph, ranks, centers, r, false, (t) =>
+      fwdEntryX[t] === -1 ? centers[t] : fwdEntryX[t],
+    )
     const bandJogs = jogs.filter((j) => j.band === r)
     spans.push(...bandJogs)
     if (spans.length === 0) continue
@@ -1049,7 +1164,7 @@ function placeLr(
   let canvasH = diagramH
   let laneBase = 0
   if (lanes.length > 0) {
-    const { assigned, count } = assignTracks(lanes, true)
+    const { assigned, count } = assignTracks(lanes)
     for (const [idx, slot] of assigned) edgeLane[idx] = slot
     canvasH = diagramH + 1 + count
     laneBase = diagramH + 1
