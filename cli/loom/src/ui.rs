@@ -30,6 +30,8 @@ pub enum Mark {
 }
 
 const LABEL_WIDTH: usize = 20;
+const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const ASCII_SPINNER: [&str; 4] = ["-", "\\", "|", "/"];
 
 pub struct Out {
     terminal: bool,
@@ -168,15 +170,22 @@ impl Out {
         self.terminal
     }
 
-    /// One in-place status line while work runs (`  ⋯ running  Skills · Herdr`).
-    /// Redrawn on the same row in a terminal; printed once per change when
-    /// output is captured so logs never fill with carriage returns.
-    pub fn progress(&self, text: impl AsRef<str>) {
+    fn progress_spinner(&self, frame: usize) -> &'static str {
+        if self.ascii {
+            ASCII_SPINNER[frame % ASCII_SPINNER.len()]
+        } else {
+            SPINNER[frame % SPINNER.len()]
+        }
+    }
+
+    /// One animated, in-place status line while work runs.
+    /// Captured output stays static so logs never fill with animation frames.
+    pub fn progress(&self, text: impl AsRef<str>, frame: usize) {
         use std::io::Write;
         if self.terminal {
             print!(
                 "\r\x1b[2K  {} {}",
-                self.muted("⋯"),
+                self.accent(self.progress_spinner(frame)),
                 self.muted(text.as_ref())
             );
             let _ = std::io::stdout().flush();
@@ -249,6 +258,24 @@ mod tests {
         assert_eq!(out.mark(Mark::Ok), "OK");
         assert_eq!(out.mark(Mark::Off), "-");
         assert_eq!(out.mark(Mark::Bad), "!");
+    }
+
+    #[test]
+    fn progress_spinner_animates_and_falls_back_to_ascii() {
+        let unicode = Out {
+            terminal: true,
+            color: true,
+            ascii: false,
+        };
+        let ascii = Out {
+            terminal: true,
+            color: false,
+            ascii: true,
+        };
+        assert_eq!(unicode.progress_spinner(0), "⠋");
+        assert_eq!(unicode.progress_spinner(1), "⠙");
+        assert_eq!(ascii.progress_spinner(0), "-");
+        assert_eq!(ascii.progress_spinner(1), "\\");
     }
 
     #[test]

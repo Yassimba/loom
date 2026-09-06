@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Marked, type Token } from "@earendil-works/pi-tui";
-import { render, toAnsi } from "./loom-mermaid/index.ts";
+import { diagramKind, render, toAnsi } from "./loom-mermaid/index.ts";
+import { isClosedFence, streamingPrefixes } from "./streaming.ts";
 
 const markdownParser = new Marked();
 const diffClasses = {
@@ -12,7 +13,7 @@ const diffClasses = {
 type TransformContext = {
   messageType: "user" | "assistant" | "assistant-thinking";
   availableWidth: number;
-  /** The message is still arriving; an unclosed fence shows as source until it closes. */
+  /** Draw completed statements while the message is still arriving. */
   isStreaming?: boolean;
 };
 
@@ -22,11 +23,11 @@ type TransformContext = {
  * laid out again for each token after it. Layout is deterministic, so the
  * first render is the only one needed.
  */
-const rendered = new Map<string, string>();
+const rendered = new Map<string, string | null>();
 const CACHE_SIZE = 64;
 
 function renderBlock(text: string, availableWidth: number): string | null {
-  const key = `${availableWidth}\0${text}`;
+  const key = `${availableWidth}\0${text.trimEnd()}`;
   const hit = rendered.get(key);
   if (hit !== undefined) {
     rendered.delete(key);
@@ -35,15 +36,14 @@ function renderBlock(text: string, availableWidth: number): string | null {
   }
   const styledSource = withDiffClasses(text);
   const art = render(styledSource.source, { maxWidth: availableWidth });
-  if (!art || art.width > availableWidth) return null;
-  const out = `${dimDefaultBorders(toAnsi(art), styledSource.dimSgr).map(codeSpan).join("  \n")}\n`;
+  const out =
+    !art || art.width > availableWidth
+      ? null
+      : `${dimDefaultBorders(toAnsi(art), styledSource.dimSgr).map(codeSpan).join("  \n")}\n`;
   rendered.set(key, out);
   if (rendered.size > CACHE_SIZE) rendered.delete(rendered.keys().next().value as string);
   return out;
 }
-
-/** A fenced block whose closing fence has arrived. */
-const isClosed = (token: { raw: string }): boolean => /\n\s*(`{3,}|~{3,})\s*$/.test(token.raw);
 
 function isMermaid(token: Token): token is Token & { type: "code"; text: string; lang?: string } {
   return (
@@ -92,7 +92,16 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
     .lexer(markdown)
     .map((token) => {
       if (!isMermaid(token)) return token.raw;
-      if (context.isStreaming === true && !isClosed(token)) return token.raw;
+      if (context.isStreaming === true && !isClosedFence(token.raw)) {
+        if (diagramKind(token.text) === null) return token.raw;
+        // Marked removes the last newline from unclosed code tokens.
+        const source = token.text + (token.raw.endsWith("\n") ? "\n" : "");
+        for (const prefix of streamingPrefixes(source)) {
+          const out = renderBlock(prefix, context.availableWidth);
+          if (out !== null) return out;
+        }
+        return "_Drawing Mermaid…_\n";
+      }
       return renderBlock(token.text, context.availableWidth) ?? token.raw;
     })
     .join("");
@@ -100,4 +109,7 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
 
 export default function piLovelyMermaid(pi: ExtensionAPI): void {
   pi.registerMarkdownTransformer(transformMermaidMarkdown);
+  pi.on("before_agent_start", (event) => ({
+    systemPrompt: `${event.systemPrompt}\n\nYou can communicate visually using fenced \`mermaid\` blocks, rendered directly in the user’s session. Supported diagram types: flowchart, sequence, state, class, ER, mindmap, timeline, pie, and git graph. Use diagrams when your message is clearer visually than in prose. Keep them compact, with short labels; prefer top-down layouts for narrow terminals. Always visualize node diffs when it makes sense: use \`:::red\` for removed, \`:::green\` for added, and \`:::orange\` for changed nodes.`,
+  }));
 }

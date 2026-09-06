@@ -255,11 +255,31 @@ pub fn remove_selected(
     Ok(())
 }
 
+fn github_token(system: &dyn System) -> Option<String> {
+    [
+        "MISE_GITHUB_TOKEN",
+        "GITHUB_API_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+    ]
+    .into_iter()
+    .find_map(|name| std::env::var(name).ok().filter(|token| !token.is_empty()))
+    .or_else(|| system.github_token())
+}
+
+fn mise_install_command(token: Option<String>) -> CommandSpec {
+    let spec = CommandSpec::new("mise", ["install", "--yes"]);
+    match token {
+        Some(token) => spec.with_private_env("MISE_GITHUB_TOKEN", token),
+        None => spec,
+    }
+}
+
 fn mise_install(
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
-    let spec = CommandSpec::new("mise", ["install", "--yes"]);
+    let spec = mise_install_command(github_token(system));
     match system.run_controlled(&spec, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
         Ok(result) if result.success => Ok(()),
         Ok(result) => Err(crate::install::command_failure_message(&result)),
@@ -393,6 +413,20 @@ gh = \"2.97.0\"
         assert!(rendered.contains("gone = \"1.0.0\""));
         let rendered = render_selection(MANIFEST, "", &["gone".into()]).unwrap();
         assert!(!rendered.contains("gone"));
+    }
+
+    #[test]
+    fn mise_install_receives_but_never_displays_the_github_token() {
+        let secret = "gho_not-a-real-token";
+        let command = mise_install_command(Some(secret.into()));
+
+        assert_eq!(
+            command.private_env,
+            [("MISE_GITHUB_TOKEN".into(), secret.into())]
+        );
+        assert!(!command.display().contains(secret));
+        assert!(!format!("{command:?}").contains(secret));
+        assert!(format!("{command:?}").contains("<REDACTED>"));
     }
 
     #[test]
