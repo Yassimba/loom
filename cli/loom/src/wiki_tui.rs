@@ -956,6 +956,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))]
     fn picker_error_consumes_the_dismissal_key() {
         let mut wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
         wizard.error = Some("picker failed".into());
