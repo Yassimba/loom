@@ -1001,6 +1001,11 @@ function placeTd(
       spread(items.filter((it) => it.skip !== null && it.key < cx), left, cx)
       spread(items.filter((it) => it.skip !== null && it.key >= cx), cx, right)
     } else spread(items, left, right)
+    // A skip whose chain column already falls inside the box top enters
+    // there and drops straight; the spread only decides the rest.
+    for (const item of items) {
+      if (item.skip !== null && item.key > left && item.key < right) item.slot = item.key
+    }
     // Walk left to right with a cursor over the free head-row cells: each
     // entry lands at its slot (or past the previous label), its own label
     // going right when the next slot leaves room, else left when the cells
