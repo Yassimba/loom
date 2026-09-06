@@ -11,7 +11,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1584
+    "area": 1984
   },
   "concentrate": {
     "brokenLinks": 0,
@@ -25,14 +25,14 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1152
+    "area": 1088
   },
   "dense": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 2,
-    "area": 520
+    "crossings": 1,
+    "area": 546
   },
   "er-cardinalities": {
     "brokenLinks": 0,
@@ -46,7 +46,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 1,
-    "area": 702
+    "area": 810
   },
   "lane-order": {
     "brokenLinks": 0,
@@ -109,7 +109,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 3,
-    "area": 8303
+    "area": 8326
   },
   "unicode-wide": {
     "brokenLinks": 0,

@@ -11,7 +11,7 @@
  */
 
 import type { Canvas } from './canvas.ts'
-import type { Anchor, Edge } from './graph.ts'
+import type { Anchor, Edge, LineKind } from './graph.ts'
 import type { Graph } from './graph.ts'
 import { fitLabel, type Limits, wrapLabel } from './labels.ts'
 import { brandesKoepf, type LayeredGraph } from './placement.ts'
@@ -39,7 +39,7 @@ const labelCols = (text: string, max: number): number => Math.min(stringWidth(te
 
 /** Where a label starts: right of its arrow, or ending just left of it. */
 const labelStart = (arrowX: number, text: string, left: boolean, max: number): number =>
-  left ? sat(arrowX, labelCols(text, max)) : arrowX + 1
+  left ? sat(arrowX, labelCols(text, max) + 1) : arrowX + 2
 
 /** The label parts drawn at a forward edge's arrival: verb and target cardinality. */
 const arrivalParts = (e: Edge): string[] => [e.label, e.cardTo].filter((p) => p != null) as string[]
@@ -661,6 +661,8 @@ interface TrackSpan {
   labeled?: boolean
   /** Spans with one key run as one trunk: every edge between two frames shares a bus. */
   bundle?: string
+  /** Line style; runs of different styles never share a trunk. */
+  line?: LineKind
 }
 
 /** Spans merged onto one track because they share an endpoint. */
@@ -761,9 +763,10 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
     const host = hypers.find((h) =>
       h.members.some(
         (m) =>
-          (span.bundle !== undefined && m.bundle === span.bundle) ||
-          (m.from === span.from && m.up[0] === span.up[0]) ||
-          (m.to === span.to && m.down[0] === span.down[0]),
+          m.line === span.line &&
+          ((span.bundle !== undefined && m.bundle === span.bundle) ||
+            (m.from === span.from && m.up[0] === span.up[0]) ||
+            (m.to === span.to && m.down[0] === span.down[0])),
       ),
     )
     if (host === undefined) {
@@ -788,7 +791,7 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
     const S = new Set([...srcs(a), ...srcs(b)])
     const T = new Set([...dsts(a), ...dsts(b)])
     const have = new Set([...a.members, ...b.members].map((m) => `${m.from}>${m.to}`))
-    if ([...a.members, ...b.members].some((m) => m.labeled)) return false
+    if ([...a.members, ...b.members].some((m) => m.labeled || m.line !== a.members[0].line)) return false
     for (const x of S) for (const y of T) if (!have.has(`${x}>${y}`)) return false
     return true
   }
@@ -894,6 +897,7 @@ function busSpans(
         up: [exit(i)],
         down: [arrive],
         labeled: edgeText(e) !== null,
+        line: e.line,
         bundle: bundle(i),
       })
     }
@@ -1127,16 +1131,21 @@ function placeTd(
     const bl = (j: number): number => sat(x[j], half(sizes.boxW[j]))
     const br = (j: number): number => bl(j) + sizes.boxW[j] - 1
     graph.edges.forEach((e, i) => {
-      if (!isSkip(e) || extras[e.to].kind !== 'plain') return
+      if (!(isSkip(e) || isBack(e)) || extras[e.to].kind !== 'plain') return
       const last = layered.chains[i].at(-1)
       if (last === undefined) return
       const col = x[last]
       const side = col <= bl(e.to) - 3 ? -1 : col >= br(e.to) + 3 ? 1 : 0
       if (side === 0 || taken.has(`${e.to}:${side}`)) return
-      const othersJog = graph.edges.some(
-        (o, k) =>
-          k !== i && o.to === e.to && o.from !== o.to && ranks[o.from] < ranks[o.to] && Math.abs(x[layered.chains[k].at(-1) ?? o.from] - x[e.to]) > 1,
-      )
+      // A skip is a lone detour only when no forward arrival jogs in; a
+      // return always takes the side, since its bottom port would sit
+      // beside the target's own fan-out stem.
+      const othersJog =
+        isSkip(e) &&
+        graph.edges.some(
+          (o, k) =>
+            k !== i && o.to === e.to && o.from !== o.to && ranks[o.from] < ranks[o.to] && Math.abs(x[layered.chains[k].at(-1) ?? o.from] - x[e.to]) > 1,
+        )
       if (othersJog) return
       // A blank cell between the leg and every other box on the rank, or
       // the leg would read as leaving that box.
@@ -1399,7 +1408,10 @@ function placeTd(
   // A side entry's chain ends on its own column; the route turns into the
   // box from there.
   graph.edges.forEach((e, i) => {
-    if (sideEntry[i] !== 0) edgeEntryX[i] = centers[layered.chains[i].at(-1) as number]
+    if (sideEntry[i] !== 0) {
+      edgeEntryX[i] = centers[layered.chains[i].at(-1) as number]
+      edgeLabelLeft[i] = false
+    }
   })
   const jogs = chainJogs(graph, ranks, layered, centers, (e, i) => {
     if (isSkip(e)) return { exit: centers[e.from], entry: edgeEntryX[i] }
@@ -1499,7 +1511,7 @@ function placeTd(
     const to = placed[edge.to]
     if (edge.from === edge.to) return selfRoute(from, edge, maxLabel)
     if (isBack(edge)) {
-      return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel)
+      return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel, sideEntry[i])
     }
     if (isSkip(edge)) {
       return chainRoute(from, to, edge, edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel, sideEntry[i])
@@ -1996,11 +2008,28 @@ function backChainRoute(
   labelLeft: boolean,
   labelAt: LabelAt,
   max: number,
+  side = 0,
 ): Route {
-  const headRow = to.y + to.h
   const points = jogPoints([exitX, from.y], jogs, true)
+  if (side !== 0) return sideLeg(points, to, edge, entryX, side, labelAt, max)
+  const headRow = to.y + to.h
   points.push([entryX, headRow])
   return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt, max) }
+}
+
+/**
+ * Finish a chain route through the target's side: along the chain column
+ * to the centre row, then across into the box. A label beside the chain
+ * stays there; otherwise it interrupts the leg, the way a lane label does.
+ */
+function sideLeg(points: [number, number][], to: Placed, edge: Edge, entryX: number, side: number, labelAt: LabelAt, max: number): Route {
+  const head = side < 0 ? to.x - 1 : to.x + to.w
+  points.push([entryX, to.cy], [head, to.cy])
+  const text = edgeText(edge)
+  if (labelAt !== null) return { points, labels: fitted([{ text: text ?? '', row: labelAt.row, x: labelAt.x }], max) }
+  const laneLabel =
+    text === null ? undefined : { text: ` ${fitLabel(text, max)} `, y: to.cy, lo: Math.min(entryX, head), hi: Math.max(entryX, head) }
+  return { points, labels: [], laneLabel }
 }
 
 /**
@@ -2021,18 +2050,7 @@ function chainRoute(
   side = 0,
 ): Route {
   const points = jogPoints([from.cx, from.y + from.h - 1], jogs, true)
-  if (side !== 0) {
-    // Down the chain column to the target's centre row, then across into
-    // its side. A label beside the chain stays where the chain put it;
-    // otherwise it interrupts the side leg, the way a lane label does.
-    const head = side < 0 ? to.x - 1 : to.x + to.w
-    points.push([entryX, to.cy], [head, to.cy])
-    const text = edgeText(edge)
-    if (labelAt !== null) return { points, labels: fitted([{ text: text ?? '', row: labelAt.row, x: labelAt.x }], max) }
-    const laneLabel =
-      text === null ? undefined : { text: ` ${fitLabel(text, max)} `, y: to.cy, lo: Math.min(entryX, head), hi: Math.max(entryX, head) }
-    return { points, labels: [], laneLabel }
-  }
+  if (side !== 0) return sideLeg(points, to, edge, entryX, side, labelAt, max)
   const headRow = to.y - 1
   points.push([entryX, headRow])
   return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt, max) }
