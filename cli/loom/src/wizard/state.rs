@@ -387,12 +387,28 @@ impl Wizard {
     // ---- selection helpers -------------------------------------------------
 
     pub(crate) fn selection(&self) -> Vec<Resource> {
+        let include_pi_loom = (self.model.mode == crate::app::SelectionMode::Setup
+            && self.model.status.pi)
+            || self
+                .model
+                .resources
+                .iter()
+                .enumerate()
+                .any(|(index, resource)| {
+                    self.selected[index]
+                        && (resource.id == "tool:pi"
+                            || (resource.kind == ResourceKind::PiPackage
+                                && !resource.is_automatic_pi_package()))
+                });
         self.model
             .resources
             .iter()
             .enumerate()
-            .filter(|(index, _)| {
+            .filter(|(index, resource)| {
                 (self.selected[*index]
+                    || (include_pi_loom
+                        && resource.is_automatic_pi_package()
+                        && !self.resource_installed(*index))
                     || (self.adhd_enabled
                         && self.model.resources[*index].id == "pi-package:i-have-adhd"
                         && !self.resource_installed(*index)))
@@ -1471,6 +1487,7 @@ fn choose_groups(model: &Model) -> Vec<Group> {
 
 fn profile_groups(model: &Model) -> Vec<Group> {
     let all_resources = (0..model.resources.len())
+        .filter(|index| !model.resources[*index].is_automatic_pi_package())
         .map(Row::Resource)
         .collect::<Vec<_>>();
     let mut groups = Vec::new();
@@ -1484,6 +1501,7 @@ fn profile_groups(model: &Model) -> Vec<Group> {
                     .iter()
                     .position(|resource| &resource.id == id)
             })
+            .filter(|index| !model.resources[*index].is_automatic_pi_package())
             .map(Row::Resource)
             .collect::<Vec<_>>();
         if direct.is_empty() {
@@ -1587,10 +1605,15 @@ fn profile_kinds(model: &Model, rows: &[Row], bulk_rows: &[Row]) -> Vec<KindGrou
 
 fn resource_groups(model: &Model) -> Vec<Group> {
     let mut groups = Vec::new();
-    if !model.resources.is_empty() {
-        let rows = (0..model.resources.len())
-            .map(Row::Resource)
-            .collect::<Vec<_>>();
+    let visible = |index: usize| {
+        model.purpose == WizardPurpose::Uninstall
+            || !model.resources[index].is_automatic_pi_package()
+    };
+    let rows = (0..model.resources.len())
+        .filter(|index| visible(*index))
+        .map(Row::Resource)
+        .collect::<Vec<_>>();
+    if !rows.is_empty() {
         groups.push(Group {
             title: "Everything".into(),
             description: "Every available resource.".into(),
@@ -1605,8 +1628,12 @@ fn resource_groups(model: &Model) -> Vec<Group> {
         });
     }
     let mut push_group = |title: String, items: Vec<usize>| {
-        if !items.is_empty() {
-            let rows = items.into_iter().map(Row::Resource).collect::<Vec<_>>();
+        let rows = items
+            .into_iter()
+            .filter(|index| visible(*index))
+            .map(Row::Resource)
+            .collect::<Vec<_>>();
+        if !rows.is_empty() {
             groups.push(Group {
                 description: title.clone(),
                 title,

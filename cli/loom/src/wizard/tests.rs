@@ -867,6 +867,27 @@ fn render_gallery() {
 }
 
 #[test]
+fn automatic_pi_loom_package_is_hidden_and_selected_for_existing_pi() {
+    let mut model = model(ready());
+    model.mode = crate::app::SelectionMode::Setup;
+    let mut pi_loom = resource(ResourceKind::PiPackage, "Pi packages", "Loom");
+    pi_loom.id = "pi-package:@yassimba/pi-loom".into();
+    model.resources.push(pi_loom);
+    model.installed.push(false);
+    let wizard = Wizard::new(model);
+
+    assert!(wizard
+        .selection()
+        .iter()
+        .any(Resource::is_automatic_pi_package));
+    assert!(choose(&wizard)
+        .groups
+        .iter()
+        .flat_map(|group| &group.rows)
+        .all(|row| !matches!(row, Row::Resource(index) if wizard.model.resources[*index].is_automatic_pi_package())));
+}
+
+#[test]
 fn setup_starts_in_the_first_role_profile() {
     let mut model = model(ready());
     model.mode = crate::app::SelectionMode::Setup;
