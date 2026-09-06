@@ -93,9 +93,7 @@ impl SettingsPaths {
         // Zed honors XDG_CONFIG_HOME only on Linux; Windows is always
         // %APPDATA%\Zed and macOS is always ~/.config/zed.
         let zed_dir = if cfg!(windows) {
-            dirs::config_dir()
-                .context("config directory is unavailable")?
-                .join("Zed")
+            native_config_dir()?.join("Zed")
         } else if cfg!(target_os = "macos") {
             home_config_dir()?.join("zed")
         } else {
@@ -127,10 +125,16 @@ impl SettingsPaths {
 
 fn native_config_dir() -> Result<PathBuf> {
     if cfg!(windows) {
-        dirs::config_dir().context("config directory is unavailable")
-    } else {
-        home_config_dir()
+        return dirs::config_dir()
+            .or_else(|| {
+                std::env::var_os("APPDATA")
+                    .filter(|value| !value.is_empty())
+                    .map(PathBuf::from)
+            })
+            .or_else(|| dirs::home_dir().map(|home| home.join("AppData").join("Roaming")))
+            .context("config directory is unavailable");
     }
+    home_config_dir()
 }
 
 fn home_config_dir() -> Result<PathBuf> {
