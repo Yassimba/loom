@@ -25,6 +25,9 @@ pub struct CommandResult {
 pub trait System {
     fn command_exists(&self, name: &str) -> bool;
     fn refresh_path(&self);
+    fn github_token(&self) -> Option<String> {
+        None
+    }
     fn run(&self, command: &CommandSpec) -> Result<CommandResult>;
     fn spawn_detached(&self, command: &CommandSpec) -> Result<()> {
         let result = self.run(command)?;
@@ -136,6 +139,7 @@ fn command_for(path: &OsStr, spec: &CommandSpec) -> Command {
     let mut command = Command::new(program);
     command.args(&spec.args);
     command.env("PATH", path);
+    command.envs(spec.private_env.iter().map(|(name, value)| (name, value)));
     if let Some(directory) = &spec.cwd {
         command.current_dir(directory);
     }
@@ -203,6 +207,22 @@ fn registry_path_entries(system: &dyn System) -> Vec<PathBuf> {
 impl System for RealSystem {
     fn command_exists(&self, name: &str) -> bool {
         resolve_program(&self.path_value(), name).is_some()
+    }
+
+    fn github_token(&self) -> Option<String> {
+        if !self.command_exists("gh") {
+            return None;
+        }
+        let result = self
+            .run_probe(&CommandSpec::new(
+                "gh",
+                ["auth", "token", "--hostname", "github.com"],
+            ))
+            .ok()?;
+        result
+            .success
+            .then(|| result.stdout.trim().to_owned())
+            .filter(|token| !token.is_empty())
     }
 
     fn refresh_path(&self) {

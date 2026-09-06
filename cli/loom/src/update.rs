@@ -36,6 +36,11 @@ struct CommandLane {
     commands: Vec<CommandSpec>,
 }
 
+fn progress_status(completed: usize, total: usize, running: &[&str], elapsed: u64) -> String {
+    let active = running.join(" + ");
+    format!("{completed}/{total} complete · {active} · {elapsed}s")
+}
+
 fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) -> Vec<CommandSpec> {
     let mut scope = None;
     let mut user = Vec::new();
@@ -178,8 +183,9 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
         }
         drop(sender);
         let mut running = labels.clone();
+        let total = running.len();
         let started = std::time::Instant::now();
-        let mut last_set = String::new();
+        let mut last_active = String::new();
         loop {
             match results.recv_timeout(std::time::Duration::from_millis(250)) {
                 Ok((index, lane)) => {
@@ -192,10 +198,15 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
-            let set = running.join(" · ");
-            if out.is_terminal() || set != last_set {
-                out.progress(format!("running  {set} · {}s", started.elapsed().as_secs()));
-                last_set = set;
+            let active = running.join(" + ");
+            if out.is_terminal() || active != last_active {
+                out.progress(progress_status(
+                    total - running.len(),
+                    total,
+                    &running,
+                    started.elapsed().as_secs(),
+                ));
+                last_active = active;
             }
         }
     });
@@ -357,6 +368,14 @@ fn sync_projects_lane(system: &dyn System, repository: &skills::Repository) -> L
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_shows_measurable_completion_and_active_lanes() {
+        assert_eq!(
+            progress_status(2, 5, &["Tools", "Pi packages", "Herdr"], 12),
+            "2/5 complete · Tools + Pi packages + Herdr · 12s"
+        );
+    }
 
     #[test]
     fn mcp_gateway_is_not_reinstalled_or_downgraded_by_updates() {

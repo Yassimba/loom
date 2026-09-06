@@ -1,11 +1,13 @@
 use crate::wiki::{VaultRecord, WikiOperation, WikiRegistry, WikiRequest};
-use crate::System;
+use crate::{CommandSpec, System};
 use anyhow::{Context, Result};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Clear, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{
+    Block, BorderType, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap,
+};
 use ratatui::{DefaultTerminal, Frame};
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -18,6 +20,7 @@ const ERR: Color = Color::Red;
 
 pub(crate) enum WikiChoice {
     Request(WikiRequest),
+    PickPath(WikiOperation),
     OpenObsidianDownload,
     Cancelled,
 }
@@ -25,7 +28,6 @@ pub(crate) enum WikiChoice {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Page {
     Home,
-    Path,
     Capabilities,
     Review,
     Vaults,
@@ -87,7 +89,7 @@ impl WikiWizard {
         let Some(record) = self.vaults.get(self.selected_vault) else {
             return Vec::new();
         };
-        if !record.path.is_dir() {
+        if cfg!(windows) || !record.path.is_dir() {
             return vec!["Status", "Unregister"];
         }
         let mut actions = vec!["Status", "Repair", "Open in Obsidian", "Launch Pi"];
@@ -122,21 +124,12 @@ impl WikiWizard {
         }
     }
 
-    fn validate_path(&self) -> Result<()> {
-        let path = PathBuf::from(self.path.trim());
-        anyhow::ensure!(!self.path.trim().is_empty(), "Enter a Vault path");
-        match self.operation {
-            WikiOperation::Create => {
-                let parent = path.parent().context("Enter a Vault folder name")?;
-                anyhow::ensure!(parent.is_dir(), "Vault parent does not exist");
-            }
-            WikiOperation::Adopt => anyhow::ensure!(
-                path.is_dir() && path.join(".obsidian").is_dir(),
-                "Choose an existing Obsidian Vault with .obsidian/"
-            ),
-            _ => {}
-        }
-        Ok(())
+    fn set_picked_path(&mut self, operation: WikiOperation, path: PathBuf) {
+        self.operation = operation;
+        self.path = path.display().to_string();
+        self.page = Page::Capabilities;
+        self.cursor = 0;
+        self.error = None;
     }
 
     fn enter(&mut self) -> Option<WikiChoice> {
@@ -155,26 +148,14 @@ impl WikiWizard {
                         self.cursor = 0;
                     }
                 } else {
-                    self.operation = if choice == "Create a new Vault" {
+                    let operation = if choice == "Create a new Vault" {
                         WikiOperation::Create
                     } else {
                         WikiOperation::Adopt
                     };
-                    if self.operation == WikiOperation::Adopt && self.path.ends_with('/') {
-                        self.path.pop();
-                    }
-                    self.page = Page::Path;
-                    self.cursor = 0;
+                    return Some(WikiChoice::PickPath(operation));
                 }
             }
-            Page::Path => match self.validate_path() {
-                Ok(()) => {
-                    self.path = self.path.trim().to_owned();
-                    self.page = Page::Capabilities;
-                    self.cursor = 0;
-                }
-                Err(error) => self.error = Some(error.to_string()),
-            },
             Page::Capabilities => self.page = Page::Review,
             Page::Review => return Some(WikiChoice::Request(self.request(self.operation.clone()))),
             Page::Vaults => {
@@ -209,8 +190,7 @@ impl WikiWizard {
         self.error = None;
         match self.page {
             Page::Home => return Some(WikiChoice::Cancelled),
-            Page::Path => self.page = Page::Home,
-            Page::Capabilities => self.page = Page::Path,
+            Page::Capabilities => self.page = Page::Home,
             Page::Review => self.page = Page::Capabilities,
             Page::Vaults => self.page = Page::Home,
             Page::Actions => self.page = Page::Vaults,
@@ -227,22 +207,13 @@ impl WikiWizard {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             return Some(WikiChoice::Cancelled);
         }
-        if key.code == KeyCode::Esc || (self.page != Page::Path && key.code == KeyCode::Char('q')) {
+        if self.error.take().is_some() {
+            return None;
+        }
+        if key.code == KeyCode::Esc || key.code == KeyCode::Char('q') {
             return self.back();
         }
         match self.page {
-            Page::Path => match key.code {
-                KeyCode::Enter => return self.enter(),
-                KeyCode::Backspace => {
-                    self.path.pop();
-                    self.error = None;
-                }
-                KeyCode::Char(character) => {
-                    self.path.push(character);
-                    self.error = None;
-                }
-                _ => {}
-            },
             Page::Capabilities => match key.code {
                 KeyCode::Up | KeyCode::Char('k') => self.step(-1, 2),
                 KeyCode::Down | KeyCode::Char('j') => self.step(1, 2),
@@ -282,25 +253,23 @@ impl WikiWizard {
     }
 
     fn draw(&self, frame: &mut Frame) {
+        if frame.area().width < 40 || frame.area().height < 10 {
+            frame.render_widget(
+                Paragraph::new("loom wiki needs at least 40 columns by 10 rows")
+                    .alignment(Alignment::Center),
+                frame.area(),
+            );
+            return;
+        }
         let [header, body, footer] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Min(1),
             Constraint::Length(1),
         ])
         .areas(frame.area());
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(" loom wiki", Style::new().fg(ACCENT).bold()),
-                Span::styled(
-                    concat!("  v", env!("CARGO_PKG_VERSION")),
-                    Style::new().dim(),
-                ),
-            ])),
-            header,
-        );
+        self.draw_header(frame, header);
         match self.page {
-            Page::Home => self.draw_list(frame, body, " Wiki Vaults ", self.home_items()),
-            Page::Path => self.draw_path(frame, body),
+            Page::Home => self.draw_home(frame, body),
             Page::Capabilities => self.draw_capabilities(frame, body),
             Page::Review => self.draw_review(frame, body),
             Page::Vaults => self.draw_list(
@@ -314,21 +283,11 @@ impl WikiWizard {
             Page::Actions => self.draw_list(frame, body, " Manage Vault ", self.action_items()),
             Page::ConfirmUnregister => self.draw_unregister(frame, body),
         }
-        let hint = match self.page {
-            Page::Path => " type a path · enter continue · esc back ",
-            Page::Capabilities => " ↑↓ move · space toggle · enter continue · esc back ",
-            Page::Review => " enter start setup · esc back ",
-            Page::ConfirmUnregister => " enter unregister · esc keep ",
-            _ => " ↑↓ move · enter select · esc back ",
-        };
-        frame.render_widget(
-            Paragraph::new(Span::styled(hint, Style::new().dim())).alignment(Alignment::Center),
-            footer,
-        );
+        self.draw_footer(frame, footer);
         if let Some(error) = &self.error {
             let area = centered(
                 frame.area(),
-                58.min(frame.area().width.saturating_sub(4)),
+                60.min(frame.area().width.saturating_sub(4)),
                 5,
             );
             frame.render_widget(Clear, area);
@@ -336,13 +295,166 @@ impl WikiWizard {
                 Paragraph::new(vec![
                     Line::styled(error, Style::new().fg(ERR)),
                     Line::from(""),
-                    Line::from("Edit the path or press esc to go back."),
+                    Line::styled("Press any key to return.", Style::new().dim()),
                 ])
                 .alignment(Alignment::Center)
-                .block(panel(" Check the path ")),
+                .block(panel(" Folder picker ", true)),
                 area,
             );
         }
+    }
+
+    fn draw_header(&self, frame: &mut Frame, area: Rect) {
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(" loom wiki", Style::new().fg(ACCENT).bold()),
+                Span::styled(
+                    concat!("  v", env!("CARGO_PKG_VERSION")),
+                    Style::new().dim(),
+                ),
+            ])),
+            area,
+        );
+        let trail = match self.page {
+            Page::Home => vec![("Choose", true), ("Capabilities", false), ("Review", false)],
+            Page::Capabilities => vec![
+                ("✓ Choose", false),
+                ("Capabilities", true),
+                ("Review", false),
+            ],
+            Page::Review => vec![
+                ("✓ Choose", false),
+                ("✓ Capabilities", false),
+                ("Review", true),
+            ],
+            Page::Vaults => vec![("Vaults", true), ("Action", false)],
+            Page::Actions | Page::ConfirmUnregister => vec![("✓ Vaults", false), ("Action", true)],
+        };
+        if area.width < 80 {
+            let active = trail.iter().position(|(_, active)| *active).unwrap_or(0);
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(
+                        format!("step {}/{} · ", active + 1, trail.len()),
+                        Style::new().dim(),
+                    ),
+                    Span::styled(
+                        trail[active].0.trim_start_matches("✓ "),
+                        Style::new().fg(ACCENT).bold(),
+                    ),
+                    Span::raw(" "),
+                ]))
+                .alignment(Alignment::Right),
+                area,
+            );
+            return;
+        }
+        let mut spans = Vec::new();
+        for (index, (label, active)) in trail.into_iter().enumerate() {
+            if index > 0 {
+                spans.push(Span::styled(" › ", Style::new().dim()));
+            }
+            spans.push(Span::styled(
+                label,
+                if active {
+                    Style::new().fg(ACCENT).bold()
+                } else {
+                    Style::new().dim()
+                },
+            ));
+        }
+        spans.push(Span::raw(" "));
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
+            area,
+        );
+    }
+
+    fn draw_footer(&self, frame: &mut Frame, area: Rect) {
+        let hint = match self.page {
+            Page::Capabilities => " ↑↓ move · space toggle",
+            Page::Review => " exact files are reviewed next",
+            Page::ConfirmUnregister => " enter unregister · esc keep",
+            _ => " ↑↓ move · enter select",
+        };
+        let (back, next) = match self.page {
+            Page::Home => ("", "Select"),
+            Page::Capabilities => ("Back", "Next"),
+            Page::Review => ("Back", "Set up"),
+            Page::Vaults => ("Back", "Select"),
+            Page::Actions => ("Back", "Run"),
+            Page::ConfirmUnregister => ("Keep", "Remove"),
+        };
+        let [hint_area, controls_area] = Layout::horizontal([
+            Constraint::Min(1),
+            Constraint::Length(if back.is_empty() { 13 } else { 25 }),
+        ])
+        .areas(area);
+        frame.render_widget(
+            Paragraph::new(Span::styled(hint, Style::new().dim())),
+            hint_area,
+        );
+        let mut controls = Vec::new();
+        if !back.is_empty() {
+            controls.push(Span::styled(
+                format!("[ ◂ {back} ]  "),
+                Style::new().fg(ACCENT),
+            ));
+        }
+        controls.push(Span::styled(
+            format!("[ {next:^7} ▸ ]"),
+            Style::new()
+                .fg(ACCENT)
+                .add_modifier(Modifier::REVERSED)
+                .bold(),
+        ));
+        frame.render_widget(
+            Paragraph::new(Line::from(controls)).alignment(Alignment::Right),
+            controls_area,
+        );
+    }
+
+    fn draw_home(&self, frame: &mut Frame, area: Rect) {
+        let [menu, details] = if area.width >= 72 {
+            Layout::horizontal([Constraint::Percentage(56), Constraint::Percentage(44)])
+                .spacing(1)
+                .areas(area)
+        } else {
+            [area, Rect::default()]
+        };
+        self.draw_list(frame, menu, " Wiki Vaults ", self.home_items());
+        if details.width == 0 {
+            return;
+        }
+        let choice = self.home_items()[self.cursor];
+        let (title, copy) = match choice {
+            "Create a new Vault" => (
+                "Create",
+                "Choose a new Vault location with your system folder picker. Loom shows every file before writing it.",
+            ),
+            "Connect an existing Vault" => (
+                "Connect",
+                "Choose an Obsidian Vault with your system folder picker. Existing notes stay in place.",
+            ),
+            "Manage registered Vaults" => (
+                "Manage",
+                "Check, repair, open, launch, or unregister a Vault already known to Loom.",
+            ),
+            _ => (
+                "Obsidian",
+                "Open the official download page. Obsidian is optional; Markdown and Pi work without it.",
+            ),
+        };
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::styled(title, Style::new().fg(ACCENT).bold()),
+                Line::from(""),
+                Line::from(copy),
+            ])
+            .wrap(Wrap { trim: true })
+            .block(panel(" Details ", false).padding(Padding::horizontal(1))),
+            details,
+        );
     }
 
     fn draw_list<I, S>(&self, frame: &mut Frame, area: Rect, title: &str, items: I)
@@ -356,46 +468,16 @@ impl WikiWizard {
             .collect::<Vec<_>>();
         frame.render_stateful_widget(
             List::new(items)
-                .block(panel(title))
-                .highlight_style(Style::new().fg(ACCENT).bold())
+                .block(panel(title, true))
+                .highlight_style(
+                    Style::new()
+                        .fg(ACCENT)
+                        .add_modifier(Modifier::REVERSED)
+                        .bold(),
+                )
                 .highlight_symbol("› "),
             area,
             &mut ListState::default().with_selected(Some(self.cursor)),
-        );
-        if self.page == Page::Home && !self.obsidian_installed {
-            let note = Rect::new(
-                area.x + 3,
-                area.bottom().saturating_sub(4),
-                area.width.saturating_sub(6),
-                2,
-            );
-            frame.render_widget(
-                Paragraph::new("Obsidian is optional. Markdown and Pi work without it; select the download page below for the official installer.")
-                    .style(Style::new().dim())
-                    .wrap(Wrap { trim: true }),
-                note,
-            );
-        }
-    }
-
-    fn draw_path(&self, frame: &mut Frame, area: Rect) {
-        let verb = if self.operation == WikiOperation::Create {
-            "new Vault"
-        } else {
-            "existing Obsidian Vault"
-        };
-        frame.render_widget(
-            Paragraph::new(vec![
-                Line::styled(format!("Choose the {verb} path"), Style::new().bold()),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled("> ", Style::new().fg(ACCENT)),
-                    Span::raw(&self.path),
-                    Span::styled("▏", Style::new().fg(ACCENT)),
-                ]),
-            ])
-            .block(panel(" Vault path ").padding(ratatui::widgets::Padding::uniform(1))),
-            area,
         );
     }
 
@@ -426,7 +508,7 @@ impl WikiWizard {
                 Line::from(""),
                 Line::styled("Selections are enabled for this Vault.", Style::new().dim()),
             ])
-            .block(panel(" Capabilities ").padding(ratatui::widgets::Padding::uniform(1))),
+            .block(panel(" Capabilities ", true).padding(Padding::uniform(1))),
             area,
         );
     }
@@ -465,7 +547,7 @@ impl WikiWizard {
                 ),
             ])
             .wrap(Wrap { trim: true })
-            .block(panel(" Review ").padding(ratatui::widgets::Padding::uniform(1))),
+            .block(panel(" Review ", true).padding(Padding::uniform(1))),
             area,
         );
     }
@@ -483,20 +565,26 @@ impl WikiWizard {
                 Line::from("Its files will remain untouched."),
             ])
             .alignment(Alignment::Center)
-            .block(panel(" Confirm ")),
+            .block(panel(" Confirm ", true)),
             area,
         );
     }
 }
 
-fn panel(title: &str) -> Block<'_> {
+fn panel(title: &str, focused: bool) -> Block<'_> {
     Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(Color::DarkGray))
-        .title(Span::styled(
-            title.to_owned(),
-            Style::new().fg(ACCENT).bold(),
-        ))
+        .border_style(if focused {
+            Style::new().fg(ACCENT)
+        } else {
+            Style::new().dim()
+        })
+        .title_style(if focused {
+            Style::new().fg(ACCENT).bold()
+        } else {
+            Style::new().dim()
+        })
+        .title(title.to_owned())
 }
 
 fn centered(area: Rect, width: u16, height: u16) -> Rect {
@@ -507,6 +595,90 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
         .flex(ratatui::layout::Flex::Center)
         .areas(vertical);
     horizontal
+}
+
+fn picker_command(
+    system: &dyn System,
+    operation: &WikiOperation,
+    current: &std::path::Path,
+) -> Result<CommandSpec> {
+    let start = current.display().to_string();
+    if cfg!(target_os = "macos") {
+        let script = if *operation == WikiOperation::Create {
+            r#"on run argv
+set startFolder to POSIX file (item 1 of argv)
+return POSIX path of (choose file name with prompt "Create a Loom Wiki Vault" default location startFolder default name "Wiki Vault")
+end run"#
+        } else {
+            r#"on run argv
+set startFolder to POSIX file (item 1 of argv)
+return POSIX path of (choose folder with prompt "Choose an Obsidian Vault" default location startFolder)
+end run"#
+        };
+        return Ok(CommandSpec::new("osascript", ["-e", script, "--", &start]));
+    }
+    if system.command_exists("zenity") {
+        let mut args = vec!["--file-selection".to_owned()];
+        if *operation == WikiOperation::Create {
+            args.extend([
+                "--save".into(),
+                format!("--filename={start}/Wiki Vault"),
+                "--title=Create a Loom Wiki Vault".into(),
+            ]);
+        } else {
+            args.extend([
+                "--directory".into(),
+                format!("--filename={start}/"),
+                "--title=Choose an Obsidian Vault".into(),
+            ]);
+        }
+        return Ok(CommandSpec::new("zenity", args));
+    }
+    if system.command_exists("kdialog") {
+        let args = if *operation == WikiOperation::Create {
+            vec!["--getsavefilename".into(), format!("{start}/Wiki Vault")]
+        } else {
+            vec!["--getexistingdirectory".into(), start]
+        };
+        return Ok(CommandSpec::new("kdialog", args));
+    }
+    anyhow::bail!(
+        "No native folder picker is available. Install zenity or kdialog, or use `loom wiki create PATH`."
+    )
+}
+
+fn pick_vault_path(
+    system: &dyn System,
+    operation: &WikiOperation,
+    current: &std::path::Path,
+) -> Result<Option<PathBuf>> {
+    let output = system.run(&picker_command(system, operation, current)?)?;
+    if !output.success {
+        let message = output.stderr.trim();
+        if message.is_empty() || message.to_ascii_lowercase().contains("cancel") {
+            return Ok(None);
+        }
+        anyhow::bail!("Folder picker failed: {message}");
+    }
+    let path = PathBuf::from(output.stdout.trim());
+    if path.as_os_str().is_empty() {
+        return Ok(None);
+    }
+    match operation {
+        WikiOperation::Create => {
+            anyhow::ensure!(!path.exists(), "Choose a new folder name for this Vault");
+            anyhow::ensure!(
+                path.parent().is_some_and(std::path::Path::is_dir),
+                "The selected parent folder does not exist"
+            );
+        }
+        WikiOperation::Adopt => anyhow::ensure!(
+            path.is_dir() && path.join(".obsidian").is_dir(),
+            "Choose an existing Obsidian Vault with a .obsidian folder"
+        ),
+        _ => unreachable!(),
+    }
+    Ok(Some(path))
 }
 
 pub(crate) fn run(
@@ -521,11 +693,22 @@ pub(crate) fn run(
     let home = system.home_dir().context("home directory is unavailable")?;
     let current = system.current_dir().unwrap_or_else(|| PathBuf::from("."));
     let vaults = WikiRegistry::load(&home)?.vaults;
-    let mut wizard = WikiWizard::new(current, vaults, feynman_default, obsidian_installed);
-    let mut terminal = ratatui::init();
-    let outcome = run_loop(&mut terminal, &mut wizard);
-    ratatui::restore();
-    outcome
+    let mut wizard = WikiWizard::new(current.clone(), vaults, feynman_default, obsidian_installed);
+    loop {
+        let mut terminal = ratatui::init();
+        let outcome = run_loop(&mut terminal, &mut wizard);
+        ratatui::restore();
+        match outcome? {
+            WikiChoice::PickPath(operation) => {
+                match pick_vault_path(system, &operation, &current) {
+                    Ok(Some(path)) => wizard.set_picked_path(operation, path),
+                    Ok(None) => {}
+                    Err(error) => wizard.error = Some(error.to_string()),
+                }
+            }
+            choice => return Ok(choice),
+        }
+    }
 }
 
 fn run_loop(terminal: &mut DefaultTerminal, wizard: &mut WikiWizard) -> Result<WikiChoice> {
@@ -550,7 +733,7 @@ fn draw_confirmation(
     yes: bool,
 ) -> u16 {
     let heading = format!(" {title} ");
-    let block = panel(&heading);
+    let block = panel(&heading, true);
     let inner = block.inner(frame.area());
     frame.render_widget(block, frame.area());
     let [preview, controls] =
@@ -653,8 +836,13 @@ pub(crate) fn select(title: &str, choices: &[&str]) -> Result<Option<usize>> {
                     .collect::<Vec<_>>();
                 frame.render_stateful_widget(
                     List::new(items)
-                        .block(panel(&format!(" {title} ")))
-                        .highlight_style(Style::new().fg(ACCENT).bold())
+                        .block(panel(&format!(" {title} "), true))
+                        .highlight_style(
+                            Style::new()
+                                .fg(ACCENT)
+                                .add_modifier(Modifier::REVERSED)
+                                .bold(),
+                        )
                         .highlight_symbol("› "),
                     frame.area(),
                     &mut ListState::default().with_selected(Some(cursor)),
@@ -732,26 +920,73 @@ mod tests {
 
     #[test]
     #[cfg(not(windows))]
-    fn create_flow_collects_path_and_feynman_in_the_tui() {
+    fn home_matches_the_main_wizard_chrome() {
+        let wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
+        let mut terminal = Terminal::new(TestBackend::new(90, 18)).unwrap();
+        terminal.draw(|frame| wizard.draw(frame)).unwrap();
+        let screen = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(screen.contains("Choose › Capabilities › Review"));
+        assert!(screen.contains("system folder picker"));
+        assert!(screen.contains("[ Select  ▸ ]"));
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn narrow_home_uses_compact_step_chrome() {
+        let wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
+        let mut terminal = Terminal::new(TestBackend::new(50, 14)).unwrap();
+        terminal.draw(|frame| wizard.draw(frame)).unwrap();
+        let screen = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+
+        assert!(screen.contains("step 1/3 · Choose"));
+        assert!(!screen.contains("Choose › Capabilities"));
+    }
+
+    #[test]
+    fn picker_error_consumes_the_dismissal_key() {
+        let mut wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
+        wizard.error = Some("picker failed".into());
+
+        assert!(wizard.handle_key(key(KeyCode::Enter)).is_none());
+        assert_eq!(wizard.page, Page::Home);
+        assert!(matches!(
+            wizard.handle_key(key(KeyCode::Enter)),
+            Some(WikiChoice::PickPath(WikiOperation::Create))
+        ));
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn create_flow_uses_the_picked_path_and_collects_capabilities() {
         let root = std::env::temp_dir().join(format!("loom-wiki-tui-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let mut wizard = WikiWizard::new(root.clone(), Vec::new(), true, false);
 
-        wizard.handle_key(key(KeyCode::Enter));
-        assert_eq!(wizard.page, Page::Path);
-        for character in "Notes".chars() {
-            wizard.handle_key(key(KeyCode::Char(character)));
-        }
-        wizard.handle_key(key(KeyCode::Enter));
-        assert_eq!(wizard.page, Page::Capabilities);
+        assert!(matches!(
+            wizard.handle_key(key(KeyCode::Enter)),
+            Some(WikiChoice::PickPath(WikiOperation::Create))
+        ));
+        wizard.set_picked_path(WikiOperation::Create, root.join("Notes"));
         wizard.handle_key(key(KeyCode::Down));
         wizard.handle_key(key(KeyCode::Char(' ')));
         wizard.handle_key(key(KeyCode::Enter));
-        assert_eq!(wizard.page, Page::Review);
         let WikiChoice::Request(request) = wizard.handle_key(key(KeyCode::Enter)).unwrap() else {
             panic!("expected Wiki request");
         };
-        assert_eq!(request.operation, WikiOperation::Create);
+
         assert_eq!(request.vault, root.join("Notes"));
         assert!(request.feynman);
         assert!(request.confluence);
@@ -759,42 +994,36 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(windows))]
-    fn create_uses_the_reviewed_path_when_a_vault_is_already_registered() {
-        let root = std::env::temp_dir().join(format!("loom-wiki-target-{}", std::process::id()));
-        std::fs::create_dir_all(&root).unwrap();
-        let registered = VaultRecord {
-            path: root.join("registered"),
-            feynman: false,
-            confluence: false,
-        };
-        let mut wizard = WikiWizard::new(root.clone(), vec![registered], true, true);
-
-        wizard.handle_key(key(KeyCode::Enter));
-        wizard.path.push_str("new-vault ");
-        wizard.handle_key(key(KeyCode::Enter));
-        wizard.handle_key(key(KeyCode::Enter));
-        let WikiChoice::Request(request) = wizard.handle_key(key(KeyCode::Enter)).unwrap() else {
-            panic!("expected Wiki request");
-        };
-
-        assert_eq!(request.vault, root.join("new-vault"));
-        assert!(request.feynman);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn ctrl_c_cancels_instead_of_editing_the_path() {
-        let root = std::env::temp_dir();
-        let mut wizard = WikiWizard::new(root.clone(), Vec::new(), false, true);
-        wizard.page = Page::Path;
-        let before = wizard.path.clone();
+    fn ctrl_c_cancels_from_the_wizard() {
+        let mut wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
 
         assert!(matches!(
             wizard.handle_key(ctrl(KeyCode::Char('c'))),
             Some(WikiChoice::Cancelled)
         ));
-        assert_eq!(wizard.path, before);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn mac_picker_uses_the_native_save_panel_for_a_new_vault() {
+        struct Fake;
+        impl System for Fake {
+            fn command_exists(&self, _: &str) -> bool {
+                false
+            }
+            fn refresh_path(&self) {}
+            fn run(&self, _: &CommandSpec) -> Result<crate::CommandResult> {
+                unreachable!()
+            }
+        }
+
+        let command =
+            picker_command(&Fake, &WikiOperation::Create, std::path::Path::new("/tmp")).unwrap();
+        assert_eq!(command.program, "osascript");
+        assert!(command
+            .args
+            .iter()
+            .any(|arg| arg.contains("choose file name")));
     }
 
     #[test]

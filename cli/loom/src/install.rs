@@ -66,11 +66,31 @@ pub struct PrerequisiteStatus {
     pub mise: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct CommandSpec {
     pub program: String,
     pub args: Vec<String>,
     pub cwd: Option<std::path::PathBuf>,
+    pub(crate) private_env: Vec<(String, String)>,
+}
+
+impl std::fmt::Debug for CommandSpec {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CommandSpec")
+            .field("program", &self.program)
+            .field("args", &self.args)
+            .field("cwd", &self.cwd)
+            .field(
+                "private_env",
+                &self
+                    .private_env
+                    .iter()
+                    .map(|(name, _)| format!("{name}=<REDACTED>"))
+                    .collect::<Vec<_>>(),
+            )
+            .finish()
+    }
 }
 
 impl CommandSpec {
@@ -82,7 +102,13 @@ impl CommandSpec {
             program: program.into(),
             args: args.into_iter().map(Into::into).collect(),
             cwd: None,
+            private_env: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_private_env(mut self, name: &str, value: String) -> Self {
+        self.private_env.push((name.into(), value));
+        self
     }
 
     /// Run this command with `directory` as its process working directory.

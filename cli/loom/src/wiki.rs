@@ -1138,6 +1138,7 @@ pub fn run_interactive_with_default(
             Ok(true)
         }
         crate::wiki_tui::WikiChoice::Cancelled => Ok(true),
+        crate::wiki_tui::WikiChoice::PickPath(_) => unreachable!(),
     }
 }
 

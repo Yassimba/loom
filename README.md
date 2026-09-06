@@ -4,15 +4,11 @@
 
 # Loom
 
-Loom weaves an entire opinionated setup together for agentic engineering. One installer gives your coding agents the skills, tools, Pi packages, and project instructions used across the full engineering workflow.
+Loom installs the skills, tools, Pi packages, and project files I use for agentic engineering, with pinned versions.
 
-Use Loom with Pi (recommended), Claude Code, Codex, OpenCode, Cursor, Grok, or any agent that reads an Agent Skills folder.
+Use it with Pi (recommended), Claude Code, Codex, OpenCode, Cursor, Grok, or any agent that reads an Agent Skills folder. The optional [pi-loom](plugins/pi-loom/README.md) extension adds a Loom header and a startup update notice in Pi.
 
-The optional [pi-loom extension](plugins/pi-loom/README.md) adds a Loom header and startup update notice to Pi. Reusable logo and icon files live in [assets/](assets/README.md).
-
-## Start here
-
-### 1. Install Loom
+## Install
 
 macOS or Linux:
 
@@ -26,52 +22,9 @@ Windows:
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Yassimba/loom/main/install.ps1 | iex"
 ```
 
-The installer adds [mise](https://mise.jdx.dev), Node.js, and the `loom` command. It then opens the setup menu.
+The installer adds [mise](https://mise.jdx.dev), Node.js, and the `loom` command, then opens the setup menu. Pick **Everything** for the full set, or choose skill groups, tools, Pi packages, and individual items. Review shows the plan before anything is installed.
 
-Select **Everything** for the full setup. You can also pick skill groups, tools, Pi packages, or individual items. The menu shows the full plan before it installs anything.
-
-Interactive `loom setup` also asks: **“Do you have ADHD and want ADHD-friendly responses in Pi?”** Choose **Yes — always enable** to install `i-have-adhd` and turn it on for future Pi sessions. **No — leave settings unchanged** preserves your current settings. This choice appears in Review; selecting Everything alone does not enable it.
-
-The preference uses Pi's `.i-have-adhd-always` flag in `~/.pi/agent` (or `PI_CODING_AGENT_DIR` when set). Run `/reload` in Pi afterwards. A saved off choice in an existing session still wins; run `/i-have-adhd on` there if needed. Remove the flag to stop enabling new sessions by default.
-
-### 2. Check the install
-
-```bash
-loom status
-```
-
-This shows what is installed and any setup step that still needs your attention.
-
-### 3. Set up a project
-
-Run this once in each repository:
-
-```bash
-cd your-project
-loom init
-```
-
-`loom init` can create:
-
-- `AGENTS.md` and `CLAUDE.md` instructions
-- local issue tracking with Markdown or [Beads](https://github.com/Dicklesworthstone/beads_rust)
-- domain notes for the words and rules used by the project
-- coding standards
-- editor links that open the right source file
-- a local Gortex graph for Pi and Zed, when Gortex is installed
-
-Use `loom init --yes` to accept the detected defaults without questions.
-
-Choose **Polished** (atlas SVG/HTML) or **Economical** (Mermaid from atlas
-references) in setup's Diagrams settings. This saves your personal default in
-`~/.config/loom/diagrams.json`. `loom init` offers a project override, or set it
-with `loom init --diagrams economical` (`polished` and `inherit` also work).
-The override lives in `ai-docs/agents/diagrams.json`; `loom init --yes` preserves
-an existing choice. A request such as “use polished diagrams for this plan”
-overrides both for that task. Blueprint, explanations and guided reviews share
-this preference; atlas depth, source verification and model selection stay the same.
-
-### Windows and WSL2
+Interactive `loom setup` also asks whether to always enable ADHD-friendly Pi responses. **Yes** installs `i-have-adhd` and writes Pi's `.i-have-adhd-always` flag in `~/.pi/agent` (or `PI_CODING_AGENT_DIR`). **No** leaves settings alone. Selecting Everything does not turn this on by itself. Run `/reload` in Pi afterwards. An existing session that already chose off still wins until you run `/i-have-adhd on` there.
 
 Native Windows works. Use WSL2 if you also want Linux-only tools such as Herdr:
 
@@ -79,11 +32,30 @@ Native Windows works. Use WSL2 if you also want Linux-only tools such as Herdr:
 wsl --install -d Ubuntu
 ```
 
-After Ubuntu starts, run the macOS/Linux install command inside it.
+Then run the Unix install command inside Ubuntu.
+
+## Check and start a project
+
+```bash
+loom status
+```
+
+That lists what is installed and any step that still needs you.
+
+Once per repository:
+
+```bash
+cd your-project
+loom init
+```
+
+`loom init` can create `AGENTS.md` and `CLAUDE.md`, local issue tracking (Markdown or [Beads](https://github.com/Dicklesworthstone/beads_rust)), domain notes, coding standards, editor links, and a Gortex graph for Pi and Zed when Gortex is installed. `loom init --yes` accepts the detected defaults.
+
+Diagrams: choose **Polished** (atlas SVG/HTML) or **Economical** (Mermaid from atlas references) in setup. That default lives in `~/.config/loom/diagrams.json`. `loom init` can override it for one project in `ai-docs/agents/diagrams.json`, or pass `--diagrams economical` (`polished` and `inherit` also work). `loom init --yes` keeps an existing project choice. A request such as "use polished diagrams for this plan" overrides both for that task.
 
 ## The main workflow
 
-You do not need every step for every change. Start at the first step that helps.
+You do not need every step. Start at the first one that helps.
 
 ```text
 brainstorming
@@ -99,58 +71,155 @@ to-spec → to-tickets
              release
 ```
 
-### 1. Find the idea: `brainstorming`
+**brainstorming** when the idea is still loose. The agent asks short questions and writes a small idea brief. Skip it when the task is already clear.
 
-Use this when the idea is still loose. The agent asks short questions, compares a few directions, and writes a small idea brief.
+**grill-with-docs** when the goal is clear but the rules are not. One question at a time, recorded in domain notes. For work too large for one session, use `wayfinder` instead: it puts open questions on the issue tracker and works them one by one.
 
-Example:
+**to-spec** turns the conversation into a spec. **to-tickets** splits an approved spec into small pieces, each a working path through the product, with blockers named. With Beads, `ticket-overview` shows the ready work without changing it, and `implement` can take the next actionable ticket.
 
-```text
-/brainstorming I want imports to be easier to undo
+**implement** builds one ticket: `ponytail` looks for the smallest change that works, `blueprint` waits for design approval, `tdd` writes a failing test first when a useful test fits, `code-review` checks the change against the spec and the repo rules, `commit` writes one Conventional Commits commit. You can run any of those skills alone.
+
+**e2e-test** starts the real app and uses it through its CLI, API, or web page. It saves output and screenshots, then checks stored data.
+
+**release** runs lint, type checks, and tests, then commits remaining work, pushes, and opens a pull or merge request. Unclear test failures go through `diagnosing-bugs` before more code changes.
+
+## Terminal Mermaid in Pi
+
+[`pi-loom-mermaid`](plugins/pi-loom-mermaid/README.md) draws Mermaid blocks in the terminal with colored borders and interior routing. It also tells the agent it can answer in diagrams when that is clearer than prose. Install it from setup, or:
+
+```bash
+pi install npm:@yassimba/pi-loom-mermaid
 ```
 
-Skip this step when the task is already clear.
+Set `markdown.mermaid` to `off` in `~/.pi/agent/settings.json` so Pi hands the original source to this renderer, then `/reload`.
 
-### 2. Make the idea precise: `grill-with-docs`
+Same diagram, three renderers:
 
-Use this when the goal is clear but the rules or design are not. The agent asks one question at a time and records decisions in the project's domain notes.
+Pi's built-in Mermaid. One gray box style. Edges share long outer rails and stack.
 
-For work that is too large for one agent session, use `wayfinder` instead. It puts the open questions on the issue tracker and works through them one at a time.
+<p align="center">
+  <img src="assets/mermaid-pi-builtin.png" alt="Pi built-in Mermaid: gray boxes and stacked outer edges">
+</p>
 
-### 3. Write the work down: `to-spec` and `to-tickets`
+pi-lovely-mermaid. Colored borders. Edges still take long parallel paths around the right side.
 
-`to-spec` turns the conversation into a spec. It does not restart the interview.
+<p align="center">
+  <img src="assets/mermaid-lovely.png" alt="pi-lovely-mermaid: colored borders with long parallel edges">
+</p>
 
-`to-tickets` splits the approved spec into small pieces. Each ticket delivers a working path through the product and says which earlier tickets block it.
+pi-loom-mermaid. The same colors, plus hops where edges cross and fewer stacked rails.
 
-If the project uses Beads:
+<p align="center">
+  <img src="assets/mermaid-pi-loom.png" alt="pi-loom-mermaid: colored borders, crossing hops, and shorter routes">
+</p>
 
-- `ticket-overview` previews the next ready ticket, maps the open roadmap, or shows the complete graph without changing it.
-- `implement` takes the next actionable ticket when you do not give it a spec or ticket.
+GitHub draws this block with its own Mermaid. Paste the same source into Pi to compare the built-in renderer with this package.
 
-### 4. Build one ticket: `implement`
+```mermaid
+flowchart TD
+    CLI["turbine CLI<br/>shell.main"]:::orange
+    LSP["Editor<br/>turbine-lsp"]:::orange
+    HTTP["HTTP client"]:::red
 
-`implement` runs the build loop for one ticket:
+    CLI --> SELECT["Select ProjectLayout"]:::orange
+    LSP --> WORKSPACE["Discover Projects<br/>EditorWorkspace.open"]:::orange
 
-1. `ponytail` looks for the smallest change that works.
-2. `blueprint` shows the design and waits for approval.
-3. `tdd` writes a failing test before the code when a useful test fits.
-4. `code-review` checks the change against both the spec and the repository rules.
-5. `commit` creates one clean Conventional Commits commit.
+    SELECT --> RUNTIME["ProjectRuntime.create"]:::orange
+    WORKSPACE --> RUNTIME
 
-You can also run any of these skills by itself.
+    ENTRY["Installed turbine.extension<br/>entry points"]:::red --> EXT["Discover, order, and admit<br/>Extensions"]:::orange
+    RUNTIME --> EXT
+    EXT --> CATALOG["ExtensionCatalog"]:::green
+    CATALOG --> FORMATS["InstalledFormats"]:::green
+    CATALOG --> LINT["CachedProjectLint"]:::green
 
-### 5. Prove it works: `e2e-test`
+    RUNTIME --> SNAPSHOT["ProjectSnapshotCache"]:::green
+    RUNTIME --> RUN["CheckRun"]:::green
+    RUNTIME --> HISTORY["RunHistoryReader"]:::green
 
-`e2e-test` starts the real app and uses it through its CLI, API, or web page. It saves output and screenshots, then checks the stored data.
+    SNAPSHOT --> COMMANDS["CLI commands"]:::orange
+    SNAPSHOT --> SESSION["EditorSession"]:::orange
+    SNAPSHOT --> API["Management API"]:::orange
 
-A passing test suite is useful, but this step checks the full running system.
+    CLI --> COMMANDS
+    LSP --> SESSION
+    HTTP --> API
 
-### 6. Ship it: `release`
+    classDef red stroke:#9f5555
+    classDef orange stroke:#9a7438
+    classDef green stroke:#4f8560
+```
 
-`release` runs lint, type checks, and tests in that order. It then commits any remaining work, pushes the branch, and opens a pull request or merge request.
+Stress cases: complex diagrams rendered by both engines.
 
-If a test fails for an unclear reason, it routes the problem through `diagnosing-bugs` before changing the code.
+**State — Pi built-in**
+
+<p align="center">
+  <img src="assets/mermaid-state-pi.png" alt="Pi built-in state diagram">
+</p>
+
+**State — pi-loom-mermaid**
+
+<p align="center">
+  <img src="assets/mermaid-state-loom.png" alt="pi-loom-mermaid state diagram">
+</p>
+
+**ER — Pi built-in**
+
+<p align="center">
+  <img src="assets/mermaid-er-pi.png" alt="Pi built-in ER diagram">
+</p>
+
+**ER — pi-loom-mermaid**
+
+<p align="center">
+  <img src="assets/mermaid-er-loom.png" alt="pi-loom-mermaid ER diagram">
+</p>
+
+**Sequence — Pi built-in**
+
+<p align="center">
+  <img src="assets/mermaid-sequence-pi.png" alt="Pi built-in sequence diagram">
+</p>
+
+**Sequence — pi-loom-mermaid**
+
+<p align="center">
+  <img src="assets/mermaid-sequence-loom.png" alt="pi-loom-mermaid sequence diagram">
+</p>
+
+**Dense class graph — Pi built-in**
+
+<p align="center">
+  <img src="assets/mermaid-class-pi.png" alt="Pi built-in dense class diagram">
+</p>
+
+**Dense class graph — pi-loom-mermaid**
+
+<p align="center">
+  <img src="assets/mermaid-class-loom.png" alt="pi-loom-mermaid dense class diagram">
+</p>
+
+**Dense flowchart — Pi built-in**
+
+<p align="center">
+  <img src="assets/mermaid-dense-pi.png" alt="Pi built-in dense flowchart">
+</p>
+
+**Dense flowchart — pi-loom-mermaid**
+
+<p align="center">
+  <img src="assets/mermaid-dense-loom.png" alt="pi-loom-mermaid dense flowchart">
+</p>
+
+Mark diff nodes with the built-in `red`, `orange`, and `green` classes (border only; fill and text stay on Pi's theme):
+
+```mermaid
+flowchart LR
+  A[Removed]:::red --> B[Changed]:::orange --> C[Added]:::green
+```
+
+Standard Mermaid `classDef` can add other colors. Diagrams wider than the terminal stay as source.
 
 ## Other useful skills
 
@@ -169,56 +238,48 @@ If a test fails for an unclear reason, it routes the problem through `diagnosing
 | Make prose shorter and clearer                            | [`write-simply`](skills/write-simply/SKILL.md)                                                                 |
 | Work with Datadog                                         | the `datadog` skill for logs, APM, monitors, docs, and live debugging                                          |
 
-Browse the full list in [`skills.sh.json`](skills.sh.json) or in the `loom add` menu.
+The full list is in [`skills.sh.json`](skills.sh.json) and in the `loom add` menu.
 
-## Add or update your setup
-
-Open the menu again at any time:
+## Add, update, remove
 
 ```bash
 loom add
-```
-
-Install named items without the menu:
-
-```bash
 loom add --skill tdd --yes
-loom add --skill tdd --skill diagnosing-bugs --yes
 loom add --tool gh --tool gitleaks --yes
 loom add --pi-package add-dir --yes
-```
-
-Preview a command before it changes anything:
-
-```bash
 loom add --skill tdd --dry-run
-```
-
-Update only the items you already chose:
-
-```bash
 loom update
 ```
 
-Loom uses fixed tool and package versions. `loom update` moves them only after this repository publishes new versions. It also updates registered project skill folders and Wiki Vaults without adding new capabilities.
+`loom update` refreshes only what you already chose, and only after this repository publishes new pins. It also updates registered project skill folders and Wiki Vaults without adding new capabilities.
 
-## Set up a Pi Wiki Vault
+```bash
+loom uninstall
+loom uninstall --all --yes
+loom uninstall --skill tdd --pi-package add-dir --yes
+loom uninstall --dry-run --all
+```
 
-Select **Wiki** in `loom setup` or `loom add`, or open its dedicated manager:
+Modified files stay by default. Interactive runs ask again before deleting them; scripts need `--force-modified`. Project resources are limited to the current repository.
+
+By default Loom finds installed agents and writes skills to their global folders. `--agent` names an agent. `--scope project` keeps the skill in the current repository. When one skill calls another, Loom installs that skill in the same place.
+
+```bash
+loom add --skill tdd --agent codex --yes
+loom add --skill tdd --agent claude --scope project --yes
+```
+
+## Wiki vaults
 
 ```bash
 loom wiki
 ```
 
-Create makes a new Vault. Adopt requires an existing directory with `.obsidian/`. Loom shows the exact `claude-obsidian` changed paths and applies only the reviewed plan hash. Obsidian is optional: Loom can open its official download page, but never runs Homebrew, Winget, Snap, Flatpak, or another OS package manager.
+Create makes a new Vault. Adopt needs an existing directory with `.obsidian/`. Loom shows the `claude-obsidian` paths it will change and applies only the reviewed plan hash. Obsidian itself is optional; Loom can open the download page and does not run Homebrew, Winget, Snap, or Flatpak.
 
-Wiki setup also installs QMD and its Vault-local skill, registers the Vault's Markdown files, and builds search embeddings. The capability screen can optionally add Feynman and the Confluence Markdown exporter; scripted setup uses `--feynman` and `--confluence`. Each Vault gets a separate named index; setup prints its `qmd --index ... query "your question"` command. The first embedding run may download a model. Repair and `loom update` refresh the index and embeddings. This is a snapshot, not a file watcher; rerun repair after editing notes to refresh search. Unregistering a Vault leaves its QMD index intact.
+Each Vault gets a named QMD index and embeddings. Setup prints the query command. This is a snapshot, not a file watcher: run repair after you edit notes. Confluence credentials, when you choose that option, go to CME's config as owner-only plaintext. `--yes` and `loom update` never prompt for them.
 
-Interactive Wiki setup shows stage spinners, elapsed time, and live output activity while tools install and QMD downloads models, indexes, and embeds. Raw tool output stays hidden because it may contain private data. QMD does not expose reliable piped percentages. Esc or Ctrl-C stops ongoing commands; already completed installations remain. After embedding, Loom checks for pending work and runs one collection-scoped hybrid search, limited to 120 seconds. Failure produces a warning; an empty index skips the check. This prepares disk caches, not a persistent model service: later CLI searches still load models.
-
-When Confluence is selected, the interactive setup offers a URL, username/email, and masked API-token or PAT form. Saving requires confirmation; replacement of an existing account is explicit. Credentials use CME's shared config (`CME_CONFIG_PATH`, or its platform app directory), stored as owner-only plaintext, not Keychain or Vault content. Other accounts and settings remain unchanged. This configures authentication but does not verify connectivity. `--yes` and `loom update` never prompt for or save credentials; use CME's own configuration separately.
-
-Wiki skills are available only inside the Vault. Loom keeps exact-pinned Python and `claude-obsidian` product code outside it, then writes project-local Pi state below ignored `.pi/`. Optional Feynman is also installed there, not globally.
+Wiki skills exist only inside the Vault. Unregister removes Loom's machine record and never deletes notes. A missing Vault is reported and never recreated.
 
 ```bash
 cd /path/to/Vault && pi
@@ -227,106 +288,49 @@ loom wiki repair /path/to/Vault
 loom wiki unregister /path/to/Vault
 ```
 
-`loom status` checks every registered Vault. `loom update` refreshes each surviving Vault independently. A missing Vault is reported and never recreated. Unregister removes only Loom's machine-local record; it never deletes notes. Rerun Loom on each machine to recreate `.pi/`. Vault writes require macOS, Linux, or WSL under the pinned `claude-obsidian` contract.
-
-## Uninstall Loom-managed resources
-
-Open the removal menu with everything Loom owns selected. Deselect anything you want to keep; Loom also keeps its required dependencies:
-
-```bash
-loom uninstall
-```
-
-Scripts can remove all owned resources without the menu, or select exact resources:
-
-```bash
-loom uninstall --all --yes
-loom uninstall --skill tdd --pi-package add-dir --yes
-loom uninstall --dry-run --all
-```
-
-Modified files are preserved by default. Interactive runs ask again before deleting them; non-interactive runs require `--force-modified`. Project resources are limited to the current repository, and a partial uninstall keeps the ownership ledger so the remaining resources can be removed later.
-
-## Choose where skills go
-
-By default, Loom finds your installed agents and adds skills to their global folders.
-
-Use `--agent` to name an agent. Use `--scope project` to keep the skill inside the current repository:
-
-```bash
-loom add --skill tdd --agent codex --yes
-loom add --skill tdd --agent codex --agent opencode --yes
-loom add --skill tdd --agent claude --scope project --yes
-```
-
-When one skill calls another, Loom installs the required skill in the same place.
-
 ## Install without Loom
-
-The `loom` command is the easiest option, but each install method also works on its own.
-
-### Install skills with skills.sh
 
 ```bash
 npx skills add Yassimba/loom
 ```
 
-### Install skills in Claude Code
+Claude Code:
 
 ```text
 /plugin marketplace add Yassimba/loom
 /plugin install loom@loom
 ```
 
-### Install Pi packages
-
-Loom installs Pi's standalone skills in the portable `.agents/skills` tree,
-which Pi discovers directly. It does not create a second copy under `.pi/skills`
-or `~/.pi/agent/skills`.
-
-The ponytail, i-have-adhd, and Plannotator packages already include Pi skills.
-Loom keeps the shared `.agents/skills` copies for other hosts and adds exact
-Pi-only exclusions after verifying the provider. Existing
-filters remain intact; only exclusions recorded in Loom's ownership ledger are
-removed during uninstall or reconciled after a direct `pi remove` on the next
-`loom update`, skill install, or global skill sync. Preexisting equal exclusions
-remain user-owned. Explicit force-inclusions require manual resolution.
-
-For project shared skills, **start Pi from the selected project root**: nested
-launches discover ancestor skills but do not inherit the root's `.pi/settings.json`.
-A project-only provider cannot safely hide a global shared skill; Loom reports
-that conflict without changing global visibility. Install the provider globally
-or resolve that scope conflict manually.
-
-Loom includes three Pi packages from this repository:
+Pi packages from this repo:
 
 ```bash
 pi install npm:@yassimba/pi-fast
 pi install npm:@yassimba/pi-add-dir
 pi install npm:@yassimba/pi-skill-autocomplete
+pi install npm:@yassimba/pi-loom-mermaid
 ```
 
-- [`pi-fast`](plugins/pi-fast/) adds `/fast` to turn priority requests on or off for OpenAI, Codex, and xAI.
+- [`pi-fast`](plugins/pi-fast/) adds `/fast` for priority requests on OpenAI, Codex, and xAI.
 - [`add-dir`](plugins/pi-add-dir/) adds another directory and its root instructions to the current Pi session.
-- [`skill-autocomplete`](plugins/skill-autocomplete/) adds `$` skill completion anywhere in the editor.
+- [`skill-autocomplete`](plugins/skill-autocomplete/) adds `$` skill completion in the editor.
+- [`pi-loom-mermaid`](plugins/pi-loom-mermaid/) draws colored Mermaid diagrams in the terminal.
 
-The setup menu also offers fixed versions of Feynman, FFF search, autoresearch, MCP support, subagents, web access, chat, rewind, and Anthropic sign-in. See [`manifest/pi-packages.json`](manifest/pi-packages.json) for the current package names and versions.
+Loom installs Pi's standalone skills in `.agents/skills`. It does not create a second copy under `.pi/skills`. Start Pi from the selected project root so project `.pi/settings.json` applies. See [`manifest/pi-packages.json`](manifest/pi-packages.json) for the current names and versions.
 
-## What Loom manages
+## What this repository holds
 
 - `skills/<name>/SKILL.md`: reviewed public skills
-- `plugins/<name>/`: Pi packages built in this repository
-- `manifest/loom.toml`: fixed versions of tools offered by the setup menu
-- `manifest/tools.json`: names and help text shown for those tools
+- `plugins/<name>/`: Pi packages built here
+- `manifest/loom.toml`: pinned tools offered by setup
+- `manifest/tools.json`: names and help text for those tools
 - `cli/loom/`: the Rust setup command
 - `cli/loom/setup-catalog.json`: the generated list built into the command
 - `.claude-plugin/`: the Claude Code marketplace package
 - `drafts/`: skills that are not reviewed or published
 - `personal/`: machine-specific skills that are never published
+- `assets/`: logo and README images
 
 ## Contributing
-
-Install the JavaScript workspace, then run the repository checks:
 
 ```bash
 npm install
@@ -334,7 +338,7 @@ npm run check
 npm run audit
 ```
 
-Check the Rust command separately:
+Rust command:
 
 ```bash
 cargo fmt --manifest-path cli/loom/Cargo.toml -- --check
@@ -342,13 +346,13 @@ cargo clippy --manifest-path cli/loom/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path cli/loom/Cargo.toml
 ```
 
-If you change a public skill or package entry, rebuild the setup list:
+After a public skill or package entry change:
 
 ```bash
 npm run catalog:generate
 ```
 
-For local Pi package work, use:
+Local Pi package work:
 
 ```bash
 scripts/sync-pi-extensions.sh status
@@ -366,6 +370,7 @@ scripts/sync-pi-extensions.sh link
 - [`diagram-design`](skills/diagram-design/SKILL.md) is adapted from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) v2.6.12 at `4451ead` under MIT.
 - Pi subagents, web access, and rewind are adapted from [nicobailon's Pi packages](https://github.com/nicobailon).
 - Anthropic sign-in is adapted from [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth).
+- pi-loom-mermaid is adapted from pi-lovely-mermaid.
 
 ## License
 
