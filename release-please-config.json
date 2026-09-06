@@ -26,6 +26,10 @@
     "plugins/pi-loom": {
       "release-type": "node",
       "component": "pi-loom"
+    },
+    "plugins/pi-loom-mermaid": {
+      "release-type": "node",
+      "component": "pi-loom-mermaid"
     }
   }
 }

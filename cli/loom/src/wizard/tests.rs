@@ -186,7 +186,10 @@ fn sem_mcp_flows_through_choose_where_review_with_gateway_exposure() {
     let rendered = screen(&mut wizard, 120, 40);
     assert!(rendered.contains("directTools=false"), "{rendered}");
     assert!(rendered.contains("mcp-adapter"), "{rendered}");
-    assert!(rendered.contains(".pi/mcp.json"), "{rendered}");
+    assert!(
+        rendered.contains(".pi/mcp.json") || rendered.contains(r".pi\mcp.json"),
+        "{rendered}"
+    );
     assert!(!rendered.contains("blocked"), "{rendered}");
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
