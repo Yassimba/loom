@@ -563,22 +563,20 @@ function skipRoutes(
 /**
  * A chain column that coincides with a port column of the rank above or
  * below would share cells with that port's vertical inside the band (a
- * forward exit at the centre of the box above; a back exit two right of
- * centre in the box below, which climbs past the forward tracks). Nudge
+ * forward exit at the centre of the box above; a back exit beside centre
+ * in the box below, which climbs past the forward tracks). Nudge
  * such a chain node by a cell where the gaps to its neighbours allow.
  */
 function clearPorts(
   graph: Graph,
-  ranks: number[],
   layered: Layered,
   centers: number[],
   size: number[],
+  backExit: (node: number) => number[],
 ): void {
   const n = graph.nodes.length
-  const hasBack = new Array<boolean>(n).fill(false)
   const ends = new Map<number, [number, number]>()
   graph.edges.forEach((e, i) => {
-    if (e.from !== e.to && ranks[e.to] < ranks[e.from]) hasBack[e.from] = true
     for (const v of layered.chains[i]) ends.set(v, [e.from, e.to])
   })
   layered.layers.forEach((row, r) => {
@@ -591,7 +589,7 @@ function clearPorts(
     }
     for (const u of layered.layers[r - 1] ?? []) if (u < n) claim(centers[u], u)
     for (const u of layered.layers[r + 1] ?? []) {
-      if (u < n && hasBack[u]) claim(Math.min(centers[u] + half(size[u]) - 2, centers[u] + 2), u)
+      if (u < n) for (const col of backExit(u)) claim(col, u)
     }
     row.forEach((v, i) => {
       if (v < n) return
@@ -634,21 +632,80 @@ function placeTd(
       if (part != null) labelPad[e.to] = Math.max(labelPad[e.to], Math.min(stringWidth(part), MAX_LABEL) + 1)
     }
   }
-  // A back edge leaves and enters two cells right of centre (see backPort
-  // below), so its chain, aligned with an endpoint's centre, sits two right
-  // of that: straight from the port, clear of the forward exit at centre.
-  const backChain = new Set<number>()
+  // A back edge leaves the source's top and enters the target's bottom two
+  // cells off centre, clear of the forward exits and arrivals that own the
+  // centre column — the short return arrow mermaid draws. Which side: the
+  // port's arm climbs (drops) through the band's forward bus rows, crossing
+  // every one that spans the port column; and at the target, the jog from
+  // the port toward the route's next stop crosses the target's own exit
+  // column when the stop lies on the other side (at the source the
+  // arrivals' arms end below the back rows, so its jog crosses nothing).
+  // Take the side that costs less.
+  // The chain, aligned with an endpoint's centre by Brandes–Köpf, then
+  // shifts to that endpoint's port so it runs straight from it.
+  const isBack = (e: Edge): boolean => e.from !== e.to && ranks[e.to] < ranks[e.from]
+  const first = assignPositions(layered, sizes.layW, GAP_X, (node) => labelPad[node])
+  /** Forward bus rows in the band below rank `r` whose span covers column `p`. */
+  const busOver = (r: number, p: number): number =>
+    graph.edges.filter((e) => {
+      if (e.from === e.to || ranks[e.from] !== r || ranks[e.to] !== r + 1) return false
+      const [a, b] = [first[e.from], first[e.to]]
+      return Math.abs(a - b) > 1 && Math.min(a, b) < p && p < Math.max(a, b)
+    }).length
+  const portSide = (node: number, band: number, toward: number, atTarget: boolean): number => {
+    const cx = first[node]
+    const cost = (side: number): number => {
+      const p = cx + 2 * side
+      const exits = graph.edges.some((e) => e.from === node && ranks[e.to] > ranks[node])
+      const jog = atTarget && exits && (toward - cx) * side < 0 ? 1 : 0
+      return busOver(band, p) + jog
+    }
+    return cost(-1) < cost(1) ? -1 : 1
+  }
+  const exitSide = graph.edges.map((e, i) =>
+    isBack(e) ? portSide(e.from, ranks[e.from] - 1, first[layered.chains[i][0] ?? e.to], false) : 0,
+  )
+  const entrySide = graph.edges.map((e, i) => {
+    if (!isBack(e)) return 0
+    const last = layered.chains[i].at(-1)
+    const toward = last === undefined ? first[e.from] + 2 * exitSide[i] : first[last]
+    return portSide(e.to, ranks[e.to], toward, true)
+  })
+  const shift = new Map<number, number>()
   graph.edges.forEach((e, i) => {
-    if (e.from !== e.to && ranks[e.to] < ranks[e.from]) for (const v of layered.chains[i]) backChain.add(v)
+    const chain = layered.chains[i]
+    if (!isBack(e) || chain.length === 0) return
+    const side =
+      first[chain[0]] === first[e.from]
+        ? exitSide[i]
+        : first[chain[chain.length - 1]] === first[e.to]
+          ? entrySide[i]
+          : 0
+    for (const v of chain) shift.set(v, 2 * side)
   })
   const centers = assignPositions(
     layered,
     sizes.layW,
     GAP_X,
     (node) => labelPad[node],
-    (v) => (backChain.has(v) ? 2 : 0),
+    (v) => shift.get(v) ?? 0,
   )
-  clearPorts(graph, ranks, layered, centers, sizes.layW)
+  const boxL = (j: number): number => sat(centers[j], half(sizes.boxW[j]))
+  const boxR = (j: number): number => boxL(j) + sizes.boxW[j] - 1
+  const port = (node: number, side: number): number =>
+    Math.max(boxL(node) + 1, Math.min(boxR(node) - 1, centers[node] + 2 * side))
+  // A return entering on the left labels leftward; give the leftmost such
+  // label room before the first column.
+  let margin = 0
+  graph.edges.forEach((e, i) => {
+    const text = edgeText(e)
+    if (!isBack(e) || entrySide[i] >= 0 || text === null) return
+    margin = Math.max(margin, Math.min(stringWidth(text), MAX_LABEL) + 1 - port(e.to, -1))
+  })
+  for (let v = 0; v < centers.length; v++) centers[v] += margin
+  clearPorts(graph, layered, centers, sizes.layW, (node) =>
+    graph.edges.flatMap((e, i) => (isBack(e) && e.from === node ? [port(node, exitSide[i])] : [])),
+  )
 
   // Top-entry geometry, derivable before placement. A node's entries — the
   // merged forward cluster plus each skip — spread evenly across the box top
@@ -657,8 +714,6 @@ function placeTd(
   // over the right half instead. A label that does not fit before the next
   // entry renders left of its arrow. A skip whose entry column crosses no
   // box on any intermediate rank drops straight instead of taking a lane.
-  const boxL = (j: number): number => sat(centers[j], half(sizes.boxW[j]))
-  const boxR = (j: number): number => boxL(j) + sizes.boxW[j] - 1
   const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
   const edgeEntryX = new Array<number>(graph.edges.length).fill(-1)
   const edgeStraight = new Array<boolean>(graph.edges.length).fill(false)
@@ -772,21 +827,18 @@ function placeTd(
   // Every skip and back edge runs through the interior along the column its
   // virtual chain reserved; each band it jogs in lends it a bus track. A
   // skip's departure jog shares the source's fan row (endpoint sharing), so
-  // a node's forward fan and its skips split from one `┴` origin. A back
-  // edge leaves the source's top and enters the target's bottom, both right
-  // of centre so it stays clear of the forward exits and arrivals that own
-  // the centre column — the short return arrow mermaid draws.
-  const isBack = (e: Edge): boolean => e.from !== e.to && ranks[e.to] < ranks[e.from]
-  const backPort = (j: number): number => Math.min(boxR(j) - 1, centers[j] + 2)
+  // a node's forward fan and its skips split from one `┴` origin.
   graph.edges.forEach((e, i) => {
-    if (isBack(e)) edgeEntryX[i] = backPort(e.to)
+    if (!isBack(e)) return
+    edgeEntryX[i] = port(e.to, entrySide[i])
+    edgeLabelLeft[i] = entrySide[i] < 0
   })
   const edgeExitX = new Array<number>(graph.edges.length).fill(-1)
   graph.edges.forEach((e, i) => {
     if (!isBack(e)) return
     // A one-column step reads as a kink; snap the exit to the next stop.
     const next = layered.chains[i].length > 0 ? centers[layered.chains[i][0]] : edgeEntryX[i]
-    const exit = backPort(e.from)
+    const exit = port(e.from, exitSide[i])
     edgeExitX[i] = Math.abs(exit - next) <= 1 ? next : exit
   })
   const jogs = chainJogs(graph, ranks, layered, centers, (e, i) => {
@@ -1161,7 +1213,7 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
       else if (to.rank > from.rank) {
         routeSkip(canvas, from, to, edge, plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i])
       } else {
-        routeBackChain(canvas, from, to, edge, plan.edgeExitX[i], plan.edgeEntryX[i], plan.skipRoute[i])
+        routeBackChain(canvas, from, to, edge, plan.edgeExitX[i], plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i])
       }
     } else if (adjacent) {
       routeForwardLr(canvas, from, to, edge, bus)
@@ -1544,6 +1596,7 @@ function routeBackChain(
   exitX: number,
   entryX: number,
   route: { bus: number; at: number }[],
+  labelLeft: boolean,
 ): void {
   const fy = from.y
   const headRow = to.y + to.h
@@ -1564,7 +1617,10 @@ function routeBackChain(
   if (edge.headFrom !== 'none') canvas.set(exitX, fy, headGlyph(edge.headFrom, '▼'), 'edge')
 
   const text = edgeText(edge)
-  if (text !== null) placeLabel(canvas, text, headRow, entryX + 1)
+  if (text !== null) {
+    const start = labelLeft ? sat(entryX, Math.min(stringWidth(text), MAX_LABEL)) : entryX + 1
+    placeLabel(canvas, text, headRow, start)
+  }
 }
 
 /** A self-edge: a stub loop hanging below the box. */

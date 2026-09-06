@@ -11,14 +11,14 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1485
+    "area": 1518
   },
   "cycles": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 2,
-    "area": 1116
+    "crossings": 0,
+    "area": 1224
   },
   "dense": {
     "brokenLinks": 0,
@@ -66,8 +66,8 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
-    "area": 360
+    "crossings": 0,
+    "area": 450
   },
   "self-loops": {
     "brokenLinks": 0,
