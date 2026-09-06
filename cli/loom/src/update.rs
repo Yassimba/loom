@@ -387,13 +387,13 @@ mod tests {
 
         assert!(commands
             .iter()
-            .any(|command| command == "pi install npm:pi-subagents@0.65.1"));
+            .any(|command| command == "pi install npm:pi-subagents@0.66.0"));
         assert!(commands
             .iter()
             .any(|command| command == "pi install npm:@yassimba/pi-add-dir@latest"));
         assert!(commands
             .iter()
-            .any(|command| command == "pi install -l npm:pi-subagents@0.65.1"));
+            .any(|command| command == "pi install -l npm:pi-subagents@0.66.0"));
         assert!(commands.contains(&format!("pi install -l {feynman}")));
         assert!(!commands.contains(&format!("pi install {feynman}")));
 
