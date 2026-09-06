@@ -116,13 +116,16 @@ $SkillRoots = @(
   (Join-Path $HOME ".codex\skills"),
   (Join-Path $HOME ".config\opencode\skills"),
   (Join-Path $HOME ".cursor\skills"),
-  (Join-Path $HOME ".grok\skills"),
-  (Join-Path $HOME ".pi\agent\skills")
+  (Join-Path $HOME ".grok\skills")
 )
 foreach ($SkillRoot in $SkillRoots) {
   if (-not (Test-Path (Join-Path $SkillRoot "$Skill\SKILL.md"))) {
     throw "$Skill skill is missing from $SkillRoot"
   }
+}
+# Pi reads skills from the portable .agents tree; nothing lands in its own.
+if (Test-Path (Join-Path $HOME ".pi\agent\skills\$Skill")) {
+  throw "$Skill skill was installed into the Pi tree"
 }
 if (-not (Test-Path (Join-Path $HOME ".config\opencode\plugins\loom-session-env.js"))) {
   throw "OpenCode adapter was not installed"
