@@ -39,8 +39,9 @@ DRAFTS="$REPO/drafts"
 PRIMARY="$HOME/.claude/skills"
 
 # link/unlink/status touch all of these. Narrow with
-# --tree claude|agents|codex|pi|opencode|cursor|grok.
-TREES=("$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills" "$HOME/.pi/agent/skills" "$HOME/.config/opencode/skills" "$HOME/.cursor/skills" "$HOME/.grok/skills")
+# --tree claude|agents|codex|pi|opencode|cursor|grok. Pi uses the portable
+# .agents tree; --tree pi remains an alias for compatibility.
+TREES=("$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills" "$HOME/.config/opencode/skills" "$HOME/.cursor/skills" "$HOME/.grok/skills")
 
 say()  { printf '%s\n' "$*"; }
 item() { printf '  %s\n' "$*"; }
@@ -115,24 +116,6 @@ link_one() {
   src="$(repo_path "$name")"
   target="$tree/$name"
 
-  if [ "$tree" = "$HOME/.pi/agent/skills" ] && printf '%s\n' "$PI_BUNDLED_SKILLS" | grep -Fxq "$name"; then
-    # Never traverse a redirected agent tree to remove a duplicate.
-    if [ -L "$HOME/.pi" ] || [ -L "$HOME/.pi/agent" ] || [ -L "$tree" ]; then
-      item "skip     $name  (Pi skill tree is symlinked)"
-    elif [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then
-      rm "$target"
-      item "included $name  (package provides Pi skill; repo link removed)"
-    elif [ ! -L "$target" ] && [ -d "$target" ] && same "$src" "$target"; then
-      rm -rf "$target"
-      item "included $name  (package provides Pi skill; identical copy removed)"
-    elif [ -e "$target" ] || [ -L "$target" ]; then
-      item "preserved $name  (package also provides it; custom copy/link left untouched)"
-    else
-      item "included $name  (provided by Pi package)"
-    fi
-    return 0
-  fi
-
   if [ -L "$target" ]; then
     [ "$(readlink "$target")" = "$src" ] && return 0
     # A link into this repo whose target moved (e.g. the old categorized
@@ -165,7 +148,7 @@ link_one() {
 reconcile_pi_shared() {
   local tree
   for tree in "${TREES[@]}"; do
-    if [ "$tree" = "$HOME/.pi/agent/skills" ] || [ "$tree" = "$HOME/.agents/skills" ]; then
+    if [ "$tree" = "$HOME/.agents/skills" ]; then
       command -v loom >/dev/null || die "loom not found (needed to check bundled Pi skills)"
       loom bundled-skills --reconcile
       return
@@ -175,15 +158,10 @@ reconcile_pi_shared() {
 
 cmd_link() {
   local only="${1:-}" tree n
-  PI_BUNDLED_SKILLS=""
   if [ -n "$only" ]; then
     [ -n "$(repo_path "$only")" ] || die "no skill named '$only' under skills/"
   fi
   for tree in "${TREES[@]}"; do
-    if [ "$tree" = "$HOME/.pi/agent/skills" ]; then
-      reconcile_pi_shared
-      PI_BUNDLED_SKILLS="$(loom bundled-skills)"
-    fi
     mkdir -p "$tree"
     say "$tree:"
     remove_stale_links "$tree"
@@ -375,7 +353,7 @@ main() {
   if [ -n "$want_tree" ]; then
     case "$want_tree" in
       claude|agents|codex|cursor|grok) TREES=("$HOME/.$want_tree/skills") ;;
-      pi) TREES=("$HOME/.pi/agent/skills") ;;
+      pi) TREES=("$HOME/.agents/skills") ;;
       opencode) TREES=("$HOME/.config/opencode/skills") ;;
       *) die "--tree must be one of: claude agents codex pi opencode cursor grok" ;;
     esac
