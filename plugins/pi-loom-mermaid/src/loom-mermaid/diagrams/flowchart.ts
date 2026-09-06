@@ -17,7 +17,7 @@ import {
   type Shape,
 } from '../graph.ts'
 import { asciiLower, cleanLabel, decodeHtmlEntities, isIdChar } from '../labels.ts'
-import { layoutFlowchart, layoutGrouped } from '../layout.ts'
+import { layoutFlowchart, layoutGrouped } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import {
   firstWord,
@@ -35,16 +35,16 @@ import {
 export const flowchart: Diagram = {
   kind: 'flowchart',
   headers: ['graph', 'flowchart'],
-  render(src) {
+  render(src, limits) {
     const graph = parseGraph(src)
     if (graph === null) return null
-    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph) : layoutGrouped(graph)
+    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph, limits) : layoutGrouped(graph, limits)
     if (canvas === null) return null
     return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
   },
 }
 
-export function parseGraph(src: string): Graph | null {
+function parseGraph(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !flowchart.headers.includes(kind)) return null

@@ -1,11 +1,23 @@
 import { measured, stringWidth } from './width.ts'
 
-/** Node labels wrap to at most this many display columns per line ... */
-export const WRAP_WIDTH = 24
-/** ... and at most this many lines; overflow is truncated with an ellipsis. */
-export const MAX_LINES = 4
-/** Edge labels are truncated to this many columns. */
-export const MAX_LABEL = 28
+/** How much text a diagram shows before wrapping or truncating. */
+export interface Limits {
+  /** Node labels wrap to at most this many display columns per line ... */
+  wrap: number
+  /** ... and at most this many lines; overflow is truncated with an ellipsis. */
+  lines: number
+  /** Edge labels are truncated to this many columns. */
+  label: number
+}
+
+/** The default limits, and the tighter ones `render` falls back through
+ * when a diagram is wider than the space it was given. */
+export const LIMITS: Limits[] = [
+  { wrap: 24, lines: 4, label: 28 },
+  { wrap: 16, lines: 3, label: 16 },
+  { wrap: 12, lines: 2, label: 10 },
+]
+export const DEFAULT_LIMITS: Limits = LIMITS[0]
 
 /**
  * Identifier-boundary characters preferred as break points when a single word
@@ -15,7 +27,7 @@ export const MAX_LABEL = 28
  * `third_party/mermaid-to-svg/src/text_wrap.rs`; the two renderers are
  * deliberately independent, so keep these in sync.
  */
-export const LABEL_BREAK_CHARS = ['_', '-', '.', '/']
+const LABEL_BREAK_CHARS = ['_', '-', '.', '/']
 
 /**
  * ASCII-only case folding, matching Rust's `to_ascii_lowercase`.
@@ -56,7 +68,7 @@ export function srcLines(src: string): string[] {
 const ALNUM = /[\p{Alphabetic}\p{N}]/u
 
 /** Matches Rust's `char::is_alphanumeric`. */
-export const isAlphanumeric = (c: string): boolean => ALNUM.test(c)
+const isAlphanumeric = (c: string): boolean => ALNUM.test(c)
 
 /** Characters allowed in a bare node/state/class identifier. */
 export const isIdChar = (c: string): boolean => isAlphanumeric(c) || c === '_'
@@ -128,7 +140,7 @@ export function decodeHtmlEntities(s: string): string {
 }
 
 /** Strip markdown emphasis from a `` `backtick` `` label string. */
-export function stripMarkdown(s: string): string {
+function stripMarkdown(s: string): string {
   const noCode = [...s].filter((c) => c !== '`').join('')
   const noStrong = noCode.replaceAll('**', '').replaceAll('__', '')
   const chars = [...noStrong]
@@ -194,7 +206,7 @@ function htmlTagAt(chars: string[], start: number): { name: string; end: number 
   return chars[i] === '>' ? { name, end: i + 1 } : null
 }
 
-export function stripHtmlTags(s: string): string {
+function stripHtmlTags(s: string): string {
   const chars = [...s]
   let out = ''
   let i = 0

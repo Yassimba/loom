@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0](https://github.com/Yassimba/loom/compare/loom-v1.0.0...loom-v1.1.0) (2026-09-05)
+
+
+### Features
+
+* add Pi response preferences and atlas orientation ([5e4dffe](https://github.com/Yassimba/loom/commit/5e4dffe49619cd050f5b269d4aaaee19039e5831))
+* add Pi response preferences and atlas orientation ([2e1faf6](https://github.com/Yassimba/loom/commit/2e1faf6d6574c74eae03d61b410caf8bf8bdaf02))
+
+## [1.0.0](https://github.com/Yassimba/loom/compare/loom-v0.21.0...loom-v1.0.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* use pi-fast.json and PI_FAST_DESIRED instead of the old pi-openai-fast names.
+
+### Features
+
+* rename pi-fast and consolidate agent workflows ([#177](https://github.com/Yassimba/loom/issues/177)) ([318af52](https://github.com/Yassimba/loom/commit/318af52d10594e06449393aa23f7eafba9af0667))
+
 ## [0.21.0](https://github.com/Yassimba/loom/compare/loom-v0.20.0...loom-v0.21.0) (2026-09-05)
 
 

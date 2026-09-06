@@ -1,0 +1,19 @@
+classDiagram
+  class Animal {
+    +String name
+    +int age
+    +speak()
+  }
+  class Dog {
+    +fetch()
+  }
+  class Cat {
+    +purr()
+  }
+  class Kennel {
+    +List~Dog~ dogs
+  }
+  Animal <|-- Dog
+  Animal <|-- Cat
+  Kennel o-- Dog : houses
+  Dog ..> Cat : chases

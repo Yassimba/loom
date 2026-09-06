@@ -8,7 +8,7 @@
 
 import { Graph, type Head, type LineKind, MAX_MEMBERS, type Node, parseDir } from '../graph.ts'
 import { asciiLower, cleanLabel, decodeHtmlEntities, displayGenerics, isIdChar } from '../labels.ts'
-import { layoutClass } from '../layout.ts'
+import { layoutClass } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import {
   firstWord,
@@ -28,10 +28,10 @@ import {
 export const classDiagram: Diagram = {
   kind: 'class',
   headers: ['classdiagram', 'classdiagram-v2'],
-  render(src) {
+  render(src, limits) {
     const graph = parseClass(src)
     if (graph === null) return null
-    const canvas = layoutClass(graph)
+    const canvas = layoutClass(graph, limits)
     if (canvas === null) return null
     return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
   },
@@ -57,7 +57,7 @@ const CLASS_OPS: [string, Head, Head, LineKind][] = [
 
 const MAX_CLASS_OP = 4
 
-export function parseClass(src: string): Graph | null {
+function parseClass(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !classDiagram.headers.includes(kind)) return null
@@ -201,7 +201,7 @@ function setAnnotation(node: Node, annotation: string): void {
 }
 
 /** Add a member to the attribute or method compartment, eliding past the cap. */
-export function pushMember(node: Node, raw: string): void {
+function pushMember(node: Node, raw: string): void {
   const sections = node.sections as string[][]
   if (raw.startsWith('<<')) {
     const split = splitOnce(raw.slice(2), '>>')

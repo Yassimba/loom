@@ -15,16 +15,16 @@ import { firstWord, headerKind, nonEmpty, splitOnce, statementsOf } from '../sta
 export const sequence: Diagram = {
   kind: 'sequence',
   headers: ['sequencediagram'],
-  render(src) {
+  render(src, limits) {
     const seq = parseSequence(src)
     if (seq === null) return null
-    const canvas = layoutSequence(seq)
+    const canvas = layoutSequence(seq, limits)
     if (canvas === null) return null
     return { canvas, warnings: seq.warnings, classDefs: {} }
   },
 }
 
-export type SeqHead = 'arrow' | 'cross'
+type SeqHead = 'arrow' | 'cross'
 
 /** Message operators, longest-first so `-->>` wins over `-->`. */
 const SEQ_OPS: [string, boolean, SeqHead][] = [
@@ -58,7 +58,7 @@ export type SeqItem =
   | { kind: 'divider'; text: string }
 
 /** A hot span of one lifeline: item indices, `to === null` while still open. */
-export interface Activation {
+interface Activation {
   at: number
   from: number
   to: number | null
@@ -117,7 +117,7 @@ export class Sequence {
   }
 }
 
-export function parseSequence(src: string): Sequence | null {
+function parseSequence(src: string): Sequence | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !sequence.headers.includes(kind)) return null

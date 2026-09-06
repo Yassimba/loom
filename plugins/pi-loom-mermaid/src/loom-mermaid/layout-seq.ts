@@ -9,16 +9,10 @@
 
 import { Canvas, D, drawTextOverEdges, L, R, U } from './canvas.ts'
 import type { NoteAnchor, SeqItem, Sequence } from './diagrams/sequence.ts'
-import { fitLabel, WRAP_WIDTH } from './labels.ts'
-import {
-  type CanvasResult,
-  drawBox,
-  half,
-  MAX_CANVAS_CELLS,
-  PAD,
-  type Placed,
-  sat,
-} from './layout.ts'
+import { fitLabel, type Limits } from './labels.ts'
+import type { CanvasResult } from './graph-render.ts'
+import { half, MAX_CANVAS_CELLS, PAD, type Placed, sat } from './layout.ts'
+import { drawBox } from './paint.ts'
 import { stringWidth } from './width.ts'
 
 /** Minimum columns between adjacent lifelines. */
@@ -38,9 +32,9 @@ function noteGeometry(xs: number[], anchor: NoteAnchor, textW: number): { x: num
 
 const itemTextW = (text: string | null): number => (text === null ? 0 : stringWidth(text))
 
-export function layoutSequence(seq: Sequence): CanvasResult {
+export function layoutSequence(seq: Sequence, limits: Limits): CanvasResult {
   const n = seq.labels.length
-  const labels = seq.labels.map((l) => fitLabel(l, WRAP_WIDTH))
+  const labels = seq.labels.map((l) => fitLabel(l, limits.wrap))
   const boxW = labels.map((l) => Math.max(1, stringWidth(l)) + 2 * PAD + 2)
   const boxH = 3
 

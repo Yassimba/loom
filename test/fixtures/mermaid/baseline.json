@@ -1,0 +1,114 @@
+{
+  "class-inheritance": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 858
+  },
+  "composite-states": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1518
+  },
+  "concentrate": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 336
+  },
+  "cycles": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1152
+  },
+  "dense": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 3,
+    "area": 520
+  },
+  "er-cardinalities": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 675
+  },
+  "fans": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 756
+  },
+  "lane-order": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 494
+  },
+  "nested-subgraphs": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1020
+  },
+  "parallel-edges": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 403
+  },
+  "reciprocal": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 450
+  },
+  "self-loops": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 703
+  },
+  "skip-labelled": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1288
+  },
+  "skip-lr": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 572
+  },
+  "state-lr": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 602
+  },
+  "unicode-wide": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 936
+  }
+}

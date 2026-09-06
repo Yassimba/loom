@@ -8,23 +8,23 @@
 
 import { Graph, type LineKind, MAX_MEMBERS, type Node } from '../graph.ts'
 import { cleanLabel, decodeHtmlEntities, displayGenerics } from '../labels.ts'
-import { layoutClass } from '../layout.ts'
+import { layoutClass } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import { headerKind, nonEmpty, splitOnce, statementsOf, words } from '../statements.ts'
 
 export const er: Diagram = {
   kind: 'er',
   headers: ['erdiagram'],
-  render(src) {
+  render(src, limits) {
     const graph = parseEr(src)
     if (graph === null) return null
-    const canvas = layoutClass(graph)
+    const canvas = layoutClass(graph, limits)
     if (canvas === null) return null
     return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
   },
 }
 
-export function parseEr(src: string): Graph | null {
+function parseEr(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !er.headers.includes(kind)) return null
@@ -175,7 +175,7 @@ function erCard(tok: string): string | null {
 }
 
 /** ER attributes are `type name`; a trailing quoted comment is dropped. */
-export function pushErAttribute(node: Node, raw: string): void {
+function pushErAttribute(node: Node, raw: string): void {
   const attrs = (node.sections as string[][])[1]
   const parts: string[] = []
   for (const tok of words(raw)) {

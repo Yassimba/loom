@@ -11,7 +11,7 @@
 
 import { Graph, MAX_GROUP_DEPTH, MAX_GROUPS, parseDir, type Shape } from '../graph.ts'
 import { asciiLower, decodeHtmlEntities } from '../labels.ts'
-import { layoutFlowchart, layoutGrouped } from '../layout.ts'
+import { layoutFlowchart, layoutGrouped } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import {
   firstWord,
@@ -29,16 +29,16 @@ import {
 export const state: Diagram = {
   kind: 'state',
   headers: ['statediagram', 'statediagram-v2'],
-  render(src) {
+  render(src, limits) {
     const graph = parseState(src)
     if (graph === null) return null
-    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph) : layoutGrouped(graph)
+    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph, limits) : layoutGrouped(graph, limits)
     if (canvas === null) return null
     return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
   },
 }
 
-export function parseState(src: string): Graph | null {
+function parseState(src: string): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !state.headers.includes(kind)) return null

@@ -1,0 +1,9 @@
+stateDiagram-v2
+  direction LR
+  [*] --> Draft
+  Draft --> Review : submit
+  Review --> Draft : changes
+  Review --> Approved : ok
+  Approved --> Published : publish
+  Draft --> Published : hotfix
+  Published --> [*]

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { transformMermaidMarkdown } from "../plugins/pi-loom-mermaid/src/index.ts";
 import { render } from "../plugins/pi-loom-mermaid/src/loom-mermaid/index.ts";
@@ -36,4 +37,46 @@ test("vendored renderer handles every advertised diagram kind", () => {
   ];
 
   for (const source of diagrams) assert.ok(render(source), source.split("\n", 1)[0]);
+});
+
+test("a diagram wider than the space is laid out again with tighter labels", () => {
+  const source = readFileSync(
+    new URL("./fixtures/mermaid/skip-labelled.mmd", import.meta.url),
+    "utf8",
+  );
+  const loose = render(source);
+  const fitted = render(source, { maxWidth: 45 });
+  assert.ok(loose && fitted);
+  assert.ok(loose.width > 45);
+  assert.ok(fitted.width <= 45);
+  assert.equal(render(source)?.width, loose.width, "limits are restored after a retry");
+
+  const output = transformMermaidMarkdown(`\`\`\`mermaid\n${source}\`\`\``, {
+    messageType: "assistant",
+    availableWidth: 45,
+  });
+  assert.doesNotMatch(output, /```mermaid/, "fits instead of falling back to source");
+});
+
+test("two edges passing through one cell cross as a hop, junctions stay junctions", () => {
+  const art = render(
+    readFileSync(new URL("./fixtures/mermaid/dense.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(art);
+  const text = art.plain.join("\n");
+  assert.match(text, /╫/, "a straight drop crossed by another edge's bus is a hop");
+  assert.match(text, /┼/, "an edge continuing through its own bus row stays a junction");
+});
+
+test("an unclosed fence stays source while streaming, and a closed one is rendered once", () => {
+  const open = "```mermaid\nflowchart TD\n  A --> B\n  B --";
+  const streaming = { messageType: "assistant" as const, availableWidth: 80, isStreaming: true };
+  assert.equal(transformMermaidMarkdown(open, streaming), open);
+  const closed = "```mermaid\nflowchart TD\n  A --> B\n```\n";
+  const first = transformMermaidMarkdown(closed, streaming);
+  assert.doesNotMatch(first, /```mermaid/);
+  const t = performance.now();
+  for (let i = 0; i < 200; i++) transformMermaidMarkdown(closed, streaming);
+  assert.ok(performance.now() - t < 100, "cached renders are near-free");
+  assert.equal(transformMermaidMarkdown(closed, streaming), first);
 });
