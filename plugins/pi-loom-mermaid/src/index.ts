@@ -12,7 +12,38 @@ const diffClasses = {
 type TransformContext = {
   messageType: "user" | "assistant" | "assistant-thinking";
   availableWidth: number;
+  /** The message is still arriving; an unclosed fence shows as source until it closes. */
+  isStreaming?: boolean;
 };
+
+/**
+ * Rendered blocks by source and width. Pi runs the transformer on the whole
+ * message for every streamed chunk and every redraw, so a diagram would be
+ * laid out again for each token after it. Layout is deterministic, so the
+ * first render is the only one needed.
+ */
+const rendered = new Map<string, string>();
+const CACHE_SIZE = 64;
+
+function renderBlock(text: string, availableWidth: number): string | null {
+  const key = `${availableWidth}\0${text}`;
+  const hit = rendered.get(key);
+  if (hit !== undefined) {
+    rendered.delete(key);
+    rendered.set(key, hit);
+    return hit;
+  }
+  const styledSource = withDiffClasses(text);
+  const art = render(styledSource.source, { maxWidth: availableWidth });
+  if (!art || art.width > availableWidth) return null;
+  const out = `${dimDefaultBorders(toAnsi(art), styledSource.dimSgr).map(codeSpan).join("  \n")}\n`;
+  rendered.set(key, out);
+  if (rendered.size > CACHE_SIZE) rendered.delete(rendered.keys().next().value as string);
+  return out;
+}
+
+/** A fenced block whose closing fence has arrived. */
+const isClosed = (token: { raw: string }): boolean => /\n\s*(`{3,}|~{3,})\s*$/.test(token.raw);
 
 function isMermaid(token: Token): token is Token & { type: "code"; text: string; lang?: string } {
   return (
@@ -61,10 +92,8 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
     .lexer(markdown)
     .map((token) => {
       if (!isMermaid(token)) return token.raw;
-      const styledSource = withDiffClasses(token.text);
-      const art = render(styledSource.source, { maxWidth: context.availableWidth });
-      if (!art || art.width > context.availableWidth) return token.raw;
-      return `${dimDefaultBorders(toAnsi(art), styledSource.dimSgr).map(codeSpan).join("  \n")}\n`;
+      if (context.isStreaming === true && !isClosed(token)) return token.raw;
+      return renderBlock(token.text, context.availableWidth) ?? token.raw;
     })
     .join("");
 }

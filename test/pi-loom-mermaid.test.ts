@@ -67,3 +67,16 @@ test("two edges passing through one cell cross as a hop, junctions stay junction
   assert.match(text, /╫/, "a straight drop crossed by another edge's bus is a hop");
   assert.match(text, /┼/, "an edge continuing through its own bus row stays a junction");
 });
+
+test("an unclosed fence stays source while streaming, and a closed one is rendered once", () => {
+  const open = "```mermaid\nflowchart TD\n  A --> B\n  B --";
+  const streaming = { messageType: "assistant" as const, availableWidth: 80, isStreaming: true };
+  assert.equal(transformMermaidMarkdown(open, streaming), open);
+  const closed = "```mermaid\nflowchart TD\n  A --> B\n```\n";
+  const first = transformMermaidMarkdown(closed, streaming);
+  assert.doesNotMatch(first, /```mermaid/);
+  const t = performance.now();
+  for (let i = 0; i < 200; i++) transformMermaidMarkdown(closed, streaming);
+  assert.ok(performance.now() - t < 100, "cached renders are near-free");
+  assert.equal(transformMermaidMarkdown(closed, streaming), first);
+});
