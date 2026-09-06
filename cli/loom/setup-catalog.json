@@ -233,6 +233,15 @@
       "windowsWsl": true
     },
     {
+      "id": "pi-package:@yassimba/pi-loom-mermaid",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "Colored Mermaid diagrams",
+      "description": "Render Mermaid diagrams with per-node colors in Pi using classDef styles.",
+      "installTarget": "@yassimba/pi-loom-mermaid",
+      "nextAction": "Set markdown.mermaid to off in Pi settings, run /reload, then use classDef styles in a Mermaid block."
+    },
+    {
       "id": "pi-package:@yassimba/pi-fast",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -286,6 +295,16 @@
       "description": "Loom branding and a startup notice for published Loom updates in Pi.",
       "installTarget": "@yassimba/pi-loom",
       "nextAction": "Start Pi to see the Loom header and available Loom updates."
+    },
+    {
+      "id": "pi-package:pi-markdown-preview",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "markdown-preview",
+      "description": "Preview Pi responses and local Markdown, LaTeX, code, and diffs in the terminal, browser, or as PDF. By Oliver Maclaren.",
+      "installTarget": "pi-markdown-preview",
+      "version": "0.16.0",
+      "nextAction": "Install Pandoc and a Chromium-based browser, run /reload in Pi, then use /preview."
     },
     {
       "id": "pi-package:pi-mcp-adapter",
