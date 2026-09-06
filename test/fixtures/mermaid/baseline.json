@@ -45,8 +45,8 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 0,
-    "area": 416
+    "crossings": 1,
+    "area": 494
   },
   "nested-subgraphs": {
     "brokenLinks": 0,

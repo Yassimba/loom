@@ -116,10 +116,17 @@ interface RoutePlan {
 // ------------------------------------------------------------------ ranking
 
 /**
- * Longest-path ranking over the graph's DAG.
+ * Rank assignment along the flow axis.
  *
- * Back edges (those closing a cycle) are excluded by a DFS colouring pass, so
- * `A --> B --> C --> A` still ranks 0, 1, 2 rather than diverging.
+ * Cycles are broken by a DFS colouring pass in declaration order, so the
+ * edge treated as the return is the one the author wrote against the flow
+ * (`A --> B --> C --> A` returns on `C --> A`); greedy feedback-set
+ * heuristics reverse fewer edges on random graphs but ignore that order.
+ * Reversed edges take part in ranking in their reversed direction, so a
+ * return always climbs at least one rank. Longest-path layering puts each
+ * node as early as its predecessors allow, then Nikolov's node promotion
+ * (mirrored: nodes move later) shortens edges while that removes more
+ * virtual chain nodes than it adds.
  */
 export function computeRanks(graph: Graph): number[] {
   const n = graph.nodes.length
@@ -131,23 +138,53 @@ export function computeRanks(graph: Graph): number[] {
       indeg[e.to]++
     }
   }
-
   const color = new Uint8Array(n)
-  const dag: number[][] = Array.from({ length: n }, () => [])
-  const order: number[] = []
-
+  const tree: number[][] = Array.from({ length: n }, () => [])
+  const postorder: number[] = []
   // Roots first so ranks grow from natural entry points, then any leftovers.
   const roots = [...Array(n).keys()].filter((i) => indeg[i] === 0)
   for (const start of [...roots, ...Array(n).keys()]) {
-    if (color[start] === 0) dfsDag(start, children, color, dag, order)
+    if (color[start] === 0) dfsDag(start, children, color, tree, postorder)
   }
+  const forward = new Set<string>()
+  tree.forEach((vs, u) => {
+    for (const v of vs) forward.add(`${u}>${v}`)
+  })
+
+  const succ: number[][] = Array.from({ length: n }, () => [])
+  const pred: number[][] = Array.from({ length: n }, () => [])
+  for (const e of graph.edges) {
+    if (e.from === e.to) continue
+    const [a, b] = forward.has(`${e.from}>${e.to}`) ? [e.from, e.to] : [e.to, e.from]
+    succ[a].push(b)
+    pred[b].push(a)
+  }
+  const order = [...postorder].reverse()
 
   const rank = new Array<number>(n).fill(0)
-  for (let i = order.length - 1; i >= 0; i--) {
-    const u = order[i]
-    for (const v of dag[u]) rank[v] = Math.max(rank[v], rank[u] + 1)
+  for (const u of order) for (const v of succ[u]) rank[v] = Math.max(rank[v], rank[u] + 1)
+
+  // Demote a node (and whatever it would collide with) one rank later;
+  // worth keeping when the virtual nodes saved on its incoming edges
+  // outnumber those added on its outgoing ones.
+  const demote = (v: number): number => {
+    let saved = 0
+    for (const w of succ[v]) if (rank[w] === rank[v] + 1) saved += demote(w)
+    rank[v]++
+    return saved + succ[v].length - pred[v].length
   }
-  return rank
+  for (let round = 0; round < 8; round++) {
+    let improved = false
+    for (let v = 0; v < n; v++) {
+      if (succ[v].length === 0) continue
+      const before = [...rank]
+      if (demote(v) > 0) improved = true
+      else rank.splice(0, n, ...before)
+    }
+    if (!improved) break
+  }
+  const min = Math.min(...rank, 0)
+  return rank.map((r) => r - min)
 }
 
 /** Iterative DFS recording postorder and skipping edges back into the stack. */
@@ -179,6 +216,7 @@ function dfsDag(
     }
   }
 }
+
 
 /**
  * The layered graph crossing reduction works on: every real node plus one
