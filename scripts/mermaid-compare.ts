@@ -94,24 +94,30 @@ const files =
 
 const olds = render(oldRoot, files);
 const news = render(newRoot, files);
+const summaryOnly = process.env.MERMAID_COMPARE_SUMMARY === "1";
 let regressed = false;
+const summary: string[] = [];
 for (let i = 0; i < files.length; i++) {
   const o = olds[i];
   const n = news[i];
-  console.log(`\n=== ${n.name}`);
-  console.log(sideBySide(o.plain ?? ["<null>"], n.plain ?? ["<null>"]));
   const table: string[] = [];
   for (const k of SHOWN) {
     const ov = o.metrics?.[k] ?? "-";
     const nv = n.metrics?.[k] ?? "-";
-    const mark = ov === nv ? " " : "*";
-    table.push(`${mark}${k}=${ov}\u2192${nv}`);
+    if (ov !== nv) table.push(`${k} ${ov}\u2192${nv}`);
   }
-  console.log(table.join("  "));
   const oldBad = hardFailures(o);
   const newBad = hardFailures(n);
+  if (newBad.some((f) => !oldBad.includes(f))) regressed = true;
+  const verdict = newBad.length > 0 ? `  HARD: ${newBad.join(", ")}` : "";
+  summary.push(
+    `${n.name.padEnd(20)} ${table.length > 0 ? table.join("  ") : "unchanged"}${verdict}`,
+  );
+  if (summaryOnly) continue;
+  console.log(`\n=== ${n.name}`);
+  console.log(sideBySide(o.plain ?? ["<null>"], n.plain ?? ["<null>"]));
   if (oldBad.length > 0) console.log(`old hard failures: ${oldBad.join(", ")}`);
   if (newBad.length > 0) console.log(`NEW hard failures: ${newBad.join(", ")}`);
-  if (newBad.some((f) => !oldBad.includes(f))) regressed = true;
 }
+console.log(`\n${summary.join("\n")}`);
 process.exit(regressed ? 1 : 0);

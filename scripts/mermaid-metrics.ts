@@ -63,8 +63,9 @@ export interface Metrics {
   marginBottom: number;
   /**
    * Hard failure: an edge cell whose direction bit points at a neighbour
-   * that neither continues the line, is a box, nor is an arrowhead — the
-   * gap a route leaves where a box or the canvas edge swallowed it.
+   * that neither continues the line, is a box, an arrowhead, nor a label
+   * written over the line — the gap a route leaves where a box or the
+   * canvas edge swallowed it.
    */
   brokenLinks: number;
   /** Hard failure: edge bits under a label character. */
@@ -85,7 +86,13 @@ function brokenAt(c: CanvasLike, x: number, y: number, mask: number): number {
     if ((mask & bit) === 0) continue;
     const j = at(c, x + dx, y + dy);
     if (j === null) broken++;
-    else if ((c.mask[j] & back) === 0 && !c.occupied[j] && HEADS[c.ch[j]] === undefined) broken++;
+    else if (
+      (c.mask[j] & back) === 0 &&
+      !c.occupied[j] &&
+      HEADS[c.ch[j]] === undefined &&
+      c.role[j] !== "edgeLabel"
+    )
+      broken++;
   }
   return broken;
 }
