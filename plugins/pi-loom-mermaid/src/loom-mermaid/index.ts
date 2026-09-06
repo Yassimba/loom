@@ -49,13 +49,16 @@ export function render(src: string, options: { maxWidth?: number } = {}): Mermai
   // the tightest, for the caller to judge against `art.width`).
   let drawn: ReturnType<Diagram['render']> = null
   let art: ReturnType<Canvas['toLines']> = { plain: [], styled: [], width: 0 }
+  let collapsed = false
   for (const limits of LIMITS) {
     drawn = diagram.render(src, limits)
     if (drawn === null) return null
+    collapsed = limits.collapse === true
     art = drawn.canvas.toLines()
     if (options.maxWidth === undefined || art.width <= options.maxWidth) break
   }
   if (drawn === null) return null
+  if (collapsed) drawn.warnings.push('too wide for the space: subgraphs drawn collapsed, one box each')
 
   // A frontmatter `title:` is centred above the art, in the `title` role.
   const title = frontmatterTitle(src)

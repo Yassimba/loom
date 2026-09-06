@@ -33,6 +33,66 @@ export function layoutClass(graph: Graph, limits: Limits): CanvasResult {
 
 // -------------------------------------------------------------------- groups
 
+/**
+ * The overview of a grouped diagram: every top-level subgraph becomes one
+ * node labelled with its title and member count in parentheses, edges between two
+ * subgraphs (or a subgraph and a loose node) merge into one, and edges
+ * inside a subgraph disappear. Multilevel drawing's coarsest level
+ * (Walshaw), used when the full diagram is too wide for the space.
+ */
+function collapseGroups(graph: Graph): Graph {
+  const out = new Graph(graph.dir)
+  out.classDefs = graph.classDefs
+  const topOf = (g: number | null): number | null => {
+    let cur = g
+    while (cur !== null && graph.groups[cur].parent !== null) cur = graph.groups[cur].parent
+    return cur
+  }
+  const groupNode = new Map<number, number>()
+  const members = new Map<number, number>()
+  graph.nodeGroup.forEach((g) => {
+    const t = topOf(g)
+    if (t !== null) members.set(t, (members.get(t) ?? 0) + 1)
+  })
+  const nodeAt = new Map<number, number>()
+  graph.nodes.forEach((node, v) => {
+    const t = topOf(graph.nodeGroup[v])
+    if (t === null) {
+      if (graph.groups.some((g) => graph.index.get(g.id) === v)) return
+      nodeAt.set(v, out.nodes.length)
+      out.nodes.push(node)
+      out.nodeGroup.push(null)
+      return
+    }
+    let gn = groupNode.get(t)
+    if (gn === undefined) {
+      gn = out.nodes.length
+      const count = members.get(t) ?? 0
+      out.nodes.push({ label: `${graph.groups[t].label || graph.groups[t].id} (${count})`, shape: 'rect' })
+      out.nodeGroup.push(null)
+      groupNode.set(t, gn)
+    }
+    nodeAt.set(v, gn)
+  })
+  // A node whose id names a subgraph stands for it.
+  graph.groups.forEach((g, gi) => {
+    const v = graph.index.get(g.id)
+    const t = topOf(gi)
+    if (v !== undefined && t !== null && groupNode.has(t)) nodeAt.set(v, groupNode.get(t) as number)
+  })
+  const seen = new Set<string>()
+  for (const e of graph.edges) {
+    const a = nodeAt.get(e.from)
+    const b = nodeAt.get(e.to)
+    if (a === undefined || b === undefined || a === b) continue
+    const key = `${a}>${b}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.edges.push({ ...e, from: a, to: b, label: null, cardFrom: undefined, cardTo: undefined })
+  }
+  return out
+}
+
 /** An endpoint inside a scope: a plain node or a (proxied) subgraph. */
 interface ScopeItem {
   group: boolean
@@ -47,6 +107,7 @@ interface ScopeItem {
  * one crossing a subgraph boundary attaches to the frame instead of the node.
  */
 export function layoutGrouped(graph: Graph, limits: Limits): CanvasResult {
+  if (limits.collapse) return layoutFlowchart(collapseGroups(graph), limits)
   // A node whose id matches a subgraph id stands in for that subgraph.
   const proxy = new Map<number, number>()
   graph.groups.forEach((g, gi) => {
