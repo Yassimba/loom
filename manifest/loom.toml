@@ -41,8 +41,11 @@ python = "3.13.7"
 # manual install instruction and mise skips this entry.
 herdr = { version = "0.8.2", os = ["macos", "linux"] }
 
-# local semantic code index for coding agents
-"npm:@colbymchenry/codegraph" = "1.6.0"
+# Semantic code MCP server (Pi gateway setup uses sem mcp)
+"github:Ataraxy-Labs/sem[exe=sem]" = "v0.24.0"
+
+# local repository graph and code intelligence for Pi and Zed
+"github:zzet/gortex[exe=gortex]" = "v0.64.0"
 
 # compress command output for coding agents
 "github:rtk-ai/rtk" = "v0.48.0"

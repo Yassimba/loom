@@ -39,7 +39,7 @@ fn diagram_override_switches_and_default_init_preserves_it() {
     }
     std::fs::write(&path, "{\"style\":\"economical\",\"keep\":42}\n").unwrap();
     let before = std::fs::read(&path).unwrap();
-    let output = run(&["init", "--yes", "--no-codegraph"]);
+    let output = run(&["init", "--yes"]);
     assert!(
         output.status.success(),
         "{}",
@@ -85,7 +85,6 @@ fn late_init_failure_still_records_completed_project_writes() {
             "--editor",
             "cursor",
             "--coding-standards",
-            "--no-codegraph",
             "--yes",
         ])
         .env("HOME", &home)

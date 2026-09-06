@@ -1,7 +1,7 @@
 {
   "name": "@yassimba/pi-loom-mermaid",
   "version": "0.1.0",
-  "description": "Render colored Mermaid diagrams in Pi with lovely-mermaid.",
+  "description": "Loom's advanced Mermaid renderer for Pi, with better routing and color.",
   "license": "MIT",
   "type": "module",
   "engines": {

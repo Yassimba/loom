@@ -77,11 +77,11 @@ enum Command {
         coding_standards: bool,
         #[arg(long, hide = true)]
         no_coding_standards: bool,
-        /// Wire CodeGraph into installed agents and index this project
-        #[arg(long, overrides_with = "no_codegraph")]
-        codegraph: bool,
+        /// Set up Gortex for Pi and Zed and track this repository
+        #[arg(long, overrides_with = "no_gortex")]
+        gortex: bool,
         #[arg(long, hide = true)]
-        no_codegraph: bool,
+        no_gortex: bool,
         /// Run without prompts; with no feature flags, accept detection defaults
         #[arg(long)]
         yes: bool,
@@ -178,6 +178,9 @@ struct SelectionArgs {
     /// Install a tool from the pinned manifest; repeat for multiple tools
     #[arg(long = "tool")]
     tools: Vec<String>,
+    /// Select a reviewed MCP server (Sem via Pi gateway; use --agent pi)
+    #[arg(long = "mcp-server")]
+    mcp_servers: Vec<String>,
     /// Install skills for this agent; repeat for multiple agents
     #[arg(long = "agent", value_enum)]
     agents: Vec<SkillAgent>,
@@ -208,6 +211,13 @@ fn completion_command(catalog: &Catalog) -> clap::Command {
     let mut command = Cli::command();
     for name in ["setup", "add", "uninstall"] {
         command = command.mut_subcommand(name, |sub| {
+            let sub = if name == "uninstall" {
+                sub
+            } else {
+                sub.mut_arg("mcp_servers", |arg| {
+                    arg.value_parser(values(ResourceKind::McpServer))
+                })
+            };
             sub.mut_arg("skills", |arg| {
                 arg.value_parser(values(ResourceKind::Skill))
             })
@@ -243,6 +253,7 @@ fn run_selection(
         pi_packages: args.pi_packages,
         herdr_plugins: args.herdr_plugins,
         tools: args.tools,
+        mcp_servers: args.mcp_servers,
     };
     install_selected(
         mode,
@@ -264,6 +275,7 @@ fn run_uninstall(args: UninstallArgs, system: &RealSystem) -> Result<bool> {
         pi_packages: args.pi_packages,
         herdr_plugins: args.herdr_plugins,
         tools: args.tools,
+        mcp_servers: Vec::new(),
     };
     let selected = if selectors.is_empty() {
         Vec::new()
@@ -404,8 +416,8 @@ fn main() -> Result<()> {
             diagrams,
             coding_standards,
             no_coding_standards,
-            codegraph,
-            no_codegraph,
+            gortex,
+            no_gortex,
             yes,
             force,
         } => {
@@ -431,7 +443,7 @@ fn main() -> Result<()> {
                     editor,
                     diagrams,
                     coding_standards: flag(coding_standards, no_coding_standards),
-                    codegraph: flag(codegraph, no_codegraph),
+                    gortex: flag(gortex, no_gortex),
                     yes,
                     force,
                 },
@@ -541,6 +553,17 @@ mod tests {
     }
 
     #[test]
+    fn mcp_documented_uninstall_command_parses() {
+        let command = include_str!("../MCP.md")
+            .split('`')
+            .find(|text| text.starts_with("loom uninstall"))
+            .expect("MCP removal instructions");
+        let cli = Cli::try_parse_from(command.split_whitespace())
+            .expect("documented MCP removal command must be accepted");
+        assert!(matches!(cli.command, Some(Command::Uninstall(_))));
+    }
+
+    #[test]
     fn init_accepts_adhd_permanent_mode_flag() {
         // Capability/seam: scripted permanent ADHD mode. This fails if the
         // public flag stops reaching the init workflow. No expiry.
@@ -608,21 +631,18 @@ mod tests {
     }
 
     #[test]
-    fn wiki_has_unregister_but_no_delete_command() {
-        assert!(Cli::try_parse_from(["loom", "wiki", "unregister", "/tmp/vault"]).is_ok());
-        assert!(Cli::try_parse_from(["loom", "wiki", "delete", "/tmp/vault"]).is_err());
-    }
-
-    #[test]
-    fn init_accepts_codegraph_flag() {
-        let cli = Cli::try_parse_from(["loom", "init", "--codegraph"]).unwrap();
+    fn init_accepts_gortex_flag() {
+        let cli = Cli::try_parse_from(["loom", "init", "--gortex"]).unwrap();
 
         assert!(matches!(
             cli.command,
-            Some(Command::Init {
-                codegraph: true,
-                ..
-            })
+            Some(Command::Init { gortex: true, .. })
         ));
+    }
+
+    #[test]
+    fn wiki_has_unregister_but_no_delete_command() {
+        assert!(Cli::try_parse_from(["loom", "wiki", "unregister", "/tmp/vault"]).is_ok());
+        assert!(Cli::try_parse_from(["loom", "wiki", "delete", "/tmp/vault"]).is_err());
     }
 }

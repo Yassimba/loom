@@ -25,8 +25,8 @@ request. Resolve `<atlas-skill>` from the installed system-atlas directory.
    unverified; keep unaffected layout. Also inspect relevant staged,
    unstaged, and untracked source when the task targets the working tree.
    Record the task target separately from atlas pins and review comparison base.
-4. Inspect changed source and affected callers/contracts using CodeGraph when
-   indexed, otherwise targeted reads. Verify relevant bindings against the
+4. Inspect changed source and affected callers/contracts with targeted reads.
+   Verify relevant bindings against the
    task's revision. Inspect both sides of review diffs. Atlas context is not a
    substitute for reviewing changed code or checking uncertain claims.
 

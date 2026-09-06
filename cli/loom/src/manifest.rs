@@ -75,8 +75,7 @@ fn current_key(key: &str) -> &str {
 /// yet). Core keys are implicit and excluded; renamed keys come back current.
 pub fn selected_keys(home: &std::path::Path) -> Vec<String> {
     let target = conf_d_target(home);
-    let _ = crate::fs_tx::recover(&target);
-    let Ok(content) = fs::read_to_string(target) else {
+    let Ok(Some(content)) = crate::fs_tx::read_recoverable(&target) else {
         return Vec::new();
     };
     let core = core_section(&content).unwrap_or_default();
@@ -93,8 +92,8 @@ pub fn selected_keys(home: &std::path::Path) -> Vec<String> {
 
 pub fn selection_contains(home: &std::path::Path, key: &str) -> bool {
     let target = conf_d_target(home);
-    let _ = crate::fs_tx::recover(&target);
-    fs::read_to_string(target).is_ok_and(|content| {
+    crate::fs_tx::read_recoverable(&target).is_ok_and(|content| {
+        let Some(content) = content else { return false };
         content
             .lines()
             .filter_map(line_key)
@@ -289,6 +288,15 @@ mod tests {
     }
 
     #[test]
+    fn sem_selection_keeps_the_reviewed_exact_pin() {
+        let rendered =
+            render_selection(BUNDLED_MANIFEST, "", &[crate::mcp::SEM_TOOL_KEY.into()]).unwrap();
+        assert!(rendered.contains("\"github:Ataraxy-Labs/sem[exe=sem]\" = \"v0.24.0\""));
+        let empty = render_selection(BUNDLED_MANIFEST, "", &[]).unwrap();
+        assert!(!empty.contains("Ataraxy-Labs"));
+    }
+
+    #[test]
     fn published_manifest_is_valid_toml() {
         include_str!("../../../manifest/loom.toml")
             .parse::<toml_edit::DocumentMut>()
@@ -308,7 +316,7 @@ gh = \"2.97.0\"
 ";
 
     #[test]
-    fn selected_keys_recovers_an_interrupted_selection() {
+    fn selection_preview_preserves_pending_files_until_mutation() {
         let home = std::env::temp_dir().join(format!(
             "loom-manifest-recovery-{}-{}",
             std::process::id(),
@@ -331,8 +339,14 @@ gh = \"2.97.0\"
             selected_keys(&home),
             vec!["ubi:Yassimba/loom".to_string(), "gh".to_string()]
         );
+        assert!(selection_contains(&home, "gh"));
+        assert!(!target.exists());
+        assert!(backup.is_file());
+        crate::fs_tx::recover(&target).unwrap();
         assert!(target.is_file());
         assert!(!backup.exists());
+        assert!(selection_contains(&home, "gh"));
+        assert!(selection_contains(&home, "ubi:Yassimba/loom"));
         std::fs::remove_dir_all(home).unwrap();
     }
 

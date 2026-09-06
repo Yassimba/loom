@@ -7,6 +7,7 @@ pub mod init;
 mod install;
 mod jsonc;
 pub mod manifest;
+pub mod mcp;
 pub mod ownership;
 mod pi_compat;
 pub mod settings;

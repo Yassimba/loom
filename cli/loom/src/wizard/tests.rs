@@ -153,6 +153,51 @@ fn wizard() -> Wizard {
     Wizard::new(model(ready()))
 }
 
+#[test]
+fn sem_mcp_flows_through_choose_where_review_with_gateway_exposure() {
+    let root = std::env::temp_dir().join(format!("loom-mcp-wizard-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut model = model(ready());
+    model.resources = crate::Catalog::embedded()
+        .unwrap()
+        .find(&["mcp-server:sem".into(), "pi-package:pi-mcp-adapter".into()])
+        .unwrap();
+    model.installed = vec![false; 2];
+    model.settings.clear();
+    model.profiles.clear();
+    model.dry_run = true;
+    model.skill_destination =
+        SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &root, &root);
+    let mut wizard = Wizard::new(model);
+    assert_eq!(wizard.item_state(Item::Resource(0)), ItemState::Available);
+    assert_eq!(wizard.item_state(Item::Resource(1)), ItemState::Picked);
+    wizard.selected[0] = true;
+    press(&mut wizard, &[KeyCode::Enter]);
+    assert!(matches!(wizard.stages[wizard.stage_index], Stage::Where(_)));
+    let rendered = screen(&mut wizard, 120, 40);
+    assert!(rendered.contains("auto-selected Pi gateway"), "{rendered}");
+    assert!(rendered.contains("MCP not yet verified"), "{rendered}");
+    press(
+        &mut wizard,
+        &[KeyCode::Home, KeyCode::Char(' '), KeyCode::Enter],
+    );
+    assert_eq!(wizard.skill_scope, SkillScope::Project);
+    let rendered = screen(&mut wizard, 120, 40);
+    assert!(rendered.contains("directTools=false"), "{rendered}");
+    assert!(rendered.contains("mcp-adapter"), "{rendered}");
+    assert!(
+        rendered.contains(".pi/mcp.json") || rendered.contains(r".pi\mcp.json"),
+        "{rendered}"
+    );
+    assert!(!rendered.contains("blocked"), "{rendered}");
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::Exit(WizardOutcome::DryRun(_, _)))
+    ));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
@@ -344,7 +389,7 @@ fn stages_are_choose_where_review_install_and_where_needs_skills() {
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert_eq!(wizard.visible_stages(), [0, 1, 3, 4]);
     press(&mut wizard, &[KeyCode::Enter]);
-    assert_eq!(title(&wizard), "Skill scope");
+    assert_eq!(title(&wizard), "Where");
     press(&mut wizard, &[KeyCode::Enter]);
     assert_eq!(title(&wizard), "Review");
     press(&mut wizard, &[KeyCode::Esc, KeyCode::Esc]);
@@ -572,7 +617,7 @@ fn where_toggles_scope_and_agents_and_reports_exact_trees() {
     let mut wizard = wizard();
     go_to(&mut wizard, Row::Resource(3));
     press(&mut wizard, &[KeyCode::Char(' '), KeyCode::Enter]);
-    assert_eq!(title(&wizard), "Skill scope");
+    assert_eq!(title(&wizard), "Where");
     assert_eq!(cursor(&wizard), 1, "the first agent, not the scope row");
     press(&mut wizard, &[KeyCode::Home, KeyCode::Char(' ')]);
     assert_eq!(wizard.skill_scope, SkillScope::Project);
@@ -924,7 +969,7 @@ fn mixed_skill_and_wiki_selection_explains_the_two_destinations() {
     wizard.selected = vec![true, true];
 
     press(&mut wizard, &[KeyCode::Enter]);
-    assert_eq!(title(&wizard), "Skill scope");
+    assert_eq!(title(&wizard), "Where");
     let scope = screen(&mut wizard, 104, 26);
     assert!(scope.contains("This screen affects agent skills only"));
     assert!(scope.contains("Wiki setup is separate"));

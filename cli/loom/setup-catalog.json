@@ -22,7 +22,8 @@
         "skill:ponytail",
         "tool:pi",
         "tool:herdr",
-        "tool:codegraph",
+        "tool:gortex",
+        "mcp-server:sem",
         "tool:tuicr",
         "tool:gh",
         "tool:glab",
@@ -59,7 +60,7 @@
         "skill:datadog",
         "tool:pi",
         "tool:herdr",
-        "tool:codegraph",
+        "tool:gortex",
         "tool:gh",
         "tool:glab",
         "tool:tokei",
@@ -118,7 +119,7 @@
         "skill:research",
         "skill:show-me",
         "tool:pi",
-        "tool:codegraph",
+        "tool:gortex",
         "tool:tokei",
         "tool:mermaid-cli",
         "tool:plannotator",
@@ -221,16 +222,6 @@
       "installTarget": "pi-autoresearch",
       "version": "1.7.0",
       "nextAction": "Run /autoresearch with an optimization target in Pi."
-    },
-    {
-      "id": "pi-package:@yassimba/pi-codegraph",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "CodeGraph prompt context",
-      "description": "Front-load relevant CodeGraph context into Pi prompts.",
-      "installTarget": "@yassimba/pi-codegraph",
-      "nextAction": "Install CodeGraph with `loom add --tool codegraph`, run `codegraph init` in a project, then reload Pi.",
-      "windowsWsl": true
     },
     {
       "id": "pi-package:@yassimba/pi-loom-mermaid",
@@ -1071,6 +1062,28 @@
       "windowsWsl": true
     },
     {
+      "id": "tool:sem",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "sem",
+      "description": "Semantic code search, diffs, and change impact. Binary prerequisite for Sem MCP.",
+      "installTarget": "github:Ataraxy-Labs/sem[exe=sem]",
+      "nextAction": "For agent access, select MCP servers → sem in loom add.",
+      "bin": "sem",
+      "companions": []
+    },
+    {
+      "id": "tool:gortex",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "gortex",
+      "description": "Local repository graph and code intelligence for Pi and Zed.",
+      "installTarget": "github:zzet/gortex[exe=gortex]",
+      "nextAction": "Run `loom init --gortex` in a repository to configure Pi and Zed, start Gortex, and track it.",
+      "bin": "gortex",
+      "companions": []
+    },
+    {
       "id": "tool:loom-teams",
       "kind": "tool",
       "group": "Tools",
@@ -1090,7 +1103,10 @@
       "installTarget": "npm:@earendil-works/pi-coding-agent",
       "nextAction": "Run `pi` in a project to start the agent.",
       "bin": "pi",
-      "companions": []
+      "companions": [],
+      "dependencies": [
+        "pi-mcp-adapter"
+      ]
     },
     {
       "id": "tool:herdr",
@@ -1103,17 +1119,6 @@
       "bin": "herdr",
       "companions": [],
       "windowsWsl": true
-    },
-    {
-      "id": "tool:codegraph",
-      "kind": "tool",
-      "group": "Tools",
-      "label": "codegraph",
-      "description": "Local semantic code index for coding agents — source, call paths, and change impact without file-by-file discovery.",
-      "installTarget": "npm:@colbymchenry/codegraph",
-      "nextAction": "Run `loom init` in a project to wire agents and build its index.",
-      "bin": "codegraph",
-      "companions": []
     },
     {
       "id": "tool:rtk",
@@ -1368,6 +1373,20 @@
       ],
       "bin": "obsidian",
       "companions": []
+    },
+    {
+      "id": "mcp-server:sem",
+      "kind": "mcp-server",
+      "group": "MCP servers",
+      "label": "sem",
+      "description": "Semantic code search, diffs, and change impact through Pi’s MCP gateway. Tools are discovered on request.",
+      "installTarget": "sem",
+      "version": "0.24.0",
+      "source": "https://github.com/Ataraxy-Labs/sem/releases/tag/v0.24.0",
+      "dependencies": [
+        "pi-mcp-adapter"
+      ],
+      "nextAction": "Restart Pi in the selected project and open /mcp to check Sem. Tool exposure is gateway-only; first launch may discover metadata."
     }
   ]
 }

@@ -55,6 +55,9 @@ fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) ->
         .resources
         .iter()
         .filter(|resource| resource.kind == ResourceKind::PiPackage)
+        // MCP setup preserves the shared gateway; a catalog reinstall would
+        // downgrade compatible newer installs to the setup prerequisite pin.
+        .filter(|resource| resource.install_target != "pi-mcp-adapter")
         .filter(|resource| !native_windows || !resource.windows_wsl)
         .flat_map(|resource| {
             let spec = resource.pi_install_spec();
@@ -354,6 +357,17 @@ fn sync_projects_lane(system: &dyn System, repository: &skills::Repository) -> L
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mcp_gateway_is_not_reinstalled_or_downgraded_by_updates() {
+        let catalog = Catalog::embedded().unwrap();
+        for version in ["2.32.1", "2.33.0"] {
+            let listed = format!(
+                "User packages:\n  npm:pi-mcp-adapter@{version}\nProject packages:\n  npm:pi-mcp-adapter@{version}\n"
+            );
+            assert!(pi_package_commands(&catalog, &listed, false).is_empty());
+        }
+    }
 
     #[test]
     fn pi_package_updates_preserve_user_and_project_scope() {

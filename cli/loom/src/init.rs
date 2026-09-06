@@ -88,7 +88,7 @@ pub struct InitOptions {
     pub editor: Option<Editor>,
     pub diagrams: Option<DiagramStyle>,
     pub coding_standards: Option<bool>,
-    pub codegraph: Option<bool>,
+    pub gortex: Option<bool>,
     pub yes: bool,
     pub force: bool,
 }
@@ -251,7 +251,7 @@ struct InitFeatures {
     editor: Option<Editor>,
     diagrams: Option<DiagramStyle>,
     coding_standards: bool,
-    codegraph: bool,
+    gortex: bool,
 }
 
 fn has_project_selection(options: &InitOptions) -> bool {
@@ -265,13 +265,13 @@ fn has_project_selection(options: &InitOptions) -> bool {
 }
 
 fn has_explicit_selection(options: &InitOptions) -> bool {
-    has_project_selection(options) || options.diagrams.is_some() || options.codegraph == Some(true)
+    has_project_selection(options) || options.diagrams.is_some() || options.gortex == Some(true)
 }
 
 fn choose_features(
     project: &Path,
     beads_tools_installed: bool,
-    codegraph_installed: bool,
+    gortex_installed: bool,
     default_editor: Editor,
     options: &InitOptions,
     mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
@@ -280,8 +280,8 @@ fn choose_features(
         if options.tracker == Some(Tracker::Beads) && !beads_tools_installed {
             anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
         }
-        if options.codegraph == Some(true) && !codegraph_installed {
-            anyhow::bail!("CodeGraph is not installed; run `loom add --tool codegraph`");
+        if options.gortex == Some(true) && !gortex_installed {
+            anyhow::bail!("Gortex is not installed; run `loom add --tool gortex`");
         }
         return Ok(InitFeatures {
             project_instructions: has_project_selection(options),
@@ -293,7 +293,7 @@ fn choose_features(
             editor: options.editor,
             diagrams: options.diagrams,
             coding_standards: options.coding_standards.unwrap_or(false),
-            codegraph: options.codegraph.unwrap_or(false),
+            gortex: options.gortex.unwrap_or(false),
         });
     }
 
@@ -388,14 +388,14 @@ fn choose_features(
     if tracker == Some(Tracker::Beads) && !beads_tools_installed {
         anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
     }
-    let codegraph = match options.codegraph {
-        Some(true) if !codegraph_installed => {
-            anyhow::bail!("CodeGraph is not installed; run `loom add --tool codegraph`");
+    let gortex = match options.gortex {
+        Some(true) if !gortex_installed => {
+            anyhow::bail!("Gortex is not installed; run `loom add --tool gortex`");
         }
         Some(explicit) => explicit,
-        None if codegraph_installed => ask(
-            "Set up CodeGraph?",
-            "Wires installed agents and indexes this project.",
+        None if gortex_installed => ask(
+            "Set up Gortex?",
+            "Wires Pi and Zed without hooks, starts Gortex, and tracks this repository.",
             true,
         )?,
         None => false,
@@ -421,8 +421,37 @@ fn choose_features(
         editor,
         diagrams,
         coding_standards,
-        codegraph,
+        gortex,
     })
+}
+
+fn setup_gortex(system: &dyn System, project: &Path) -> Result<()> {
+    let result = system
+        .run(
+            &CommandSpec::new(
+                "gortex",
+                [
+                    "install",
+                    "--yes",
+                    "--no-hooks",
+                    "--agents",
+                    "pi,zed",
+                    "--start",
+                    "--track",
+                    "--track-path",
+                    ".",
+                ],
+            )
+            .in_dir(project),
+        )
+        .context("could not start Gortex setup")?;
+    if !result.success {
+        anyhow::bail!(
+            "Gortex setup failed: {}",
+            crate::install::command_failure_message(&result)
+        );
+    }
+    Ok(())
 }
 
 fn setup_beads(system: &dyn System, project: &Path) -> Result<bool> {
@@ -499,24 +528,6 @@ fn ignore_agent_docs(project: &Path) -> Result<&'static str> {
     Ok("ignores ai-docs/")
 }
 
-fn setup_codegraph(system: &dyn System) -> Result<()> {
-    for command in [
-        CommandSpec::new("codegraph", ["install", "--yes", "--location", "local"]),
-        CommandSpec::new("codegraph", ["init"]),
-    ] {
-        let result = system
-            .run(&command)
-            .context("could not start CodeGraph setup")?;
-        if !result.success {
-            anyhow::bail!(
-                "CodeGraph setup failed: {}",
-                crate::install::command_failure_message(&result)
-            );
-        }
-    }
-    Ok(())
-}
-
 fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
     interactive
         || options.yes
@@ -527,7 +538,7 @@ fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
         || options.domain.is_some()
         || options.editor.is_some()
         || options.coding_standards.is_some()
-        || options.codegraph.is_some()
+        || options.gortex.is_some()
         || options.diagrams.is_some()
 }
 
@@ -537,11 +548,12 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
             "non-interactive `loom init` needs --yes or explicit feature flags; no files changed"
         );
     }
-    let project = std::env::current_dir().context("no current directory")?;
+    let current = system.current_dir().context("no current directory")?;
+    let project = crate::project_root(&current);
     let features = choose_features(
         &project,
         system.command_exists("br") && system.command_exists("bv"),
-        system.command_exists("codegraph"),
+        system.command_exists("gortex"),
         detect_editor(system),
         options,
         |prompt, help, default| select_yes_no(prompt, help, default, options.yes),
@@ -564,12 +576,12 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
             },
         );
     }
+    if features.gortex {
+        setup_gortex(system, &project)?;
+        out.row(Mark::Ok, "Gortex", "Pi and Zed wired; repository tracked");
+    }
     if !features.project_instructions {
-        if features.codegraph {
-            setup_codegraph(system)?;
-            out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
-            out.verdict(true, "Done");
-        } else if features.diagrams.is_some() {
+        if features.diagrams.is_some() || features.gortex {
             out.verdict(true, "Done");
         } else {
             out.verdict(true, "Nothing selected; no changes made");
@@ -727,10 +739,6 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     }
     let ignore_detail = ignore_agent_docs(&project).context("could not update .gitignore")?;
     out.row(Mark::Ok, ".gitignore", ignore_detail);
-    if features.codegraph {
-        setup_codegraph(system)?;
-        out.row(Mark::Ok, "CodeGraph", "agents wired, project indexed");
-    }
 
     out.verdict(true, "Done");
     if existing.is_none() {
@@ -1051,8 +1059,8 @@ mod tests {
     }
 
     impl System for RecordingSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "codegraph"
+        fn command_exists(&self, _name: &str) -> bool {
+            false
         }
 
         fn refresh_path(&self) {}
@@ -1068,23 +1076,6 @@ mod tests {
     }
 
     #[test]
-    fn codegraph_setup_uses_current_install_and_init_commands() {
-        let system = RecordingSystem {
-            commands: Mutex::new(Vec::new()),
-        };
-
-        setup_codegraph(&system).unwrap();
-
-        assert_eq!(
-            *system.commands.lock().unwrap(),
-            [
-                CommandSpec::new("codegraph", ["install", "--yes", "--location", "local"]),
-                CommandSpec::new("codegraph", ["init"]),
-            ]
-        );
-    }
-
-    #[test]
     fn noninteractive_init_requires_explicit_consent() {
         let mut options = InitOptions {
             python: None,
@@ -1095,7 +1086,7 @@ mod tests {
             editor: None,
             diagrams: None,
             coding_standards: None,
-            codegraph: None,
+            gortex: None,
             yes: false,
             force: false,
         };
@@ -1122,7 +1113,7 @@ mod tests {
             editor: None,
             diagrams: None,
             coding_standards: None,
-            codegraph: None,
+            gortex: None,
             yes: false,
             force: false,
         };
@@ -1149,7 +1140,7 @@ mod tests {
                 editor: None,
                 diagrams: None,
                 coding_standards: false,
-                codegraph: false,
+                gortex: false,
             }
         );
     }
@@ -1167,7 +1158,7 @@ mod tests {
             editor: None,
             diagrams: None,
             coding_standards: None,
-            codegraph: None,
+            gortex: None,
             yes: true,
             force: false,
         };
@@ -1198,7 +1189,7 @@ mod tests {
                 editor: Some(Editor::Cursor),
                 diagrams: Some(DiagramStyle::Inherit),
                 coding_standards: true,
-                codegraph: true,
+                gortex: true,
             }
         );
         let local_defaults = choose_features(
@@ -1242,8 +1233,9 @@ mod tests {
                     true,
                 ),
                 (
-                    "Set up CodeGraph?".into(),
-                    "Wires installed agents and indexes this project.".into(),
+                    "Set up Gortex?".into(),
+                    "Wires Pi and Zed without hooks, starts Gortex, and tracks this repository."
+                        .into(),
                     true,
                 ),
             ]
@@ -1253,22 +1245,18 @@ mod tests {
         let selected = choose_features(
             project,
             false,
-            true,
+            false,
             Editor::None,
             &options,
             |prompt, _, _| {
                 asked.push(prompt.to_string());
-                Ok(prompt != "Set up project agent instructions?")
+                Ok(false)
             },
         )
         .unwrap();
 
-        assert_eq!(
-            asked,
-            ["Set up project agent instructions?", "Set up CodeGraph?"]
-        );
+        assert_eq!(asked, ["Set up project agent instructions?"]);
         assert!(!selected.project_instructions);
-        assert!(selected.codegraph);
     }
 
     #[test]
@@ -1281,6 +1269,104 @@ mod tests {
         );
         assert_eq!(render_gitignore("target\n/ai-docs/\n"), None);
         assert_eq!(render_gitignore("ai-docs\n"), None);
+    }
+
+    #[test]
+    fn gortex_setup_from_a_nested_directory_tracks_the_repository_root() {
+        struct NestedSystem {
+            home: std::path::PathBuf,
+            current: std::path::PathBuf,
+            commands: Mutex<Vec<CommandSpec>>,
+        }
+
+        impl System for NestedSystem {
+            fn command_exists(&self, name: &str) -> bool {
+                name == "gortex"
+            }
+
+            fn home_dir(&self) -> Option<std::path::PathBuf> {
+                Some(self.home.clone())
+            }
+
+            fn current_dir(&self) -> Option<std::path::PathBuf> {
+                Some(self.current.clone())
+            }
+
+            fn refresh_path(&self) {}
+
+            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
+                self.commands.lock().unwrap().push(command.clone());
+                Ok(CommandResult {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            }
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "loom-gortex-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let nested = root.join("packages/example");
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::create_dir_all(&nested).unwrap();
+        let system = NestedSystem {
+            home: root.clone(),
+            current: nested,
+            commands: Mutex::new(Vec::new()),
+        };
+        let options = InitOptions {
+            python: None,
+            rust: None,
+            adhd: None,
+            tracker: None,
+            domain: None,
+            editor: None,
+            diagrams: None,
+            coding_standards: None,
+            gortex: Some(true),
+            yes: false,
+            force: false,
+        };
+
+        run_init(&system, &options).unwrap();
+
+        assert_eq!(system.commands.lock().unwrap()[0].cwd, Some(root.clone()));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn gortex_setup_is_non_enforcing_and_tracks_the_project() {
+        let system = RecordingSystem {
+            commands: Mutex::new(Vec::new()),
+        };
+        let project = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+        setup_gortex(&system, project).unwrap();
+
+        assert_eq!(
+            *system.commands.lock().unwrap(),
+            [CommandSpec::new(
+                "gortex",
+                [
+                    "install",
+                    "--yes",
+                    "--no-hooks",
+                    "--agents",
+                    "pi,zed",
+                    "--start",
+                    "--track",
+                    "--track-path",
+                    ".",
+                ]
+            )
+            .in_dir(project)]
+        );
     }
 
     #[test]

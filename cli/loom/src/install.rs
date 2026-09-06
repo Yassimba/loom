@@ -117,11 +117,19 @@ pub enum StepAction {
     SyncTools {
         tools: Vec<String>,
     },
+    ConfigureMcp {
+        destination: crate::SkillDestination,
+    },
 }
 
 impl StepAction {
     pub fn display(&self) -> String {
         match self {
+            Self::ConfigureMcp { destination } => format!(
+                "configure Sem → {}; {}",
+                crate::mcp::config_path(destination).display(),
+                crate::mcp::EXPOSURE_NOTE
+            ),
             Self::Command(command) => command.display(),
             Self::CopySkills {
                 skills,
@@ -141,8 +149,13 @@ impl StepAction {
                 }
             ),
             Self::SyncTools { tools } => format!(
-                "add to the mise selection and install: {}",
-                tools.join(", ")
+                "add to the mise selection and install: {}{}",
+                tools.join(", "),
+                if tools.iter().any(|key| key == crate::mcp::SEM_TOOL_KEY) {
+                    " (machine-wide Sem v0.24.0)"
+                } else {
+                    ""
+                }
             ),
         }
     }
@@ -180,9 +193,24 @@ pub fn build_install_plan(
     platform: Platform,
     skill_destination: &crate::skills::SkillDestination,
 ) -> Result<InstallPlan> {
-    let needs_pi = resources
+    let has_mcp = resources
         .iter()
-        .any(|resource| resource.kind == ResourceKind::PiPackage);
+        .any(|resource| resource.kind == ResourceKind::McpServer);
+    if has_mcp {
+        anyhow::ensure!(
+            resources
+                .iter()
+                .filter(|r| r.kind == ResourceKind::McpServer)
+                .all(|r| r.id == "mcp-server:sem"),
+            "unverified MCP server"
+        );
+        anyhow::ensure!(resources.iter().any(|r| r.kind == ResourceKind::Skill) || skill_destination.agents == [crate::SkillAgent::Pi], "Sem MCP supports Pi in this release; other agent adapters are not yet verified (use --agent pi)");
+        crate::mcp::preflight(skill_destination)?;
+    }
+    let needs_pi = has_mcp
+        || resources
+            .iter()
+            .any(|resource| resource.kind == ResourceKind::PiPackage);
     let needs_herdr = resources
         .iter()
         .any(|resource| resource.kind == ResourceKind::HerdrPlugin);
@@ -196,6 +224,9 @@ pub fn build_install_plan(
             std::iter::once(tool.install_target.clone()).chain(tool.companions.iter().cloned())
         })
         .collect::<Vec<_>>();
+    if has_mcp && !tools.iter().any(|key| key == crate::mcp::SEM_TOOL_KEY) {
+        tools.push(crate::mcp::SEM_TOOL_KEY.into());
+    }
     if needs_pi && !status.pi && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
         tools.push(crate::manifest::PI_TOOL_KEY.into());
     }
@@ -252,7 +283,7 @@ pub fn build_install_plan(
     }
     for resource in resources {
         let (manager, command, verification) = match resource.kind {
-            ResourceKind::Skill | ResourceKind::Tool => continue,
+            ResourceKind::Skill | ResourceKind::Tool | ResourceKind::McpServer => continue,
             ResourceKind::PiPackage => (
                 "pi",
                 CommandSpec::new("pi", ["install", &resource.pi_install_spec()]),
@@ -283,6 +314,16 @@ pub fn build_install_plan(
             manager: manager.into(),
             action: StepAction::Command(command),
             verification: Some(verification),
+        });
+    }
+    if has_mcp {
+        steps.push(InstallStep {
+            target: "mcp-server:sem".into(),
+            manager: "pi".into(),
+            action: StepAction::ConfigureMcp {
+                destination: skill_destination.clone(),
+            },
+            verification: None,
         });
     }
     Ok(InstallPlan {
@@ -324,6 +365,25 @@ pub fn execute_install_plan_with_control(
     cancelled: &std::sync::atomic::AtomicBool,
     observer: &mut dyn FnMut(usize, StepStatus),
 ) -> InstallReport {
+    // Validate every MCP destination again before any concurrent lane can mutate state.
+    for step in &plan.resources {
+        if let StepAction::ConfigureMcp { destination } = &step.action {
+            if let Err(error) = crate::mcp::preflight(destination) {
+                observer(
+                    plan.prerequisites.len()
+                        + plan.resources.iter().position(|s| s == step).unwrap(),
+                    StepStatus::Failed(error.to_string()),
+                );
+                return InstallReport {
+                    installed: Vec::new(),
+                    failures: vec![InstallFailure {
+                        target: step.target.clone(),
+                        message: error.to_string(),
+                    }],
+                };
+            }
+        }
+    }
     let repository = &crate::skills::Repository::default();
     let lanes = install_lanes(plan);
     let mut outcomes = vec![None; plan.prerequisites.len() + plan.resources.len()];
@@ -473,7 +533,13 @@ fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
                     && skills.iter().any(|name| bundled_names.contains(&name))
         )
     });
-    if needs_bundled_pi {
+    let configures_mcp = plan
+        .resources
+        .iter()
+        .any(|step| matches!(step.action, StepAction::ConfigureMcp { .. }));
+    // MCP and skill copies both read/modify/save the shared ownership ledger.
+    // Keep those transactions in sequence, including MCP's repeated preflight.
+    if needs_bundled_pi || configures_mcp {
         if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == "skills") {
             lane.waits_for = Some("pi");
         }
@@ -485,7 +551,7 @@ fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
                 if tools.iter().any(|tool| tool == crate::manifest::PI_TOOL_KEY)
         )
     });
-    if pi_via_mise {
+    if pi_via_mise || configures_mcp {
         if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == "pi") {
             lane.waits_for = Some("mise");
         }
@@ -601,6 +667,11 @@ fn execute_action(
     repository: &crate::skills::Repository,
 ) -> Option<String> {
     let command = match &step.action {
+        StepAction::ConfigureMcp { destination } => {
+            return crate::mcp::install(destination, system)
+                .err()
+                .map(|e| e.to_string())
+        }
         StepAction::CopySkills {
             skills,
             destination,

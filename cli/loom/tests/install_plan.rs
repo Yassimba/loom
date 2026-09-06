@@ -49,6 +49,23 @@ fn skill_with_deps(id: &str, target: &str, dependencies: &[&str]) -> Resource {
 }
 
 #[test]
+fn sem_mcp_requires_a_verified_destination() {
+    let error = build_install_plan(
+        &[resource(ResourceKind::McpServer, "mcp-server:sem", "sem")],
+        PrerequisiteStatus {
+            pi: false,
+            herdr: false,
+            mise: false,
+        },
+        Platform::Unix,
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("other agent adapters are not yet verified"));
+}
+
+#[test]
 fn mixed_selection_copies_skills_and_delegates_the_rest() {
     let resources = vec![
         resource(ResourceKind::Skill, "skill:tdd", "tdd"),

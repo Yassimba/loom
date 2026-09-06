@@ -58,7 +58,7 @@ loom init
 - domain notes for the words and rules used by the project
 - coding standards
 - editor links that open the right source file
-- a local CodeGraph index, if you installed CodeGraph
+- a local Gortex graph for Pi and Zed, when Gortex is installed
 
 Use `loom init --yes` to accept the detected defaults without questions.
 

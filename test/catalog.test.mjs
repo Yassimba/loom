@@ -55,6 +55,7 @@ async function createCatalogFixture() {
     'id = "example.sample"\nname = "Sample Herdr plugin"\nversion = "1.0.0"\ndescription = "Sample Herdr capability"\n',
   );
   await mkdir(join(repoRoot, "manifest"), { recursive: true });
+  await writeFile(join(repoRoot, "manifest", "mcp-servers.json"), JSON.stringify({ servers: [] }));
   await writeFile(
     join(repoRoot, "manifest", "herdr-plugins.json"),
     JSON.stringify({
@@ -101,6 +102,18 @@ async function createCatalogFixture() {
   );
   return repoRoot;
 }
+
+test("Pi and Sem select the Pi MCP adapter", async () => {
+  const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
+  const sem = catalog.resources.find(({ id }) => id === "mcp-server:sem");
+  const pi = catalog.resources.find(({ id }) => id === "tool:pi");
+  assert.equal(sem.kind, "mcp-server");
+  assert.equal(sem.version, "0.24.0");
+  assert.equal(sem.source, "https://github.com/Ataraxy-Labs/sem/releases/tag/v0.24.0");
+  assert.deepEqual(sem.dependencies, ["pi-mcp-adapter"]);
+  assert.deepEqual(pi.dependencies, ["pi-mcp-adapter"]);
+  assert.ok(catalog.profiles[0].resources.includes(sem.id));
+});
 
 test("the setup catalog carries ordered profiles with exact resource ids", async () => {
   const repoRoot = await createCatalogFixture();

@@ -20,6 +20,19 @@ fn remove_path(path: &Path) -> Result<(), String> {
     .map_err(|error| format!("could not remove {}: {error}", path.display()))
 }
 
+/// Inspect the live file, or its recoverable backup when absent, without
+/// renaming files or removing stale backups during previews.
+pub fn read_recoverable(path: &Path) -> Result<Option<String>, String> {
+    for candidate in [path.to_path_buf(), sibling(path, "loom-old")?] {
+        match fs::read_to_string(&candidate) {
+            Ok(text) => return Ok(Some(text)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("could not read {}: {error}", candidate.display())),
+        }
+    }
+    Ok(None)
+}
+
 /// Restore a backup left between the two replacement renames. Call this
 /// before reading transactional state, not only before its next write.
 pub fn recover(target: &Path) -> Result<(), String> {

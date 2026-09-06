@@ -4,7 +4,6 @@
   "plugins/pi-fast": "2.0.0",
   "plugins/pi-add-dir": "0.3.0",
   "plugins/skill-autocomplete": "0.2.0",
-  "plugins/pi-codegraph": "0.2.0",
   "plugins/pi-loom": "0.2.0",
   "plugins/pi-loom-mermaid": "0.1.0"
 }

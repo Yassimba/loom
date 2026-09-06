@@ -4,8 +4,7 @@ Record the comparison base and target separately from atlas pins. Follow the
 [shared consumer procedure](../../system-atlas/references/consume.md) to account
 for atlas drift before classifying the requested difference.
 
-Inspect changed source and affected callers at both revisions. Use CodeGraph
-when its index matches the required source; otherwise use targeted Git reads.
+Inspect changed source and affected callers at both revisions with targeted Git reads.
 Classify additions, removals, and changed responsibilities/contracts/routes.
 
 Follow the [shared output preference](../../system-atlas/references/overlays.md).

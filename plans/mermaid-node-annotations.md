@@ -12,6 +12,83 @@ flowchart LR
   D --> E[Restore marker after rerender]
 ```
 
+## Complex diagram testbed
+
+### Architecture diff
+
+```mermaid
+flowchart LR
+  UI[Plan UI] --> API[Review API]
+  API --> STORE[(Annotation Store)]
+  API -.-> OLD[Legacy Renderer]
+  API --> NEW[HTML / Mermaid Renderer]
+  NEW --> STORE
+  classDef added stroke:#22c55e
+  classDef removed stroke:#ef4444
+  class NEW added
+  class OLD removed
+  linkStyle default stroke:#94a3b8
+```
+
+Green borders are added. Red borders are removed. Connectors stay neutral; the removed path is dashed.
+
+### Review sequence
+
+```mermaid
+sequenceDiagram
+  participant R as Reviewer
+  participant P as Plan UI
+  participant A as Annotation API
+  participant S as Store
+  R->>P: Click diagram element
+  P->>A: Save anchored comment
+  A->>S: Persist with parent review
+  S-->>A: Saved annotation
+  A-->>P: Restore marker
+  P-->>R: Show anchored feedback
+```
+
+### Annotation entities
+
+```mermaid
+erDiagram
+  REVIEW ||--o{ ANNOTATION : contains
+  MARKDOWN_BLOCK ||--o{ ANNOTATION : anchors
+  ANNOTATION }o--|| AUTHOR : created_by
+  REVIEW {
+    string id PK
+    string title
+    string status
+  }
+  MARKDOWN_BLOCK {
+    string id PK
+    string review_id FK
+    string type
+  }
+  ANNOTATION {
+    string id PK
+    string block_id FK
+    string element_selector
+    string comment
+  }
+  AUTHOR {
+    string id PK
+    string name
+  }
+```
+
+### Official Mermaid fallback
+
+```mermaid
+gantt
+  title Fallback stays compatible
+  dateFormat YYYY-MM-DD
+  section Review
+  Plan :done, plan, 2026-03-01, 2d
+  Implement :active, build, after plan, 3d
+  Verify :verify, after build, 2d
+```
+
 ## Approach
 
 Extend the existing Markdown `Viewer` and `MermaidBlock` path. Identify rendered `g.node[id]` elements, store the shared `HtmlElementAnchor` shape with the Markdown block ID, and route creation through the existing comment composer and parent annotation callback.
