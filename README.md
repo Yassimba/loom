@@ -280,20 +280,13 @@ npx skills add Yassimba/loom
 
 ### Install Pi packages
 
-The ponytail and i-have-adhd packages already include their Pi skills. Loom marks
-these skills **Included with package**, skips standalone Pi copies when the
-package's enabled files are present, and still copies skills to other selected
-agents. Skill-only installs work normally. If a selected provider package fails,
-the dependent skills step is skipped; fix the package failure and retry.
+Loom installs Pi's standalone skills in the portable `.agents/skills` tree,
+which Pi discovers directly. It does not create a second copy under `.pi/skills`
+or `~/.pi/agent/skills`.
 
-`loom update` removes only unchanged, receipt-owned Pi duplicates. On a linked
-checkout, `scripts/sync-skills.sh link ponytail --tree pi` (and the same command
-for `i-have-adhd`) removes matching repo links or identical copies instead of
-recreating them. Custom edits/foreign links and disabled or filtered packages
-are left alone.
-
-Pi also discovers `.agents/skills`. Loom keeps those shared copies for other
-hosts and adds exact Pi-only exclusions after verifying the provider. Existing
+The ponytail, i-have-adhd, and Plannotator packages already include Pi skills.
+Loom keeps the shared `.agents/skills` copies for other hosts and adds exact
+Pi-only exclusions after verifying the provider. Existing
 filters remain intact; only exclusions recorded in Loom's ownership ledger are
 removed during uninstall or reconciled after a direct `pi remove` on the next
 `loom update`, skill install, or global skill sync. Preexisting equal exclusions
