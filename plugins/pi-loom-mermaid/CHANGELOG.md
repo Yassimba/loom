@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.2.0...pi-loom-mermaid-v0.3.0) (2026-09-06)
+
+
+### Features
+
+* improve setup and Mermaid rendering ([#188](https://github.com/Yassimba/loom/issues/188)) ([f77b4ac](https://github.com/Yassimba/loom/commit/f77b4ac5c42e406a1f7eb2eb21759a390478719b))
+
 ## [0.2.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.1.0...pi-loom-mermaid-v0.2.0) (2026-09-06)
 
 

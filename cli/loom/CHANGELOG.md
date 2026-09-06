@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Yassimba/loom/compare/loom-v1.2.0...loom-v1.3.0) (2026-09-06)
+
+
+### Features
+
+* improve setup and Mermaid rendering ([#188](https://github.com/Yassimba/loom/issues/188)) ([f77b4ac](https://github.com/Yassimba/loom/commit/f77b4ac5c42e406a1f7eb2eb21759a390478719b))
+
 ## [1.2.0](https://github.com/Yassimba/loom/compare/loom-v1.1.0...loom-v1.2.0) (2026-09-06)
 
 
