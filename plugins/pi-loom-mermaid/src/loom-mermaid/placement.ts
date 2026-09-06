@@ -233,16 +233,7 @@ function straightest(
   const scored = runs.map((x, index) => {
     let bends = 0
     for (let v = 0; v < g.down.length; v++) {
-      const fan = g.down[v]
-      // A fan out of three or more reads best with its parent over the
-      // middle: score the parent's offset from the fan's mean, not from
-      // whichever child it happens to align with.
-      if (v < realCount && fan.length >= 3 && fan.every((w) => w < realCount)) {
-        const mean = fan.reduce((s, w) => s + x[w], 0) / fan.length
-        bends += 4 * fan.length * Math.abs(x[v] - mean)
-        continue
-      }
-      for (const w of fan) bends += weight(v, w) * Math.abs(x[v] - x[w])
+      for (const w of g.down[v]) bends += weight(v, w) * Math.abs(x[v] - x[w])
     }
     let lo = Number.POSITIVE_INFINITY
     let hi = Number.NEGATIVE_INFINITY
