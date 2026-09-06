@@ -3,33 +3,33 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
-    "area": 836
+    "crossings": 0,
+    "area": 858
   },
   "composite-states": {
     "brokenLinks": 0,
-    "edgeOverText": 1,
+    "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1344
+    "area": 1485
   },
   "cycles": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
-    "area": 891
+    "crossings": 2,
+    "area": 1116
   },
   "dense": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 3,
-    "area": 600
+    "crossings": 2,
+    "area": 532
   },
   "er-cardinalities": {
     "brokenLinks": 0,
-    "edgeOverText": 1,
+    "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
     "area": 675
@@ -60,11 +60,11 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 390
+    "area": 403
   },
   "reciprocal": {
     "brokenLinks": 0,
-    "edgeOverText": 3,
+    "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 1,
     "area": 360
@@ -81,7 +81,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1265
+    "area": 1288
   },
   "skip-lr": {
     "brokenLinks": 0,
@@ -102,6 +102,6 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 918
+    "area": 936
   }
 }

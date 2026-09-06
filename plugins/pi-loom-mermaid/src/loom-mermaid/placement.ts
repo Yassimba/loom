@@ -12,7 +12,9 @@
  * nodes and virtual chain nodes alike, `size[v]` is each one's cross-axis
  * extent, and a virtual node is any id at or past `realCount`. The returned
  * centres are non-negative integers that keep `sep(left, right)` cells
- * between each pair of neighbours.
+ * between each pair of neighbours. `offset(v)` moves a node off its aligned
+ * coordinate afterwards — a chain that should line up with a port beside
+ * its endpoint's centre rather than the centre itself.
  */
 
 export interface LayeredGraph {
@@ -26,6 +28,7 @@ export function brandesKoepf(
   size: number[],
   sep: (left: number, right: number) => number,
   realCount: number,
+  offset: (v: number) => number = () => 0,
 ): number[] {
   const n = g.up.length
   const layerOf = new Array<number>(n).fill(0)
@@ -55,10 +58,10 @@ export function brandesKoepf(
       runs.push(fromRight ? x.map((c) => -c) : x)
     }
   }
-  const centers = straightest(runs, g, size, realCount)
+  const centers = straightest(runs, g, size, realCount).map((c, v) => c + offset(v))
 
-  // Rounding and the four-way average can shave a cell off a separation;
-  // one left-to-right pass per layer restores it and pins the origin at 0.
+  // Rounding and offsets can shave a cell off a separation; one
+  // left-to-right pass per layer restores it and pins the origin at 0.
   let min = Number.POSITIVE_INFINITY
   for (const row of g.layers) {
     for (let i = 1; i < row.length; i++) {
