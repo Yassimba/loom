@@ -10,24 +10,12 @@
  * text never ends up mirrored.
  */
 
-import {
-  Canvas,
-  CONT,
-  D,
-  drawText,
-  drawTextOverEdges,
-  L,
-  R,
-  STY_DOT,
-  STY_SOLID,
-  STY_THICK,
-  U,
-} from './canvas.ts'
-import type { Edge, Head, Node, Shape } from './graph.ts'
-import { Graph } from './graph.ts'
+import type { Canvas } from './canvas.ts'
+import type { Edge } from './graph.ts'
+import type { Graph } from './graph.ts'
 import { fitLabel, MAX_LABEL, MAX_LINES, WRAP_WIDTH, wrapLabel } from './labels.ts'
 import { brandesKoepf, type LayeredGraph } from './placement.ts'
-import { measured, stringWidth } from './width.ts'
+import { stringWidth } from './width.ts'
 
 /** Cells of padding between a box border and its text. */
 export const PAD = 1
@@ -36,9 +24,6 @@ const GAP_X = 3
 const GAP_Y = 2
 /** Refuse to allocate a canvas larger than this many cells. */
 export const MAX_CANVAS_CELLS = 1 << 21
-
-/** A laid-out canvas, or `null` when the diagram is empty or over the cell cap. */
-export type CanvasResult = Canvas | null
 
 /** Saturating subtraction; Rust's `usize` arithmetic never goes negative. */
 export const sat = (a: number, b: number): number => Math.max(0, a - b)
@@ -59,7 +44,7 @@ const labelStart = (arrowX: number, text: string, left: boolean): number =>
 /** The label parts drawn at a forward edge's arrival: verb and target cardinality. */
 const arrivalParts = (e: Edge): string[] => [e.label, e.cardTo].filter((p) => p != null) as string[]
 
-function edgeText(edge: Edge): string | null {
+export function edgeText(edge: Edge): string | null {
   const joined = [edge.cardFrom ?? '', edge.label ?? '', edge.cardTo ?? '']
     .filter((part) => part !== '')
     .join(' ')
@@ -87,7 +72,7 @@ interface NodeSizes {
 }
 
 /** What to draw inside a node box. */
-type NodeExtra =
+export type NodeExtra =
   | { kind: 'plain' }
   | { kind: 'frame'; sub: Canvas }
   | { kind: 'compartments'; sections: string[][] }
@@ -107,7 +92,7 @@ export interface Route {
 }
 
 /** A lane label waiting for every route to land before claiming its spot. */
-interface LaneLabel {
+export interface LaneLabel {
   text: string
   y: number
   lo: number
@@ -1419,9 +1404,22 @@ function placeLr(
 }
 
 // -------------------------------------------------------------------- canvas
+/**
+ * The geometry of a laid-out graph: canvas size, a box per node, a route
+ * per edge (null for a self loop) and each node's wrapped label lines.
+ * Pure data — `paint` in paint.ts turns it into a canvas, and tests or
+ * metrics can read it without one.
+ */
+export interface Layout {
+  w: number
+  h: number
+  placed: Placed[]
+  routes: (Route | null)[]
+  labels: string[][]
+}
 
-/** Rank, place, draw and route a graph onto a fresh canvas. */
-function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
+/** Rank, order, place and route a graph. Null when it is empty or over the cell cap. */
+export function layout(graph: Graph, extras: NodeExtra[]): Layout | null {
   const n = graph.nodes.length
   if (n === 0) return null
 
@@ -1523,372 +1521,11 @@ function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
     : placeLr(ranks, maxRank, byRank, layered, sizes, graph, placed)
 
   if (plan.canvasW * plan.canvasH > MAX_CANVAS_CELLS) return null
-
-  const canvas = new Canvas(plan.canvasW, plan.canvasH)
-  for (let idx = 0; idx < n; idx++) {
-    const extra = extras[idx]
-    canvas.curTag = graph.nodes[idx].classes?.join(' ')
-    canvas.curHref = graph.nodes[idx].href
-    // `BT` mirrors the finished canvas; multi-row content draws upside down so
-    // the flip restores reading order (flipHorizontal's text runs, vertically).
-    const mirrored = graph.dir === 'up'
-    if (extra.kind === 'frame')
-      drawFrame(canvas, placed[idx], graph.nodes[idx].label, extra.sub, mirrored)
-    else if (extra.kind === 'compartments')
-      drawClassBox(canvas, placed[idx], extra.sections, mirrored)
-    else drawBox(canvas, placed[idx], wrapped[idx], graph.nodes[idx].shape, mirrored)
-  }
-  canvas.curTag = undefined
-  canvas.curHref = undefined
-
-  graph.edges.forEach((edge, i) => {
-    canvas.curStyle =
-      edge.line === 'dotted' ? STY_DOT : edge.line === 'thick' ? STY_THICK : STY_SOLID
-    const route = plan.routes[i]
-    if (route === null) routeSelf(canvas, placed[edge.from], edge)
-    else drawRoute(canvas, edge, route)
-  })
-  flushLabels(canvas)
-  placeLaneLabels(canvas, plan.routes.flatMap((r) => (r?.laneLabel === undefined ? [] : [r.laneLabel])))
-
-  canvas.finalizeMask()
-  return canvas
-}
-
-/** Apply the direction flip a finished canvas needs for `BT` / `RL`. */
-function orient(canvas: Canvas, graph: Graph): Canvas {
-  if (graph.dir === 'up') canvas.flipVertical()
-  else if (graph.dir === 'left') canvas.flipHorizontal()
-  return canvas
-}
-
-/** Flowchart and state diagrams: plain boxes, no extra content. */
-export function layoutFlowchart(graph: Graph): CanvasResult {
-  const extras: NodeExtra[] = graph.nodes.map(() => ({ kind: 'plain' }))
-  const canvas = layoutCanvas(graph, extras)
-  return canvas && orient(canvas, graph)
-}
-
-/** Class and ER diagrams: boxes divided into title / attribute / method rows. */
-export function layoutClass(graph: Graph): CanvasResult {
-  const extras: NodeExtra[] = graph.nodes.map((node) => ({
-    kind: 'compartments',
-    sections: node.sections ?? [[node.label]],
-  }))
-  const canvas = layoutCanvas(graph, extras)
-  return canvas && orient(canvas, graph)
-}
-
-// -------------------------------------------------------------------- groups
-
-/** An endpoint inside a scope: a plain node or a (proxied) subgraph. */
-interface ScopeItem {
-  group: boolean
-  i: number
-}
-
-/**
- * Lay out a flowchart that uses `subgraph`.
- *
- * Each subgraph becomes a framed box holding its own independently laid-out
- * canvas. An edge is drawn in the innermost scope containing both endpoints;
- * one crossing a subgraph boundary attaches to the frame instead of the node.
- */
-export function layoutGrouped(graph: Graph): CanvasResult {
-  // A node whose id matches a subgraph id stands in for that subgraph.
-  const proxy = new Map<number, number>()
-  graph.groups.forEach((g, gi) => {
-    const ni = graph.index.get(g.id)
-    if (ni !== undefined) proxy.set(ni, gi)
-  })
-
-  const groupChain = (g: number | null): number[] => {
-    const chain: number[] = []
-    let cur = g
-    while (cur !== null) {
-      chain.push(cur)
-      cur = graph.groups[cur].parent
-    }
-    return chain.reverse()
-  }
-  const endpoint = (n: number): { item: ScopeItem; chain: number[] } => {
-    const gi = proxy.get(n)
-    return gi === undefined
-      ? { item: { group: false, i: n }, chain: groupChain(graph.nodeGroup[n]) }
-      : { item: { group: true, i: gi }, chain: groupChain(graph.groups[gi].parent) }
-  }
-
-  /** Edges bucketed by the scope that draws them; `null` is the top level. */
-  const scopeEdges = new Map<number | null, [ScopeItem, ScopeItem, number][]>()
-  const referenced = new Array<boolean>(graph.groups.length).fill(false)
-  graph.edges.forEach((e, ei) => {
-    const f = endpoint(e.from)
-    const t = endpoint(e.to)
-    let k = 0
-    while (k < f.chain.length && k < t.chain.length && f.chain[k] === t.chain[k]) k++
-    const scope = k === 0 ? null : f.chain[k - 1]
-    const fItem = f.chain.length > k ? { group: true, i: f.chain[k] } : f.item
-    const tItem = t.chain.length > k ? { group: true, i: t.chain[k] } : t.item
-    for (const item of [fItem, tItem]) {
-      if (item.group) referenced[item.i] = true
-    }
-    const list = scopeEdges.get(scope)
-    if (list) list.push([fItem, tItem, ei])
-    else scopeEdges.set(scope, [[fItem, tItem, ei]])
-  })
-
-  const directNodes = new Map<number | null, number[]>()
-  graph.nodeGroup.forEach((g, ni) => {
-    if (proxy.has(ni)) return
-    const list = directNodes.get(g)
-    if (list) list.push(ni)
-    else directNodes.set(g, [ni])
-  })
-
-  // Drop empty subgraphs, but keep any that an edge attaches to. Walked by
-  // the actual child relation: state `--` regions reparent earlier groups
-  // under later ones, so index order says nothing about depth.
-  const childGroups: number[][] = graph.groups.map(() => [])
-  graph.groups.forEach((g, gi) => {
-    if (g.parent !== null) childGroups[g.parent].push(gi)
-  })
-  const keep = new Array<boolean>(graph.groups.length).fill(false)
-  const visit = (gi: number): boolean => {
-    let kept = referenced[gi] || (directNodes.get(gi) ?? []).length > 0
-    for (const c of childGroups[gi]) if (visit(c)) kept = true
-    keep[gi] = kept
-    return kept
-  }
-  graph.groups.forEach((g, gi) => {
-    if (g.parent === null) visit(gi)
-  })
-
-  const canvas = buildScope(graph, null, scopeEdges, directNodes, keep)
-  return canvas && orient(canvas, graph)
-}
-
-function buildScope(
-  graph: Graph,
-  scope: number | null,
-  scopeEdges: Map<number | null, [ScopeItem, ScopeItem, number][]>,
-  directNodes: Map<number | null, number[]>,
-  keep: boolean[],
-): CanvasResult {
-  const items: ScopeItem[] = (directNodes.get(scope) ?? []).map((i) => ({ group: false, i }))
-  const childGroups = graph.groups
-    .map((_, gi) => gi)
-    .filter((gi) => graph.groups[gi].parent === scope && keep[gi])
-  items.push(...childGroups.map((i) => ({ group: true, i })))
-
-  if (items.length === 0) return new Canvas(1, 1)
-
-  const nodeAt = new Map<number, number>()
-  const groupAt = new Map<number, number>()
-  const nodes: Node[] = []
-  const extras: NodeExtra[] = []
-  for (const item of items) {
-    ;(item.group ? groupAt : nodeAt).set(item.i, nodes.length)
-    if (!item.group) {
-      nodes.push({
-        label: graph.nodes[item.i].label,
-        shape: graph.nodes[item.i].shape,
-        classes: graph.nodes[item.i].classes,
-        href: graph.nodes[item.i].href,
-      })
-      extras.push({ kind: 'plain' })
-    } else {
-      const sub = buildScope(graph, item.i, scopeEdges, directNodes, keep)
-      if (sub === null) return null
-      nodes.push({ label: graph.groups[item.i].label, shape: 'rect' })
-      extras.push({ kind: 'frame', sub })
-    }
-  }
-
-  const edges: Edge[] = []
-  for (const [f, t, ei] of scopeEdges.get(scope) ?? []) {
-    const fi = (f.group ? groupAt : nodeAt).get(f.i)
-    const ti = (t.group ? groupAt : nodeAt).get(t.i)
-    if (fi === undefined || ti === undefined) continue
-    const e = graph.edges[ei]
-    const collapsed: Edge = {
-      from: fi,
-      to: ti,
-      label: e.label,
-      headTo: e.headTo,
-      headFrom: e.headFrom,
-      line: e.line,
-    }
-    // Edges from (or to) different nodes inside one frame collapse onto
-    // the frame and become indistinguishable; draw them once.
-    const twin = (a: Edge, b: Edge): boolean =>
-      a.from === b.from && a.to === b.to && a.label === b.label && a.headTo === b.headTo && a.headFrom === b.headFrom && a.line === b.line
-    if ((f.group || t.group) && edges.some((x) => twin(x, collapsed))) continue
-    edges.push(collapsed)
-  }
-
-  // Layout only reads nodes/edges/dir, so a bare Graph carrying those is enough.
-  const synth = new Graph(graph.dir)
-  synth.nodes = nodes
-  synth.edges = edges
-  return layoutCanvas(synth, extras)
-}
-
-// ------------------------------------------------------------------- drawing
-
-export function drawBox(
-  canvas: Canvas,
-  p: Placed,
-  lines: string[],
-  shape: Shape,
-  mirrored = false,
-): void {
-  const { x, y, w, h } = p
-  const right = x + w - 1
-  const bottom = y + h - 1
-
-  // A diamond is a double-line box — the terminal's nod to `A{...}`.
-  const [tl, tr, bl, br] =
-    shape === 'diamond'
-      ? ['╔', '╗', '╚', '╝']
-      : shape === 'round'
-        ? ['╭', '╮', '╰', '╯']
-        : ['┌', '┐', '└', '┘']
-  canvas.set(x, y, tl, 'border')
-  canvas.set(right, y, tr, 'border')
-  canvas.set(x, bottom, bl, 'border')
-  canvas.set(right, bottom, br, 'border')
-
-  if (shape === 'diamond') {
-    // Double lines have no direction bits; edges tee into them through the
-    // mixed junctions (`╤` `╧` `╟` `╢`) that `finalizeMask` resolves.
-    for (let cx = x + 1; cx < right; cx++) {
-      canvas.set(cx, y, '═', 'border')
-      canvas.set(cx, bottom, '═', 'border')
-    }
-    for (let cy = y + 1; cy < bottom; cy++) {
-      canvas.set(x, cy, '║', 'border')
-      canvas.set(right, cy, '║', 'border')
-    }
-  } else {
-    // The perimeter is drawn as bits so edges can tee into it, but it is the
-    // box outline, so it claims `border` rather than `edge`.
-    for (let cx = x + 1; cx < right; cx++) {
-      canvas.addBits(cx, y, L | R, 'border')
-      canvas.addBits(cx, bottom, L | R, 'border')
-    }
-    for (let cy = y + 1; cy < bottom; cy++) {
-      canvas.addBits(x, cy, U | D, 'border')
-      canvas.addBits(right, cy, U | D, 'border')
-    }
-  }
-
-  for (let cy = y; cy <= bottom; cy++) {
-    for (let cx = x; cx <= right; cx++) {
-      const i = canvas.idx(cx, cy)
-      canvas.occupied[i] = 1
-      if (canvas.curTag !== undefined) canvas.tag[i] = canvas.curTag
-      if (canvas.curHref !== undefined) canvas.href[i] = canvas.curHref
-    }
-  }
-
-  const inner = Math.max(1, sat(w, 2 * PAD + 2))
-  const ordered = mirrored ? [...lines].reverse() : lines
-  ordered.forEach((line, li) => {
-    const text = fitLabel(line, inner)
-    const textX = x + 1 + PAD + half(sat(inner, stringWidth(text)))
-    drawText(canvas, text, textX, y + 1 + li, 'text')
-  })
-}
-
-/** A class or ER box: sections separated by horizontal rules, title centred. */
-function drawClassBox(canvas: Canvas, p: Placed, sections: string[][], mirrored = false): void {
-  drawBox(canvas, p, [], 'rect')
-  const inner = Math.max(1, sat(p.w, 2 * PAD + 2))
-  const rows: ({ sep: true } | { sep?: undefined; text: string; center: boolean })[] = []
-  sections.forEach((section, si) => {
-    if (section.length === 0) return
-    if (rows.length > 0) rows.push({ sep: true })
-    for (const line of section) rows.push({ text: fitLabel(line, inner), center: si === 0 })
-  })
-  if (mirrored) rows.reverse()
-  rows.forEach((r, ri) => {
-    const row = p.y + 1 + ri
-    if (r.sep) {
-      canvas.set(p.x, row, '├', 'border')
-      for (let x = p.x + 1; x < p.x + p.w - 1; x++) canvas.set(x, row, '─', 'border')
-      canvas.set(p.x + p.w - 1, row, '┤', 'border')
-    } else {
-      const tx = r.center ? p.x + 1 + PAD + half(sat(inner, stringWidth(r.text))) : p.x + 1 + PAD
-      drawTextOverEdges(canvas, r.text, tx, row, 'text')
-    }
-  })
-}
-
-/** A subgraph frame: a titled box with a finished sub-canvas centred inside. */
-function drawFrame(canvas: Canvas, p: Placed, title: string, sub: Canvas, mirrored = false): void {
-  drawBox(canvas, p, [], 'rect')
-  // An unlabelled frame (a state `--` region) keeps its border unbroken.
-  if (title !== '') {
-    const t = fitLabel(title, sat(p.w, 4))
-    // Mirrored: the bottom border becomes the top after the flip.
-    drawTextOverEdges(canvas, ` ${t} `, p.x + 1, mirrored ? p.y + p.h - 1 : p.y, 'text')
-  }
-  canvas.blit(sub, p.x + 1 + half(p.w - 2 - sub.w), p.y + 1 + half(p.h - 2 - sub.h))
-}
-
-// ------------------------------------------------------------------- routing
-
-function headGlyph(head: Head, arrow: string): string {
-  switch (head) {
-    case 'circle':
-      return 'o'
-    case 'cross':
-      return '×'
-    case 'diamondFill':
-      return '◆'
-    case 'diamondOpen':
-      return '◇'
-    case 'triangle':
-      return { '▼': '▽', '▲': '△', '◄': '◁', '▶': '▷' }[arrow] ?? arrow
-    default:
-      return arrow
-  }
+  return { w: plan.canvasW, h: plan.canvasH, placed, routes: plan.routes, labels: wrapped }
 }
 
 type Jog = { bus: number; at: number }
 type LabelAt = { row: number; x: number } | null
-
-/** Direction bit from one cell toward the next (they share a row or column). */
-const toward = ([x0, y0]: [number, number], [x1, y1]: [number, number]): number =>
-  x1 > x0 ? R : x1 < x0 ? L : y1 > y0 ? D : U
-
-const ARROW: Record<number, string> = { [D]: '▼', [U]: '▲', [R]: '▶', [L]: '◄' }
-
-/**
- * Paint a route: junction bits where it leaves the source border, a
- * segment per pair of corners, then the tail and head glyphs facing the
- * way the line leaves and arrives. A head of `none` just meets the box.
- */
-function drawRoute(canvas: Canvas, edge: Edge, route: Route): void {
-  const { points } = route
-  const [sx, sy] = points[0]
-  const [hx, hy] = points[points.length - 1]
-  const leave = toward(points[0], points[1])
-  const arrive = toward(points[points.length - 2], points[points.length - 1])
-  canvas.junction(sx, sy, leave)
-  for (let k = 0; k + 1 < points.length; k++) {
-    const [x0, y0] = points[k]
-    const [x1, y1] = points[k + 1]
-    if (x0 === x1) canvas.segV(x0, y0, y1)
-    else canvas.segH(y0, x0, x1)
-  }
-  if (edge.headTo === 'none') canvas.addBits(hx, hy, toward(points[points.length - 1], points[points.length - 2]))
-  else canvas.set(hx, hy, headGlyph(edge.headTo, ARROW[arrive]), 'edge')
-  if (edge.headFrom !== 'none') {
-    canvas.set(sx, sy, headGlyph(edge.headFrom, ARROW[toward(points[1], points[0])]), 'edge')
-  }
-  for (const { text, row, x } of route.labels) placeLabel(canvas, text, row, x)
-}
 
 /**
  * Corners of a path that follows its chain's jogs from `start`: each jog
@@ -2070,103 +1707,4 @@ function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number): Route {
       ? undefined
       : { text: ` ${fitLabel(text, MAX_LABEL)} `, y: laneY, lo: Math.min(sx, tx), hi: Math.max(sx, tx) }
   return { points, labels: [], laneLabel }
-}
-
-/** A self-edge: a stub loop hanging below the box. */
-function routeSelf(canvas: Canvas, p: Placed, edge: Edge): void {
-  const bottom = p.y + p.h - 1
-  const exitX = p.cx + 1
-  const retX = p.x + p.w - 2
-  if (retX <= exitX || bottom + 2 >= canvas.h) return
-
-  const [v, h, bl, br] =
-    edge.line === 'dotted'
-      ? ['╎', '╌', '╰', '╯']
-      : edge.line === 'thick'
-        ? ['┃', '━', '┗', '┛']
-        : ['│', '─', '╰', '╯']
-
-  canvas.junction(exitX, bottom, D)
-  canvas.set(exitX, bottom + 1, v, 'edge')
-  canvas.set(exitX, bottom + 2, bl, 'edge')
-  for (let x = exitX + 1; x < retX; x++) canvas.set(x, bottom + 2, h, 'edge')
-  canvas.set(retX, bottom + 2, br, 'edge')
-  canvas.set(retX, bottom + 1, headGlyph(edge.headTo, '▲'), 'edge')
-  const selfText = edgeText(edge)
-  if (selfText !== null) placeLabel(canvas, selfText, bottom + 1, p.x + p.w + 1)
-}
-
-/**
- * Write each lane label onto its own row, centred on the run but slid to
- * the nearest stretch free of crossing verticals, arrowheads and earlier
- * labels — clearing a crossing line under a label would sever it.
- */
-function placeLaneLabels(canvas: Canvas, labels: LaneLabel[]): void {
-  for (const { text, y, lo, hi } of labels) {
-    const tw = stringWidth(text)
-    const lastStart = hi - 1 - tw
-    if (lastStart < lo + 1 || y >= canvas.h) continue
-    const clear = (start: number): boolean => {
-      for (let x = start; x < start + tw; x++) {
-        const i = canvas.idx(x, y)
-        if (canvas.occupied[i] === 1) return false
-        if ((canvas.mask[i] & (U | D)) !== 0) return false
-        if (canvas.ch[i] !== ' ') return false
-      }
-      return true
-    }
-    const mid = Math.min(Math.max(half(lo + hi) - half(tw), lo + 1), lastStart)
-    let at = mid
-    for (let d = 0; ; d++) {
-      const left = mid - d
-      const right = mid + d
-      if (left < lo + 1 && right > lastStart) break
-      if (left >= lo + 1 && clear(left)) {
-        at = left
-        break
-      }
-      if (right <= lastStart && clear(right)) {
-        at = right
-        break
-      }
-    }
-    drawTextOverEdges(canvas, text, at, y, 'edgeLabel')
-  }
-}
-
-/**
- * Edge labels queued while routing and written once every route has
- * landed (`flushLabels`), so a label knows what it sits on: it interrupts
- * a line the way a lane label interrupts its lane (the text sits across the
- * line, which stays readable either side — a cardinality on its own bus
- * row, a label across a return climbing past it) and stops short of a box
- * or other text.
- */
-/** Queue a label to be written after every line, so it interrupts them. */
-function placeLabel(canvas: Canvas, label: string, row: number, x: number): void {
-  canvas.labels.push({ label, row, x })
-}
-
-function flushLabels(canvas: Canvas): void {
-  for (const { label, row, x } of canvas.labels.splice(0)) writeLabel(canvas, label, row, x)
-}
-
-function writeLabel(canvas: Canvas, label: string, row: number, startX: number): void {
-  if (row >= canvas.h) return
-  const text = fitLabel(label, MAX_LABEL)
-  let x = startX
-  for (const [c, cw] of measured(text)) {
-    if (cw === 0) continue
-    if (x + cw > canvas.w) break
-    let blocked = false
-    for (let k = 0; k < cw; k++) {
-      const i = canvas.idx(x + k, row)
-      if (canvas.ch[i] !== ' ' || canvas.occupied[i]) blocked = true
-    }
-    if (blocked) break
-    for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(x + k, row)] = 0
-    canvas.set(x, row, c, 'edgeLabel')
-    for (let k = 1; k < cw; k++) canvas.set(x + k, row, CONT, 'edgeLabel')
-    x += cw
-  }
 }

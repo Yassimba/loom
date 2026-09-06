@@ -8,7 +8,7 @@
 
 import { Graph, type Head, type LineKind, MAX_MEMBERS, type Node, parseDir } from '../graph.ts'
 import { asciiLower, cleanLabel, decodeHtmlEntities, displayGenerics, isIdChar } from '../labels.ts'
-import { layoutClass } from '../layout.ts'
+import { layoutClass } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import {
   firstWord,

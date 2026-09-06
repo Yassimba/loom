@@ -17,7 +17,7 @@ import {
   type Shape,
 } from '../graph.ts'
 import { asciiLower, cleanLabel, decodeHtmlEntities, isIdChar } from '../labels.ts'
-import { layoutFlowchart, layoutGrouped } from '../layout.ts'
+import { layoutFlowchart, layoutGrouped } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import {
   firstWord,

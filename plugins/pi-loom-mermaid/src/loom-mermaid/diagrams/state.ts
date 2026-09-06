@@ -11,7 +11,7 @@
 
 import { Graph, MAX_GROUP_DEPTH, MAX_GROUPS, parseDir, type Shape } from '../graph.ts'
 import { asciiLower, decodeHtmlEntities } from '../labels.ts'
-import { layoutFlowchart, layoutGrouped } from '../layout.ts'
+import { layoutFlowchart, layoutGrouped } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import {
   firstWord,

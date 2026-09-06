@@ -8,7 +8,7 @@
 
 import { Graph, type LineKind, MAX_MEMBERS, type Node } from '../graph.ts'
 import { cleanLabel, decodeHtmlEntities, displayGenerics } from '../labels.ts'
-import { layoutClass } from '../layout.ts'
+import { layoutClass } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import { headerKind, nonEmpty, splitOnce, statementsOf, words } from '../statements.ts'
 
