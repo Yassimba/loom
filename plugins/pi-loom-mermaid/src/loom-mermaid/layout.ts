@@ -475,6 +475,43 @@ export function assignTracks(spans: TrackSpan[]): { assigned: [number, number][]
   return { assigned, count: n === 0 ? 0 : Math.max(...track) + 1 }
 }
 
+/**
+ * Pack lane spans into as few tracks as possible, shortest first: a span
+ * contained in another takes the inner track, so exits and entries at rows
+ * the inner lane never reaches cross nothing. Lanes trade crossings for
+ * height, where `assignTracks`' dependency chains would cost a track each.
+ */
+export function packTracks(spans: TrackSpan[]): { assigned: [number, number][]; count: number } {
+  const sorted = [...spans].sort(
+    (a, b) =>
+      a.end - a.start - (b.end - b.start) ||
+      a.start - b.start ||
+      a.end - b.end ||
+      a.from - b.from ||
+      a.to - b.to ||
+      a.edge - b.edge,
+  )
+  const tracks: TrackSpan[][] = []
+  const assigned: [number, number][] = []
+  for (const span of sorted) {
+    let slot = tracks.findIndex((members) =>
+      members.every(
+        (m) =>
+          m.end + 2 <= span.start ||
+          span.end + 2 <= m.start ||
+          ((m.from === span.from || m.to === span.to) && !m.labeled && !span.labeled),
+      ),
+    )
+    if (slot === -1) {
+      tracks.push([])
+      slot = tracks.length - 1
+    }
+    tracks[slot].push(span)
+    assigned.push([span.edge, slot])
+  }
+  return { assigned, count: tracks.length }
+}
+
 function mergeShared(spans: TrackSpan[]): Hyper[] {
   const sorted = [...spans].sort(
     (a, b) => a.start - b.start || a.end - b.end || a.from - b.from || a.to - b.to || a.edge - b.edge,
@@ -1089,12 +1126,20 @@ function placeLr(
     const t = e.to
     stubRows.add(sat(centers[t], half(sizes.boxH[t] + sizes.extraH[t])) + sizes.boxH[t])
   }
-  // A skip follows the row its virtual chain reserved into the target's
-  // centre row, unless a chain row is a stub row — then the lane.
+  // A skip whose target row crosses no box on any intermediate rank runs
+  // straight through the diagram into the target's left side; otherwise
+  // the bottom lane. (No chains here: LR back edges must lane, and a
+  // diagram mixing interior skips with laned returns crosses itself.)
   const edgeStraight = new Array<boolean>(graph.edges.length).fill(false)
-  const entryY = graph.edges.map((e, i) =>
-    isSkip(e) && !layered.chains[i].some((v) => stubRows.has(centers[v])) ? centers[e.to] : -1,
-  )
+  const clearRow = (e: Edge): boolean =>
+    !stubRows.has(centers[e.to]) &&
+    graph.nodes.every(
+      (_, j) =>
+        ranks[j] <= ranks[e.from] ||
+        ranks[j] >= ranks[e.to] ||
+        Math.abs(centers[j] - centers[e.to]) > half(sizes.boxH[j] + sizes.extraH[j]),
+    )
+  const entryY = graph.edges.map((e) => (isSkip(e) && clearRow(e) ? centers[e.to] : -1))
   const jogs = chainJogs(graph, ranks, layered, centers, (e, i) =>
     entryY[i] === -1 ? null : { exit: centers[e.from], entry: entryY[i] },
   )
@@ -1164,7 +1209,7 @@ function placeLr(
   let canvasH = diagramH
   let laneBase = 0
   if (lanes.length > 0) {
-    const { assigned, count } = assignTracks(lanes)
+    const { assigned, count } = packTracks(lanes)
     for (const [idx, slot] of assigned) edgeLane[idx] = slot
     canvasH = diagramH + 1 + count
     laneBase = diagramH + 1
@@ -1220,14 +1265,15 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
   for (let idx = 0; idx < ranks.length; idx++) byRank[ranks[idx]].push(idx)
   // Top-down routes every edge through the interior. Left-to-right boxes
   // are three rows tall, leaving no port off the centre row for a return,
-  // so LR back edges go around in a lane below: their endpoints go last
-  // within the rank, or whatever the ordering put beyond them would sit in
-  // that corridor and be cut through.
+  // so LR back edges go around in a lane below — and skips with them, as a
+  // diagram mixing interior skips with laned returns crosses itself. Lane
+  // endpoints go last within the rank, or whatever the ordering put beyond
+  // them would sit in that corridor and be cut through.
   const vertical = graph.dir === 'down' || graph.dir === 'up'
-  const interior = (e: Edge): boolean => vertical || ranks[e.to] > ranks[e.from]
+  const interior = (): boolean => vertical
   const inLane = new Array<boolean>(graph.nodes.length).fill(false)
   for (const e of graph.edges) {
-    if (e.from !== e.to && ranks[e.to] !== ranks[e.from] + 1 && !interior(e)) {
+    if (e.from !== e.to && ranks[e.to] !== ranks[e.from] + 1 && !vertical) {
       inLane[e.from] = true
       inLane[e.to] = true
     }

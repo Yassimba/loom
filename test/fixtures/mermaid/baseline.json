@@ -87,15 +87,15 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 2,
-    "area": 720
+    "crossings": 0,
+    "area": 572
   },
   "state-lr": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
-    "area": 688
+    "crossings": 0,
+    "area": 602
   },
   "unicode-wide": {
     "brokenLinks": 0,
