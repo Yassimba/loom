@@ -177,9 +177,23 @@ function dfsDag(
  * Reorder nodes within each rank to minimise edge crossings (barycenter
  * sweeps): alternate down/up passes sort each rank by the mean position of its
  * neighbours, keeping whichever ordering crossed least.
+ *
+ * `trailing` nodes must end their rank (lane endpoints: the strip they exit
+ * toward lies past the rank's last box, so anything ordered beyond them
+ * would be cut through). The constraint is applied inside every sweep, so the
+ * crossing count that picks the best order is the count of the order used.
  */
-export function orderRanks(byRank: number[][], edges: Edge[], ranks: number[]): void {
+export function orderRanks(
+  byRank: number[][],
+  edges: Edge[],
+  ranks: number[],
+  trailing: boolean[] = [],
+): void {
   const n = ranks.length
+  const partition = (row: number[]): void => {
+    row.sort((a, b) => Number(trailing[a] ?? false) - Number(trailing[b] ?? false))
+  }
+  for (const row of byRank) partition(row)
   if (byRank.length < 2 || n < 3) return
 
   const parents: number[][] = Array.from({ length: n }, () => [])
@@ -207,6 +221,7 @@ export function orderRanks(byRank: number[][], edges: Edge[], ranks: number[]): 
     const neigh = it % 2 === 0 ? parents : children
     for (const row of rows) {
       sortByBarycenter(row, neigh, pos)
+      partition(row)
       reindex(row)
     }
     const crossings = countCrossings(edges, ranks, pos)
@@ -875,8 +890,6 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
 
   const byRank: number[][] = Array.from({ length: maxRank + 1 }, () => [])
   for (let idx = 0; idx < ranks.length; idx++) byRank[ranks[idx]].push(idx)
-  orderRanks(byRank, graph.edges, ranks)
-
   // Lane edges exit through the rank's trailing side toward the lane strip;
   // their endpoints go last within the rank, or whatever the ordering put
   // beyond them would sit in that corridor and be cut through.
@@ -889,7 +902,7 @@ export function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
       inLane[e.to] = true
     }
   }
-  for (const row of byRank) row.sort((a, b) => Number(inLane[a]) - Number(inLane[b]))
+  orderRanks(byRank, graph.edges, ranks, inLane)
 
   const wrapped = graph.nodes.map((node) => wrapLabel(node.label, WRAP_WIDTH, MAX_LINES))
   const widest = (lines: string[]): number =>

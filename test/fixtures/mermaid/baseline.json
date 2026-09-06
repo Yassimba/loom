@@ -41,6 +41,13 @@
     "crossings": 0,
     "area": 742
   },
+  "lane-order": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 525
+  },
   "nested-subgraphs": {
     "brokenLinks": 0,
     "edgeOverText": 0,
