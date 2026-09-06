@@ -115,13 +115,22 @@ test("a diagram wider than the space is laid out again with tighter labels", () 
 });
 
 test("two edges passing through one cell cross as a hop, junctions stay junctions", () => {
-  const art = render(
+  // dense.mmd concentrates into one trunk per target: no crossing left to
+  // hop. subgraphs-lr still has a lane crossing a bus.
+  const dense = render(
     readFileSync(new URL("./fixtures/mermaid/dense.mmd", import.meta.url), "utf8"),
   );
-  assert.ok(art);
-  const text = art.plain.join("\n");
-  assert.match(text, /╫/, "a straight drop crossed by another edge's bus is a hop");
-  assert.match(text, /┼/, "an edge continuing through its own bus row stays a junction");
+  assert.ok(dense);
+  assert.match(
+    dense.plain.join("\n"),
+    /┼/,
+    "an edge continuing through its own bus row stays a junction",
+  );
+  const grouped = render(
+    readFileSync(new URL("./fixtures/mermaid/subgraphs-lr.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(grouped);
+  assert.match(grouped.plain.join("\n"), /╫/, "a lane crossed by another edge's bus is a hop");
 });
 
 test("streaming advances on completed statements and holds while a label arrives", () => {

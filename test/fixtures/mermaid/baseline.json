@@ -31,7 +31,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 3,
+    "crossings": 2,
     "area": 520
   },
   "er-cardinalities": {
@@ -46,7 +46,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 1,
-    "area": 756
+    "area": 702
   },
   "lane-order": {
     "brokenLinks": 0,
@@ -109,7 +109,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 3,
-    "area": 8326
+    "area": 8303
   },
   "unicode-wide": {
     "brokenLinks": 0,

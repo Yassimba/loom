@@ -777,6 +777,34 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
     for (const c of span.up) if (!host.up.includes(c)) host.up.push(c)
     for (const c of span.down) if (!host.down.includes(c)) host.down.push(c)
   }
+  // Bicliques: runs whose members join every source of the one to every
+  // target of the other form one bundle (Newbery's edge concentration),
+  // so a full fan-out-into-fan-in draws one trunk with one head per
+  // target instead of a head per edge. Labelled edges stay apart, since
+  // a label on the trunk would name every edge.
+  const srcs = (h: Hyper): Set<number> => new Set(h.members.map((m) => m.from))
+  const dsts = (h: Hyper): Set<number> => new Set(h.members.map((m) => m.to))
+  const complete = (a: Hyper, b: Hyper): boolean => {
+    const S = new Set([...srcs(a), ...srcs(b)])
+    const T = new Set([...dsts(a), ...dsts(b)])
+    const have = new Set([...a.members, ...b.members].map((m) => `${m.from}>${m.to}`))
+    if ([...a.members, ...b.members].some((m) => m.labeled)) return false
+    for (const x of S) for (const y of T) if (!have.has(`${x}>${y}`)) return false
+    return true
+  }
+  for (let i = 0; i < hypers.length; i++) {
+    for (let j = hypers.length - 1; j > i; j--) {
+      if (!complete(hypers[i], hypers[j])) continue
+      const a = hypers[i]
+      const b = hypers[j]
+      a.members.push(...b.members)
+      a.start = Math.min(a.start, b.start)
+      a.end = Math.max(a.end, b.end)
+      for (const c of b.up) if (!a.up.includes(c)) a.up.push(c)
+      for (const c of b.down) if (!a.down.includes(c)) a.down.push(c)
+      hypers.splice(j, 1)
+    }
+  }
   return hypers
 }
 
@@ -865,6 +893,7 @@ function busSpans(
         edge: i,
         up: [exit(i)],
         down: [arrive],
+        labeled: edgeText(e) !== null,
         bundle: bundle(i),
       })
     }
@@ -1194,10 +1223,27 @@ function placeTd(
     const fwds = entries.filter((i) => isFwd(graph.edges[i]))
     const over = (i: number): boolean => arrives(i) > left && arrives(i) < right
     const flanked = fwds.some((i) => arrives(i) <= left) && fwds.some((i) => arrives(i) >= right)
-    const jogging = fwds.filter((i) => !over(i) || flanked)
-    let items: Item[] = entries.filter((i) => !jogging.includes(i)).map((i) => item([i], arrives(i)))
-    if (jogging.length > 0) {
-      items.push(item(jogging, jogging.reduce((a, i) => a + centers[graph.edges[i].from], 0) / jogging.length))
+    // Unlabelled forwards concentrate: when any of them jogs in, every one
+    // of them joins that arrival — one head for the fan-in, on the centre
+    // when a straight drop is among them (Newbery's edge concentration).
+    const plain = fwds.every((i) => edgeText(graph.edges[i]) === null)
+    const someJog = fwds.some((i) => !over(i) || flanked)
+    const jogging = fwds.filter((i) => !over(i) || flanked || (plain && someJog))
+    // An unlabelled skip arriving beside a jogging fan joins it: one head
+    // for the fan-in rather than a second `▼` a cell over (edge
+    // concentration, as dot's `concentrate`).
+    const joins = entries.filter(
+      (i) =>
+        isSkip(graph.edges[i]) &&
+        edgeText(graph.edges[i]) === null &&
+        jogging.length > 0 &&
+        (arrives(i) <= left || arrives(i) >= right),
+    )
+    const merged = [...jogging, ...joins]
+    let items: Item[] = entries.filter((i) => !merged.includes(i)).map((i) => item([i], arrives(i)))
+    if (merged.length > 0) {
+      const drop = jogging.find((i) => over(i) && Math.abs(arrives(i) - cx) <= 1)
+      items.push(item(merged, drop === undefined ? jogging.reduce((a, i) => a + centers[graph.edges[i].from], 0) / jogging.length : cx))
     }
     // Slots: an arrival at most a cell off centre snaps to it (routeForward
     // straightens such a jog), other in-range arrivals keep their column,
