@@ -1759,14 +1759,20 @@ function buildScope(
     const ti = (t.group ? groupAt : nodeAt).get(t.i)
     if (fi === undefined || ti === undefined) continue
     const e = graph.edges[ei]
-    edges.push({
+    const collapsed: Edge = {
       from: fi,
       to: ti,
       label: e.label,
       headTo: e.headTo,
       headFrom: e.headFrom,
       line: e.line,
-    })
+    }
+    // Edges from (or to) different nodes inside one frame collapse onto
+    // the frame and become indistinguishable; draw them once.
+    const twin = (a: Edge, b: Edge): boolean =>
+      a.from === b.from && a.to === b.to && a.label === b.label && a.headTo === b.headTo && a.headFrom === b.headFrom && a.line === b.line
+    if ((f.group || t.group) && edges.some((x) => twin(x, collapsed))) continue
+    edges.push(collapsed)
   }
 
   // Layout only reads nodes/edges/dir, so a bare Graph carrying those is enough.
