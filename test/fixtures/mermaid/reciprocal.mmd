@@ -1,0 +1,7 @@
+flowchart TD
+  Client -->|request| Server
+  Server -->|response| Client
+  Server -->|query| DB
+  DB -->|rows| Server
+  Client -->|render| UI
+  UI -->|event| Client

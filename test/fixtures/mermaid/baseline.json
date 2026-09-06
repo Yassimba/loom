@@ -1,0 +1,86 @@
+{
+  "class-inheritance": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 880
+  },
+  "composite-states": {
+    "brokenLinks": 0,
+    "edgeOverText": 1,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1428
+  },
+  "cycles": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 891
+  },
+  "dense": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 5,
+    "area": 520
+  },
+  "er-cardinalities": {
+    "brokenLinks": 0,
+    "edgeOverText": 1,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 600
+  },
+  "fans": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 742
+  },
+  "nested-subgraphs": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1020
+  },
+  "parallel-edges": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 377
+  },
+  "reciprocal": {
+    "brokenLinks": 0,
+    "edgeOverText": 3,
+    "danglingHeads": 0,
+    "crossings": 2,
+    "area": 360
+  },
+  "self-loops": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 703
+  },
+  "skip-labelled": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1704
+  },
+  "unicode-wide": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 874
+  }
+}
