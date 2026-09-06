@@ -54,6 +54,8 @@ export interface Metrics {
   area: number;
   /** `┼` cells: two edges crossing (or a four-way junction). */
   crossings: number;
+  /** Four-way cells that are two edges passing through: true crossings, drawn as hops. */
+  hops: number;
   bends: number;
   /** Cells carrying edge bits. */
   routedLength: number;
@@ -111,8 +113,10 @@ function measureEdgeCell(c: CanvasLike, x: number, y: number, m: Metrics): void 
   const ch = c.ch[i];
   if (mask !== 0) {
     m.routedLength++;
-    if (mask === (U | D | L | R)) m.crossings++;
-    else if (isBend(mask)) m.bends++;
+    if (mask === (U | D | L | R)) {
+      m.crossings++;
+      if (ch === "╫") m.hops++;
+    } else if (isBend(mask)) m.bends++;
     if (!EDGE_GLYPHS.has(ch) && ch !== "\0") m.edgeOverText++;
     m.brokenLinks += brokenAt(c, x, y, mask);
   }
@@ -129,6 +133,7 @@ export function measure(c: CanvasLike, ms: number): Metrics {
     height: c.h,
     area: c.w * c.h,
     crossings: 0,
+    hops: 0,
     bends: 0,
     routedLength: 0,
     marginRight: 0,

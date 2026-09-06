@@ -57,3 +57,13 @@ test("a diagram wider than the space is laid out again with tighter labels", () 
   });
   assert.doesNotMatch(output, /```mermaid/, "fits instead of falling back to source");
 });
+
+test("two edges passing through one cell cross as a hop, junctions stay junctions", () => {
+  const art = render(
+    readFileSync(new URL("./fixtures/mermaid/dense.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(art);
+  const text = art.plain.join("\n");
+  assert.match(text, /╫/, "a straight drop crossed by another edge's bus is a hop");
+  assert.match(text, /┼/, "an edge continuing through its own bus row stays a junction");
+});

@@ -25,7 +25,17 @@ export const STY_SOLID = 4
  * in; `finalizeMask` turns the accumulated bits into characters at the end.
  *
  * `occupied` marks cells claimed by a box, which edge bits must not overwrite.
+ *
+ * `pass` remembers how each cell was reached: a vertical run passing
+ * through, a horizontal run passing through, or a turn, end or junction.
+ * A cell crossed by one vertical and one horizontal run and nothing else
+ * is two edges crossing, drawn as a hop (`╫`) rather than a junction
+ * (`┼`), so an edge can be followed through a dense band.
  */
+export const PASS_V = 1
+export const PASS_H = 2
+export const JOINED = 4
+export const HOP = '╫'
 export class Canvas {
   readonly w: number
   readonly h: number
@@ -38,6 +48,7 @@ export class Canvas {
   mask: Uint8Array
   style: Uint8Array
   occupied: Uint8Array
+  pass: Uint8Array
   curStyle: number = STY_SOLID
   /** Author classes stamped on cells painted while set, like `curStyle`. */
   curTag: string | undefined
@@ -55,6 +66,7 @@ export class Canvas {
     this.mask = new Uint8Array(n)
     this.style = new Uint8Array(n)
     this.occupied = new Uint8Array(n)
+    this.pass = new Uint8Array(n)
   }
 
   idx(x: number, y: number): number {
@@ -84,6 +96,7 @@ export class Canvas {
     const i = this.idx(x, y)
     if (this.occupied[i]) return
     this.mask[i] |= bits
+    this.pass[i] |= bits === (U | D) ? PASS_V : bits === (L | R) ? PASS_H : JOINED
     this.style[i] |= this.curStyle
     if (this.role[i] !== 'border') this.role[i] = role
     if (this.curTag !== undefined) this.tag[i] = this.curTag
@@ -104,6 +117,7 @@ export class Canvas {
         this.tag[di] = sub.tag[si]
         this.href[di] = sub.href[si]
         this.style[di] = sub.style[si]
+        this.pass[di] = sub.pass[si]
         this.occupied[di] = 1
       }
     }
@@ -114,6 +128,7 @@ export class Canvas {
     if (x >= this.w || y >= this.h) return
     const i = this.idx(x, y)
     this.mask[i] |= bits
+    this.pass[i] |= JOINED
     if (this.role[i] !== 'border') this.role[i] = 'edge'
   }
 
@@ -144,7 +159,7 @@ export class Canvas {
     for (let i = 0; i < this.ch.length; i++) {
       if (this.mask[i] === 0) continue
       if (this.ch[i] === ' ') {
-        const c = maskChar(this.mask[i])
+        const c = this.pass[i] === (PASS_V | PASS_H) ? HOP : maskChar(this.mask[i])
         this.ch[i] =
           this.style[i] === STY_DOT ? dottedChar(c) : this.style[i] === STY_THICK ? thickChar(c) : c
       } else if (this.ch[i] === '═' || this.ch[i] === '║') {
