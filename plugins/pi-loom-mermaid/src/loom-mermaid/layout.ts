@@ -92,36 +92,33 @@ type NodeExtra =
   | { kind: 'frame'; sub: Canvas }
   | { kind: 'compartments'; sections: string[][] }
 
-interface RoutePlan {
+/**
+ * One edge's path as data: cell corners from the source border to the head
+ * cell, in drawing order. Painting derives everything else — the junction
+ * bits at the border, the head and tail glyphs from the approach direction,
+ * the segments between corners. Labels wait until every route has landed.
+ */
+export interface Route {
+  points: [number, number][]
+  /** Labels written across the lines once all routes are drawn. */
+  labels: { text: string; row: number; x: number }[]
+  /** A lane label that slides along its run to a clear stretch (left-to-right lanes). */
+  laneLabel?: LaneLabel
+}
+
+/** A lane label waiting for every route to land before claiming its spot. */
+interface LaneLabel {
+  text: string
+  y: number
+  lo: number
+  hi: number
+}
+
+/** The placement stage's result: canvas size and a route per edge (`null` for a self loop, which draws its own stub). */
+interface Plan {
   canvasW: number
   canvasH: number
-  /** Coordinate just past each rank's boxes, where its bus rows begin. */
-  bandEnd: number[]
-  /** Coordinate where each rank's boxes begin — no box sits before it. */
-  rankStart: number[]
-  /** Bus track offset per edge. */
-  edgeBus: number[]
-  /** Coordinate of the first lane track. */
-  laneBase: number
-  /** Lane track offset per edge. */
-  edgeLane: number[]
-  /** Skip edges: the column entering the target's top; back edges: the
-   * column entering its bottom. -1 otherwise. */
-  edgeEntryX: number[]
-  /** Back edges, top-down: the column leaving the source's top. */
-  edgeExitX: number[]
-  /** Skip edges routed through the interior along their virtual chain. */
-  edgeStraight: boolean[]
-  /**
-   * Interior skip route: each jog's bus coordinate and the cross-axis
-   * coordinate the edge continues along after it, in flow order.
-   */
-  skipRoute: { bus: number; at: number }[][]
-  /** Per node: the forward cluster's entry column, or -1 for the centre. */
-  /** Per edge: render the label left of the arrowhead instead of right. */
-  edgeLabelLeft: boolean[]
-  /** Where a chain-routed edge's label sits beside its long vertical, if it moved off the head row. */
-  edgeLabelAt: ({ row: number; x: number } | null)[]
+  routes: (Route | null)[]
 }
 
 // ------------------------------------------------------------------ ranking
@@ -907,7 +904,7 @@ function placeTd(
   sizes: NodeSizes,
   graph: Graph,
   placed: Placed[],
-): RoutePlan {
+): Plan {
   // Arrival labels hang right of a box's entry heads (forward: above the
   // top, back: below the bottom), on rows a chain column passes through: a
   // chain placed right of a box keeps clear of them.
@@ -1230,8 +1227,7 @@ function placeTd(
   }
   const canvasH = rankY[maxRank] + rankH[maxRank]
   const bandEnd = Array.from({ length: maxRank + 1 }, (_, r) => rankY[r] + rankH[r])
-  const rankStart = rankY
-  const skipRoute = skipRoutes(graph, jogs, (j) => bandEnd[j.band] + (jogTrack.get(j) ?? 0))
+  const jogRoute = skipRoutes(graph, jogs, (j) => bandEnd[j.band] + (jogTrack.get(j) ?? 0))
 
   let diagramW = 1
   for (let v = graph.nodes.length; v < centers.length; v++) diagramW = Math.max(diagramW, centers[v] + 1)
@@ -1281,21 +1277,17 @@ function placeTd(
     }
   })
 
-  return {
-    canvasW: contentW,
-    canvasH,
-    bandEnd,
-    rankStart,
-    edgeBus,
-    laneBase: 0,
-    edgeLane: new Array<number>(graph.edges.length).fill(0),
-    edgeEntryX,
-    edgeExitX,
-    edgeStraight: new Array<boolean>(graph.edges.length).fill(false),
-    skipRoute,
-    edgeLabelLeft,
-    edgeLabelAt,
-  }
+  const routes = graph.edges.map((edge, i): Route | null => {
+    if (edge.from === edge.to) return null
+    const from = placed[edge.from]
+    const to = placed[edge.to]
+    if (isBack(edge)) {
+      return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i])
+    }
+    if (isSkip(edge)) return chainRoute(from, to, edge, edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i])
+    return forwardRoute(from, to, edge, bandEnd[from.rank] + edgeBus[i], edgeEntryX[i], edgeLabelLeft[i])
+  })
+  return { canvasW: contentW, canvasH, routes }
 }
 
 function placeLr(
@@ -1306,7 +1298,7 @@ function placeLr(
   sizes: NodeSizes,
   graph: Graph,
   placed: Placed[],
-): RoutePlan {
+): Plan {
   const colW = byRank.map((row) =>
     row.length === 0 ? 0 : Math.max(...row.map((i) => sizes.boxW[i])),
   )
@@ -1388,7 +1380,6 @@ function placeLr(
   const canvasW =
     rankX[maxRank] + colW[maxRank] + (selfTails.length === 0 ? 0 : Math.max(...selfTails))
   const bandEnd = Array.from({ length: maxRank + 1 }, (_, r) => rankX[r] + colW[r])
-  const rankStart = rankX
   const skipRoute = skipRoutes(graph, jogs, (j) => bandEnd[j.band] + (jogTrack.get(j) ?? 0))
 
   let diagramH = 1
@@ -1416,21 +1407,15 @@ function placeLr(
     laneBase = diagramH + 1
   }
 
-  return {
-    canvasW,
-    canvasH,
-    bandEnd,
-    rankStart,
-    edgeBus,
-    laneBase,
-    edgeLane,
-    edgeEntryX: new Array<number>(graph.edges.length).fill(-1),
-    edgeExitX: new Array<number>(graph.edges.length).fill(-1),
-    edgeStraight,
-    skipRoute,
-    edgeLabelLeft: new Array<boolean>(graph.edges.length).fill(false),
-    edgeLabelAt: graph.edges.map(() => null),
-  }
+  const routes = graph.edges.map((edge, i): Route | null => {
+    if (edge.from === edge.to) return null
+    const from = placed[edge.from]
+    const to = placed[edge.to]
+    if (to.rank === from.rank + 1) return forwardRouteLr(from, to, edge, bandEnd[from.rank] + edgeBus[i])
+    if (to.rank > from.rank && edgeStraight[i]) return skipRouteLr(from, to, edge, skipRoute[i])
+    return laneRoute(from, to, edge, laneBase + edgeLane[i])
+  })
+  return { canvasW, canvasH, routes }
 }
 
 // -------------------------------------------------------------------- canvas
@@ -1556,37 +1541,15 @@ function layoutCanvas(graph: Graph, extras: NodeExtra[]): CanvasResult {
   canvas.curTag = undefined
   canvas.curHref = undefined
 
-  const laneLabels: LaneLabel[] = []
   graph.edges.forEach((edge, i) => {
     canvas.curStyle =
       edge.line === 'dotted' ? STY_DOT : edge.line === 'thick' ? STY_THICK : STY_SOLID
-    if (edge.from === edge.to) {
-      routeSelf(canvas, placed[edge.from], edge)
-      return
-    }
-    const from = placed[edge.from]
-    const to = placed[edge.to]
-    const adjacent = to.rank === from.rank + 1
-    const bus = plan.bandEnd[from.rank] + plan.edgeBus[i]
-    const lane = plan.laneBase + plan.edgeLane[i]
-    if (vertical) {
-      if (adjacent)
-        routeForward(canvas, from, to, edge, bus, plan.edgeEntryX[i], plan.edgeLabelLeft[i])
-      else if (to.rank > from.rank) {
-        routeSkip(canvas, from, to, edge, plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i], plan.edgeLabelAt[i])
-      } else {
-        routeBackChain(canvas, from, to, edge, plan.edgeExitX[i], plan.edgeEntryX[i], plan.skipRoute[i], plan.edgeLabelLeft[i], plan.edgeLabelAt[i])
-      }
-    } else if (adjacent) {
-      routeForwardLr(canvas, from, to, edge, bus)
-    } else if (to.rank > from.rank && plan.edgeStraight[i]) {
-      routeSkipLr(canvas, from, to, edge, plan.skipRoute[i])
-    } else {
-      routeBackLr(canvas, from, to, edge, lane, laneLabels)
-    }
+    const route = plan.routes[i]
+    if (route === null) routeSelf(canvas, placed[edge.from], edge)
+    else drawRoute(canvas, edge, route)
   })
   flushLabels(canvas)
-  placeLaneLabels(canvas, laneLabels)
+  placeLaneLabels(canvas, plan.routes.flatMap((r) => (r?.laneLabel === undefined ? [] : [r.laneLabel])))
 
   canvas.finalizeMask()
   return canvas
@@ -1892,62 +1855,105 @@ function headGlyph(head: Head, arrow: string): string {
   }
 }
 
-/** Adjacent ranks, top-down: drop, jog along the bus row, drop into the head.
- * `entryX` overrides the centre entry column when the target's top is shared
- * with skip entries; `labelLeft` renders the label left of the arrowhead. */
-function routeForward(
-  canvas: Canvas,
-  from: Placed,
-  to: Placed,
-  edge: Edge,
-  bus: number,
-  entryX = -1,
-  labelLeft = false,
-): void {
+type Jog = { bus: number; at: number }
+type LabelAt = { row: number; x: number } | null
+
+/** Direction bit from one cell toward the next (they share a row or column). */
+const toward = ([x0, y0]: [number, number], [x1, y1]: [number, number]): number =>
+  x1 > x0 ? R : x1 < x0 ? L : y1 > y0 ? D : U
+
+const ARROW: Record<number, string> = { [D]: '▼', [U]: '▲', [R]: '▶', [L]: '◄' }
+
+/**
+ * Paint a route: junction bits where it leaves the source border, a
+ * segment per pair of corners, then the tail and head glyphs facing the
+ * way the line leaves and arrives. A head of `none` just meets the box.
+ */
+function drawRoute(canvas: Canvas, edge: Edge, route: Route): void {
+  const { points } = route
+  const [sx, sy] = points[0]
+  const [hx, hy] = points[points.length - 1]
+  const leave = toward(points[0], points[1])
+  const arrive = toward(points[points.length - 2], points[points.length - 1])
+  canvas.junction(sx, sy, leave)
+  for (let k = 0; k + 1 < points.length; k++) {
+    const [x0, y0] = points[k]
+    const [x1, y1] = points[k + 1]
+    if (x0 === x1) canvas.segV(x0, y0, y1)
+    else canvas.segH(y0, x0, x1)
+  }
+  if (edge.headTo === 'none') canvas.addBits(hx, hy, toward(points[points.length - 1], points[points.length - 2]))
+  else canvas.set(hx, hy, headGlyph(edge.headTo, ARROW[arrive]), 'edge')
+  if (edge.headFrom !== 'none') {
+    canvas.set(sx, sy, headGlyph(edge.headFrom, ARROW[toward(points[1], points[0])]), 'edge')
+  }
+  for (const { text, row, x } of route.labels) placeLabel(canvas, text, row, x)
+}
+
+/**
+ * Corners of a path that follows its chain's jogs from `start`: each jog
+ * runs along the flow axis to its bus, then across it to where the chain
+ * continues.
+ */
+function jogPoints(start: [number, number], jogs: Jog[], vertical: boolean): [number, number][] {
+  const points: [number, number][] = [start]
+  let [x, y] = start
+  for (const { bus, at } of jogs) {
+    if (vertical) points.push([x, bus], [at, bus])
+    else points.push([bus, y], [bus, at])
+    ;[x, y] = vertical ? [at, bus] : [bus, at]
+  }
+  return points
+}
+
+/**
+ * Adjacent ranks, top-down: out the source's bottom, jog on a bus row,
+ * into the target's top. A jog of one column reads as a kink and snaps
+ * straight. Cardinalities sit at their own ends; the verb takes the row
+ * above the head, falling back beside the target card when the gap has no
+ * spare row.
+ */
+function forwardRoute(from: Placed, to: Placed, edge: Edge, bus: number, entryX: number, labelLeft: boolean): Route {
   const tx = entryX === -1 ? to.cx : entryX
-  // A jog of one column reads as a kink; snap straight instead.
   const bx = Math.abs(from.cx - tx) <= 1 ? tx : from.cx
   const by = from.y + from.h - 1
   const headRow = to.y - 1
-
-  canvas.junction(bx, by, D)
-  canvas.segV(bx, by, bus)
-  if (bx === tx) {
-    canvas.segV(bx, bus, headRow)
-  } else {
-    canvas.segH(bus, bx, tx)
-    canvas.segV(tx, bus, headRow)
-  }
-
-  if (edge.headTo === 'none') canvas.addBits(tx, headRow, U)
-  else canvas.set(tx, headRow, headGlyph(edge.headTo, '▼'), 'edge')
-  if (edge.headFrom !== 'none') canvas.set(bx, by, headGlyph(edge.headFrom, '▲'), 'edge')
-
+  const points: [number, number][] =
+    bx === tx
+      ? [
+          [bx, by],
+          [tx, headRow],
+        ]
+      : [
+          [bx, by],
+          [bx, bus],
+          [tx, bus],
+          [tx, headRow],
+        ]
+  const labels: Route['labels'] = []
   if (edge.cardFrom === undefined && edge.cardTo === undefined) {
-    if (edge.label !== null) {
-      placeLabel(canvas, edge.label, headRow, labelStart(tx, edge.label, labelLeft))
-    }
-    return
+    if (edge.label !== null) labels.push({ text: edge.label, row: headRow, x: labelStart(tx, edge.label, labelLeft) })
+    return { points, labels }
   }
-  // Cardinalities sit at their own ends; the verb takes the row above the
-  // head, falling back beside the target card when the gap has no spare row.
   const srcRow = by + 1
-  if (edge.cardFrom !== undefined) placeLabel(canvas, edge.cardFrom, srcRow, bx + 1)
-  if (edge.cardTo !== undefined) placeLabel(canvas, edge.cardTo, headRow, tx + 1)
+  if (edge.cardFrom !== undefined) labels.push({ text: edge.cardFrom, row: srcRow, x: bx + 1 })
+  if (edge.cardTo !== undefined) labels.push({ text: edge.cardTo, row: headRow, x: tx + 1 })
   if (edge.label !== null) {
     const midRow = headRow - 1
-    if (midRow > srcRow) {
-      const lineX = midRow > bus ? tx : bx
-      placeLabel(canvas, edge.label, midRow, lineX + 1)
-    } else {
-      placeLabel(
-        canvas,
-        edge.label,
-        headRow,
-        tx + 1 + (edge.cardTo === undefined ? 0 : stringWidth(edge.cardTo) + 1),
-      )
+    if (midRow > srcRow) labels.push({ text: edge.label, row: midRow, x: (midRow > bus ? tx : bx) + 1 })
+    else {
+      const x = tx + 1 + (edge.cardTo === undefined ? 0 : stringWidth(edge.cardTo) + 1)
+      labels.push({ text: edge.label, row: headRow, x })
     }
   }
+  return { points, labels }
+}
+
+/** A chain-routed edge's label: beside its chain when it has a spot there, else at the head. */
+function chainLabel(edge: Edge, headRow: number, entryX: number, labelLeft: boolean, labelAt: LabelAt): Route['labels'] {
+  const text = edgeText(edge)
+  if (text === null) return []
+  return [labelAt === null ? { text, row: headRow, x: labelStart(entryX, text, labelLeft) } : { text, ...labelAt }]
 }
 
 /**
@@ -1955,40 +1961,115 @@ function routeForward(
  * virtual chain reserved (jogging on a bus row wherever it steps), arrow
  * into the target's bottom. Adjacent returns have no chain and jog once.
  */
-function routeBackChain(
-  canvas: Canvas,
+function backChainRoute(
   from: Placed,
   to: Placed,
   edge: Edge,
   exitX: number,
   entryX: number,
-  route: { bus: number; at: number }[],
+  jogs: Jog[],
   labelLeft: boolean,
-  labelAt: { row: number; x: number } | null,
-): void {
-  const fy = from.y
+  labelAt: LabelAt,
+): Route {
   const headRow = to.y + to.h
+  const points = jogPoints([exitX, from.y], jogs, true)
+  points.push([entryX, headRow])
+  return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt) }
+}
 
-  canvas.junction(exitX, fy, U)
-  let x = exitX
-  let y = fy
-  for (const { bus, at } of route) {
-    canvas.segV(x, y, bus)
-    canvas.segH(bus, x, at)
-    x = at
-    y = bus
+/**
+ * Forward skip edge, top-down: out the source's *bottom*, then down the
+ * column its virtual chain reserved, jogging along a bus row wherever the
+ * chain steps sideways (the first jog shares the source's fan row — one `┴`
+ * origin split; the last lands on the entry column) into the target's *top*.
+ */
+function chainRoute(
+  from: Placed,
+  to: Placed,
+  edge: Edge,
+  entryX: number,
+  jogs: Jog[],
+  labelLeft: boolean,
+  labelAt: LabelAt,
+): Route {
+  const headRow = to.y - 1
+  const points = jogPoints([from.cx, from.y + from.h - 1], jogs, true)
+  points.push([entryX, headRow])
+  return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt) }
+}
+
+/**
+ * Adjacent ranks, left-to-right: out the right side, jog on the bus
+ * column. The verb keeps its usual spot above the line; cardinalities hug
+ * their own ends on the rows above the departure and arrival cells.
+ */
+function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number): Route {
+  const rx = from.x + from.w - 1
+  const ry = from.cy
+  const ly = to.cy
+  const headCol = to.x - 1
+  const points: [number, number][] =
+    ry === ly
+      ? [
+          [rx, ry],
+          [headCol, ly],
+        ]
+      : [
+          [rx, ry],
+          [bus, ry],
+          [bus, ly],
+          [headCol, ly],
+        ]
+  const labels: Route['labels'] = []
+  if (edge.label !== null) labels.push({ text: edge.label, row: sat(ly, 1), x: bus + 1 })
+  if (edge.cardFrom !== undefined) labels.push({ text: edge.cardFrom, row: sat(ry, 1), x: rx + 1 })
+  if (edge.cardTo !== undefined) {
+    labels.push({ text: edge.cardTo, row: sat(ly, 1), x: sat(headCol, stringWidth(edge.cardTo)) })
   }
-  canvas.segV(x, y, headRow)
+  return { points, labels }
+}
 
-  if (edge.headTo === 'none') canvas.addBits(entryX, headRow, D)
-  else canvas.set(entryX, headRow, headGlyph(edge.headTo, '▲'), 'edge')
-  if (edge.headFrom !== 'none') canvas.set(exitX, fy, headGlyph(edge.headFrom, '▼'), 'edge')
-
+/**
+ * Forward skip, left-to-right: out the source's right side, along the row
+ * its virtual chain reserved, jogging on a bus column wherever the chain
+ * steps (the first jog shares the source's fan column), into the target's
+ * left side on its centre row. Label after the first jog, where forward
+ * labels sit — the gap before the target belongs to the arrivals that end
+ * there.
+ */
+function skipRouteLr(from: Placed, to: Placed, edge: Edge, jogs: Jog[]): Route {
+  const rx = from.x + from.w - 1
+  const ry = from.cy
+  const points = jogPoints([rx, ry], jogs, false)
+  points.push([to.x - 1, to.cy])
   const text = edgeText(edge)
-  if (text !== null && labelAt !== null) placeLabel(canvas, text, labelAt.row, labelAt.x)
-  else if (text !== null) {
-    placeLabel(canvas, text, headRow, labelStart(entryX, text, labelLeft))
-  }
+  const labels: Route['labels'] = []
+  if (text !== null) labels.push({ text, row: sat(jogs[0]?.at ?? to.cy, 1), x: (jogs[0]?.bus ?? rx) + 1 })
+  return { points, labels }
+}
+
+/**
+ * Skip or back edge, left-to-right: down out the bottom, along a lane,
+ * back up. The label interrupts its own lane row — the row above belongs
+ * to the neighbouring lane once several stack — and waits until every
+ * route landed so it can dodge the verticals that cross this row.
+ */
+function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number): Route {
+  const sx = from.cx
+  const sy = from.y + from.h - 1
+  const tx = to.cx
+  const points: [number, number][] = [
+    [sx, sy],
+    [sx, laneY],
+    [tx, laneY],
+    [tx, to.y + to.h],
+  ]
+  const text = edgeText(edge)
+  const laneLabel =
+    text === null
+      ? undefined
+      : { text: ` ${fitLabel(text, MAX_LABEL)} `, y: laneY, lo: Math.min(sx, tx), hi: Math.max(sx, tx) }
+  return { points, labels: [], laneLabel }
 }
 
 /** A self-edge: a stub loop hanging below the box. */
@@ -2013,161 +2094,6 @@ function routeSelf(canvas: Canvas, p: Placed, edge: Edge): void {
   canvas.set(retX, bottom + 1, headGlyph(edge.headTo, '▲'), 'edge')
   const selfText = edgeText(edge)
   if (selfText !== null) placeLabel(canvas, selfText, bottom + 1, p.x + p.w + 1)
-}
-
-/**
- * Forward skip edge, top-down: out the source's *bottom*, then down the
- * column its virtual chain reserved, jogging along a bus row wherever the
- * chain steps sideways (the first jog shares the source's fan row — one `┴`
- * origin split; the last lands on the entry column) into the target's *top*.
- */
-function routeSkip(
-  canvas: Canvas,
-  from: Placed,
-  to: Placed,
-  edge: Edge,
-  entryX: number,
-  route: { bus: number; at: number }[],
-  labelLeft: boolean,
-  labelAt: { row: number; x: number } | null,
-): void {
-  const bx = from.cx
-  const bottom = from.y + from.h - 1
-  const headRow = to.y - 1
-
-  canvas.junction(bx, bottom, D)
-  let x = bx
-  let y = bottom
-  for (const { bus, at } of route) {
-    canvas.segV(x, y, bus)
-    canvas.segH(bus, x, at)
-    x = at
-    y = bus
-  }
-  canvas.segV(x, y, headRow)
-
-  if (edge.headTo === 'none') canvas.addBits(entryX, headRow, D)
-  else canvas.set(entryX, headRow, headGlyph(edge.headTo, '▼'), 'edge')
-  if (edge.headFrom !== 'none') canvas.set(bx, bottom, headGlyph(edge.headFrom, '▲'), 'edge')
-
-  const text = edgeText(edge)
-  if (text !== null && labelAt !== null) placeLabel(canvas, text, labelAt.row, labelAt.x)
-  else if (text !== null) {
-    placeLabel(canvas, text, headRow, labelStart(entryX, text, labelLeft))
-  }
-}
-
-/** Adjacent ranks, left-to-right: out the right side, jog on the bus column. */
-function routeForwardLr(canvas: Canvas, from: Placed, to: Placed, edge: Edge, bus: number): void {
-  const rx = from.x + from.w - 1
-  const ry = from.cy
-  const ly = to.cy
-  const headCol = to.x - 1
-
-  canvas.junction(rx, ry, R)
-  canvas.segH(ry, rx, bus)
-  if (ry === ly) {
-    canvas.segH(ry, bus, headCol)
-  } else {
-    canvas.segV(bus, ry, ly)
-    canvas.segH(ly, bus, headCol)
-  }
-
-  if (edge.headTo === 'none') canvas.addBits(headCol, ly, R)
-  else canvas.set(headCol, ly, headGlyph(edge.headTo, '▶'), 'edge')
-  if (edge.headFrom !== 'none') canvas.set(rx, ry, headGlyph(edge.headFrom, '◄'), 'edge')
-
-  // The verb keeps its usual spot above the line; cardinalities hug their
-  // own ends on the rows above the departure and arrival cells.
-  if (edge.label !== null) placeLabel(canvas, edge.label, sat(ly, 1), bus + 1)
-  if (edge.cardFrom !== undefined) placeLabel(canvas, edge.cardFrom, sat(ry, 1), rx + 1)
-  if (edge.cardTo !== undefined) {
-    placeLabel(canvas, edge.cardTo, sat(ly, 1), sat(headCol, stringWidth(edge.cardTo)))
-  }
-}
-
-/**
- * Forward skip, left-to-right: out the source's right side, along the row
- * its virtual chain reserved, jogging on a bus column wherever the chain
- * steps (the first jog shares the source's fan column), into the target's
- * left side on its centre row.
- */
-function routeSkipLr(
-  canvas: Canvas,
-  from: Placed,
-  to: Placed,
-  edge: Edge,
-  route: { bus: number; at: number }[],
-): void {
-  const rx = from.x + from.w - 1
-  const ry = from.cy
-  const ty = to.cy
-  const headCol = to.x - 1
-
-  canvas.junction(rx, ry, R)
-  let x = rx
-  let y = ry
-  for (const { bus, at } of route) {
-    canvas.segH(y, x, bus)
-    canvas.segV(bus, y, at)
-    x = bus
-    y = at
-  }
-  canvas.segH(ty, x, headCol)
-
-  if (edge.headTo === 'none') canvas.addBits(headCol, ty, R)
-  else canvas.set(headCol, ty, headGlyph(edge.headTo, '▶'), 'edge')
-  if (edge.headFrom !== 'none') canvas.set(rx, ry, headGlyph(edge.headFrom, '◄'), 'edge')
-
-  // Label after the first jog, where forward labels sit — the gap before
-  // the target belongs to the arrivals that end there.
-  const text = edgeText(edge)
-  if (text !== null) placeLabel(canvas, text, sat(route[0]?.at ?? ty, 1), (route[0]?.bus ?? rx) + 1)
-}
-
-/** A lane label waiting for every route to land before claiming its spot. */
-interface LaneLabel {
-  text: string
-  y: number
-  lo: number
-  hi: number
-}
-
-/** Skip or back edge, left-to-right: down out the bottom, along a lane, back up. */
-function routeBackLr(
-  canvas: Canvas,
-  from: Placed,
-  to: Placed,
-  edge: Edge,
-  laneY: number,
-  laneLabels: LaneLabel[],
-): void {
-  const sx = from.cx
-  const sy = from.y + from.h - 1
-  const tx = to.cx
-  const ty = to.y + to.h - 1
-
-  canvas.junction(sx, sy, D)
-  canvas.segV(sx, sy, laneY)
-  canvas.segH(laneY, sx, tx)
-  canvas.segV(tx, laneY, ty + 1)
-
-  if (edge.headTo === 'none') canvas.addBits(tx, ty + 1, D)
-  else canvas.set(tx, ty + 1, headGlyph(edge.headTo, '▲'), 'edge')
-  if (edge.headFrom !== 'none') canvas.set(sx, sy, headGlyph(edge.headFrom, '▲'), 'edge')
-
-  // The label interrupts its own lane row — the row above belongs to the
-  // neighbouring lane once several stack. Deferred until all edges landed,
-  // so it can dodge the verticals that cross this row.
-  const backText = edgeText(edge)
-  if (backText !== null) {
-    laneLabels.push({
-      text: ` ${fitLabel(backText, MAX_LABEL)} `,
-      y: laneY,
-      lo: Math.min(sx, tx),
-      hi: Math.max(sx, tx),
-    })
-  }
 }
 
 /**
