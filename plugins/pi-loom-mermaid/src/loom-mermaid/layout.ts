@@ -1130,32 +1130,51 @@ function placeTd(
     chainLabel[i] = { v, w, side }
     taken.add(v)
   })
-  // Side entry (port assignment as in Hegemann and Wolff, GD 2023): a
-  // skip whose chain comes down well outside the target box, alone —
-  // no other arrival jogging in — enters through the facing side on the
-  // centre row rather than hooking across the band above into the top.
-  // One per side; plain boxes only (a class box's side rows are
-  // compartment rules). Decided on a coordinate set: once on the first
-  // placement, to reserve room for a head label on the side leg, and
-  // again on the final one.
+  // Plain boxes only (a class box's side rows are compartment rules).
+  // Decided on a coordinate set: once on the first placement, to reserve
+  // room for a head label on a side leg, and again on the final one.
   const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
   // A self-loop hooks the corner away from its box's returns, leaving them
   // the side they come from.
   const hookSide = graph.nodes.map((_, j) =>
     graph.edges.some((e, i) => isBack(e) && e.to === j && first[layered.chains[i].at(-1) ?? e.from] > first[j]) ? -1 : 1,
   )
-  const sideEntries = (x: number[]): number[] => {
-    const out = new Array<number>(graph.edges.length).fill(0)
+  // Side ports (port assignment as in Hegemann and Wolff, GD 2023): an
+  // edge whose chain runs well outside a plain box, with a clear leg, goes
+  // through the facing side — into a target, or out of a return's source —
+  // instead of a port beside the box's own stem. One edge per box side.
+  const sidePorts = (x: number[]): { entry: number[]; exit: number[] } => {
+    const entry = new Array<number>(graph.edges.length).fill(0)
+    const exit = new Array<number>(graph.edges.length).fill(0)
     // A self-loop's hook owns one side of its box.
     const taken = new Set<string>(graph.edges.filter((e) => e.from === e.to).map((e) => `${e.to}:${hookSide[e.to]}`))
     const bl = (j: number): number => sat(x[j], half(sizes.boxW[j]))
     const br = (j: number): number => bl(j) + sizes.boxW[j] - 1
+    const clearLeg = (j: number, col: number): boolean =>
+      byRank[ranks[j]].every((k) => k === j || Math.min(col, x[j]) - 1 >= br(k) || Math.max(col, x[j]) + 1 <= bl(k))
+    const sideOf = (j: number, col: number): number => (col <= bl(j) - 3 ? -1 : col >= br(j) + 3 ? 1 : 0)
+    // A label beside a chain on the source's row would sit on the leg.
+    const labelOnLeg = (j: number, col: number): boolean =>
+      chainLabel.some((label) => {
+        if (label === null || layerOf[label.v] !== ranks[j]) return false
+        const lo = label.side > 0 ? x[label.v] + 2 : x[label.v] - 1 - label.w
+        return lo <= Math.max(col, x[j]) && lo + label.w > Math.min(col, x[j])
+      })
+    graph.edges.forEach((e, i) => {
+      if (!isBack(e) || extras[e.from].kind !== 'plain') return
+      const head = layered.chains[i][0]
+      if (head === undefined) return
+      const side = sideOf(e.from, x[head])
+      if (side === 0 || taken.has(`${e.from}:${side}`) || !clearLeg(e.from, x[head]) || labelOnLeg(e.from, x[head])) return
+      taken.add(`${e.from}:${side}`)
+      exit[i] = side
+    })
     graph.edges.forEach((e, i) => {
       if (!(isSkip(e) || isBack(e)) || extras[e.to].kind !== 'plain') return
       const last = layered.chains[i].at(-1)
       if (last === undefined) return
       const col = x[last]
-      const side = col <= bl(e.to) - 3 ? -1 : col >= br(e.to) + 3 ? 1 : 0
+      const side = sideOf(e.to, col)
       if (side === 0 || taken.has(`${e.to}:${side}`)) return
       // A skip is a lone detour only when no forward arrival jogs in; a
       // return always takes the side, since its bottom port would sit
@@ -1166,17 +1185,13 @@ function placeTd(
           (o, k) =>
             k !== i && o.to === e.to && o.from !== o.to && ranks[o.from] < ranks[o.to] && Math.abs(x[layered.chains[k].at(-1) ?? o.from] - x[e.to]) > 1,
         )
-      if (othersJog) return
       // A blank cell between the leg and every other box on the rank, or
       // the leg would read as leaving that box.
-      const blocked = byRank[ranks[e.to]].some(
-        (j) => j !== e.to && Math.min(col, x[e.to]) - 1 < br(j) && Math.max(col, x[e.to]) + 1 > bl(j),
-      )
-      if (blocked) return
+      if (othersJog || !clearLeg(e.to, col)) return
       taken.add(`${e.to}:${side}`)
-      out[i] = side
+      entry[i] = side
     })
-    return out
+    return { entry, exit }
   }
   const labelPad = headPad((i) => chainLabel[i] !== null)
   const labelPadLeft = new Array<number>(layered.up.length).fill(0)
@@ -1187,7 +1202,7 @@ function placeTd(
   }
   // A side entry's head label rides its leg: the chain's last node keeps
   // that much room on its box side.
-  sideEntries(first).forEach((side, i) => {
+  sidePorts(first).entry.forEach((side, i) => {
     const text = edgeText(graph.edges[i])
     if (side === 0 || text === null || chainLabel[i] !== null) return
     const v = layered.chains[i].at(-1) as number
@@ -1279,7 +1294,7 @@ function placeTd(
     const parts = arrivalParts(e)
     return parts.length === 0 ? -1 : Math.max(...parts.map((p) => labelCols(p, maxLabel)))
   }
-  const sideEntry = sideEntries(centers)
+  const { entry: sideEntry, exit: sideExit } = sidePorts(centers)
   const into: number[][] = graph.nodes.map(() => [])
   graph.edges.forEach((e, i) => {
     if ((isSkip(e) && sideEntry[i] === 0) || isFwd(e)) into[e.to].push(i)
@@ -1426,7 +1441,7 @@ function placeTd(
     // A one-column step reads as a kink; snap the exit to the next stop.
     const next = layered.chains[i].length > 0 ? centers[layered.chains[i][0]] : edgeEntryX[i]
     const exit = port(e.from, exitSide[i])
-    edgeExitX[i] = Math.abs(exit - next) <= 1 ? next : exit
+    edgeExitX[i] = sideExit[i] !== 0 ? next : Math.abs(exit - next) <= 1 ? next : exit
   })
   // A side entry's chain ends on its own column; the route turns into the
   // box from there.
@@ -1532,7 +1547,7 @@ function placeTd(
     const to = placed[edge.to]
     if (edge.from === edge.to) return selfRoute(from, edge, maxLabel, hookSide[edge.from] < 0 ? 'left' : 'right')
     if (isBack(edge)) {
-      return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel, sideEntry[i])
+      return backChainRoute(from, to, edge, edgeExitX[i], edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel, sideEntry[i], sideExit[i])
     }
     if (isSkip(edge)) {
       return chainRoute(from, to, edge, edgeEntryX[i], jogRoute[i], edgeLabelLeft[i], edgeLabelAt[i], maxLabel, sideEntry[i])
@@ -2045,8 +2060,13 @@ function backChainRoute(
   labelAt: LabelAt,
   max: number,
   side = 0,
+  exitSide = 0,
 ): Route {
-  const points = jogPoints([exitX, from.y], jogs, true)
+  // Out the side on the centre row to the chain column, or out the top port.
+  const points =
+    exitSide === 0
+      ? jogPoints([exitX, from.y], jogs, true)
+      : [[exitSide < 0 ? from.x - 1 : from.x + from.w, from.cy] as [number, number], ...jogPoints([exitX, from.cy], jogs, true)]
   if (side !== 0) return sideLeg(points, to, edge, entryX, side, labelAt, max)
   const headRow = to.y + to.h
   points.push([entryX, headRow])
