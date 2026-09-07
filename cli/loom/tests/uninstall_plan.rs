@@ -463,3 +463,151 @@ fn unknown_or_unowned_selector_fails() {
 
     assert_eq!(error.to_string(), "skill:nope is not owned by Loom here");
 }
+
+#[test]
+fn final_cleanup_preserves_shared_mise_and_project_local_runtimes() {
+    for bootstrap_installed_mise in [false, true] {
+        let home = temp_home("shared-mise");
+        let root = home.join(".local/share/mise");
+        let runtime = root.join("installs/python/3.13/bin/python");
+        let executable = home.join(".local/bin/mise");
+        let profile = home.join(".profile");
+        let activation = "eval \"$(mise activate bash)\"";
+        let project_config = home.join("projects/other/mise.toml");
+        let selection = loom::manifest::conf_d_target(&home);
+        for (path, contents) in [
+            (&runtime, "project runtime"),
+            (&executable, "shared mise"),
+            (&profile, activation),
+            (&project_config, "[tools]\npython = '3.13'\n"),
+            (&selection, "[tools]\nnode = '24.19.0'\n"),
+        ] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, contents).unwrap();
+        }
+        // No global foreign TOML: the shared runtime is used only by another project.
+        let mut receipts = vec![Receipt::ActivationLine {
+            path: profile.clone(),
+            line: activation.into(),
+        }];
+        if bootstrap_installed_mise {
+            receipts.push(Receipt::MiseInstallation {
+                root: root.clone(),
+                executable: Some(executable.clone()),
+                manager: None,
+                path_entry_added: Some(home.join(".local/bin")),
+            });
+        }
+        let mut state = state(vec![OwnedResource {
+            id: "core:mise".into(),
+            scope: OwnershipScope::Global,
+            depends_on: Vec::new(),
+            receipts,
+        }]);
+        state.save(&home).unwrap();
+        let plan = build_uninstall_plan(
+            &state,
+            &UninstallRequest::default(),
+            &home,
+            loom::receipt_status,
+        )
+        .unwrap();
+        let system = FakeSystem {
+            home: home.clone(),
+            commands: Mutex::new(Vec::new()),
+        };
+        let report =
+            execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
+        assert!(report.failures.is_empty(), "{report:?}");
+        assert_eq!(report.removed, vec!["core:mise"]);
+        let script = home.join(".cache/loom").join(if cfg!(windows) {
+            "uninstall-final.ps1"
+        } else {
+            "uninstall-final.sh"
+        });
+        let body = std::fs::read_to_string(&script).unwrap();
+        // Check before running: a regression must never launch real mise pruning.
+        assert!(
+            !body.contains("prune"),
+            "shared runtimes must not be pruned: {body}"
+        );
+        assert!(
+            !body.contains(&root.display().to_string()),
+            "shared mise data must remain"
+        );
+        assert!(
+            !body.contains(&executable.display().to_string()),
+            "shared mise executable must remain"
+        );
+        assert!(
+            !body.contains(&profile.display().to_string()),
+            "shared activation must remain"
+        );
+        let mut command = if cfg!(windows) {
+            let mut command = std::process::Command::new("powershell");
+            command.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]);
+            command
+        } else {
+            std::process::Command::new("sh")
+        };
+        // Substitute a nonexistent parent PID so the final cleanup can run synchronously.
+        let output = command.arg(&script).arg("2147483647").output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!selection.exists());
+        assert!(!home.join(loom::ownership::STATE_PATH).exists());
+        assert_eq!(
+            std::fs::read_to_string(&runtime).unwrap(),
+            "project runtime"
+        );
+        assert_eq!(std::fs::read_to_string(&executable).unwrap(), "shared mise");
+        assert_eq!(std::fs::read_to_string(&profile).unwrap(), activation);
+        assert_eq!(
+            std::fs::read_to_string(&project_config).unwrap(),
+            "[tools]\npython = '3.13'\n"
+        );
+        std::fs::remove_dir_all(home).unwrap();
+    }
+}
+
+#[test]
+fn removing_a_selected_tool_never_prunes_shared_mise_runtimes() {
+    let home = temp_home("tool-selection");
+    let selection = loom::manifest::conf_d_target(&home);
+    std::fs::create_dir_all(selection.parent().unwrap()).unwrap();
+    std::fs::write(
+        &selection,
+        "[tools]\n# core:begin\nnode = \"24.19.0\"\n# core:end\ngh = \"2.97.0\"\n",
+    )
+    .unwrap();
+    let mut state = state(vec![owned(
+        "tool:gh",
+        OwnershipScope::Global,
+        &[],
+        Receipt::MiseTool { key: "gh".into() },
+    )]);
+    state.save(&home).unwrap();
+    let plan = build_uninstall_plan(&state, &UninstallRequest::default(), &home, |_| {
+        ReceiptStatus::Clean
+    })
+    .unwrap();
+    let system = FakeSystem {
+        home: home.clone(),
+        commands: Mutex::new(Vec::new()),
+    };
+    let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
+    assert!(report.failures.is_empty(), "{report:?}");
+    assert_eq!(report.removed, vec!["tool:gh"]);
+    let content = std::fs::read_to_string(&selection).unwrap();
+    assert!(!content.contains("gh ="));
+    assert!(content.contains("node = \"24.19.0\""));
+    assert!(
+        system.commands.lock().unwrap().is_empty(),
+        "selection removal must not prune shared runtimes"
+    );
+    assert!(InstallState::load(&home).unwrap().resources.is_empty());
+    std::fs::remove_dir_all(home).unwrap();
+}

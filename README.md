@@ -133,6 +133,9 @@ loom uninstall --dry-run --all
 
 Loom keeps modified files by default. Interactive runs ask before deleting them; scripts require `--force-modified`.
 
+Uninstall removes Loom's tool selection, not shared runtimes. It preserves mise,
+runtime binaries, PATH entries, and shell activation.
+
 ## Pi packages
 
 Install Pi packages through `loom add`, or install one directly:
