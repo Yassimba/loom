@@ -144,6 +144,17 @@ test("a left-to-right lane takes the side its endpoints can reach without pierci
   assert.match(text, /└───┘\n\s+▲/, "the return arrives under A");
 });
 
+test("two differently named relations into one entity both keep their name", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/er-cardinalities.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  for (const verb of ["contains", "ordered in", "billed by", "places", "uses", "stocks"]) {
+    assert.match(text, new RegExp(verb), `${verb} is drawn`);
+  }
+});
+
 test("streaming advances on completed statements and holds while a label arrives", () => {
   const streaming = { messageType: "assistant" as const, availableWidth: 80, isStreaming: true };
   const prefix = "```mermaid\nflowchart TD\n  A[First] --> B[Second]\n";

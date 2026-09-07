@@ -890,7 +890,7 @@ function busSpans(
   graph.edges.forEach((e, i) => {
     const jogs =
       bundle(i) !== undefined ||
-      (exact ? exit(i) !== entry(i) : Math.abs(centers[e.from] - centers[e.to]) > 1)
+      (exact ? exit(i) !== entry(i) : Math.abs(exit(i) - entry(i)) > 1)
     if (e.from !== e.to && ranks[e.to] === ranks[e.from] + 1 && ranks[e.from] === r && jogs) {
       const arrive = entry(i)
       out.push({
@@ -1403,9 +1403,9 @@ function placeTd(
       return { cols, lefts }
     }
     let fit = walk(items)
-    // No room for a head each: every forward merges into one arrival on
-    // the centre and the skips spread around it.
-    if (fit === null && fwds.length > jogging.length) {
+    // No room for a head each: forwards that read alike merge into one
+    // arrival on the centre and the skips spread around it.
+    if (fit === null && fwds.length > jogging.length && fwds.every((i) => alike(i, fwds[0]))) {
       items = [...items.filter((it) => !fwds.includes(it.edges[0])), item(fwds, cx)]
       fit = walk(items)
     }
@@ -1500,7 +1500,9 @@ function placeTd(
   const gapY = hasCards ? Math.max(GAP_Y, 3) : GAP_Y
   const rankY = new Array<number>(maxRank + 1).fill(0)
   for (let r = 1; r <= maxRank; r++) {
-    rankY[r] = rankY[r - 1] + rankH[r - 1] + Math.max(gapY, busTracks[r - 1] + 1)
+    // With cards the first bus shares the source-card row and further
+    // buses add rows, so a verb never sits on a bus.
+    rankY[r] = rankY[r - 1] + rankH[r - 1] + (hasCards ? gapY + sat(busTracks[r - 1], 1) : Math.max(gapY, busTracks[r - 1] + 1))
   }
   const canvasH = rankY[maxRank] + rankH[maxRank]
   const bandEnd = Array.from({ length: maxRank + 1 }, (_, r) => rankY[r] + rankH[r])
@@ -1916,6 +1918,28 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
     }
   }
 
+  // Top-down, every forward arrival that reads differently gets its own
+  // head on the target's top, each with its label beside it: the box is at
+  // least that wide, or the walk would have to fold two texts onto one
+  // head and lose one.
+  if (vertical) {
+    const reads = (e: Edge): string => `${e.line}|${e.headTo}|${edgeText(e)}`
+    graph.nodes.forEach((_, j) => {
+      const texts = new Set<string>()
+      let need = 1
+      graph.edges.forEach((e, i) => {
+        if (e.to !== j || e.from === j || ranks[e.from] >= ranks[j] || texts.has(reads(e))) return
+        // A parallel edge rides its first twin's cells.
+        if (graph.edges.some((o, k) => k < i && o.from === e.from && o.to === e.to)) return
+        texts.add(reads(e))
+        // A skip's label rides beside its chain when there is room.
+        const parts = ranks[j] - ranks[e.from] > 1 ? [] : arrivalParts(e)
+        need += 2 + (parts.length === 0 ? 0 : Math.max(...parts.map((t) => labelCols(t, limits.label))) + 1)
+      })
+      if (texts.size > 1) boxW[j] = Math.max(boxW[j], need + 1)
+    })
+  }
+
   const sizes: NodeSizes = {
     boxW,
     boxH,
@@ -2030,8 +2054,12 @@ function forwardRoute(
   if (edge.cardTo !== undefined) labels.push({ text: edge.cardTo, row: headRow, x: tx + 1 })
   if (edge.label !== null) {
     const midRow = headRow - 1
-    if (midRow > srcRow) labels.push({ text: edge.label, row: midRow, x: (midRow > bus ? tx : bx) + 1 })
-    else {
+    if (midRow > srcRow) {
+      // Beside the target column (the source column when the bus runs
+      // below), on the side the fan-in walk gave this head.
+      const col = midRow > bus ? tx : bx
+      labels.push({ text: edge.label, row: midRow, x: labelLeft ? sat(col, labelCols(edge.label, max) + 1) : col + 1 })
+    } else {
       const x = tx + 1 + (edge.cardTo === undefined ? 0 : stringWidth(edge.cardTo) + 1)
       labels.push({ text: edge.label, row: headRow, x })
     }
