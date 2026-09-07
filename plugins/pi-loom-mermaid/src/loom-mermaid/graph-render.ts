@@ -199,6 +199,19 @@ function buildScope(
     .map((_, gi) => gi)
     .filter((gi) => graph.groups[gi].parent === scope && keep[gi])
   items.push(...childGroups.map((i) => ({ group: true, i })))
+  // In declaration order, a frame standing where its first member was
+  // named: ranking breaks cycles from the first item, the author's entry.
+  const firstIn = (gi: number): number => {
+    let first = graph.nodes.length
+    graph.nodeGroup.forEach((g, ni) => {
+      for (let at: number | null = g; at !== null; at = graph.groups[at].parent) {
+        if (at === gi) first = Math.min(first, ni)
+      }
+    })
+    return first
+  }
+  const order = (item: ScopeItem): number => (item.group ? firstIn(item.i) : item.i)
+  items.sort((a, b) => order(a) - order(b))
 
   if (items.length === 0) return { canvas: new Canvas(1, 1), anchors: new Map() }
 

@@ -1235,7 +1235,9 @@ function placeTd(
       const p = cx + 2 * side
       const exits = graph.edges.some((e) => e.from === node && ranks[e.to] > ranks[node])
       const jog = atTarget && exits && (toward - cx) * side < 0 ? 1 : 0
-      return busOver(band, p) + jog
+      // Ties go to the side facing the route's next stop.
+      const away = (toward - cx) * side < 0 ? 0.5 : 0
+      return busOver(band, p) + jog + away
     }
     return cost(-1) < cost(1) ? -1 : 1
   }
@@ -1348,12 +1350,22 @@ function placeTd(
       graph.edges[i].line === graph.edges[k].line &&
       graph.edges[i].headTo === graph.edges[k].headTo &&
       edgeText(graph.edges[i]) === edgeText(graph.edges[k])
-    const joins = entries.filter((i) => isSkip(graph.edges[i]) && host.length > 0 && host.every((k) => alike(i, k)))
+    const joins = entries.filter((i) => isSkip(graph.edges[i]) && host.length > 0 && host.some((k) => alike(i, k)))
     const merged = [...host, ...joins]
     let items: Item[] = entries.filter((i) => !merged.includes(i)).map((i) => item([i], arrives(i)))
-    if (merged.length > 0) {
-      const drop = host.find((i) => over(i) && Math.abs(arrives(i) - cx) <= 1)
-      items.push(item(merged, drop === undefined ? host.reduce((a, i) => a + centers[graph.edges[i].from], 0) / host.length : cx))
+    // One head per way of reading the merged arrivals: alike ones share
+    // it, so no label is ever folded under another.
+    const groups: number[][] = []
+    for (const i of merged) {
+      const g = groups.find((group) => alike(i, group[0]))
+      if (g === undefined) groups.push([i])
+      else g.push(i)
+    }
+    for (const group of groups) {
+      const hosts = group.filter((i) => host.includes(i))
+      const anchors = hosts.length > 0 ? hosts : group
+      const drop = anchors.find((i) => over(i) && Math.abs(arrives(i) - cx) <= 1)
+      items.push(item(group, drop === undefined ? anchors.reduce((a, i) => a + centers[graph.edges[i].from], 0) / anchors.length : cx))
     }
     // Slots: an arrival at most a cell off centre snaps to it (routeForward
     // straightens such a jog), other in-range arrivals keep their column,
@@ -1362,13 +1374,13 @@ function placeTd(
     // (or past the previous label), its own label going right when the
     // next slot leaves room, else left when the cells behind the cursor
     // allow. Null when the top runs out of room.
-    const walk = (list: Item[]): { cols: number[]; lefts: boolean[] } | null => {
+    const walk = (list: Item[], packed = false): { cols: number[]; lefts: boolean[] } | null => {
       list.sort((a, b) => a.key - b.key || a.edges[0] - b.edges[0])
       const fixed = list.filter((it) => it.key > left && it.key < right)
       for (const item of fixed) item.slot = Math.abs(item.key - cx) <= 1 ? cx : item.key
       const spread = (group: Item[], lo: number, hi: number): void => {
         group.forEach((item, i) => {
-          const at = lo + Math.round(((hi - lo) * (i + 1)) / (group.length + 1))
+          const at = packed ? left + 1 : lo + Math.round(((hi - lo) * (i + 1)) / (group.length + 1))
           item.slot = Math.max(left + 1, Math.min(right - 1, at))
         })
       }
@@ -1402,7 +1414,8 @@ function placeTd(
       }
       return { cols, lefts }
     }
-    let fit = walk(items)
+    // Spread over the top when there is room; else packed from the left.
+    let fit = walk(items) ?? walk(items, true)
     // No room for a head each: forwards that read alike merge into one
     // arrival on the centre and the skips spread around it.
     if (fit === null && fwds.length > jogging.length && fwds.every((i) => alike(i, fwds[0]))) {
