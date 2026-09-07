@@ -54,7 +54,7 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 "npm:@tobilu/qmd" = "2.8.3"
 
 # code review TUI (annotate diffs, export to GitHub or clipboard)
-"github:agavra/tuicr" = "v0.24.0"
+"github:agavra/tuicr" = "v0.25.0"
 
 # browser-based plan and code review for coding agents
 "github:Yassimba/plannotator" = "v0.27.12-loom.1"
