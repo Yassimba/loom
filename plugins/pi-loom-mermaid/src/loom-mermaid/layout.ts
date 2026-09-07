@@ -1118,9 +1118,19 @@ function placeTd(
     const w = labelCols(text, maxLabel)
     const mid = chain.length >> 1
     let best: { v: number; side: number; dist: number } | null = null
+    // A return leaving its source's side on this row would run under the
+    // label: leave that stretch to the leg.
+    const onLeg = (v: number, side: number): boolean => {
+      const lo = side > 0 ? first[v] + 2 : first[v] - 1 - w
+      return graph.edges.some((o, k) => {
+        const head = layered.chains[k][0]
+        if (!isBack(o) || head === undefined || ranks[o.from] !== layerOf[v] || extras[o.from].kind !== 'plain') return false
+        return lo <= Math.max(first[o.from], first[head]) && lo + w > Math.min(first[o.from], first[head])
+      })
+    }
     chain.forEach((v, k) => {
       for (const side of [1, -1]) {
-        if (slack(v, side) < w + 1 || taken.has(v) || layered.shared.has(v)) continue
+        if (slack(v, side) < w + 1 || taken.has(v) || layered.shared.has(v) || onLeg(v, side)) continue
         const dist = Math.abs(k - mid)
         if (best === null || dist < best.dist) best = { v, side, dist }
       }
