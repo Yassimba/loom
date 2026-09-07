@@ -1856,6 +1856,15 @@ function placeLr(
   }
   for (const js of skipRoute) for (const j of js) j.at += topH
 
+  // A lane enters its target on the centre column — two cells off, toward
+  // its source, when a lane also leaves that box on the same side, so an
+  // arriving line never runs up the column the departing ones run down.
+  const laned = new Set(lanes.map((s) => s.edge))
+  const laneEntry = (i: number, from: Placed, to: Placed): number => {
+    const shared = graph.edges.some((o, k) => k !== i && o.from === graph.edges[i].to && laned.has(k) && onTop(k) === onTop(i))
+    if (!shared) return to.cx
+    return Math.max(to.x + 1, Math.min(to.x + to.w - 2, to.cx + (from.cx < to.cx ? -2 : 2)))
+  }
   const routes = graph.edges.map((edge, i): Route => {
     const max = sizes.maxLabel
     if (edge.from === edge.to) return selfRoute(placed[edge.from], edge, max, 'below')
@@ -1866,9 +1875,7 @@ function placeLr(
         ? forwardRouteLr(from, to, edge, bandEnd[from.rank] + 1 + edgeBus[i], max, bundleOf(i) !== undefined)
         : to.rank > from.rank && edgeStraight[i]
           ? skipRouteLr(from, to, edge, skipRoute[i], max)
-          : onTop(i)
-            ? laneRoute(from, to, edge, edgeLane[i], max, true)
-            : laneRoute(from, to, edge, laneBase + edgeLane[i], max)
+          : laneRoute(from, to, edge, onTop(i) ? edgeLane[i] : laneBase + edgeLane[i], max, onTop(i), laneEntry(i, from, to))
     return through.length === 0 ? route : { ...route, through: [...(route.through ?? []), ...through] }
   })
   return { canvasW, canvasH, routes }
@@ -2261,10 +2268,9 @@ function skipRouteLr(from: Placed, to: Placed, edge: Edge, jogs: Jog[], max: num
  * to the neighbouring lane once several stack — and waits until every
  * route landed so it can dodge the verticals that cross this row.
  */
-function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number, max: number, top = false): Route {
+function laneRoute(from: Placed, to: Placed, edge: Edge, laneY: number, max: number, top: boolean, tx: number): Route {
   const sx = from.cx
   const sy = top ? from.y : from.y + from.h - 1
-  const tx = to.cx
   const points: [number, number][] = [
     [sx, sy],
     [sx, laneY],

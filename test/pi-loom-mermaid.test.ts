@@ -144,6 +144,16 @@ test("a left-to-right lane takes the side its endpoints can reach without pierci
   assert.match(text, /└───┘\n\s+▲/, "the return arrives under A");
 });
 
+test("a lane arriving under a box keeps off the column its departing lanes use", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/lane-shared-port.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  // The dotted skip into Run lands beside the solid one leaving it.
+  assert.match(text, /▲ │.*\n.*╌┘ │/, "dotted arrival and solid departure on separate columns");
+});
+
 test("two differently named relations into one entity both keep their name", () => {
   const drawn = render(
     readFileSync(new URL("./fixtures/mermaid/er-cardinalities.mmd", import.meta.url), "utf8"),
