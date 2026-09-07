@@ -636,7 +636,7 @@ function assignPositions(
   // (from two cells right of its centre) would run into the right one.
   const sepOf = (left: number, right: number): number =>
     left < n && right < n
-      ? Math.max(sep, pad(left) + 2 - (size[left] - half(size[left])))
+      ? Math.max(sep, pad(left) + 2 - (size[left] - half(size[left])), padLeft(right) + 2 - half(size[right]))
       : 1 + (left >= n || right >= n ? pad(left) : 0) + padLeft(right)
   return brandesKoepf(layered, all, sepOf, n, offset)
 }
@@ -1207,6 +1207,15 @@ function placeTd(
     if (label.side > 0) labelPad[label.v] = label.w + 1
     else labelPadLeft[label.v] = label.w + 1
   }
+  // A self-loop's hook and label, four cells past the border on the
+  // hook's side (pads count from a cell past the centre).
+  graph.nodes.forEach((_, j) => {
+    const w = sizes.selfLabelW[j]
+    if (w === 0) return
+    const beyond = w + 3 + (sizes.boxW[j] - half(sizes.boxW[j]))
+    if (hookSide[j] > 0) labelPad[j] = Math.max(labelPad[j], beyond)
+    else labelPadLeft[j] = Math.max(labelPadLeft[j], w + 3 + half(sizes.boxW[j]))
+  })
   // A side entry's head label rides its leg: the chain's last node keeps
   // that much room on its box side.
   sidePorts(first).entry.forEach((side, i) => {
@@ -1945,7 +1954,8 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
   const sizes: NodeSizes = {
     boxW,
     boxH,
-    layW: boxW.map((w, i) => w + (selfLabelW[i] > 0 ? 2 * (selfLabelW[i] + 4) : 0)),
+    // Top-down, the hook's side reserves its label through the pads.
+    layW: boxW.map((w, i) => w + (selfLabelW[i] > 0 && !vertical ? 2 * (selfLabelW[i] + 4) : 0)),
     layH: boxH,
     selfLabelW,
     titleW: extras.map((extra, i) =>
