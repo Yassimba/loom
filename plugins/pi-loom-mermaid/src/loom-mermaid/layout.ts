@@ -632,12 +632,17 @@ function assignPositions(
   // `pad(v)` reserves cells right of `v` for a label: a real node's arrival
   // labels when a chain follows it, or a chain node's own edge label;
   // `padLeft(v)` the same on its left.
-  // Two real nodes keep `sep`, or more when the left one's arrival label
-  // (from two cells right of its centre) would run into the right one.
-  const sepOf = (left: number, right: number): number =>
-    left < n && right < n
-      ? Math.max(sep, pad(left) + 2 - (size[left] - half(size[left])), padLeft(right) + 2 - half(size[right]))
-      : 1 + (left >= n || right >= n ? pad(left) : 0) + padLeft(right)
+  // Two real nodes keep `sep`, or more when a label — the left one's two
+  // cells right of its centre, the right one's ending two cells left of
+  // its centre — would run into the other box or label.
+  const sepOf = (left: number, right: number): number => {
+    if (left >= n || right >= n) return 1 + (left >= n || right >= n ? pad(left) : 0) + padLeft(right)
+    const [r, l] = [size[left] - half(size[left]), half(size[right])]
+    const [a, b] = [pad(left), padLeft(right)]
+    // Label to label: halves as the compaction measures them, unrounded.
+    const both = a > 0 && b > 0 ? a + b + 2 - size[left] / 2 - size[right] / 2 : 0
+    return Math.max(sep, a > 0 ? a + 2 - r : 0, b > 0 ? b + 2 - l : 0, both)
+  }
   return brandesKoepf(layered, all, sepOf, n, offset)
 }
 
@@ -1268,14 +1273,61 @@ function placeTd(
           : 0
     for (const v of chain) shift.set(v, 2 * side)
   })
-  const centers = assignPositions(
-    layered,
-    sizes.layW,
-    GAP_X,
-    (node) => labelPad[node],
-    (v) => shift.get(v) ?? 0,
-    (node) => labelPadLeft[node],
-  )
+  const place = (): number[] =>
+    assignPositions(
+      layered,
+      sizes.layW,
+      GAP_X,
+      (node) => labelPad[node],
+      (v) => shift.get(v) ?? 0,
+      (node) => labelPadLeft[node],
+    )
+  const extentOf = (v: number): number => (v < graph.nodes.length ? sizes.layW[v] : 1)
+  /** Left edge, rightmost box edge, rightmost label end. */
+  const extentsOf = (c: number[]): [number, number, number] => {
+    let lo = Number.POSITIVE_INFINITY
+    let box = 0
+    let text = 0
+    c.forEach((x, v) => {
+      lo = Math.min(lo, x - half(extentOf(v)) - labelPadLeft[v])
+      box = Math.max(box, x + extentOf(v) - half(extentOf(v)))
+      text = Math.max(text, x + labelPad[v])
+    })
+    return [lo, box, text]
+  }
+  let centers = place()
+  // A head label reserves room on the right by default. A box
+  // whose one labelled arrival would fit on its left instead flips it
+  // there when that narrows the drawing (dagre's label dummy, either side).
+  const labelFlipped = new Set<number>()
+  const single = graph.nodes.map((_, v) => {
+    const list = graph.edges.filter((e, i) => e.to === v && e.from !== v && !isBack(e) && chainLabel[i] === null && edgeText(e) !== null)
+    if (list.length !== 1 || labelPadLeft[v] !== 0 || sizes.selfLabelW[v] !== 0) return 0
+    // Beside a real neighbour's own label the two would read as one text.
+    const row = layered.layers[layerOf[v]]
+    const prev = row[row.indexOf(v) - 1]
+    return prev !== undefined && prev < graph.nodes.length && labelPad[prev] > 0 ? 0 : labelPad[v]
+  })
+  let [lo, box, text] = extentsOf(centers)
+  single.forEach((w, v) => {
+    if (w === 0) return
+    labelPad[v] = 0
+    labelPadLeft[v] = w
+    const next = place()
+    const [nextLo, nextBox, nextText] = extentsOf(next)
+    // Boxes end sooner on the right (or a label past them does) without
+    // hanging further out on the left: a label past the origin only
+    // shifts the whole drawing.
+    const narrower = nextBox < box || (nextBox === box && Math.max(nextBox, nextText) < Math.max(box, text))
+    if (narrower && nextLo >= lo) {
+      ;[lo, box, text] = [nextLo, nextBox, nextText]
+      centers = next
+      labelFlipped.add(v)
+    } else {
+      labelPad[v] = w
+      labelPadLeft[v] = 0
+    }
+  })
   const boxL = (j: number): number => sat(centers[j], half(sizes.boxW[j]))
   const boxR = (j: number): number => boxL(j) + sizes.boxW[j] - 1
   const port = (node: number, side: number): number =>
@@ -1288,6 +1340,7 @@ function placeTd(
     if (!isBack(e) || entrySide[i] >= 0 || text === null || chainLabel[i] !== null) return
     margin = Math.max(margin, labelCols(text, maxLabel) + 1 - port(e.to, -1))
   })
+  for (const v of labelFlipped) margin = Math.max(margin, labelPadLeft[v] - centers[v])
   for (let v = 0; v < centers.length; v++) centers[v] += margin
   clearPorts(graph, layered, centers, sizes.layW, (node) =>
     graph.edges.flatMap((e, i) => (isBack(e) && e.from === node ? [port(node, exitSide[i])] : [])),
@@ -1403,12 +1456,15 @@ function placeTd(
       const lefts: boolean[] = []
       let cursor = left
       for (const [i, item] of list.entries()) {
-        const x = Math.max(item.slot, cursor)
+        // A flipped box's first label takes the room reserved left of the
+        // centre, so its arrow sits no further left than that.
+        const flipped = i === 0 && item.w >= 0 && labelFlipped.has(t)
+        const x = Math.max(item.slot, cursor, flipped ? cx : 0)
         if (x > right - 1) return null
         const next = list[i + 1]?.slot ?? Number.MAX_SAFE_INTEGER
         const w = item.w
         // A label sits a cell off its arrow: `▼ yes`, `yes ▼`.
-        if (w >= 0 && x + w + 3 > next && x - cursor >= w + 1) {
+        if (w >= 0 && (flipped || (x + w + 3 > next && x - cursor >= w + 1))) {
           lefts.push(true)
           cursor = x + 2
         } else {
