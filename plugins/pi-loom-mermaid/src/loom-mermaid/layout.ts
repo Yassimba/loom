@@ -29,11 +29,6 @@ export const MAX_CANVAS_CELLS = 1 << 21
 export const sat = (a: number, b: number): number => Math.max(0, a - b)
 export const half = (n: number): number => Math.floor(n / 2)
 
-/**
- * Everything an edge says, joined — the fallback for routes that have no
- * per-end placement (lanes, self-loops). Forward routes place `cardFrom` /
- * `cardTo` at their own ends instead.
- */
 /** Columns a label takes once fitted to `max`. */
 const labelCols = (text: string, max: number): number => Math.min(stringWidth(text), max)
 
@@ -41,9 +36,7 @@ const labelCols = (text: string, max: number): number => Math.min(stringWidth(te
 const labelStart = (arrowX: number, text: string, left: boolean, max: number): number =>
   left ? sat(arrowX, labelCols(text, max) + 1) : arrowX + 2
 
-/** The label parts drawn at a forward edge's arrival: verb and target cardinality. */
-const arrivalParts = (e: Edge): string[] => [e.label, e.cardTo].filter((p) => p != null) as string[]
-
+/** Everything an edge says, joined: source cardinality, verb, target cardinality. */
 export function edgeText(edge: Edge): string | null {
   const joined = [edge.cardFrom ?? '', edge.label ?? '', edge.cardTo ?? '']
     .filter((part) => part !== '')
@@ -639,8 +632,12 @@ function assignPositions(
   // `pad(v)` reserves cells right of `v` for a label: a real node's arrival
   // labels when a chain follows it, or a chain node's own edge label;
   // `padLeft(v)` the same on its left.
+  // Two real nodes keep `sep`, or more when the left one's arrival label
+  // (from two cells right of its centre) would run into the right one.
   const sepOf = (left: number, right: number): number =>
-    left < n && right < n ? sep : 1 + (left >= n || right >= n ? pad(left) : 0) + padLeft(right)
+    left < n && right < n
+      ? Math.max(sep, pad(left) + 2 - (size[left] - half(size[left])))
+      : 1 + (left >= n || right >= n ? pad(left) : 0) + padLeft(right)
   return brandesKoepf(layered, all, sepOf, n, offset)
 }
 
@@ -1063,8 +1060,8 @@ function placeTd(
     const pad = new Array<number>(layered.up.length).fill(0)
     graph.edges.forEach((e, i) => {
       if (e.from === e.to || skip(i)) return
-      const parts = ranks[e.to] > ranks[e.from] ? arrivalParts(e) : [edgeText(e) ?? '']
-      for (const part of parts) pad[e.to] = Math.max(pad[e.to], part === '' ? 0 : labelCols(part, maxLabel) + 1)
+      const text = edgeText(e)
+      if (text !== null) pad[e.to] = Math.max(pad[e.to], labelCols(text, maxLabel) + 1)
     })
     return pad
   }
@@ -1302,9 +1299,8 @@ function placeTd(
   const edgeLabelLeft = new Array<boolean>(graph.edges.length).fill(false)
   const labelW = (i: number): number => {
     if (chainLabel[i] !== null) return -1
-    const e = graph.edges[i]
-    const parts = arrivalParts(e)
-    return parts.length === 0 ? -1 : Math.max(...parts.map((p) => labelCols(p, maxLabel)))
+    const text = edgeText(graph.edges[i])
+    return text === null ? -1 : labelCols(text, maxLabel)
   }
   const { entry: sideEntry, exit: sideExit } = sidePorts(centers)
   const into: number[][] = graph.nodes.map(() => [])
@@ -1507,15 +1503,9 @@ function placeTd(
   const rankH = byRank.map((row) =>
     row.length === 0 ? 3 : Math.max(...row.map((i) => sizes.boxH[i])),
   )
-  // Per-end cardinalities want a row each around the verb: source card,
-  // label, arrow-and-target-card.
-  const hasCards = graph.edges.some((e) => e.cardFrom !== undefined || e.cardTo !== undefined)
-  const gapY = hasCards ? Math.max(GAP_Y, 3) : GAP_Y
   const rankY = new Array<number>(maxRank + 1).fill(0)
   for (let r = 1; r <= maxRank; r++) {
-    // With cards the first bus shares the source-card row and further
-    // buses add rows, so a verb never sits on a bus.
-    rankY[r] = rankY[r - 1] + rankH[r - 1] + (hasCards ? gapY + sat(busTracks[r - 1], 1) : Math.max(gapY, busTracks[r - 1] + 1))
+    rankY[r] = rankY[r - 1] + rankH[r - 1] + Math.max(GAP_Y, busTracks[r - 1] + 1)
   }
   const canvasH = rankY[maxRank] + rankH[maxRank]
   const bandEnd = Array.from({ length: maxRank + 1 }, (_, r) => rankY[r] + rankH[r])
@@ -1549,15 +1539,8 @@ function placeTd(
     if (label !== null) {
       contentW = Math.max(contentW, (edgeLabelAt[i] as { x: number }).x + label.w)
     } else if (ranks[e.to] > ranks[e.from]) {
-      const parts = arrivalParts(e)
-      const entry = Math.max(placed[e.to].cx, edgeEntryX[i])
-      for (const part of parts) {
-        const lw = labelCols(part, maxLabel)
-        contentW = Math.max(contentW, entry + 2 + lw)
-      }
-      if (e.cardFrom !== undefined) {
-        contentW = Math.max(contentW, placed[e.from].cx + 2 + stringWidth(e.cardFrom))
-      }
+      const text = edgeText(e)
+      if (text !== null) contentW = Math.max(contentW, Math.max(placed[e.to].cx, edgeEntryX[i]) + 2 + labelCols(text, maxLabel))
     } else {
       const text = edgeText(e)
       if (text !== null) {
@@ -1723,10 +1706,7 @@ function placeLr(
     if (e.from === e.to) return
     if (ranks[e.to] !== ranks[e.from] + 1 && !edgeStraight[i]) return
     const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel)
-    const cards = [e.cardFrom, e.cardTo]
-      .filter((c) => c !== undefined)
-      .reduce((w, c) => w + stringWidth(c as string) + 1, 0)
-    bandLabel[ranks[e.from]] = Math.max(bandLabel[ranks[e.from]], verb + cards)
+    bandLabel[ranks[e.from]] = Math.max(bandLabel[ranks[e.from]], verb)
   })
 
   const edgeBus = new Array<number>(graph.edges.length).fill(0)
@@ -1844,6 +1824,15 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
   const n = graph.nodes.length
   if (n === 0) return null
 
+  // Cardinalities read as one text with the verb, source end first:
+  // `1 places *`. One label beside the line, not three rows of them.
+  for (const e of graph.edges) {
+    if (e.cardFrom === undefined && e.cardTo === undefined) continue
+    e.label = edgeText(e)
+    e.cardFrom = undefined
+    e.cardTo = undefined
+  }
+
   // Parallel edges ride the same cells, so all labels after the first were
   // silently lost — join them onto the first instead. Done before sizing so
   // the joined label gets its room.
@@ -1946,8 +1935,8 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
         if (graph.edges.some((o, k) => k < i && o.from === e.from && o.to === e.to)) return
         texts.add(reads(e))
         // A skip's label rides beside its chain when there is room.
-        const parts = ranks[j] - ranks[e.from] > 1 ? [] : arrivalParts(e)
-        need += 2 + (parts.length === 0 ? 0 : Math.max(...parts.map((t) => labelCols(t, limits.label))) + 1)
+        const text = ranks[j] - ranks[e.from] > 1 ? null : edgeText(e)
+        need += 2 + (text === null ? 0 : labelCols(text, limits.label) + 1)
       })
       if (texts.size > 1) boxW[j] = Math.max(boxW[j], need + 1)
     })
@@ -2028,9 +2017,7 @@ function jogPoints(start: [number, number], jogs: Jog[], vertical: boolean): [nu
 /**
  * Adjacent ranks, top-down: out the source's bottom, jog on a bus row,
  * into the target's top. A jog of one column reads as a kink and snaps
- * straight. Cardinalities sit at their own ends; the verb takes the row
- * above the head, falling back beside the target card when the gap has no
- * spare row.
+ * straight. The label sits beside the head.
  */
 function forwardRoute(
   from: Placed,
@@ -2058,25 +2045,7 @@ function forwardRoute(
           [tx, headRow],
         ]
   const labels: Route['labels'] = []
-  if (edge.cardFrom === undefined && edge.cardTo === undefined) {
-    if (edge.label !== null) labels.push({ text: edge.label, row: headRow, x: labelStart(tx, edge.label, labelLeft, max) })
-    return { points, labels: fitted(labels, max) }
-  }
-  const srcRow = by + 1
-  if (edge.cardFrom !== undefined) labels.push({ text: edge.cardFrom, row: srcRow, x: bx + 1 })
-  if (edge.cardTo !== undefined) labels.push({ text: edge.cardTo, row: headRow, x: tx + 1 })
-  if (edge.label !== null) {
-    const midRow = headRow - 1
-    if (midRow > srcRow) {
-      // Beside the target column (the source column when the bus runs
-      // below), on the side the fan-in walk gave this head.
-      const col = midRow > bus ? tx : bx
-      labels.push({ text: edge.label, row: midRow, x: labelLeft ? sat(col, labelCols(edge.label, max) + 1) : col + 1 })
-    } else {
-      const x = tx + 1 + (edge.cardTo === undefined ? 0 : stringWidth(edge.cardTo) + 1)
-      labels.push({ text: edge.label, row: headRow, x })
-    }
-  }
+  if (edge.label !== null) labels.push({ text: edge.label, row: headRow, x: labelStart(tx, edge.label, labelLeft, max) })
   return { points, labels: fitted(labels, max) }
 }
 
@@ -2187,10 +2156,6 @@ function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: 
         ]
   const labels: Route['labels'] = []
   if (edge.label !== null) labels.push({ text: edge.label, row: sat(ly, 1), x: bus + 1 })
-  if (edge.cardFrom !== undefined) labels.push({ text: edge.cardFrom, row: sat(ry, 1), x: rx + 1 })
-  if (edge.cardTo !== undefined) {
-    labels.push({ text: edge.cardTo, row: sat(ly, 1), x: sat(headCol, stringWidth(edge.cardTo)) })
-  }
   const route: Route = { points, labels: fitted(labels, max) }
   // A bundled edge meets the shared bus where it joins and leaves it.
   if (bundled) route.through = [[bus, ry, 'j'], [bus, ly, 'j']]
