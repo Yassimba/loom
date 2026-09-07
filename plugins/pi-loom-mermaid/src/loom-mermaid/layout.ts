@@ -1492,22 +1492,27 @@ function placeTd(
       })
       return
     }
-    // Legacy: forwards merge on the centre; a skip lands past the arrival
-    // labels, or left of centre with its own label flipped left.
-    const reach = fwds.length > 0 ? Math.max(cx, ...fwds.map((i) => cx + 1 + labelW(i))) : -1
+    // Legacy: the centre goes to a skip whose chain comes straight down
+    // it, else to the forwards merged; every other entry lands two cells
+    // off on the side it arrives from (past the centre's label), or the
+    // other side with its label flipped left, or merges onto the centre.
+    const straight = entries.find((i) => isSkip(graph.edges[i]) && arrives(i) === cx)
+    const centred = straight === undefined ? fwds : [straight]
+    const reach = centred.length > 0 ? Math.max(cx, ...centred.map((i) => cx + 1 + labelW(i))) : -1
     for (const si of entries) {
-      if (isFwd(graph.edges[si])) {
+      if (centred.includes(si)) {
         edgeEntryX[si] = cx
         continue
       }
-      // A gap of one cell keeps two heads apart; with no room for that
-      // on either side, the skip merges onto the centre arrow.
       const clear = reach === -1 ? cx + 2 : reach + 2
-      if (clear <= right - 1) edgeEntryX[si] = clear
-      else if (cx - 2 >= left + 1) {
+      const fromLeft = arrives(si) < cx
+      const leftOk = cx - 2 >= left + 1
+      const rightOk = clear <= right - 1
+      if ((fromLeft && leftOk) || (!rightOk && leftOk)) {
         edgeEntryX[si] = cx - 2
         edgeLabelLeft[si] = true
-      } else edgeEntryX[si] = cx
+      } else if (rightOk) edgeEntryX[si] = clear
+      else edgeEntryX[si] = cx
     }
   })
   // Every skip and back edge runs through the interior along the column its
@@ -2003,7 +2008,10 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
         const text = ranks[j] - ranks[e.from] > 1 ? null : edgeText(e)
         need += 2 + (text === null ? 0 : labelCols(text, limits.label) + 1)
       })
-      if (texts.size > 1) boxW[j] = Math.max(boxW[j], need + 1)
+      // And wide enough for a straight drop on the centre with the other
+      // heads two cells apart on one side, so the drop never bends to
+      // make room (labels then spill past the box).
+      if (texts.size > 1) boxW[j] = Math.max(boxW[j], need + 1, 4 * texts.size - 1)
     })
   }
 
