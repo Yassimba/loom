@@ -133,6 +133,17 @@ test("two edges passing through one cell cross as a hop, junctions stay junction
   assert.match(grouped.plain.join("\n"), /╫/, "a lane crossed by another edge's bus is a hop");
 });
 
+test("a left-to-right lane takes the side its endpoints can reach without piercing a box", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/lane-stacked.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  // D sits under C; its return to A runs below the diagram, not up through C.
+  assert.doesNotMatch(text, /┴─┐\n│ C │/, "no line enters C's top");
+  assert.match(text, /└───┘\n\s+▲/, "the return arrives under A");
+});
+
 test("streaming advances on completed statements and holds while a label arrives", () => {
   const streaming = { messageType: "assistant" as const, availableWidth: 80, isStreaming: true };
   const prefix = "```mermaid\nflowchart TD\n  A[First] --> B[Second]\n";
