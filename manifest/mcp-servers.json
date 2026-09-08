@@ -1,6 +1,13 @@
 {
   "servers": [
     {
+      "name": "context7",
+      "source": "https://mcp.context7.com/mcp",
+      "description": "Look up current library documentation and code examples through Context7’s hosted MCP server. Queries are sent to Context7; no local server or API key is required for basic use.",
+      "dependencies": ["pi-mcp-adapter"],
+      "nextAction": "Restart Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
+    },
+    {
       "name": "sem",
       "version": "0.24.0",
       "source": "https://github.com/Ataraxy-Labs/sem/releases/tag/v0.24.0",

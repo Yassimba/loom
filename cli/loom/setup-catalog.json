@@ -1045,8 +1045,8 @@
       "kind": "herdr-plugin",
       "group": "Herdr plugins",
       "label": "Annotate",
-      "description": "Annotate terminal selections, review documents and agent replies, and send feedback directly to the agent (plannotator/herdr-annotate). Needs Bun on PATH.",
-      "installTarget": "plannotator/herdr-annotate",
+      "description": "Annotate terminal selections, review documents and agent replies, and render Mermaid in Pi replies. Needs Bun and pi-loom-mermaid.",
+      "installTarget": "Yassimba/herdr-annotate",
       "nextAction": "Run `herdr server reload-config`, then use your Herdr prefix with `A`, `O`, or `Shift+O`.",
       "windowsWsl": true
     },
@@ -1151,6 +1151,17 @@
       "installTarget": "gh",
       "nextAction": "Run `gh auth login` once.",
       "bin": "gh",
+      "companions": []
+    },
+    {
+      "id": "tool:jira-cli",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "jira-cli",
+      "description": "View, create, and update Jira issues from the terminal. Used by the jira skill.",
+      "installTarget": "github:ankitpokhrel/jira-cli[exe=jira]",
+      "nextAction": "Run `jira init` to configure your Jira connection.",
+      "bin": "jira",
       "companions": []
     },
     {
@@ -1362,6 +1373,19 @@
       ],
       "bin": "obsidian",
       "companions": []
+    },
+    {
+      "id": "mcp-server:context7",
+      "kind": "mcp-server",
+      "group": "MCP servers",
+      "label": "context7",
+      "description": "Look up current library documentation and code examples through Context7’s hosted MCP server. Queries are sent to Context7; no local server or API key is required for basic use.",
+      "installTarget": "context7",
+      "source": "https://mcp.context7.com/mcp",
+      "dependencies": [
+        "pi-mcp-adapter"
+      ],
+      "nextAction": "Restart Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
     },
     {
       "id": "mcp-server:sem",

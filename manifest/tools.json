@@ -63,6 +63,13 @@
       "nextAction": "Run `gh auth login` once."
     },
     {
+      "key": "github:ankitpokhrel/jira-cli[exe=jira]",
+      "label": "jira-cli",
+      "bin": "jira",
+      "description": "View, create, and update Jira issues from the terminal. Used by the jira skill.",
+      "nextAction": "Run `jira init` to configure your Jira connection."
+    },
+    {
       "key": "glab",
       "label": "glab",
       "description": "GitLab CLI — the release and code-review skills use it for MRs on GitLab projects.",

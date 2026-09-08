@@ -40,6 +40,7 @@ struct Stub {
     commands: Mutex<Vec<String>>,
     fail_mise: bool,
     fail_adapter: bool,
+    missing_sem: bool,
 }
 
 impl Stub {
@@ -49,12 +50,13 @@ impl Stub {
             commands: Mutex::new(Vec::new()),
             fail_mise: false,
             fail_adapter: false,
+            missing_sem: false,
         }
     }
 }
 impl System for Stub {
-    fn command_exists(&self, _: &str) -> bool {
-        true
+    fn command_exists(&self, name: &str) -> bool {
+        name != "sem" || !self.missing_sem
     }
     fn refresh_path(&self) {}
     fn home_dir(&self) -> Option<PathBuf> {
@@ -95,10 +97,21 @@ impl System for Stub {
 }
 
 fn plan(destination: &SkillDestination) -> loom::InstallPlan {
+    plan_servers(destination, &["sem"])
+}
+
+fn plan_servers(destination: &SkillDestination, names: &[&str]) -> loom::InstallPlan {
     let catalog = loom::Catalog::embedded().unwrap();
     let resources = loom::expand_skill_dependencies(
         &catalog.resources,
-        catalog.find(&["mcp-server:sem".into()]).unwrap(),
+        catalog
+            .find(
+                &names
+                    .iter()
+                    .map(|name| format!("mcp-server:{name}"))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap(),
         &[SkillAgent::Pi],
     );
     loom::build_install_plan(
@@ -126,7 +139,7 @@ fn sem_mcp_merge_is_idempotent_private_and_entry_owned_in_both_scopes() {
             json!({"settings":{"directTools":true},"mcpServers":{"other":{"env":{"TOKEN":"private-sentinel"}}}, "custom":true}),
         );
         let original = fs::read(&target).unwrap();
-        mcp::install(&d, &stub).unwrap();
+        mcp::install(mcp::Server::Sem, &d, &stub).unwrap();
         let after = fs::read(&target).unwrap();
         let value = serde_json::from_str::<serde_json::Value>(std::str::from_utf8(&after).unwrap())
             .unwrap();
@@ -140,8 +153,8 @@ fn sem_mcp_merge_is_idempotent_private_and_entry_owned_in_both_scopes() {
         );
         assert_eq!(value["custom"], true);
         assert_eq!(value["settings"]["directTools"], true);
-        assert!(mcp::configured(&d, &stub));
-        mcp::install(&d, &stub).unwrap();
+        assert!(mcp::configured(mcp::Server::Sem, &d, &stub));
+        mcp::install(mcp::Server::Sem, &d, &stub).unwrap();
         assert_eq!(fs::read(&target).unwrap(), after);
         assert!(stub.commands.lock().unwrap().is_empty());
         let mut state = ownership::InstallState::load(&d.home).unwrap();
@@ -229,7 +242,7 @@ fn sem_mcp_preserves_existing_lifecycle_without_adopting_user_entry() {
         json!({"mcpServers":{"sem":{"command":"sem","args":["mcp"],"directTools":false,"lifecycle":"keep-alive","env":{"TOKEN":"private"}}}}),
     );
     let before = fs::read(&path).unwrap();
-    mcp::install(&d, &Stub::new(&d.home)).unwrap();
+    mcp::install(mcp::Server::Sem, &d, &Stub::new(&d.home)).unwrap();
     assert_eq!(fs::read(&path).unwrap(), before);
     assert!(ownership::InstallState::load(&d.home)
         .unwrap()
@@ -277,7 +290,7 @@ fn sem_mcp_rejects_disabled_unverified_and_project_adapter_sources() {
             &d.home.join(".pi/agent/settings.json"),
             json!({"packages":[package]}),
         );
-        assert!(mcp::preflight(&d).is_err());
+        assert!(mcp::preflight(mcp::Server::Sem, &d).is_err());
         fs::remove_dir_all(d.home).unwrap();
     }
     let d = destination("mcp-project-adapter", SkillScope::Project);
@@ -285,7 +298,7 @@ fn sem_mcp_rejects_disabled_unverified_and_project_adapter_sources() {
         &d.project_root.join(".pi/settings.json"),
         json!({"packages":[mcp::ADAPTER_SPEC]}),
     );
-    assert!(mcp::preflight(&d)
+    assert!(mcp::preflight(mcp::Server::Sem, &d)
         .unwrap_err()
         .to_string()
         .contains("project or duplicate"));
@@ -297,10 +310,10 @@ fn sem_mcp_other_scopes_and_modified_owned_entries_are_preserved() {
     let d = destination("mcp-scope-conflict", SkillScope::Global);
     adapter(&d.home, "2.32.1");
     let stub = Stub::new(&d.home);
-    mcp::install(&d, &stub).unwrap();
+    mcp::install(mcp::Server::Sem, &d, &stub).unwrap();
     let mut local = d.clone();
     local.scope = SkillScope::Project;
-    assert!(mcp::preflight(&local)
+    assert!(mcp::preflight(mcp::Server::Sem, &local)
         .unwrap_err()
         .to_string()
         .contains("already has a definition"));
@@ -333,7 +346,7 @@ fn sem_mcp_never_follows_config_symlinks() {
     let other = d.home.join("other.json");
     fs::write(&other, "{}").unwrap();
     std::os::unix::fs::symlink(&other, &path).unwrap();
-    assert!(mcp::preflight(&d)
+    assert!(mcp::preflight(mcp::Server::Sem, &d)
         .unwrap_err()
         .to_string()
         .contains("symlinked"));
@@ -530,7 +543,7 @@ fn sem_mcp_preserves_active_server_key_for_install_status_and_removal() {
         }
         write_json(&path, original.clone());
         let stub = Stub::new(&d.home);
-        mcp::install(&d, &stub).unwrap();
+        mcp::install(mcp::Server::Sem, &d, &stub).unwrap();
         let installed: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(
@@ -541,7 +554,7 @@ fn sem_mcp_preserves_active_server_key_for_install_status_and_removal() {
             installed["mcp-servers"]["other"],
             original["mcp-servers"]["other"]
         );
-        assert!(mcp::configured(&d, &stub));
+        assert!(mcp::configured(mcp::Server::Sem, &d, &stub));
         let state = ownership::InstallState::load(&d.home).unwrap();
         let receipt = &state.resources.values().next().unwrap().receipts[0];
         assert_eq!(
@@ -558,7 +571,7 @@ fn sem_mcp_preserves_active_server_key_for_install_status_and_removal() {
     let d = destination("mcp-alias-conflict", SkillScope::Project);
     let path = mcp::config_path(&d);
     write_json(&path, json!({"mcp-servers":{"sem":{"command":"other"}}}));
-    assert!(mcp::preflight(&d)
+    assert!(mcp::preflight(mcp::Server::Sem, &d)
         .unwrap_err()
         .to_string()
         .contains("conflicting"));
@@ -578,7 +591,7 @@ fn sem_mcp_recovers_interrupted_config_before_merge_and_removal() {
     assert!(!path.exists());
     assert_eq!(fs::read(&pending).unwrap(), before);
     let stub = Stub::new(&d.home);
-    mcp::install(&d, &stub).unwrap();
+    mcp::install(mcp::Server::Sem, &d, &stub).unwrap();
     assert!(
         fs::read_to_string(&path).unwrap().contains("\"other\""),
         "recovery must preserve existing servers"
@@ -607,11 +620,11 @@ fn sem_mcp_recovers_interrupted_config_before_merge_and_removal() {
     );
     assert!(!path.exists());
     assert!(
-        !mcp::configured(&d, &stub),
+        !mcp::configured(mcp::Server::Sem, &d, &stub),
         "pending recovery is not an active Pi configuration"
     );
-    mcp::install(&d, &stub).unwrap();
-    assert!(mcp::configured(&d, &stub));
+    mcp::install(mcp::Server::Sem, &d, &stub).unwrap();
+    assert!(mcp::configured(mcp::Server::Sem, &d, &stub));
     fs::rename(&path, &pending).unwrap();
     if let ownership::Receipt::McpEntry { path, name, digest } = receipt {
         mcp::remove_entry(path, name, digest).unwrap();
@@ -876,4 +889,262 @@ fn sem_mcp_cli_dry_run_preserves_pending_config_ledger_and_selection() {
             fs::remove_dir_all(d.home).unwrap();
         }
     }
+}
+
+#[test]
+fn context7_plan_installs_only_the_adapter_then_configures_and_uninstalls_each_scope() {
+    for scope in [SkillScope::Global, SkillScope::Project] {
+        let d = destination("context7-install", scope);
+        let plan = plan_servers(&d, &["context7"]);
+        assert!(
+            plan.prerequisites.is_empty(),
+            "no local Context7 or Sem binary needed"
+        );
+        assert_eq!(plan.resources.len(), 2);
+        assert_eq!(plan.resources[0].target, "pi-package:pi-mcp-adapter");
+        assert_eq!(plan.resources[1].target, "mcp-server:context7");
+        let path = mcp::config_path(&d);
+        write_json(&path, json!({"mcp-servers":{"other":{"command":"keep"}}}));
+        let mut stub = Stub::new(&d.home);
+        stub.missing_sem = true;
+        let report = loom::execute_install_plan(&plan, &stub);
+        assert!(report.failures.is_empty(), "{report:?}");
+        assert!(report.installed.contains(&"mcp-server:context7".into()));
+        let after = fs::read(&path).unwrap();
+        let config: serde_json::Value = serde_json::from_slice(&after).unwrap();
+        assert_eq!(
+            config["mcp-servers"]["context7"],
+            json!({"url":"https://mcp.context7.com/mcp","directTools":false})
+        );
+        assert!(config["mcp-servers"].get("sem").is_none());
+        assert!(!d.home.join(".config/mise").exists());
+        assert!(mcp::configured(mcp::Server::Context7, &d, &stub));
+        assert!(!mcp::configured(mcp::Server::Sem, &d, &stub));
+        mcp::install(mcp::Server::Context7, &d, &stub).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), after);
+        let mut state = ownership::InstallState::load(&d.home).unwrap();
+        let owned = state.resources.values().next().unwrap();
+        assert!(owned.id.ends_with("mcp-server:context7"));
+        assert!(!owned.depends_on.contains(&"tool:sem".into()));
+        assert!(owned
+            .depends_on
+            .contains(&"pi-package:pi-mcp-adapter".into()));
+        assert!(
+            matches!(&owned.receipts[0], ownership::Receipt::McpEntry { name, .. } if name == "context7")
+        );
+        let removal = uninstall::build_uninstall_plan(
+            &state,
+            &uninstall::UninstallRequest {
+                selected: Some(vec![owned.id.clone()]),
+                force_modified: false,
+            },
+            &d.project_root,
+            uninstall::receipt_status,
+        )
+        .unwrap();
+        let report = uninstall::execute_uninstall_plan(
+            &removal,
+            &mut state,
+            &d.home,
+            &stub,
+            &AtomicBool::new(false),
+        );
+        assert!(report.failures.is_empty(), "{report:?}");
+        assert!(!mcp::configured(mcp::Server::Context7, &d, &stub));
+        let config: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(config, json!({"mcp-servers":{"other":{"command":"keep"}}}));
+        assert!(!stub
+            .commands
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|c| c.contains("mise") || c.contains("sem") || c.contains("uninstall")));
+        fs::remove_dir_all(d.home).unwrap();
+    }
+}
+
+#[test]
+fn context7_conflicts_stop_all_lanes_and_preserve_secrets_and_other_scopes() {
+    for value in [
+        json!({"url":"https://private.invalid/TOKEN","directTools":false}),
+        json!({"url":"https://mcp.context7.com/mcp","directTools":false,"disabled":true}),
+        json!({"url":"https://mcp.context7.com/mcp","directTools":true}),
+        json!({"url":"https://mcp.context7.com/mcp","directTools":false,"command":"other"}),
+        json!({"url":"https://mcp.context7.com/mcp","directTools":false,"socket":"private"}),
+    ] {
+        let d = destination("context7-conflict", SkillScope::Project);
+        let plan = plan_servers(&d, &["sem", "context7"]);
+        let path = mcp::config_path(&d);
+        write_json(&path, json!({"mcpServers":{"context7":value}}));
+        let before = fs::read(&path).unwrap();
+        let stub = Stub::new(&d.home);
+        let report = loom::execute_install_plan(&plan, &stub);
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(report.failures[0].target, "mcp-server:context7");
+        assert!(!format!("{report:?}").contains("TOKEN"));
+        assert!(stub.commands.lock().unwrap().is_empty());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        fs::remove_dir_all(d.home).unwrap();
+    }
+    let d = destination("context7-scope", SkillScope::Global);
+    adapter(&d.home, "2.33.0");
+    mcp::install(mcp::Server::Context7, &d, &Stub::new(&d.home)).unwrap();
+    let mut local = d.clone();
+    local.scope = SkillScope::Project;
+    assert!(mcp::preflight(mcp::Server::Context7, &local)
+        .unwrap_err()
+        .to_string()
+        .contains("already has a definition"));
+    assert!(
+        mcp::preflight(mcp::Server::Sem, &local).is_ok(),
+        "Context7 must not block a different server in another scope"
+    );
+    fs::remove_dir_all(d.home).unwrap();
+}
+
+#[test]
+fn context7_preserves_user_auth_and_modified_owned_config() {
+    let d = destination("context7-auth", SkillScope::Global);
+    adapter(&d.home, "2.33.0");
+    let path = mcp::config_path(&d);
+    let entry = json!({"url":"https://mcp.context7.com/mcp","directTools":false,"headers":{"Authorization":"Bearer private-sentinel"},"lifecycle":"lazy"});
+    write_json(&path, json!({"mcpServers":{"context7":entry}}));
+    let before = fs::read(&path).unwrap();
+    let stub = Stub::new(&d.home);
+    mcp::install(mcp::Server::Context7, &d, &stub).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert!(
+        ownership::InstallState::load(&d.home)
+            .unwrap()
+            .resources
+            .is_empty(),
+        "never adopt user config"
+    );
+    write_json(&path, json!({}));
+    mcp::install(mcp::Server::Context7, &d, &stub).unwrap();
+    let state = ownership::InstallState::load(&d.home).unwrap();
+    let receipt = &state.resources["mcp-server:context7"].receipts[0];
+    write_json(&path, json!({"mcpServers":{"context7":entry}}));
+    assert_eq!(
+        uninstall::receipt_status(receipt),
+        uninstall::ReceiptStatus::Modified
+    );
+    if let ownership::Receipt::McpEntry { path, name, digest } = receipt {
+        assert!(mcp::remove_entry(path, name, digest).is_err());
+    }
+    assert_eq!(fs::read(&path).unwrap(), before);
+    fs::remove_dir_all(d.home).unwrap();
+}
+
+#[test]
+fn both_mcp_servers_share_one_adapter_and_keep_independent_receipts() {
+    std::env::set_var("LOOM_REPO_DIR", common::repo_root());
+    let d = destination("both-mcp", SkillScope::Project);
+    let plan = plan_servers(&d, &["context7", "sem"]);
+    assert_eq!(
+        plan.resources
+            .iter()
+            .filter(|s| s.target == "pi-package:pi-mcp-adapter")
+            .count(),
+        1
+    );
+    let stub = Stub::new(&d.home);
+    let report = loom::execute_install_plan(&plan, &stub);
+    assert!(report.failures.is_empty(), "{report:?}");
+    let state = ownership::InstallState::load(&d.home).unwrap();
+    assert_eq!(state.resources.len(), 2);
+    for server in [mcp::Server::Sem, mcp::Server::Context7] {
+        assert!(mcp::configured(server, &d, &stub));
+    }
+    let context7 = state
+        .resources
+        .values()
+        .find(|r| r.id.ends_with("mcp-server:context7"))
+        .unwrap();
+    if let ownership::Receipt::McpEntry { path, name, digest } = &context7.receipts[0] {
+        mcp::remove_entry(path, name, digest).unwrap();
+    }
+    assert!(!mcp::configured(mcp::Server::Context7, &d, &stub));
+    assert!(mcp::configured(mcp::Server::Sem, &d, &stub));
+    fs::remove_dir_all(d.home).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn context7_cli_add_and_status_use_context7_identity_even_when_sem_is_configured() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::{Command, Stdio};
+    let d = destination("context7-cli", SkillScope::Global);
+    adapter(&d.home, "2.33.0");
+    mcp::install(mcp::Server::Sem, &d, &Stub::new(&d.home)).unwrap();
+    let bin = d.home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    for (name, script) in [
+        ("pi", "#!/bin/sh\n[ \"$1\" = list ] || exit 91\nprintf 'User packages:\\n  npm:pi-mcp-adapter@2.33.0\\n  npm:@yassimba/pi-loom@latest\\n'\n"),
+        ("sem", "#!/bin/sh\nexit 99\n"),
+    ] {
+        let path = bin.join(name);
+        fs::write(&path, script).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_loom"))
+            .args(args)
+            .env("HOME", &d.home)
+            .env("USERPROFILE", &d.home)
+            .env("XDG_CONFIG_HOME", d.home.join(".config"))
+            .env("LOOM_REPO_DIR", common::repo_root())
+            .env_remove("PI_CODING_AGENT_DIR")
+            .env_remove("PI_MCP_CONFIG_MODE")
+            .env_remove("LOOM_BOOTSTRAP")
+            .env("PATH", &bin)
+            .current_dir(&d.project_root)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    };
+    let output = run(&["add", "--mcp-server", "context7", "--agent", "pi", "--yes"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.contains("configured; live health not checked"),
+        "{text}"
+    );
+    assert!(
+        !d.home.join(".config/mise").exists(),
+        "remote MCP needs no mise install when Pi exists"
+    );
+    let state = ownership::InstallState::load(&d.home).unwrap();
+    assert!(state.resources.contains_key("mcp-server:context7"));
+    assert!(state.resources.contains_key("mcp-server:sem"));
+    let status = run(&["status"]);
+    let text = String::from_utf8_lossy(&status.stdout);
+    assert!(
+        text.lines()
+            .any(|line| line.contains("context7") && line.contains("gateway configured")),
+        "{text}"
+    );
+    // Keep Sem healthy but break Context7: status must not borrow Sem's health.
+    let path = mcp::config_path(&d);
+    let config = fs::read_to_string(&path).unwrap().replace(
+        "https://mcp.context7.com/mcp",
+        "https://example.invalid/mcp",
+    );
+    fs::write(&path, config).unwrap();
+    let status = run(&["status"]);
+    let text = String::from_utf8_lossy(&status.stdout);
+    assert!(
+        text.contains("loom add --mcp-server context7 --agent pi"),
+        "{text}"
+    );
+    assert!(
+        text.lines()
+            .any(|line| line.contains("sem") && line.contains("gateway configured")),
+        "{text}"
+    );
+    fs::remove_dir_all(d.home).unwrap();
 }

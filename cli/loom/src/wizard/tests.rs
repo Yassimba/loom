@@ -154,48 +154,54 @@ fn wizard() -> Wizard {
 }
 
 #[test]
-fn sem_mcp_flows_through_choose_where_review_with_gateway_exposure() {
-    let root = std::env::temp_dir().join(format!("loom-mcp-wizard-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
-    let root = root.canonicalize().unwrap();
-    let mut model = model(ready());
-    model.resources = crate::Catalog::embedded()
-        .unwrap()
-        .find(&["mcp-server:sem".into(), "pi-package:pi-mcp-adapter".into()])
-        .unwrap();
-    model.installed = vec![false; 2];
-    model.settings.clear();
-    model.profiles.clear();
-    model.dry_run = true;
-    model.skill_destination =
-        SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &root, &root);
-    let mut wizard = Wizard::new(model);
-    assert_eq!(wizard.item_state(Item::Resource(0)), ItemState::Available);
-    assert_eq!(wizard.item_state(Item::Resource(1)), ItemState::Picked);
-    wizard.selected[0] = true;
-    press(&mut wizard, &[KeyCode::Enter]);
-    assert!(matches!(wizard.stages[wizard.stage_index], Stage::Where(_)));
-    let rendered = screen(&mut wizard, 120, 40);
-    assert!(rendered.contains("auto-selected Pi gateway"), "{rendered}");
-    assert!(rendered.contains("MCP not yet verified"), "{rendered}");
-    press(
-        &mut wizard,
-        &[KeyCode::Home, KeyCode::Char(' '), KeyCode::Enter],
-    );
-    assert_eq!(wizard.skill_scope, SkillScope::Project);
-    let rendered = screen(&mut wizard, 120, 40);
-    assert!(rendered.contains("directTools=false"), "{rendered}");
-    assert!(rendered.contains("mcp-adapter"), "{rendered}");
-    assert!(
-        rendered.contains(".pi/mcp.json") || rendered.contains(r".pi\mcp.json"),
-        "{rendered}"
-    );
-    assert!(!rendered.contains("blocked"), "{rendered}");
-    assert!(matches!(
-        press(&mut wizard, &[KeyCode::Enter]),
-        Some(Action::Exit(WizardOutcome::DryRun(_, _)))
-    ));
-    std::fs::remove_dir_all(root).unwrap();
+fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
+    for name in ["sem", "context7"] {
+        let root =
+            std::env::temp_dir().join(format!("loom-mcp-wizard-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let mut model = model(ready());
+        model.resources = crate::Catalog::embedded()
+            .unwrap()
+            .find(&[
+                format!("mcp-server:{name}"),
+                "pi-package:pi-mcp-adapter".into(),
+            ])
+            .unwrap();
+        model.installed = vec![false; 2];
+        model.settings.clear();
+        model.profiles.clear();
+        model.dry_run = true;
+        model.skill_destination =
+            SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &root, &root);
+        let mut wizard = Wizard::new(model);
+        assert_eq!(wizard.item_state(Item::Resource(0)), ItemState::Available);
+        assert_eq!(wizard.item_state(Item::Resource(1)), ItemState::Picked);
+        wizard.selected[0] = true;
+        press(&mut wizard, &[KeyCode::Enter]);
+        assert!(matches!(wizard.stages[wizard.stage_index], Stage::Where(_)));
+        let rendered = screen(&mut wizard, 120, 40);
+        assert!(rendered.contains("auto-selected Pi gateway"), "{rendered}");
+        assert!(rendered.contains("MCP not yet verified"), "{rendered}");
+        press(
+            &mut wizard,
+            &[KeyCode::Home, KeyCode::Char(' '), KeyCode::Enter],
+        );
+        assert_eq!(wizard.skill_scope, SkillScope::Project);
+        let rendered = screen(&mut wizard, 120, 40);
+        assert!(rendered.contains("directTools=false"), "{rendered}");
+        assert!(rendered.contains("mcp-adapter"), "{rendered}");
+        assert!(
+            rendered.contains(".pi/mcp.json") || rendered.contains(r".pi\mcp.json"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("blocked"), "{rendered}");
+        assert!(matches!(
+            press(&mut wizard, &[KeyCode::Enter]),
+            Some(Action::Exit(WizardOutcome::DryRun(_, _)))
+        ));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 
 fn key(code: KeyCode) -> KeyEvent {

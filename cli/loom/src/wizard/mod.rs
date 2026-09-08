@@ -138,7 +138,7 @@ fn run_install_job(
                         .chain(&job.plan.resources)
                         .nth(index);
                     ExecStatus::Ok(
-                        if step.is_some_and(|s| s.target == "mcp-server:sem") {
+                        if step.is_some_and(|s| s.target.starts_with("mcp-server:")) {
                             "configured; live health not checked"
                         } else {
                             "installed"

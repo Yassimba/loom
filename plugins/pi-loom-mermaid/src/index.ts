@@ -85,6 +85,24 @@ function codeSpan(line: string): string {
   return `${fence}${padding}${content}${padding}${fence}`;
 }
 
+export function transformMermaidForDocument(markdown: string, availableWidth = 100): string {
+  return markdownParser
+    .lexer(markdown)
+    .map((token) => {
+      if (!isMermaid(token)) return token.raw;
+      const art = render(withDiffClasses(token.text).source, { maxWidth: availableWidth });
+      if (!art || art.width > availableWidth) return token.raw;
+      const text = art.plain.join("\n");
+      const longestRun = Math.max(
+        0,
+        ...Array.from(text.matchAll(/`+/g), (match) => match[0].length),
+      );
+      const fence = "`".repeat(Math.max(3, longestRun + 1));
+      return `${fence}\n${text}\n${fence}\n`;
+    })
+    .join("");
+}
+
 export function transformMermaidMarkdown(markdown: string, context: TransformContext): string {
   if (context.messageType === "assistant-thinking") return markdown;
 

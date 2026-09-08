@@ -144,6 +144,7 @@ pub enum StepAction {
         tools: Vec<String>,
     },
     ConfigureMcp {
+        server: crate::mcp::Server,
         destination: crate::SkillDestination,
     },
 }
@@ -151,8 +152,12 @@ pub enum StepAction {
 impl StepAction {
     pub fn display(&self) -> String {
         match self {
-            Self::ConfigureMcp { destination } => format!(
-                "configure Sem → {}; {}",
+            Self::ConfigureMcp {
+                server,
+                destination,
+            } => format!(
+                "configure {} → {}; {}",
+                server.name(),
                 crate::mcp::config_path(destination).display(),
                 crate::mcp::EXPOSURE_NOTE
             ),
@@ -219,21 +224,16 @@ pub fn build_install_plan(
     platform: Platform,
     skill_destination: &crate::skills::SkillDestination,
 ) -> Result<InstallPlan> {
-    let has_mcp = resources
+    let mcp_servers = resources
         .iter()
-        .any(|resource| resource.kind == ResourceKind::McpServer);
-    if has_mcp {
-        anyhow::ensure!(
-            resources
-                .iter()
-                .filter(|r| r.kind == ResourceKind::McpServer)
-                .all(|r| r.id == "mcp-server:sem"),
-            "unverified MCP server"
-        );
-        anyhow::ensure!(resources.iter().any(|r| r.kind == ResourceKind::Skill) || skill_destination.agents == [crate::SkillAgent::Pi], "Sem MCP supports Pi in this release; other agent adapters are not yet verified (use --agent pi)");
-        crate::mcp::preflight(skill_destination)?;
+        .filter(|resource| resource.kind == ResourceKind::McpServer)
+        .map(|resource| crate::mcp::Server::from_name(&resource.install_target))
+        .collect::<Result<Vec<_>>>()?;
+    for server in &mcp_servers {
+        anyhow::ensure!(resources.iter().any(|r| r.kind == ResourceKind::Skill) || skill_destination.agents == [crate::SkillAgent::Pi], "MCP setup supports Pi in this release; other agent adapters are not yet verified (use --agent pi)");
+        crate::mcp::preflight(*server, skill_destination)?;
     }
-    let needs_pi = has_mcp
+    let needs_pi = !mcp_servers.is_empty()
         || resources
             .iter()
             .any(|resource| resource.kind == ResourceKind::PiPackage);
@@ -250,7 +250,9 @@ pub fn build_install_plan(
             std::iter::once(tool.install_target.clone()).chain(tool.companions.iter().cloned())
         })
         .collect::<Vec<_>>();
-    if has_mcp && !tools.iter().any(|key| key == crate::mcp::SEM_TOOL_KEY) {
+    if mcp_servers.contains(&crate::mcp::Server::Sem)
+        && !tools.iter().any(|key| key == crate::mcp::SEM_TOOL_KEY)
+    {
         tools.push(crate::mcp::SEM_TOOL_KEY.into());
     }
     if needs_pi && !status.pi && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
@@ -341,11 +343,12 @@ pub fn build_install_plan(
             verification: Some(verification),
         });
     }
-    if has_mcp {
+    for server in mcp_servers {
         steps.push(InstallStep {
-            target: "mcp-server:sem".into(),
+            target: format!("mcp-server:{}", server.name()),
             manager: "pi".into(),
             action: StepAction::ConfigureMcp {
+                server,
                 destination: skill_destination.clone(),
             },
             verification: None,
@@ -392,8 +395,12 @@ pub fn execute_install_plan_with_control(
 ) -> InstallReport {
     // Validate every MCP destination again before any concurrent lane can mutate state.
     for step in &plan.resources {
-        if let StepAction::ConfigureMcp { destination } = &step.action {
-            if let Err(error) = crate::mcp::preflight(destination) {
+        if let StepAction::ConfigureMcp {
+            server,
+            destination,
+        } = &step.action
+        {
+            if let Err(error) = crate::mcp::preflight(*server, destination) {
                 observer(
                     plan.prerequisites.len()
                         + plan.resources.iter().position(|s| s == step).unwrap(),
@@ -578,7 +585,11 @@ fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
                     if tools.iter().any(|tool| tool == tool_key)
             )
         });
-        if runtime_via_mise || (manager == "pi" && configures_mcp) {
+        if runtime_via_mise
+            || (manager == "pi"
+                && configures_mcp
+                && lanes.iter().any(|lane| lane.manager == "mise"))
+        {
             if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == manager) {
                 lane.waits_for = Some("mise");
             }
@@ -695,8 +706,11 @@ fn execute_action(
     repository: &crate::skills::Repository,
 ) -> Option<String> {
     let command = match &step.action {
-        StepAction::ConfigureMcp { destination } => {
-            return crate::mcp::install(destination, system)
+        StepAction::ConfigureMcp {
+            server,
+            destination,
+        } => {
+            return crate::mcp::install(*server, destination, system)
                 .err()
                 .map(|e| e.to_string())
         }

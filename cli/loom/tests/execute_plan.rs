@@ -343,7 +343,7 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
             assert_eq!(
                 *system.runtime_calls.lock().unwrap(),
                 vec![
-                    "herdr plugin install plannotator/herdr-annotate --yes",
+                    "herdr plugin install Yassimba/herdr-annotate --yes",
                     "herdr plugin list",
                 ]
             );

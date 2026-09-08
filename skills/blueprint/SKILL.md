@@ -13,9 +13,9 @@ and how success will be verified. Ground existing behavior in source; distinguis
 proposals and unknowns from facts.
 
 Use fenced `mermaid` blocks; they render automatically in the user's session.
-At least show structure and data in and out flow and interfaces
+At minimum, show the structure, input and output flow, interface dependencies, and a code snippet of the main interfaces.
 
-But also object lineage, interfaces, or lifecycles and more if that makes it easier to understand and decide if this is how it should work.
-Use the diagram types that fit and use multiple diagram (types) and complementary views for distinct questions.
+Add object lineage or lifecycle views when they make the proposal easier to assess.
+Use the diagram types that fit. Use complementary views for distinct questions.
 
-Mark (upcomming) changes with `:::red` for removed, `:::green` for added, and `:::orange` for changed.
+Mark upcoming changes with `:::red` for removed, `:::green` for added, and `:::orange` for changed.

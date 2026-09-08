@@ -1122,7 +1122,7 @@ impl Wizard {
             Line::styled("Agent destination", Style::new().bold().fg(ACCENT)),
             Line::from(""),
             Line::from(if self.has_mcp() {
-                "Scope applies to skills and MCP config. Sem and the auto-selected Pi gateway are machine-wide. MCP goes to Pi only; other selected agents receive skills."
+                "Scope applies to skills and MCP config. Required tools and the auto-selected Pi gateway are machine-wide. MCP goes to Pi only; other selected agents receive skills."
             } else {
                 "This screen affects agent skills only."
             }),
@@ -1302,7 +1302,7 @@ impl Wizard {
                         crate::mcp::config_path(&self.skill_destination()).display()
                     )));
                     lines.push(Line::from(
-                        "  Machine-wide Sem v0.24.0 via mise; Pi gateway is selected automatically.",
+                        "  Pi gateway is selected automatically; required local tools are machine-wide.",
                     ));
                     lines.push(Line::from(crate::mcp::EXPOSURE_NOTE));
                 }
