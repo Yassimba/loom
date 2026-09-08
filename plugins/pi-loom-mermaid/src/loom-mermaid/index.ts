@@ -14,9 +14,9 @@ export type { MermaidArt, Role, Span } from './types.ts'
 /**
  * Render a Mermaid source block as Unicode box-drawing art.
  *
- * Supported: `graph`/`flowchart` (including `subgraph`), `stateDiagram`,
- * `classDiagram`, `erDiagram`, `sequenceDiagram`, `pie`, `mindmap`,
- * `timeline` and `gitGraph`.
+ * Supported: `architecture-beta`, `graph`/`flowchart` (including `subgraph`),
+ * `stateDiagram`, `classDiagram`, `erDiagram`, `sequenceDiagram`, `pie`,
+ * `mindmap`, `timeline` and `gitGraph`.
  *
  * The diagram is laid out at whatever size it needs; `art.width` reports the
  * columns that turned out to be. Given `maxWidth`, a diagram wider than that

@@ -19,6 +19,7 @@ test("adds Mermaid guidance to the existing system prompt on each agent start", 
     const { systemPrompt } = handler({ systemPrompt: base });
     assert.ok(systemPrompt.startsWith(`${base}\n\n`));
     assert.match(systemPrompt, /Use Mermaid proactively/);
+    assert.match(systemPrompt, /architecture for deployed services/);
     assert.match(systemPrompt, /flowchart for dependencies\/decisions/);
     assert.match(systemPrompt, /:::red removed, :::green added, :::orange changed/);
     assert.match(systemPrompt, /prefer colored outlines/);
@@ -67,6 +68,7 @@ flowchart LR
 
 test("vendored renderer handles every advertised diagram kind", () => {
   const diagrams = [
+    "architecture-beta\n service api(server)[API]\n service db(database)[Database]\n api:R --> L:db",
     "flowchart LR\n A --> B",
     "stateDiagram-v2\n A --> B",
     "classDiagram\n class A",
@@ -87,6 +89,25 @@ test("vendored renderer handles every advertised diagram kind", () => {
     });
     assert.doesNotMatch(live, /```mermaid|Drawing Mermaid/, source);
   }
+});
+
+test("renders architecture groups, services, junctions, and arrows", () => {
+  const drawn = render(`architecture-beta
+  group cloud(cloud)[Cloud]
+  group data(database)[Data] in cloud
+  service api(server)[API] in cloud
+  service db(database)[Database] in data
+  junction route in cloud
+  api:R <--> L:route
+  route:R --> L:db{group}`);
+
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  for (const label of ["Cloud", "Data", "API", "Database", "•"])
+    assert.match(text, new RegExp(label));
+  assert.match(text, /◄/);
+  assert.match(text, /▶/);
+  assert.deepEqual(drawn.warnings, []);
 });
 
 test("a diagram wider than the space is laid out again with tighter labels", () => {
