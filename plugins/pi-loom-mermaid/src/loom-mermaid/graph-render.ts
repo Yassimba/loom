@@ -257,7 +257,6 @@ function buildScope(
       line: e.line,
       fromSide: e.fromSide,
       toSide: e.toSide,
-      sameRank: e.sameRank,
       fromAnchor: anchorOf(f, e.from),
       toAnchor: anchorOf(t, e.to),
     }
