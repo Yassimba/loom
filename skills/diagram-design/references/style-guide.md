@@ -16,16 +16,16 @@ Every token is referred to by **semantic role**, not by its hex value. Type refe
 
 | Role | Purpose | Default (light) | Default (dark) |
 |---|---|---|---|
-| `paper` | Page background, default node fill | `#f5f5f5` (white-smoke) | `#2d3142` (jet-black) |
-| `paper-2` | Diagram container bg, secondary fill | `#ececec` | `#393e53` |
-| `ink` | Primary text, primary stroke | `#2d3142` (jet-black) | `#f5f5f5` (white-smoke) |
-| `muted` | Secondary text, default arrow stroke | `#4f5d75` (blue-slate) | `#bfc0c0` (silver) |
-| `soft` | Sublabels, boundary labels | `#7a8399` | `#8e98ac` |
-| `rule` | Hairline borders | `rgba(45,49,66,0.12)` | `rgba(245,245,245,0.12)` |
-| `rule-solid` | Stronger borders, baselines | `#bfc0c0` (silver) | `rgba(191,192,192,0.25)` |
-| `accent` | Focal / 1–2 max per diagram | `#eb6c36` (atomic-tangerine) | `#f08a59` |
-| `accent-tint` | Fill for accent-bordered boxes | `rgba(235,108,54,0.08)` | `rgba(240,138,89,0.10)` |
-| `link` | HTTP/API calls, external arrows | `#2e5aa8` | `#6a95d8` |
+| `paper` | Page background, default node fill | `#f7f8fb` | `#0d1323` |
+| `paper-2` | Diagram container bg, secondary fill | `#f2f4fa` | `#131a2e` |
+| `ink` | Primary text, primary stroke | `#0d1323` | `#f2f4fa` |
+| `muted` | Secondary text, default arrow stroke | `#596173` | `#b4bac9` |
+| `soft` | Sublabels, boundary labels | `#838b9d` | `#6e7588` |
+| `rule` | Hairline borders | `rgba(13,19,35,0.12)` | `rgba(242,244,250,0.12)` |
+| `rule-solid` | Stronger borders, baselines | `#dce1eb` | `#3c4256` |
+| `accent` | Focal / 1–2 max per diagram | `#4d91ff` | `#4d91ff` |
+| `accent-tint` | Fill for accent-bordered boxes | `rgba(77,145,255,0.10)` | `rgba(77,145,255,0.14)` |
+| `link` | HTTP/API calls, external arrows | `#3d72c8` | `#4d91ff` |
 
 > **Brand palette source:** this skin maps to a five-color brand palette — `jet-black #2d3142`, `silver #bfc0c0`, `white-smoke #f5f5f5`, `atomic-tangerine #eb6c36`, `blue-slate #4f5d75`. The `soft`, `rule`, and `link` tokens are derived (lighter slate, ink-at-opacity, and a saturated variant in the blue-slate hue family) to cover roles the brand palette doesn't name directly.
 
@@ -73,17 +73,29 @@ A self-contained palette for the terminal-window primitive (see [primitive-termi
 
 | Role | Family | Size | Weight | Usage |
 |---|---|---|---|---|
-| `title` | Instrument Serif | 1.75rem | 400 | Page H1 |
-| `node-name` | Geist (sans) | 12px | 600 | Human-readable labels |
-| `sublabel` | Geist Mono | 9px | 400 | Port, protocol, URL, field type |
-| `eyebrow` | Geist Mono | 7–8px | 500, tracked 0.18em, uppercase | Type tags, axis labels |
-| `arrow-label` | Geist Mono | 8px | 400, tracked 0.06em | Arrow annotations |
-| `callout` | Instrument Serif *italic* | 14px | 400 | Editorial asides only |
+| `title` | Hubot Sans | 2rem | 700 | Page H1 |
+| `node-name` | Hubot Sans | 12px | 600 | Human-readable labels |
+| `sublabel` | ui-monospace | 9px | 400 | Port, protocol, URL, field type |
+| `eyebrow` | Outfit | 8px | 500, tracked 0.18em, uppercase | Type tags, axis labels |
+| `arrow-label` | Outfit | 8px | 500, tracked 0.06em | Arrow annotations |
+| `callout` | Hubot Sans *italic* | 14px | 400 | Editorial asides only |
 
 ### Font stack
 
-```html
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&display=swap" rel="stylesheet">
+```css
+@font-face {
+  font-family: "Hubot Sans";
+  src: url("../fonts/HubotSans-Variable.ttf") format("truetype-variations");
+  font-style: normal;
+  font-weight: 100 1000;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("../fonts/Outfit-Variable.ttf") format("truetype-variations");
+  font-style: normal;
+  font-weight: 100 1000;
+}
 ```
 
 ### Korean labels
