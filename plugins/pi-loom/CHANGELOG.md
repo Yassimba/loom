@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/Yassimba/loom/compare/pi-loom-v0.2.1...pi-loom-v0.2.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* bypass stale manifest caches in all clients ([#202](https://github.com/Yassimba/loom/issues/202)) ([a16013e](https://github.com/Yassimba/loom/commit/a16013ead9ecdd50519fad6a86400eb073185cf8))
+
 ## [0.2.1](https://github.com/Yassimba/loom/compare/pi-loom-v0.2.0...pi-loom-v0.2.1) (2026-09-08)
 
 
