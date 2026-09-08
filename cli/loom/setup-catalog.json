@@ -390,16 +390,10 @@
       "kind": "skill",
       "group": "Coding",
       "label": "blueprint",
-      "description": "Plan substantial code changes using atlas context and projected views in SVG/HTML or Mermaid and Plannotator approval.",
+      "description": "Sketch a proposed code change visually with Mermaid before implementation.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
-      "dependencies": [
-        "diagram-design",
-        "plannotator",
-        "explain-code-flow",
-        "system-atlas",
-        "mermaid-skill"
-      ]
+      "dependencies": []
     },
     {
       "id": "skill:brainstorming",
@@ -720,15 +714,10 @@
       "kind": "skill",
       "group": "Coding",
       "label": "explain-code-flow",
-      "description": "Explain a feature from system context to runtime detail, reusing atlas figures and facts. Show changed flows in polished SVG/HTML or economical Mermaid views.",
+      "description": "Explain a feature's runtime flow, data transformations, and input/output contracts visually with Mermaid. Use when explaining code flow or tracing an object's full lineage.",
       "installTarget": "explain-code-flow",
       "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
-      "dependencies": [
-        "diagram-design",
-        "plannotator",
-        "system-atlas",
-        "mermaid-skill"
-      ]
+      "dependencies": []
     },
     {
       "id": "skill:improve-codebase-architecture",

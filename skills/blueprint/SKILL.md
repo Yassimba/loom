@@ -1,58 +1,24 @@
 ---
 name: blueprint
-description: "Plan substantial code changes using atlas context and projected views in SVG/HTML or Mermaid and Plannotator approval."
+description: "Sketch a proposed code change visually with Mermaid before implementation."
 ---
 
 # Blueprint
 
-Explain what will change. Existing facts come from the atlas plus verified local
-changes; proposed elements visibly say PROJECTED. The approved plan is the
-implementation contract.
+Make the proposed change clear enough to decide whether and how to build it:
+the goal, current versus proposed behavior, affected code, key trade-offs,
+and how success will be verified. Ground existing behavior in source;
+distinguish proposals and unknowns from facts.
 
-## 1. Pin and inspect
+Prefer the smallest change that meets the goal. Reuse existing code and
+interfaces before introducing new abstractions or dependencies.
 
-Start `ai-docs/blueprints/<slug>/plan.md` with outcome, acceptance criteria,
-constraints, affected surface, and repository target state. Name the runtime
-entry and tracer when relevant. Resolve ambiguity that changes system shape.
+Use fenced `mermaid` blocks; they render automatically in the user's session.
+Show structure, data in and out flow, object lineage, interfaces, or lifecycles
+with the diagram types that fit. Use complementary views for distinct questions.
+Mark changes with `:::red` removed, `:::green` added, and `:::orange` changed
+where supported.
 
-Follow [the shared atlas consumer procedure](../system-atlas/references/consume.md).
-Record reused topic IDs and baseline pins in `overlay.json`; put new facts and
-source references directly in the plan. Inspect the relevant delta and gaps.
-
-Done when the change boundary, target, reused context, and uncertainties are
-explicit. No separate brief, evidence packet, or figure-selection report.
-
-## 2. Project
-
-Give each planned change a stable ID (C1, C2, …) in the plan's Changes section:
-target, current → proposed behavior, reason, and verification. Include ordered
-implementation steps, compatibility/migration needs, risks, and rollback where
-applicable.
-
-Select atlas figures by question, then follow
-[the shared output preference](../system-atlas/references/overlays.md). For a comparison use
-[the diff convention](../explain-code-flow/references/diagram-diff.md).
-Separate atlas-to-current drift from current-to-proposal changes. Proposed
-elements remain unbound and visibly PROJECTED.
-
-Done when the plan explains every change and acceptance criterion, and its
-figures reveal the important structure, runtime journey, or contracts.
-
-## 3. Review and lock
-
-Follow [references/guided-review.md](references/guided-review.md) for the compact
-artifact contract, validation, Plannotator submission, and lock. Write plainly;
-define unfamiliar terms once and remove repetition during the authoring pass.
-
-Revise only affected plan sections and figures after feedback. Implementation
-begins after explicit approval and successful lock. A later design change gets
-a new reviewed revision rather than editing the approved contract.
-
-Done when the approved plan, generated context/figures, and target baseline are
-bound by the approval record.
-
-## After implementation
-
-Follow [references/verify-built.md](references/verify-built.md). Compare every
-promised change and acceptance criterion with built source, explain drift, and
-reuse unaffected diagrams.
+Deliver directly in chat with short labels and brief prose. Include implementation
+steps when useful. Create files only when requested; leave review tooling to
+the user. Begin implementation only after explicit approval.

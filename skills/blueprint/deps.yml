@@ -1,8 +1,0 @@
-# Skills/tools this skill invokes; installers pull them in transitively.
-skills:
-  - diagram-design
-  - plannotator
-  # Hard file dependency: Blueprint runs its scripts and loads its references.
-  - explain-code-flow
-  - system-atlas
-  - mermaid-skill
