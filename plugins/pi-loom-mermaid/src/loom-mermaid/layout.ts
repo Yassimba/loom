@@ -1332,9 +1332,34 @@ function placeTd(
   const boxR = (j: number): number => boxL(j) + sizes.boxW[j] - 1
   const port = (node: number, side: number): number =>
     Math.max(boxL(node) + 1, Math.min(boxR(node) - 1, centers[node] + 2 * side))
+  // An exterior return can clear every intermediate box yet still run
+  // over its wider source. Move a straight, unshared outer chain just
+  // beyond that source so the existing side-port checks can use it. Keep
+  // straight top exits and interior/shared chains in their reserved slots.
+  graph.edges.forEach((e, i) => {
+    const chain = layered.chains[i]
+    if (!isBack(e) || extras[e.from].kind !== 'plain' || chain.length === 0) return
+    const col = centers[chain[0]]
+    const side = Math.sign(col - centers[e.from])
+    if (side === 0 || Math.abs(col - port(e.from, side)) <= 1) return
+    const outer = side < 0 ? 0 : -1
+    if (layered.layers[ranks[e.from]].at(outer) !== e.from) return
+    if (chain.some((v) => centers[v] !== col || layered.shared.has(v) || layered.layers[layerOf[v]].at(outer) !== v)) return
+    const left = centers[e.from] - half(sizes.boxW[e.from])
+    const next = side < 0 ? left - 3 : left + sizes.boxW[e.from] + 2
+    if ((next - col) * side <= 0) return
+    const candidate = [...centers]
+    for (const v of chain) candidate[v] = next
+    const ports = sidePorts(candidate)
+    if (ports.exit[i] !== side) return
+    // Preserve an existing clear target-side entry.
+    const entry = sidePorts(centers).entry[i]
+    if (entry !== 0 && ports.entry[i] !== entry) return
+    centers = candidate
+  })
   // A return entering on the left labels leftward; give the leftmost such
   // label room before the first column.
-  let margin = 0
+  let margin = Math.max(0, -extentsOf(centers)[0])
   graph.edges.forEach((e, i) => {
     const text = edgeText(e)
     if (!isBack(e) || entrySide[i] >= 0 || text === null || chainLabel[i] !== null) return

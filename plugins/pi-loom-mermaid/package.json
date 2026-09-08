@@ -7,6 +7,9 @@
   "engines": {
     "node": ">=22.6"
   },
+  "bin": {
+    "loom-mermaid-render": "./src/cli.ts"
+  },
   "keywords": [
     "pi-package",
     "pi",

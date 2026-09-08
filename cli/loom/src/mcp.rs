@@ -11,6 +11,54 @@ pub const SEM_TOOL_KEY: &str = "github:Ataraxy-Labs/sem[exe=sem]";
 pub const ADAPTER_SPEC: &str = "npm:pi-mcp-adapter@2.32.1";
 pub const EXPOSURE_NOTE: &str = "Pi gateway only (directTools=false); lifecycle unchanged. First launch may discover server metadata. Restart Pi and use /mcp to check live health.";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Server {
+    Sem,
+    Context7,
+}
+
+impl Server {
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name {
+            "sem" => Ok(Self::Sem),
+            "context7" => Ok(Self::Context7),
+            _ => bail!("unverified MCP server"),
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Sem => "sem",
+            Self::Context7 => "context7",
+        }
+    }
+
+    fn entry(self) -> Value {
+        match self {
+            Self::Sem => json!({"command": "sem", "args": ["mcp"], "directTools": false}),
+            Self::Context7 => json!({"url": "https://mcp.context7.com/mcp", "directTools": false}),
+        }
+    }
+
+    fn compatible_entry(self, entry: &Value) -> bool {
+        self.entry()
+            .as_object()
+            .unwrap()
+            .iter()
+            .all(|(key, value)| entry.get(key) == Some(value))
+            && entry.get("disabled").is_none_or(|v| v == false)
+            && entry.get("socket").is_none()
+            && match self {
+                Self::Sem => entry.get("url").is_none(),
+                Self::Context7 => entry.get("command").is_none() && entry.get("args").is_none(),
+            }
+    }
+
+    fn prerequisites_present(self, system: &dyn System) -> bool {
+        system.command_exists("pi") && (self != Self::Sem || system.command_exists("sem"))
+    }
+}
+
 pub fn config_path(destination: &SkillDestination) -> PathBuf {
     match destination.scope {
         SkillScope::Global => destination.home.join(".pi/agent/mcp.json"),
@@ -76,20 +124,6 @@ fn read_object(path: &Path) -> Result<(String, Value)> {
     Ok((text, value))
 }
 
-fn sem_entry() -> Value {
-    json!({"command": "sem", "args": ["mcp"], "directTools": false})
-}
-
-fn compatible_entry(entry: &Value) -> bool {
-    entry.is_object()
-        && entry.get("command") == Some(&json!("sem"))
-        && entry.get("args") == Some(&json!(["mcp"]))
-        && entry.get("directTools") == Some(&json!(false))
-        && entry.get("disabled").is_none_or(|value| value == false)
-        && entry.get("url").is_none()
-        && entry.get("socket").is_none()
-}
-
 // Match the adapter's `mcpServers ?? raw["mcp-servers"]` precedence.
 fn servers_key(value: &Value) -> &'static str {
     if value.get("mcpServers").is_none_or(Value::is_null)
@@ -115,7 +149,7 @@ fn validate_config(value: &Value, path: &Path) -> Result<()> {
     );
     ensure!(
         value.pointer("/settings/disableProxyTool") != Some(&json!(true)),
-        "{} disables the MCP gateway; enable the proxy before installing Sem",
+        "{} disables the MCP gateway; enable the proxy before installing an MCP server",
         path.display()
     );
     ensure!(
@@ -125,7 +159,7 @@ fn validate_config(value: &Value, path: &Path) -> Result<()> {
             && value
                 .pointer("/settings/hostConfigDiscovery")
                 .is_none_or(|v| v == "off"),
-        "{} uses host imports/discovery; resolve Sem manually in /mcp setup before using Loom",
+        "{} uses host imports/discovery; resolve MCP servers manually in /mcp setup before using Loom",
         path.display()
     );
     Ok(())
@@ -133,10 +167,11 @@ fn validate_config(value: &Value, path: &Path) -> Result<()> {
 
 /// Read-only preflight, used both before review and again before any install lane.
 /// Existing same-name definitions in other layers require explicit user resolution.
-pub fn preflight(destination: &SkillDestination) -> Result<()> {
+pub fn preflight(server: Server, destination: &SkillDestination) -> Result<()> {
+    let name = server.name();
     ensure!(
         destination.agents.contains(&SkillAgent::Pi),
-        "Sem MCP needs Pi selected; other agent adapters are not yet verified (use --agent pi)"
+        "MCP setup needs Pi selected; other agent adapters are not yet verified (use --agent pi)"
     );
     ensure!(
         destination.scope != SkillScope::Project
@@ -158,9 +193,9 @@ pub fn preflight(destination: &SkillDestination) -> Result<()> {
     ] {
         let (_, value) = read_object(&path)?;
         validate_config(&value, &path)?;
-        if let Some(entry) = value.get(servers_key(&value)).and_then(|v| v.get("sem")) {
-            ensure!(path == target, "Sem already has a definition in {}; resolve that entry before adding another scope", path.display());
-            ensure!(compatible_entry(entry), "{} has a conflicting or disabled Sem entry; preserve it and configure gateway exposure manually in /mcp", path.display());
+        if let Some(entry) = value.get(servers_key(&value)).and_then(|v| v.get(name)) {
+            ensure!(path == target, "{name} already has a definition in {}; resolve that entry before adding another scope", path.display());
+            ensure!(server.compatible_entry(entry), "{} has a conflicting or disabled {name} entry; preserve it and configure gateway exposure manually in /mcp", path.display());
         }
     }
     adapter_needed(destination)?;
@@ -245,16 +280,15 @@ pub fn adapter_needed(destination: &SkillDestination) -> Result<bool> {
 }
 
 /// Configuration presence is not live health. No MCP processes are launched.
-pub fn configured(destination: &SkillDestination, system: &dyn System) -> bool {
-    preflight(destination).is_ok()
+pub fn configured(server: Server, destination: &SkillDestination, system: &dyn System) -> bool {
+    preflight(server, destination).is_ok()
         && config_path(destination).is_file()
         && adapter_needed(destination).is_ok_and(|needed| !needed)
-        && system.command_exists("pi")
-        && system.command_exists("sem")
+        && server.prerequisites_present(system)
         && read_object(&config_path(destination)).is_ok_and(|(_, v)| {
             v.get(servers_key(&v))
-                .and_then(|servers| servers.get("sem"))
-                .is_some_and(compatible_entry)
+                .and_then(|servers| servers.get(server.name()))
+                .is_some_and(|entry| server.compatible_entry(entry))
         })
 }
 
@@ -316,26 +350,25 @@ fn entry_digest(value: &Value) -> String {
     )
 }
 
-pub fn install(destination: &SkillDestination, system: &dyn System) -> Result<()> {
-    preflight(destination)?;
+pub fn install(server: Server, destination: &SkillDestination, system: &dyn System) -> Result<()> {
+    preflight(server, destination)?;
+    let name = server.name();
     ensure!(
-        !adapter_needed(destination)?
-            && system.command_exists("pi")
-            && system.command_exists("sem"),
-        "Sem MCP prerequisites missing; retry setup to install Sem and the Pi adapter"
+        !adapter_needed(destination)? && server.prerequisites_present(system),
+        "{name} MCP prerequisites missing; retry setup to install its prerequisites and the Pi adapter"
     );
     let path = config_path(destination);
     recover_config(&path)?;
     let (before, mut value) = read_object(&path)?;
     let key = servers_key(&value);
-    if value.get(key).and_then(|v| v.get("sem")).is_some() {
+    if value.get(key).and_then(|v| v.get(name)).is_some() {
         return Ok(());
     }
-    let entry = sem_entry();
+    let entry = server.entry();
     if value.get(key).is_none_or(Value::is_null) {
         value[key] = json!({});
     }
-    value[key]["sem"] = entry.clone();
+    value[key][name] = entry.clone();
     let after = crate::jsonc::set(&before, key, &value[key])?;
     let mut state =
         crate::ownership::InstallState::load(&destination.home).map_err(anyhow::Error::msg)?;
@@ -349,31 +382,34 @@ pub fn install(destination: &SkillDestination, system: &dyn System) -> Result<()
         },
     };
     let id = match &scope {
-        crate::ownership::OwnershipScope::Global => "mcp-server:sem".into(),
+        crate::ownership::OwnershipScope::Global => format!("mcp-server:{name}"),
         crate::ownership::OwnershipScope::Project { root } => {
-            format!("project:{}:mcp-server:sem", root.display())
+            format!("project:{}:mcp-server:{name}", root.display())
         }
     };
+    let mut depends_on = vec![
+        "core:loom".into(),
+        "core:mise".into(),
+        "tool:pi".into(),
+        "pi-package:pi-mcp-adapter".into(),
+    ];
+    if server == Server::Sem {
+        depends_on.push("tool:sem".into());
+    }
     state.record(crate::ownership::OwnedResource {
         id,
         scope,
-        depends_on: vec![
-            "core:loom".into(),
-            "core:mise".into(),
-            "tool:pi".into(),
-            "pi-package:pi-mcp-adapter".into(),
-            "tool:sem".into(),
-        ],
+        depends_on,
         receipts: vec![crate::ownership::Receipt::McpEntry {
             path: path.clone(),
-            name: "sem".into(),
+            name: name.into(),
             digest: entry_digest(&entry),
         }],
     });
     write_config(&path, &before, &after)?;
     if let Err(error) = state.save(&destination.home) {
         // Do not leave a new, unowned entry after an ordinary ledger write failure.
-        remove_entry(&path, "sem", &entry_digest(&entry))?;
+        remove_entry(&path, name, &entry_digest(&entry))?;
         bail!("MCP ownership could not be saved: {error}");
     }
     Ok(())

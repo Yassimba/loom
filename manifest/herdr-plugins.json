@@ -4,8 +4,8 @@
     {
       "id": "annotate",
       "label": "Annotate",
-      "description": "Annotate terminal selections, review documents and agent replies, and send feedback directly to the agent (plannotator/herdr-annotate). Needs Bun on PATH.",
-      "installTarget": "plannotator/herdr-annotate",
+      "description": "Annotate terminal selections, review documents and agent replies, and render Mermaid in Pi replies. Needs Bun and pi-loom-mermaid.",
+      "installTarget": "Yassimba/herdr-annotate",
       "nextAction": "Run `herdr server reload-config`, then use your Herdr prefix with `A`, `O`, or `Shift+O`."
     }
   ]

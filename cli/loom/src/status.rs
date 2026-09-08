@@ -111,10 +111,12 @@ fn print_mcp(system: &dyn System, style: &Out) -> bool {
                 };
                 let destination =
                     crate::SkillDestination::new(vec![crate::SkillAgent::Pi], scope, &home, root);
-                let configured = present && crate::mcp::configured(&destination, system);
+                let configured = present
+                    && crate::mcp::Server::from_name(name)
+                        .is_ok_and(|server| crate::mcp::configured(server, &destination, system));
                 healthy &= configured;
                 style.row(if configured { Mark::Ok } else { Mark::Bad }, name,
-                    format!("{} — {}", tidy_path(path, &home), if configured { "gateway configured; live health not checked (use /mcp in Pi)" } else { "config changed/missing or prerequisite unavailable; inspect /mcp or retry loom add --mcp-server sem --agent pi" }));
+                    format!("{} — {}", tidy_path(path, &home), if configured { "gateway configured; live health not checked (use /mcp in Pi)".into() } else { format!("config changed/missing or prerequisite unavailable; inspect /mcp or retry loom add --mcp-server {name} --agent pi") }));
             }
         }
     }

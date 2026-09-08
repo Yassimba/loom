@@ -16,7 +16,7 @@ import {
   parseDir,
   type Shape,
 } from '../graph.ts'
-import { asciiLower, cleanLabel, decodeHtmlEntities, isIdChar } from '../labels.ts'
+import { asciiLower, cleanLabel, decodeHtmlEntities, isIdChar, type Limits } from '../labels.ts'
 import { layoutFlowchart, layoutGrouped } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
 import {
@@ -35,21 +35,42 @@ import {
 export const flowchart: Diagram = {
   kind: 'flowchart',
   headers: ['graph', 'flowchart'],
-  render(src, limits) {
-    const graph = parseGraph(src)
-    if (graph === null) return null
-    const canvas = graph.groups.length === 0 ? layoutFlowchart(graph, limits) : layoutGrouped(graph, limits)
-    if (canvas === null) return null
-    return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
-  },
+  render: renderGraph,
+  renderDown: (src, limits) => renderGraph(src, limits, true),
 }
 
-function parseGraph(src: string): Graph | null {
+function renderGraph(src: string, limits: Limits, fallbackDown = false) {
+  const graph = parseGraph(src, fallbackDown)
+  if (graph === null) return null
+  if (fallbackDown && graph.groups.length > 0) {
+    // TD attaches cross-scope edges to frames, losing member anchors and
+    // potentially merging distinct edges. Only retry when none need those anchors.
+    const scopes = [...graph.nodeGroup]
+    const groupNodes = new Set<number>()
+    for (const group of graph.groups) {
+      const node = graph.index.get(group.id)
+      if (node === undefined) continue
+      groupNodes.add(node)
+      scopes[node] = group.parent
+    }
+    if (graph.edges.some((e) => scopes[e.from] !== scopes[e.to] &&
+      (!groupNodes.has(e.from) || !groupNodes.has(e.to)))) return null
+  }
+  const canvas = graph.groups.length === 0 ? layoutFlowchart(graph, limits) : layoutGrouped(graph, limits)
+  if (canvas === null) return null
+  return { canvas, warnings: graph.warnings, classDefs: graph.classDefs }
+}
+
+function parseGraph(src: string, fallbackDown: boolean): Graph | null {
   const statements = statementsOf(src)
   const kind = headerKind(statements)
   if (kind === null || !flowchart.headers.includes(kind)) return null
 
   const graph = new Graph(parseDir(words(statements[0])[1] ?? 'TB'))
+  if (fallbackDown) {
+    if (graph.dir !== 'right') return null
+    graph.dir = 'down'
+  }
   const stack: number[] = []
   /** `class A,B name` assignments, applied after the walk so a statement may
    * precede the nodes it names. Unknown ids are ignored. */
@@ -91,9 +112,12 @@ function parseGraph(src: string): Graph | null {
         if (target) hrefs.push(target)
         continue
       }
+      case 'direction':
+        // Nested directions are not modelled yet; do not reorient an explicit scope.
+        if (fallbackDown && stack.length > 0) return null
+        continue
       case 'style':
       case 'linkstyle':
-      case 'direction':
         continue
       default:
         break

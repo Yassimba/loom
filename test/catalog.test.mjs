@@ -103,7 +103,7 @@ async function createCatalogFixture() {
   return repoRoot;
 }
 
-test("Pi and Sem select the Pi MCP adapter", async () => {
+test("Pi, Sem, and Context7 select the Pi MCP adapter", async () => {
   const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
   const sem = catalog.resources.find(({ id }) => id === "mcp-server:sem");
   const pi = catalog.resources.find(({ id }) => id === "tool:pi");
@@ -113,6 +113,12 @@ test("Pi and Sem select the Pi MCP adapter", async () => {
   assert.deepEqual(sem.dependencies, ["pi-mcp-adapter"]);
   assert.deepEqual(pi.dependencies, ["pi-mcp-adapter"]);
   assert.ok(catalog.profiles[0].resources.includes(sem.id));
+  const context7 = catalog.resources.find(({ id }) => id === "mcp-server:context7");
+  assert.equal(context7.installTarget, "context7");
+  assert.equal(context7.source, "https://mcp.context7.com/mcp");
+  assert.equal(context7.version, undefined); // Hosted service, not a pinned local binary.
+  assert.deepEqual(context7.dependencies, ["pi-mcp-adapter"]);
+  assert.ok(!catalog.profiles[0].resources.includes(context7.id)); // Opt-in, not a profile default.
 });
 
 test("the setup catalog carries ordered profiles with exact resource ids", async () => {

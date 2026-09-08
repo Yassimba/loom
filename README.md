@@ -10,6 +10,8 @@ Use Loom with Pi (recommended), Claude Code, Codex, OpenCode, Cursor, Grok, or a
 
 ## Install
 
+Prefer to set things up yourself? Follow the [manual installation guide](INSTALL.md) for skills, tools, MCP servers, and agent-specific packages.
+
 macOS or Linux:
 
 ```bash
@@ -167,6 +169,24 @@ Open either image for the full-size comparison. See the [pi-loom-mermaid guide](
 
 Loom installs Pi's standalone skills in `.agents/skills`. Start Pi from the project root so its `.pi/settings.json` applies. [`manifest/pi-packages.json`](manifest/pi-packages.json) lists the current package names and versions.
 
+## MCP servers
+
+MCP connects Pi to extra tools. Loom offers two optional servers:
+
+| Server | What it adds |
+| --- | --- |
+| [sem](https://github.com/Ataraxy-Labs/sem) | Local code search, code comparisons, and checks for what a change affects |
+| [Context7](https://github.com/upstash/context7) | Current library documentation and code examples from a hosted service |
+
+```bash
+loom add --mcp-server context7 --agent pi
+loom add --mcp-server sem --agent pi
+```
+
+Loom installs the shared Pi MCP adapter if needed. Add `--scope project` for a project-only server configuration; Pi and the adapter remain machine-wide. Restart Pi and open `/mcp` to check the connection.
+
+Context7 sends documentation queries to `https://mcp.context7.com/mcp`. Basic use needs no API key or local server. An optional [Context7 API key](https://context7.com/dashboard) gives higher rate limits; configure it through the adapter yourself. Loom does not collect credentials or pin the hosted service’s version. Installing Context7 does not install sem.
+
 ## Wiki vaults
 
 Run `loom wiki` to create a Vault or adopt an existing Obsidian directory. Each Vault gets a named QMD search index and project-local wiki skills.
@@ -180,20 +200,34 @@ loom wiki unregister /path/to/Vault
 
 The index is a snapshot, so run `repair` after editing notes. `unregister` removes Loom's machine record without deleting notes. If you enable Confluence export, CME stores its credentials as owner-only plaintext.
 
-## Other installation methods
+## Install without Loom
 
-Install all public skills with the Vercel skills CLI:
+Use the Vercel skills CLI to install Loom skills directly into OpenCode, Claude Code, Codex, Cursor, or another supported agent:
 
 ```bash
 npx skills add Yassimba/loom
 ```
 
-Install the Claude Code plugin:
+The command lets you choose the agent, skills, and global or project scope. For a non-interactive OpenCode install:
+
+```bash
+# All public Loom skills, for your user account
+npx skills add Yassimba/loom --agent opencode --skill '*' --global --yes
+
+# One skill, in the current project
+npx skills add Yassimba/loom --agent opencode --skill tdd --yes
+```
+
+Use `--agent '*'` to install for every detected agent. Run `npx skills update --global` to update global installs.
+
+Claude Code users can install Loom as a plugin instead:
 
 ```text
 /plugin marketplace add Yassimba/loom
 /plugin install loom@loom
 ```
+
+These methods install skills, not Loom's pinned command-line tools or Pi packages. Follow the [manual installation guide](INSTALL.md) to add command-line tools, MCP servers, and agent-specific packages.
 
 ## Repository layout
 

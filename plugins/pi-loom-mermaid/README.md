@@ -1,28 +1,66 @@
 # pi-loom-mermaid
 
-Draws Mermaid blocks in Pi as Unicode terminal diagrams. Colored borders, hops where edges cross, and fewer stacked rails than Pi's built-in renderer or pi-lovely-mermaid. It also adds a short system prompt so the agent can answer in diagrams when that is clearer than prose.
+Show diagrams directly in Pi, with colored boxes, a clearer layout, and connecting lines that are easier to follow.
 
-Same diagram:
+This extension draws diagrams written in Mermaid, a text format for describing boxes, arrows, and other shapes. It also asks the agent to use diagrams when they explain something more clearly than text.
 
-Pi built-in. One gray box style. Edges share long outer rails.
+## Install
+
+Requires Pi and Node.js 22.6 or newer.
+
+1. Install the package:
+
+   ```bash
+   pi install npm:@yassimba/pi-loom-mermaid
+   ```
+
+2. Set `markdown.mermaid` to `"off"` in `~/.pi/agent/settings.json`. Merge this into your existing settings; do not replace the file:
+
+   ```json
+   {
+     "markdown": {
+       "mermaid": "off"
+     }
+   }
+   ```
+
+   This turns off Pi’s own diagram drawing so this extension can draw instead. If you have another Mermaid extension installed, disable it with `pi config`.
+
+3. Run `/reload` in Pi.
+
+## Usage
+
+Ask Pi: “Explain this code with a Mermaid diagram.” Pi draws the diagram in the conversation.
+
+You can also paste the example below. Keep the opening line of three backticks followed by `mermaid`, and the closing line of three backticks.
+
+To show changes, add `:::red` after a box for removed code, `:::orange` for changed code, or `:::green` for added code. These labels give boxes muted colored borders. Text and backgrounds keep your Pi theme’s colors. The `classDef` lines in the example set custom border colors.
+
+If a diagram is too wide, Pi shows its code instead. Widen the terminal or ask Pi to split it into smaller diagrams.
+
+## The same diagram in Pi and GitHub
+
+All three views below use the same Mermaid code.
+
+### Pi built-in
+
+Gray boxes. Connecting lines take long paths around the outside.
 
 <p align="center">
-  <img src="../../assets/mermaid-pi-builtin.png" alt="Pi built-in Mermaid: gray boxes and stacked outer edges">
+  <img src="https://raw.githubusercontent.com/Yassimba/loom/main/assets/mermaid-pi-builtin.png" alt="Pi built-in Mermaid: gray boxes with long connecting lines around the outside">
 </p>
 
-pi-lovely-mermaid. Color, still long parallel paths around the right side.
+### pi-loom-mermaid
+
+Colored boxes and shorter connecting lines. Small bends mark where lines cross.
 
 <p align="center">
-  <img src="../../assets/mermaid-lovely.png" alt="pi-lovely-mermaid: colored borders with long parallel edges">
+  <img src="https://raw.githubusercontent.com/Yassimba/loom/main/assets/mermaid-pi-loom.png" alt="pi-loom-mermaid: colored boxes, shorter connecting lines, and bends at crossings">
 </p>
 
-This package. The same colors, plus crossing hops and shorter routes.
+### GitHub built-in
 
-<p align="center">
-  <img src="../../assets/mermaid-pi-loom.png" alt="pi-loom-mermaid: colored borders, crossing hops, and shorter routes">
-</p>
-
-GitHub draws the next blocks with its own Mermaid. Paste the same source into Pi (built-in vs this package) to compare routing and color.
+GitHub draws the code below as a diagram. Copy the code into Pi to compare how it looks.
 
 ```mermaid
 flowchart TD
@@ -59,103 +97,26 @@ flowchart TD
     classDef green stroke:#4f8560
 ```
 
-Stress cases: complex diagrams rendered by both engines.
+## Update or remove
 
-**State — Pi built-in**
-
-<p align="center">
-  <img src="../../assets/mermaid-state-pi.png" alt="Pi built-in state diagram">
-</p>
-
-**State — pi-loom-mermaid**
-
-<p align="center">
-  <img src="../../assets/mermaid-state-loom.png" alt="pi-loom-mermaid state diagram">
-</p>
-
-**ER — Pi built-in**
-
-<p align="center">
-  <img src="../../assets/mermaid-er-pi.png" alt="Pi built-in ER diagram">
-</p>
-
-**ER — pi-loom-mermaid**
-
-<p align="center">
-  <img src="../../assets/mermaid-er-loom.png" alt="pi-loom-mermaid ER diagram">
-</p>
-
-**Sequence — Pi built-in**
-
-<p align="center">
-  <img src="../../assets/mermaid-sequence-pi.png" alt="Pi built-in sequence diagram">
-</p>
-
-**Sequence — pi-loom-mermaid**
-
-<p align="center">
-  <img src="../../assets/mermaid-sequence-loom.png" alt="pi-loom-mermaid sequence diagram">
-</p>
-
-**Dense class graph — Pi built-in**
-
-<p align="center">
-  <img src="../../assets/mermaid-class-pi.png" alt="Pi built-in dense class diagram">
-</p>
-
-**Dense class graph — pi-loom-mermaid**
-
-<p align="center">
-  <img src="../../assets/mermaid-class-loom.png" alt="pi-loom-mermaid dense class diagram">
-</p>
-
-**Dense flowchart — Pi built-in**
-
-<p align="center">
-  <img src="../../assets/mermaid-dense-pi.png" alt="Pi built-in dense flowchart">
-</p>
-
-**Dense flowchart — pi-loom-mermaid**
-
-<p align="center">
-  <img src="../../assets/mermaid-dense-loom.png" alt="pi-loom-mermaid dense flowchart">
-</p>
-
-## Install
-
-From Loom setup, or:
+Update the package, then run `/reload`:
 
 ```bash
-pi install npm:@yassimba/pi-loom-mermaid
+pi update npm:@yassimba/pi-loom-mermaid
 ```
 
-Turn off Pi's built-in Mermaid transformer so this extension gets the original source. In `~/.pi/agent/settings.json`:
+To uninstall:
 
-```json
-{
-  "markdown": {
-    "mermaid": "off"
-  }
-}
+```bash
+pi remove npm:@yassimba/pi-loom-mermaid
 ```
 
-Then run `/reload` in Pi.
+Delete the `"mermaid": "off"` setting you added to restore Pi’s own diagram drawing, then run `/reload`.
 
-## Usage
+## Contributing
 
-Mark diff nodes with the built-in `red`, `orange`, and `green` classes:
-
-```mermaid
-flowchart LR
-  A[Removed]:::red --> B[Changed]:::orange --> C[Added]:::green
-```
-
-Those classes color and dim only the box border. Fill and text stay on Pi's theme. A `classDef` in the diagram overrides a built-in class or adds other colors.
-
-Diagrams wider than the terminal stay as Mermaid source.
+From the [Loom repository](https://github.com/Yassimba/loom) root, run `npm ci`, `npm run check`, and `npm run audit` before opening a pull request.
 
 ## License
 
-[MIT](LICENSE)
-
-pi-loom-mermaid is adapted from pi-lovely-mermaid.
+[MIT](LICENSE). Adapted from pi-lovely-mermaid.

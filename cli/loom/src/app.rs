@@ -484,7 +484,8 @@ pub(crate) fn detect_installed(
                 return false;
             }
             match resource.kind {
-                ResourceKind::McpServer => crate::mcp::configured(destination, system),
+                ResourceKind::McpServer => crate::mcp::Server::from_name(&resource.install_target)
+                    .is_ok_and(|server| crate::mcp::configured(server, destination, system)),
                 // A tool is installed when mise manages it (it is in the
                 // selection) or its binary is on PATH from any other installer
                 // (brew, cargo, ...): both are honestly "installed".
@@ -832,7 +833,7 @@ fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
         out.row(
             Mark::Ok,
             &label(target),
-            if target == "mcp-server:sem" {
+            if target.starts_with("mcp-server:") {
                 "configured; live health not checked"
             } else {
                 "installed"

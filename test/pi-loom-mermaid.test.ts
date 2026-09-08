@@ -4,6 +4,8 @@ import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import piLovelyMermaid, { transformMermaidMarkdown } from "../plugins/pi-loom-mermaid/src/index.ts";
 import { render, toAnsi } from "../plugins/pi-loom-mermaid/src/loom-mermaid/index.ts";
+import { LIMITS } from "../plugins/pi-loom-mermaid/src/loom-mermaid/labels.ts";
+import { diagramFor } from "../plugins/pi-loom-mermaid/src/loom-mermaid/registry.ts";
 
 test("adds Mermaid guidance to the existing system prompt on each agent start", () => {
   let handler: ((event: { systemPrompt: string }) => { systemPrompt: string }) | undefined;
@@ -125,6 +127,138 @@ test("architecture edges honor all four requested target ports", () => {
     assert.ok(drawn);
     assert.match(drawn.plain.join("\n"), new RegExp(arrow), ports);
   }
+});
+
+test("LR overflow retries TD without changing the source or later wide renders", () => {
+  for (const header of ["flowchart LR", "graph lr"]) {
+    const source = `${header}\nA[Alpha] --> B[Beta] --> C[Gamma] --> D[Delta]`;
+    const original = source;
+    const wide = render(source);
+    const down = render(source.replace(header, "flowchart TD"));
+    assert.ok(wide && down);
+    assert.deepEqual(render(source, { maxWidth: wide.width }), wide, "fitting LR stays LR");
+    assert.deepEqual(render(source, { maxWidth: 20 }), down, "overflow retries TD");
+    assert.equal(source, original);
+    assert.deepEqual(render(source), wide, "unbounded render restores the parsed LR direction");
+    assert.deepEqual(render(source, { maxWidth: wide.width }), wide, "widening restores LR");
+
+    const markdown = `\`\`\`mermaid\n${source}\n\`\`\``;
+    const transform = (availableWidth: number) =>
+      transformMermaidMarkdown(markdown, {
+        messageType: "assistant",
+        availableWidth,
+      });
+    const cachedWide = transform(100);
+    assert.match(transform(20), /▼/);
+    assert.equal(transform(100), cachedWide, "width-keyed cache restores LR");
+    assert.match(cachedWide, /▶/);
+  }
+});
+
+test("LR keeps tighter horizontal labels before trying TD, then tries TD before collapsing", () => {
+  const horizontal = "flowchart LR\nA[One two three four five six] --> B[Seven eight nine ten]";
+  const diagram = diagramFor(horizontal);
+  assert.ok(diagram);
+  const tight = diagram.render(horizontal, LIMITS[1])?.canvas.toLines();
+  const loose = render(horizontal);
+  assert.ok(tight && loose && tight.width < loose.width);
+  assert.deepEqual(render(horizontal, { maxWidth: tight.width })?.plain, tight.plain);
+
+  const grouped =
+    "flowchart LR\nsubgraph Work\nA[Alpha] --> B[Beta] --> C[Gamma] --> D[Delta]\nend";
+  const fitted = render(grouped, { maxWidth: 20 });
+  assert.deepEqual(fitted, render(grouped.replace("LR", "TD")));
+  assert.ok(fitted);
+  assert.match(fitted.plain.join("\n"), /Alpha/);
+  assert.deepEqual(fitted.warnings, [], "full TD wins before the collapsed overview");
+});
+
+test("LR and TD overflow retain the existing collapsed and raw-source fallbacks", () => {
+  const source = "flowchart LR\nsubgraph Work\nA[Alpha] --> B[Beta] --> C[Gamma] --> D[Delta]\nend";
+  const collapsed = diagramFor(source)?.render(source, LIMITS[LIMITS.length - 1]);
+  const narrow = render(source, { maxWidth: 1 });
+  assert.ok(collapsed && narrow);
+  assert.deepEqual(narrow.plain, collapsed.canvas.toLines().plain);
+  assert.match(narrow.warnings.join("\n"), /subgraphs drawn collapsed/);
+  assert.ok(narrow.width > 1, "caller still decides how to handle an oversized result");
+  const markdown = `\`\`\`mermaid\n${source}\n\`\`\``;
+  assert.equal(
+    transformMermaidMarkdown(markdown, {
+      messageType: "assistant",
+      availableWidth: 1,
+    }),
+    markdown,
+  );
+});
+
+test("TD retry refuses member edges across group boundaries instead of merging them", () => {
+  const groups = `flowchart LR
+subgraph S
+A --> B --> C --> D
+A --> X
+end
+subgraph T
+E --> F --> G --> H
+E --> Y
+end`;
+  const source = `${groups}\nD --> H\nX --> Y`;
+  const diagram = diagramFor(source);
+  const wide = render(source);
+  const down = render(source.replace("LR", "TD"));
+  assert.ok(diagram && wide && down);
+  assert.ok(wide.width > down.width);
+  const collapsed = diagram.render(source, LIMITS[LIMITS.length - 1]);
+  const narrow = render(source, { maxWidth: down.width });
+  assert.ok(collapsed && narrow);
+  assert.deepEqual(narrow.plain, collapsed.canvas.toLines().plain);
+  assert.match(narrow.warnings.join("\n"), /subgraphs drawn collapsed/);
+  assert.deepEqual(render(source), wide, "wide LR keeps the original member-level edges");
+
+  for (const unsafe of [
+    source,
+    `${groups}\nOutside --> A`,
+    "flowchart LR\nsubgraph Parent\nA\nsubgraph Child\nB\nend\nend\nA --> B",
+    "flowchart LR\nsubgraph S\nA --> T\nend\nsubgraph T\nB\nend",
+  ]) {
+    assert.equal(diagram.renderDown?.(unsafe, LIMITS[0]), null, unsafe);
+  }
+  for (const safe of [groups, `${groups}\nS --> T`]) {
+    const expected = render(safe.replace("LR", "TD"));
+    assert.ok(expected);
+    assert.deepEqual(
+      diagram.renderDown?.(safe, LIMITS[0])?.canvas.toLines().plain,
+      expected.plain,
+      "independent groups and group-level arrows remain eligible",
+    );
+  }
+});
+
+test("TD retry leaves explicit group directions and other diagram directions alone", () => {
+  for (const source of [
+    "flowchart LR\nsubgraph Work\ndirection LR\nA --> B --> C --> D\nend",
+    "flowchart RL\nA --> B --> C --> D",
+    "stateDiagram-v2\ndirection LR\nA --> B\nB --> C\nC --> D",
+    "classDiagram\ndirection LR\nA --> B\nB --> C\nC --> D",
+    "erDiagram\ndirection LR\nA ||--o{ B : has\nB ||--o{ C : has",
+  ]) {
+    const diagram = diagramFor(source);
+    assert.ok(diagram);
+    let existing = diagram.render(source, LIMITS[0])?.canvas.toLines();
+    for (const limits of LIMITS) {
+      existing = diagram.render(source, limits)?.canvas.toLines();
+      assert.ok(existing);
+      if (existing.width <= 20) break;
+    }
+    assert.deepEqual(render(source, { maxWidth: 20 })?.plain, existing?.plain);
+  }
+  const source = 'flowchart LR\n%% direction LR\nA["direction LR"] --> B --> C --> D';
+  const down = render(source.replace("flowchart LR", "flowchart TD"));
+  assert.ok(down);
+  assert.deepEqual(
+    render(source, { maxWidth: down.width }),
+    down,
+    "labels/comments are not direction declarations",
+  );
 });
 
 test("a diagram wider than the space is laid out again with tighter labels", () => {
