@@ -965,12 +965,13 @@ mod tests {
         include_automatic_pi_package(&catalog, &mut selected, false);
         assert!(selected.iter().any(Resource::is_automatic_pi_package));
 
-        let implement = catalog
+        let mut implement = catalog
             .resources
             .iter()
             .find(|resource| resource.id == "skill:implement")
             .unwrap()
             .clone();
+        implement.dependencies = vec!["pi-package:@yassimba/pi-loom-mermaid".into()];
         let mut expanded =
             expand_skill_dependencies(&catalog.resources, vec![implement], &[SkillAgent::Pi]);
         assert!(expanded.iter().any(|resource| {
