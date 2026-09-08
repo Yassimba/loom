@@ -62,17 +62,17 @@ Keep relation types distinct:
 - `blocks`: raw BV edges normally point dependent to prerequisite. Confirm one against `br show`, then draw `prerequisite -> unlocked work`.
 - `related`: association; keep outside execution order.
 
-Keep ticket IDs visible and mark states consistently (`✓ closed`, `○ open`, `▶ in progress`, `■ blocked`).
+Keep ticket IDs visible and mark states consistently (`✓ closed`, `○ open`, `▶ in progress`, `■ blocked`). Render roadmap phases as a fenced `mermaid` timeline and relationships as fenced `mermaid` flowcharts so both display in chat. In flowcharts, use solid arrows for `blocks`, hierarchy edges for `parent-child`, and dotted lines for `related`; label each relation when its meaning is not obvious.
 
 ## Write the result
 
 Invoke `write-simply` and keep BV field names exact.
 
 - **Next ticket:** **Task**, **Context**, and **Approach**; then offer to claim and start it via `implement`.
-- **Roadmap:** purpose and open-ticket totals, main ASCII spine, workstreams, bottlenecks, independent tracks, and late or optional work.
-- **Complete graph:** Roadmap plus the full parent hierarchy, ungrouped tickets, blocking DAG, and separate related edges. Include every node and blocking edge.
-- **Named tickets:** brief product context, one-hop ASCII neighborhood, and the explanation for each ticket.
+- **Roadmap:** purpose and open-ticket totals, a Mermaid timeline of workstream phases, a Mermaid flowchart of dependencies, bottlenecks, independent tracks, and late or optional work.
+- **Complete graph:** Roadmap plus Mermaid views of the full parent hierarchy, ungrouped tickets, blocking DAG, and separate related edges. Include every node and blocking edge.
+- **Named tickets:** brief product context, one-hop Mermaid neighborhood, and the explanation for each ticket.
 
-Report node totals and `blocks`, `parent-child`, and `related` counts for graph views. Label dependency-only BV edge counts as such. Prefer several small ASCII diagrams over one dense diagram. Attribute computed claims to BV and declared scope to the ticket.
+Report node totals and `blocks`, `parent-child`, and `related` counts for graph views. Label dependency-only BV edge counts as such. Keep the timeline phase-level; use several small flowcharts rather than one dense dependency graph. Attribute computed claims to BV and declared scope to the ticket.
 
 Finish by confirming the selected coverage rule was met and tracker state was unchanged.
