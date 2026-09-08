@@ -89,7 +89,7 @@ if (-not (Test-Path (Join-Path $Project "AGENTS.md"))) { throw "loom init omitte
 if (-not (Test-Path (Join-Path $Project "CLAUDE.md"))) { throw "loom init omitted CLAUDE.md" }
 Invoke-Loom update --yes *> (Join-Path $EvidenceDir "loom-update.txt")
 if ($LASTEXITCODE -ne 0) { throw "loom update failed" }
-if (-not (Select-String -Quiet -Path $StatusLog -Pattern "Selected resources and runtimes verified")) {
+if (-not (Select-String -Quiet -Path $StatusLog -Pattern "Selected resources and runtimes checked")) {
   throw "status omitted the verified-resource verdict"
 }
 if ($ExpectBeads) {

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.2.0](https://github.com/Yassimba/loom/compare/loom-v1.1.0...loom-v1.2.0) (2026-09-06)
+
+
+### Features
+
+* add colored Mermaid rendering for Pi ([6d50539](https://github.com/Yassimba/loom/commit/6d50539844307f6af8a19aecb4436e4440e5d773))
+* add colored Mermaid rendering for Pi ([57814fe](https://github.com/Yassimba/loom/commit/57814fe3e68c88e1eb6d3d20bd156a648ef9424b))
+* **loom:** add Sem MCP and colored Mermaid rendering ([db54b81](https://github.com/Yassimba/loom/commit/db54b819bee319fbda6f22b450396a4c4f24e1bc))
+* **loom:** install Pi skills in portable tree ([5dcbf63](https://github.com/Yassimba/loom/commit/5dcbf63afb0287fd17500c5927b4841172871866))
+* **loom:** install Pi skills in portable tree ([7b3bbcf](https://github.com/Yassimba/loom/commit/7b3bbcf46031920e52e30960a625a611332ff83e))
+* **loom:** replace codegraph with sem and gortex ([f2a01bb](https://github.com/Yassimba/loom/commit/f2a01bbc8cf3d4f95bcd0c0308e01bb73231b25c))
+* **manifest:** install the plannotator fork with figure-led Guided Reviews ([30eb18b](https://github.com/Yassimba/loom/commit/30eb18b46dff85dadda30d59db2d5a357b0e3fb3))
+* **manifest:** install the plannotator fork with figure-led Guided Reviews ([fb7eaad](https://github.com/Yassimba/loom/commit/fb7eaad6d44f75254ded1d3b28ff151e048e86dd))
+* **pi-loom-mermaid:** colored rendering with layered layout and interior routing ([21e71fb](https://github.com/Yassimba/loom/commit/21e71fbf4384f0ff7e30b2af8fe6f9430612bf0d))
+
+
+### Bug Fixes
+
+* **loom:** fall back to APPDATA when Windows config dir is missing ([443bee2](https://github.com/Yassimba/loom/commit/443bee2700c1a8759bb7c4e5f8537bd013984430))
+
 ## [1.1.0](https://github.com/Yassimba/loom/compare/loom-v1.0.0...loom-v1.1.0) (2026-09-05)
 
 
