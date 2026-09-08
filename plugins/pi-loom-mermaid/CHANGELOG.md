@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.3.0...pi-loom-mermaid-v0.4.0) (2026-09-08)
+
+
+### Features
+
+* **pi-loom-mermaid:** render architecture diagrams ([#198](https://github.com/Yassimba/loom/issues/198)) ([908ab30](https://github.com/Yassimba/loom/commit/908ab303ebc13e451dea758699fe24e1c0f3bdd9))
+
 ## [0.3.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.2.0...pi-loom-mermaid-v0.3.0) (2026-09-08)
 
 
