@@ -28,7 +28,7 @@ function Invoke-WithRetry([scriptblock]$Action) {
 }
 
 # The published manifest pins the released tag; install exactly that.
-$manifest = Invoke-WithRetry { Invoke-RestMethod -Uri $ManifestUrl }
+$manifest = Invoke-WithRetry { Invoke-RestMethod -Uri "${ManifestUrl}?$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())" }
 $tag = [regex]::Match(
     $manifest,
     '(?m)^"github:Yassimba/loom\[exe=loom-teams\]" = \{ version = "([^"]+)"'

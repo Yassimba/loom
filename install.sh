@@ -41,7 +41,7 @@ tmp_manifest="$(mktemp)"
 tmp_core="$(mktemp)"
 tmp_selection="$(mktemp)"
 trap 'rm -f "$tmp_manifest" "$tmp_core" "$tmp_selection"' EXIT INT TERM
-curl -fsSL --retry 5 --retry-delay 3 "$MANIFEST_URL" -o "$tmp_manifest"
+curl -fsSL --retry 5 --retry-delay 3 "${MANIFEST_URL}?$(date +%s)" -o "$tmp_manifest"
 sed -n '/^# core:begin/,/^# core:end/p' "$tmp_manifest" > "$tmp_core"
 if ! grep -q '^# core:begin' "$tmp_core" || ! grep -q '^# core:end' "$tmp_core"; then
   echo "$NAME: manifest is missing its core block" >&2
