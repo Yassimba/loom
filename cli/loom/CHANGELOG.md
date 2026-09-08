@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/Yassimba/loom/compare/loom-v1.4.0...loom-v1.4.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **loom:** bypass stale manifest downloads ([#201](https://github.com/Yassimba/loom/issues/201)) ([2f861b9](https://github.com/Yassimba/loom/commit/2f861b9d0a8b7bd58e01a678ecc33951c29022b3))
+
 ## [1.4.0](https://github.com/Yassimba/loom/compare/loom-v1.3.0...loom-v1.4.0) (2026-09-08)
 
 

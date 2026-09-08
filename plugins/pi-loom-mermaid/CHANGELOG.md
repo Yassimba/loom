@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.4.0...pi-loom-mermaid-v0.4.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **pi-loom-mermaid:** honor architecture ports ([#199](https://github.com/Yassimba/loom/issues/199)) ([b11c92a](https://github.com/Yassimba/loom/commit/b11c92a83fc7b7e1348ff515094c01f4e773b98b))
+
 ## [0.4.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.3.0...pi-loom-mermaid-v0.4.0) (2026-09-08)
 
 
