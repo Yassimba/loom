@@ -619,10 +619,17 @@ fn fetch_repo_controlled(
     fs::create_dir_all(staging)
         .map_err(|error| format!("could not create {}: {error}", staging.display()))?;
     let tarball = staging.join("repo.tar.gz");
+    let tarball_url = format!(
+        "{TARBALL_URL}?{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
     for spec in [
         CommandSpec::new(
             "curl",
-            ["-fsSL", TARBALL_URL, "-o", &tarball.display().to_string()],
+            ["-fsSL", &tarball_url, "-o", &tarball.display().to_string()],
         ),
         CommandSpec::new(
             "tar",
