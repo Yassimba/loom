@@ -33,7 +33,7 @@ python = "3.13.7"
 # backend + repo, so two `github:` entries for one repo share a store dir and
 # one metadata file — the last install wins the exe, and `mise prune` deletes
 # the other's version as unreferenced.
-"ubi:Yassimba/loom" = { version = "loom-teams-v0.2.1", exe = "loom-teams", tag_regex = "^loom-teams-v" }
+"ubi:Yassimba/loom" = { version = "loom-teams-v0.2.2", exe = "loom-teams", tag_regex = "^loom-teams-v" }
 
 # agents & multiplexer
 "npm:@earendil-works/pi-coding-agent" = "0.85.1"
