@@ -18,16 +18,10 @@ test("adds Mermaid guidance to the existing system prompt on each agent start", 
   for (const base of ["Original instructions", "Updated instructions"]) {
     const { systemPrompt } = handler({ systemPrompt: base });
     assert.ok(systemPrompt.startsWith(`${base}\n\n`));
-    assert.match(systemPrompt, /fenced `mermaid` blocks/);
-    assert.match(
-      systemPrompt,
-      /flowchart, sequence, state, class, ER, mindmap, timeline, pie, and git graph/,
-    );
-    assert.match(systemPrompt, /Always visualize node diffs when it makes sense/);
-    assert.match(
-      systemPrompt,
-      /`:::red` for removed, `:::green` for added, and `:::orange` for changed nodes/,
-    );
+    assert.match(systemPrompt, /Use Mermaid proactively/);
+    assert.match(systemPrompt, /flowchart for dependencies\/decisions/);
+    assert.match(systemPrompt, /:::red removed, :::green added, :::orange changed/);
+    assert.match(systemPrompt, /prefer colored outlines/);
   }
 });
 
@@ -115,13 +109,54 @@ test("a diagram wider than the space is laid out again with tighter labels", () 
 });
 
 test("two edges passing through one cell cross as a hop, junctions stay junctions", () => {
-  const art = render(
+  // dense.mmd concentrates into one trunk per target: no crossing left to
+  // hop. subgraphs-lr still has a lane crossing a bus.
+  const dense = render(
     readFileSync(new URL("./fixtures/mermaid/dense.mmd", import.meta.url), "utf8"),
   );
-  assert.ok(art);
-  const text = art.plain.join("\n");
-  assert.match(text, /╫/, "a straight drop crossed by another edge's bus is a hop");
-  assert.match(text, /┼/, "an edge continuing through its own bus row stays a junction");
+  assert.ok(dense);
+  assert.match(
+    dense.plain.join("\n"),
+    /┼/,
+    "an edge continuing through its own bus row stays a junction",
+  );
+  const grouped = render(
+    readFileSync(new URL("./fixtures/mermaid/subgraphs-lr.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(grouped);
+  assert.match(grouped.plain.join("\n"), /╫/, "a lane crossed by another edge's bus is a hop");
+});
+
+test("a left-to-right lane takes the side its endpoints can reach without piercing a box", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/lane-stacked.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  // D sits under C; its return to A runs below the diagram, not up through C.
+  assert.doesNotMatch(text, /┴─┐\n│ C │/, "no line enters C's top");
+  assert.match(text, /└───┘\n\s+▲/, "the return arrives under A");
+});
+
+test("a lane arriving under a box keeps off the column its departing lanes use", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/lane-shared-port.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  // The dotted skip into Run lands beside the solid one leaving it.
+  assert.match(text, /▲ │.*\n.*╌┘ │/, "dotted arrival and solid departure on separate columns");
+});
+
+test("two differently named relations into one entity both keep their name", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/er-cardinalities.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  for (const verb of ["contains", "ordered in", "billed by", "places", "uses", "stocks"]) {
+    assert.match(text, new RegExp(verb), `${verb} is drawn`);
+  }
 });
 
 test("streaming advances on completed statements and holds while a label arrives", () => {

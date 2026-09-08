@@ -110,6 +110,6 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
 export default function piLovelyMermaid(pi: ExtensionAPI): void {
   pi.registerMarkdownTransformer(transformMermaidMarkdown);
   pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\nYou can communicate visually using fenced \`mermaid\` blocks, rendered directly in the user’s session. Supported diagram types: flowchart, sequence, state, class, ER, mindmap, timeline, pie, and git graph. Use diagrams when your message is clearer visually than in prose. Keep them compact, with short labels; prefer top-down layouts for narrow terminals. Always visualize node diffs when it makes sense: use \`:::red\` for removed, \`:::green\` for added, and \`:::orange\` for changed nodes.`,
+    systemPrompt: `${event.systemPrompt}\n\nUse fenced \`mermaid\` blocks; they render automatically in the user’s session. Use Mermaid proactively to explain relationships, flows, and changes. Choose by subject: flowchart for dependencies/decisions, sequence for interactions, state for lifecycles, ER/class for models, mindmap for hierarchies, timeline/git graph for history, pie for proportions. Use complementary diagrams when explaining multiple aspects. Keep diagram labels short. Mark changes (like diff but also other changes) with: :::red removed, :::green added, :::orange changed. In general prefer colored outlines to logically group things (if there are no changes involved).`,
   }));
 }

@@ -8,6 +8,12 @@ export interface Limits {
   lines: number
   /** Edge labels are truncated to this many columns. */
   label: number
+  /**
+   * Draw each top-level subgraph as one box (its title and member count),
+   * with the edges between subgraphs merged: the overview a wide diagram
+   * falls back to before the source box.
+   */
+  collapse?: boolean
 }
 
 /** The default limits, and the tighter ones `render` falls back through
@@ -16,6 +22,7 @@ export const LIMITS: Limits[] = [
   { wrap: 24, lines: 4, label: 28 },
   { wrap: 16, lines: 3, label: 16 },
   { wrap: 12, lines: 2, label: 10 },
+  { wrap: 16, lines: 3, label: 16, collapse: true },
 ]
 export const DEFAULT_LIMITS: Limits = LIMITS[0]
 

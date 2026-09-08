@@ -66,6 +66,22 @@ export interface Edge {
   headTo: Head
   headFrom: Head
   line: LineKind
+  /**
+   * Set on an end that stands for a subgraph frame: the inner node the
+   * author actually named, as a box in the frame's sub-canvas coordinates.
+   * Layout ports the edge at that node instead of the frame's centre.
+   */
+  fromAnchor?: Anchor
+  toAnchor?: Anchor
+}
+
+/** An inner node's box inside a frame's sub-canvas. */
+export interface Anchor {
+  node: number
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 export interface Group {

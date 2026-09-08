@@ -226,7 +226,7 @@ pub(crate) fn sync_selected_from(
 pub fn remove_selected(
     system: &dyn System,
     removed: &[String],
-    cancelled: &std::sync::atomic::AtomicBool,
+    _cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
     let home = system
         .home_dir()
@@ -241,16 +241,8 @@ pub fn remove_selected(
         .collect::<Vec<_>>();
     let content = render_selection(&current, &current, &keys)?;
     crate::fs_tx::atomic_write(&target, content.as_bytes())?;
-    let result = system
-        .run_controlled(
-            &CommandSpec::new("mise", ["prune", "--yes"]),
-            crate::system::MANAGER_COMMAND_TIMEOUT,
-            cancelled,
-        )
-        .map_err(|error| error.to_string())?;
-    if !result.success {
-        return Err(crate::install::command_failure_message(&result));
-    }
+    // Project-local configurations may use the same installed versions. Removing
+    // a Loom selection is not permission to prune the shared mise store.
     system.refresh_path();
     Ok(())
 }

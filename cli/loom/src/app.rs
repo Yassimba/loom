@@ -123,10 +123,13 @@ pub fn install_selected(
         );
     }
 
-    let resources = expand_skill_dependencies(
-        &catalog.resources,
-        resolve_selectors(catalog, selectors)?,
-        &destination.agents,
+    let selected = resolve_selectors(catalog, selectors)?;
+    let mut resources =
+        expand_skill_dependencies(&catalog.resources, selected, &destination.agents);
+    include_automatic_pi_package(
+        catalog,
+        &mut resources,
+        mode == SelectionMode::Setup && status.pi,
     );
     if platform == Platform::Windows {
         if let Some(resource) = resources.iter().find(|resource| resource.windows_wsl) {
@@ -236,6 +239,27 @@ pub fn install_selected(
         }
     }
     Ok(report.failures.is_empty())
+}
+
+fn include_automatic_pi_package(
+    catalog: &Catalog,
+    selected: &mut Vec<Resource>,
+    pi_installed: bool,
+) {
+    let needs_pi = pi_installed
+        || selected.iter().any(|resource| {
+            resource.id == "tool:pi"
+                || (resource.kind == ResourceKind::PiPackage && !resource.is_automatic_pi_package())
+        });
+    if needs_pi && !selected.iter().any(Resource::is_automatic_pi_package) {
+        if let Some(resource) = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.is_automatic_pi_package())
+        {
+            selected.push(resource.clone());
+        }
+    }
 }
 
 fn native_windows_resources(catalog: &Catalog) -> Vec<Resource> {
@@ -921,6 +945,39 @@ mod tests {
         fn current_dir(&self) -> Option<std::path::PathBuf> {
             Some(self.home.clone())
         }
+    }
+
+    #[test]
+    fn pi_loom_is_automatically_added_when_pi_is_present_or_selected() {
+        let catalog = Catalog::embedded().unwrap();
+        let pi = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.id == "tool:pi")
+            .unwrap()
+            .clone();
+
+        let mut selected = Vec::new();
+        include_automatic_pi_package(&catalog, &mut selected, true);
+        assert!(selected.iter().any(Resource::is_automatic_pi_package));
+
+        let mut selected = vec![pi];
+        include_automatic_pi_package(&catalog, &mut selected, false);
+        assert!(selected.iter().any(Resource::is_automatic_pi_package));
+
+        let implement = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.id == "skill:implement")
+            .unwrap()
+            .clone();
+        let mut expanded =
+            expand_skill_dependencies(&catalog.resources, vec![implement], &[SkillAgent::Pi]);
+        assert!(expanded.iter().any(|resource| {
+            resource.kind == ResourceKind::PiPackage && !resource.is_automatic_pi_package()
+        }));
+        include_automatic_pi_package(&catalog, &mut expanded, false);
+        assert!(expanded.iter().any(Resource::is_automatic_pi_package));
     }
 
     #[test]

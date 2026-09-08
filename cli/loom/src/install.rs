@@ -270,9 +270,8 @@ pub fn build_install_plan(
         ));
     }
     if !tools.is_empty() {
-        // Prerequisite, not a resource step: prerequisites run sequentially,
-        // so a Pi arriving via the manifest is on PATH before any pi-package
-        // steps run (resource groups execute concurrently per manager).
+        // Runtime-dependent manager lanes wait for this prerequisite before
+        // installing their packages; unrelated lanes can still run concurrently.
         prerequisites.push(InstallStep {
             target: "tools".into(),
             manager: "mise".into(),
@@ -455,8 +454,9 @@ pub fn execute_install_plan_with_control(
                     continue;
                 }
                 let lane = waiting.swap_remove(index);
-                let dependency_failed =
-                    outcome.unavailable || (lane.manager == "pi" && !system.command_exists("pi"));
+                let dependency_failed = outcome.unavailable
+                    || (matches!(lane.manager, "pi" | "herdr")
+                        && !system.command_exists(lane.manager));
                 if dependency_failed {
                     let message = skipped_message(lane.manager);
                     for step in &lane.steps {
@@ -570,16 +570,18 @@ fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
             lane.waits_for = Some("pi");
         }
     }
-    let pi_via_mise = plan.prerequisites.iter().any(|step| {
-        matches!(
-            &step.action,
-            StepAction::SyncTools { tools }
-                if tools.iter().any(|tool| tool == crate::manifest::PI_TOOL_KEY)
-        )
-    });
-    if pi_via_mise || configures_mcp {
-        if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == "pi") {
-            lane.waits_for = Some("mise");
+    for (manager, tool_key) in [("pi", crate::manifest::PI_TOOL_KEY), ("herdr", "herdr")] {
+        let runtime_via_mise = plan.prerequisites.iter().any(|step| {
+            matches!(
+                &step.action,
+                StepAction::SyncTools { tools }
+                    if tools.iter().any(|tool| tool == tool_key)
+            )
+        });
+        if runtime_via_mise || (manager == "pi" && configures_mcp) {
+            if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == manager) {
+                lane.waits_for = Some("mise");
+            }
         }
     }
     lanes

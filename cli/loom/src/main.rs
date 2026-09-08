@@ -197,12 +197,13 @@ struct SelectionArgs {
 
 /// Add each catalog-backed selector value to the CLI command.
 fn completion_command(catalog: &Catalog) -> clap::Command {
-    let values = |kind: ResourceKind| {
+    let values = |kind: ResourceKind, include_automatic: bool| {
         clap::builder::PossibleValuesParser::new(
             catalog
                 .resources
                 .iter()
                 .filter(|resource| resource.kind == kind)
+                .filter(|resource| include_automatic || !resource.is_automatic_pi_package())
                 .filter(|resource| !cfg!(windows) || !resource.windows_wsl)
                 .map(|resource| resource.label.clone())
                 .collect::<Vec<_>>(),
@@ -215,19 +216,21 @@ fn completion_command(catalog: &Catalog) -> clap::Command {
                 sub
             } else {
                 sub.mut_arg("mcp_servers", |arg| {
-                    arg.value_parser(values(ResourceKind::McpServer))
+                    arg.value_parser(values(ResourceKind::McpServer, false))
                 })
             };
             sub.mut_arg("skills", |arg| {
-                arg.value_parser(values(ResourceKind::Skill))
+                arg.value_parser(values(ResourceKind::Skill, name == "uninstall"))
             })
             .mut_arg("pi_packages", |arg| {
-                arg.value_parser(values(ResourceKind::PiPackage))
+                arg.value_parser(values(ResourceKind::PiPackage, name == "uninstall"))
             })
             .mut_arg("herdr_plugins", |arg| {
-                arg.value_parser(values(ResourceKind::HerdrPlugin))
+                arg.value_parser(values(ResourceKind::HerdrPlugin, name == "uninstall"))
             })
-            .mut_arg("tools", |arg| arg.value_parser(values(ResourceKind::Tool)))
+            .mut_arg("tools", |arg| {
+                arg.value_parser(values(ResourceKind::Tool, name == "uninstall"))
+            })
         });
     }
     command
@@ -550,6 +553,18 @@ mod tests {
                 "a missing Herdr value parser hides valid plugins from shell completion"
             );
         }
+    }
+
+    #[test]
+    fn pi_loom_is_not_an_install_selector_but_can_be_uninstalled() {
+        let catalog = Catalog::embedded().unwrap();
+
+        assert!(completion_command(&catalog)
+            .try_get_matches_from(["loom", "setup", "--pi-package", "Loom"])
+            .is_err());
+        assert!(completion_command(&catalog)
+            .try_get_matches_from(["loom", "uninstall", "--pi-package", "Loom", "--yes"])
+            .is_ok());
     }
 
     #[test]

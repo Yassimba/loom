@@ -79,6 +79,10 @@ pub struct Catalog {
 }
 
 impl Resource {
+    pub fn is_automatic_pi_package(&self) -> bool {
+        self.id == "pi-package:@yassimba/pi-loom"
+    }
+
     pub fn pi_install_spec(&self) -> String {
         self.source.clone().unwrap_or_else(|| match &self.version {
             Some(version) => format!("npm:{}@{version}", self.install_target),

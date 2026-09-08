@@ -120,7 +120,9 @@ export class Canvas {
         this.href[di] = sub.href[si]
         this.style[di] = sub.style[si]
         this.pass[di] = sub.pass[si]
-        this.occupied[di] = 1
+        // Blank padding inside the frame stays free: a cross-frame route
+        // may run a stub through it to the inner node it joins.
+        this.occupied[di] = sub.occupied[si] || sub.ch[si] !== ' ' ? 1 : 0
       }
     }
   }
@@ -129,6 +131,12 @@ export class Canvas {
   junction(x: number, y: number, bits: number): void {
     if (x >= this.w || y >= this.h) return
     const i = this.idx(x, y)
+    // A plain border glyph stamped from a sub-canvas goes back to bits so
+    // the tee resolves with the rest.
+    if (this.ch[i] === '│' || this.ch[i] === '─') {
+      this.mask[i] |= this.ch[i] === '│' ? U | D : L | R
+      this.ch[i] = ' '
+    }
     this.mask[i] |= bits
     this.pass[i] |= JOINED
     if (this.role[i] !== 'border') this.role[i] = 'edge'

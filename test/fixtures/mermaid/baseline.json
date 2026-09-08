@@ -25,28 +25,28 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1152
+    "area": 1088
   },
   "dense": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 3,
-    "area": 520
+    "crossings": 1,
+    "area": 546
   },
   "er-cardinalities": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 675
+    "area": 910
   },
   "fans": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 1,
-    "area": 756
+    "area": 810
   },
   "lane-order": {
     "brokenLinks": 0,
@@ -55,54 +55,75 @@
     "crossings": 1,
     "area": 494
   },
+  "lane-shared-port": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 385
+  },
+  "lane-stacked": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 230
+  },
   "nested-subgraphs": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1020
+    "area": 1156
   },
   "parallel-edges": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 403
+    "area": 416
   },
   "reciprocal": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 450
+    "area": 480
   },
   "self-loops": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 703
+    "area": 325
   },
   "skip-labelled": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1288
+    "area": 1196
   },
   "skip-lr": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 572
+    "area": 624
   },
   "state-lr": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 602
+    "area": 688
+  },
+  "subgraphs-lr": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 3,
+    "area": 8326
   },
   "unicode-wide": {
     "brokenLinks": 0,

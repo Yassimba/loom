@@ -168,14 +168,18 @@ fn resources_in_the_same_manager_lane_never_overlap() {
     );
 }
 
-struct MisePiSystem {
+struct MiseRuntimeSystem {
     home: PathBuf,
-    pi_ready: AtomicBool,
-    pi_started_early: AtomicBool,
+    runtime: &'static str,
+    fail_install: bool,
+    expose_runtime: bool,
+    runtime_calls: Mutex<Vec<String>>,
+    runtime_ready: AtomicBool,
+    runtime_started_early: AtomicBool,
 }
 
-impl MisePiSystem {
-    fn new() -> Self {
+impl MiseRuntimeSystem {
+    fn new(runtime: &'static str) -> Self {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
@@ -185,21 +189,25 @@ impl MisePiSystem {
         fs::create_dir_all(&home).unwrap();
         Self {
             home,
-            pi_ready: AtomicBool::new(false),
-            pi_started_early: AtomicBool::new(false),
+            runtime,
+            fail_install: false,
+            expose_runtime: true,
+            runtime_calls: Mutex::new(Vec::new()),
+            runtime_ready: AtomicBool::new(false),
+            runtime_started_early: AtomicBool::new(false),
         }
     }
 }
 
-impl Drop for MisePiSystem {
+impl Drop for MiseRuntimeSystem {
     fn drop(&mut self) {
         fs::remove_dir_all(&self.home).ok();
     }
 }
 
-impl System for MisePiSystem {
-    fn command_exists(&self, _name: &str) -> bool {
-        true
+impl System for MiseRuntimeSystem {
+    fn command_exists(&self, name: &str) -> bool {
+        name != self.runtime || (self.expose_runtime && self.runtime_ready.load(Ordering::SeqCst))
     }
 
     fn refresh_path(&self) {}
@@ -226,25 +234,33 @@ impl System for MisePiSystem {
                     manifest,
                     format!(
                         "[tools]\n# core:begin\nnode = \"24.19.0\"\n# core:end\n\
-                         \"{PI_TOOL_KEY}\" = \"0.73.1\"\n"
+                         \"{PI_TOOL_KEY}\" = \"0.73.1\"\nherdr = \"0.1.0\"\n"
                     ),
                 )?;
             }
             "mise" if command.args.first().map(String::as_str) == Some("install") => {
                 std::thread::sleep(Duration::from_millis(100));
-                self.pi_ready.store(true, Ordering::SeqCst);
+                if self.fail_install {
+                    return Ok(CommandResult {
+                        success: false,
+                        stdout: String::new(),
+                        stderr: "runtime install failed".into(),
+                    });
+                }
+                self.runtime_ready.store(true, Ordering::SeqCst);
             }
             "mise" => {}
-            "pi" => {
-                if !self.pi_ready.load(Ordering::SeqCst) {
-                    self.pi_started_early.store(true, Ordering::SeqCst);
+            program if program == self.runtime => {
+                self.runtime_calls.lock().unwrap().push(command.display());
+                if !self.runtime_ready.load(Ordering::SeqCst) {
+                    self.runtime_started_early.store(true, Ordering::SeqCst);
                 }
             }
             other => panic!("unexpected command: {other}"),
         }
         Ok(CommandResult {
             success: true,
-            stdout: String::new(),
+            stdout: "annotate".into(),
             stderr: String::new(),
         })
     }
@@ -263,16 +279,76 @@ fn pi_packages_wait_when_mise_is_installing_pi() {
         }],
         resources: vec![step("pi-package:sample", "pi", "pi")],
     };
-    let system = MisePiSystem::new();
+    let system = MiseRuntimeSystem::new("pi");
 
     let report = execute_install_plan(&plan, &system);
 
     assert!(report.failures.is_empty());
     assert_eq!(report.installed, vec!["pi-package:sample"]);
     assert!(
-        !system.pi_started_early.load(Ordering::SeqCst),
+        !system.runtime_started_early.load(Ordering::SeqCst),
         "Pi packages must wait until mise has installed Pi"
     );
+}
+
+#[test]
+fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
+    for (fail_install, expose_runtime) in [(false, true), (true, true), (false, false)] {
+        let mut system = MiseRuntimeSystem::new("herdr");
+        system.fail_install = fail_install;
+        system.expose_runtime = expose_runtime;
+        let catalog = loom::Catalog::embedded().unwrap();
+        let resources = catalog.find(&["herdr-plugin:annotate".into()]).unwrap();
+        let destination = SkillDestination::new(
+            vec![SkillAgent::Pi],
+            SkillScope::Global,
+            &system.home,
+            &system.home,
+        );
+        let plan = loom::build_install_plan(
+            &resources,
+            loom::PrerequisiteStatus {
+                pi: true,
+                herdr: false,
+                mise: true,
+            },
+            loom::Platform::Unix,
+            &destination,
+        )
+        .unwrap();
+        let mut statuses = Vec::new();
+        let report = execute_install_plan_with(&plan, &system, &mut |index, status| {
+            statuses.push((index, status));
+        });
+        assert!(
+            !system.runtime_started_early.load(Ordering::SeqCst),
+            "Herdr plugins must wait until mise has installed Herdr"
+        );
+        if fail_install || !expose_runtime {
+            assert!(report.installed.is_empty(), "{report:?}");
+            assert!(system.runtime_calls.lock().unwrap().is_empty());
+            assert!(statuses.contains(&(
+                plan.prerequisites.len(),
+                StepStatus::Skipped("Herdr is unavailable".into())
+            )));
+            if fail_install {
+                assert!(report
+                    .failures
+                    .iter()
+                    .any(|failure| failure.message.contains("runtime install failed")));
+            }
+        } else {
+            assert!(report.failures.is_empty(), "{report:?}");
+            assert_eq!(report.installed, vec!["herdr-plugin:annotate"]);
+            assert_eq!(
+                *system.runtime_calls.lock().unwrap(),
+                vec![
+                    "herdr plugin install plannotator/herdr-annotate --yes",
+                    "herdr plugin list",
+                ]
+            );
+        }
+    }
 }
 
 #[test]

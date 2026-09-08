@@ -446,7 +446,7 @@ fn sem_mcp_cli_yes_configures_without_reinstalling_an_existing_gateway() {
         fs::create_dir_all(&bin).unwrap();
         for (name, script) in [
             ("mise", "#!/bin/sh\nprintf '%s\\n' \"mise $*\" >> \"$HOME/manager.log\"\nexit 0\n"),
-            ("pi", "#!/bin/sh\n[ \"$1\" = list ] || exit 91\nprintf 'User packages:\\n  npm:pi-mcp-adapter@2.33.0\\n'\n"),
+            ("pi", "#!/bin/sh\n[ \"$1\" = list ] || exit 91\nprintf 'User packages:\\n  npm:pi-mcp-adapter@2.33.0\\n  npm:@yassimba/pi-loom@latest\\n'\n"),
             ("sem", "#!/bin/sh\nprintf 'Sem must not be started' >> \"$HOME/server.log\"\nexit 99\n"),
         ] {
             let path = bin.join(name); fs::write(&path, script).unwrap();
