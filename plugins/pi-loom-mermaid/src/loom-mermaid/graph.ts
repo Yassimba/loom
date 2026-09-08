@@ -26,6 +26,7 @@ export type Head =
   | 'diamondOpen'
 
 export type LineKind = 'solid' | 'dotted' | 'thick'
+export type PortSide = 'top' | 'bottom' | 'left' | 'right'
 
 type Dir = 'down' | 'up' | 'right' | 'left'
 
@@ -66,6 +67,9 @@ export interface Edge {
   headTo: Head
   headFrom: Head
   line: LineKind
+  /** Exact attachment sides requested by diagrams such as `architecture-beta`. */
+  fromSide?: PortSide
+  toSide?: PortSide
   /**
    * Set on an end that stands for a subgraph frame: the inner node the
    * author actually named, as a box in the frame's sub-canvas coordinates.

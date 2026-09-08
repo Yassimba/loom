@@ -1,12 +1,11 @@
 /**
  * `architecture-beta`: services and junctions inside nested groups.
  *
- * Architecture's cardinal ports choose exact SVG attachment points. The
- * terminal graph router already chooses reachable box sides, so this parser
- * preserves endpoints and arrowheads while leaving port placement to it.
+ * Built-in icons use stable Unicode stand-ins; custom Iconify names remain
+ * visible as text because a terminal cannot draw their SVGs.
  */
 
-import { Graph, MAX_GROUP_DEPTH, MAX_GROUPS } from '../graph.ts'
+import { Graph, MAX_GROUP_DEPTH, MAX_GROUPS, type PortSide } from '../graph.ts'
 import { cleanLabel } from '../labels.ts'
 import { layoutFlowchart, layoutGrouped } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
@@ -27,6 +26,14 @@ export const architecture: Diagram = {
 const DECLARATION = /^(group|service)\s+([^\s()[\]:{}]+)\(([^)]*)\)\[([^\]]*)\](?:\s+in\s+([^\s]+))?$/i
 const JUNCTION = /^junction\s+([^\s:{}]+)(?:\s+in\s+([^\s]+))?$/i
 const EDGE = /^([^\s:{}]+)(?:\{group\})?:([TBLR])\s*(<)?--(>)?\s*([TBLR]):([^\s:{}]+)(?:\{group\})?$/i
+const SIDES: Record<string, PortSide> = { T: 'top', B: 'bottom', L: 'left', R: 'right' }
+const ICONS: Record<string, string> = {
+  cloud: '☁',
+  database: '◉',
+  disk: '▰',
+  internet: '◎',
+  server: '▣',
+}
 
 function parseArchitecture(src: string): Graph | null {
   const statements = statementsOf(src)
@@ -43,7 +50,7 @@ function parseArchitecture(src: string): Graph | null {
     const edge = st.match(EDGE)
 
     if (declaration) {
-      const [, kind, id, , rawLabel, parentId] = declaration
+      const [, kind, id, icon, rawLabel, parentId] = declaration
       const parent = parentId === undefined ? null : groupIndex.get(parentId)
       if (parentId !== undefined && parent === undefined) {
         graph.drop(st)
@@ -57,10 +64,10 @@ function parseArchitecture(src: string): Graph | null {
           graph.truncated ??= `subgraph cap (${MAX_GROUPS} groups, depth ${MAX_GROUP_DEPTH}) reached`
         } else {
           groupIndex.set(id, graph.groups.length)
-          graph.groups.push({ id, label: cleanLabel(rawLabel) || id, parent: parent ?? null })
+          graph.groups.push({ id, label: iconLabel(icon, rawLabel || id), parent: parent ?? null })
         }
       } else {
-        addNode(graph, id, cleanLabel(rawLabel) || id, parent ?? null, 'rect')
+        addNode(graph, id, iconLabel(icon, rawLabel || id), parent ?? null, 'rect')
       }
     } else if (junction) {
       const [, id, parentId] = junction
@@ -68,7 +75,7 @@ function parseArchitecture(src: string): Graph | null {
       if (parentId !== undefined && parent === undefined) graph.drop(st)
       else addNode(graph, id, '•', parent ?? null, 'round')
     } else if (edge) {
-      const [, fromId, , leftArrow, rightArrow, , toId] = edge
+      const [, fromId, fromPort, leftArrow, rightArrow, toPort, toId] = edge
       const from = graph.index.get(fromId)
       const to = graph.index.get(toId)
       if (from === undefined || to === undefined) {
@@ -81,6 +88,8 @@ function parseArchitecture(src: string): Graph | null {
           headFrom: leftArrow ? 'arrow' : 'none',
           headTo: rightArrow ? 'arrow' : 'none',
           line: 'solid',
+          fromSide: SIDES[fromPort.toUpperCase()],
+          toSide: SIDES[toPort.toUpperCase()],
         })
       }
     } else if (firstWord(st).toLowerCase() !== 'title') {
@@ -94,6 +103,12 @@ function parseArchitecture(src: string): Graph | null {
   }
 
   return graph.nodes.length === 0 ? null : graph
+}
+
+function iconLabel(icon: string, rawLabel: string): string {
+  const name = cleanLabel(icon)
+  const mark = ICONS[name.toLowerCase()] ?? `[${name.split(':').at(-1)}]`
+  return `${mark} ${cleanLabel(rawLabel)}`
 }
 
 function addNode(
