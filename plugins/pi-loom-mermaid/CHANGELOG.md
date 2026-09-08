@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.4.1...pi-loom-mermaid-v0.5.0) (2026-09-08)
+
+
+### Features
+
+* **setup:** expand tools and agent integrations ([#206](https://github.com/Yassimba/loom/issues/206)) ([b14458d](https://github.com/Yassimba/loom/commit/b14458d65711b96067237d5e25fff1674070fc85))
+
 ## [0.4.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.4.0...pi-loom-mermaid-v0.4.1) (2026-09-08)
 
 

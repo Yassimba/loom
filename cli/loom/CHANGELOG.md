@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Yassimba/loom/compare/loom-v1.4.1...loom-v1.5.0) (2026-09-08)
+
+
+### Features
+
+* **setup:** expand tools and agent integrations ([#206](https://github.com/Yassimba/loom/issues/206)) ([b14458d](https://github.com/Yassimba/loom/commit/b14458d65711b96067237d5e25fff1674070fc85))
+
 ## [1.4.1](https://github.com/Yassimba/loom/compare/loom-v1.4.0...loom-v1.4.1) (2026-09-08)
 
 
