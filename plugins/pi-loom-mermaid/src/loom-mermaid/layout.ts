@@ -11,7 +11,7 @@
  */
 
 import type { Canvas } from './canvas.ts'
-import type { Anchor, Edge, LineKind } from './graph.ts'
+import type { Anchor, Edge, LineKind, PortSide } from './graph.ts'
 import type { Graph } from './graph.ts'
 import { fitLabel, type Limits, wrapLabel } from './labels.ts'
 import { brandesKoepf, type LayeredGraph } from './placement.ts'
@@ -117,7 +117,7 @@ interface Port {
   wanted: number
 }
 
-type Side = 'top' | 'bottom' | 'left' | 'right'
+type Side = PortSide
 
 function framePort(
   sub: Canvas,
@@ -1690,7 +1690,9 @@ function placeLr(
     })
   }
   const forward = (e: Edge): boolean => e.from !== e.to && ranks[e.to] > ranks[e.from]
-  let ends = resolve((i) => (forward(graph.edges[i]) ? ['right', 'left'] : null))
+  const requestedSides = (e: Edge): [Side, Side] | null =>
+    e.fromSide !== undefined && e.toSide !== undefined ? [e.fromSide, e.toSide] : null
+  let ends = resolve((i) => requestedSides(graph.edges[i]) ?? (forward(graph.edges[i]) ? ['right', 'left'] : null))
   // A node whose incoming edges all leave their frames at one row off the
   // frame's centre sits that far off its own aligned position, so the
   // edges run straight rather than jog to it (`[*]` after a composite
@@ -1753,6 +1755,8 @@ function placeLr(
   })
   ends = resolve((i) => {
     const e = graph.edges[i]
+    const requested = requestedSides(e)
+    if (requested !== null) return requested
     if (e.from === e.to) return null
     if (ranks[e.to] === ranks[e.from] + 1 || edgeStraight[i]) return ['right', 'left']
     return ranks[e.to] < ranks[e.from] ? ['top', 'top'] : ['bottom', 'bottom']
@@ -1871,14 +1875,40 @@ function placeLr(
     const [from, to] = endsOf(i)
     const through = ends[i].flatMap((p, k) => (p === null ? [] : portAt(p, placed[k === 0 ? edge.from : edge.to]).through))
     const route =
-      to.rank === from.rank + 1
-        ? forwardRouteLr(from, to, edge, bandEnd[from.rank] + 1 + edgeBus[i], max, bundleOf(i) !== undefined)
-        : to.rank > from.rank && edgeStraight[i]
-          ? skipRouteLr(from, to, edge, skipRoute[i], max)
-          : laneRoute(from, to, edge, onTop(i) ? edgeLane[i] : laneBase + edgeLane[i], max, onTop(i), laneEntry(i, from, to))
+      edge.fromSide !== undefined && edge.toSide !== undefined
+        ? portRoute(from, to, edge.fromSide, edge.toSide)
+        : to.rank === from.rank + 1
+          ? forwardRouteLr(from, to, edge, bandEnd[from.rank] + 1 + edgeBus[i], max, bundleOf(i) !== undefined)
+          : to.rank > from.rank && edgeStraight[i]
+            ? skipRouteLr(from, to, edge, skipRoute[i], max)
+            : laneRoute(from, to, edge, onTop(i) ? edgeLane[i] : laneBase + edgeLane[i], max, onTop(i), laneEntry(i, from, to))
     return through.length === 0 ? route : { ...route, through: [...(route.through ?? []), ...through] }
   })
-  return { canvasW, canvasH, routes }
+
+  if (!graph.edges.some((e) => e.fromSide !== undefined)) return { canvasW, canvasH, routes }
+  // Exact side ports may face out of the outermost box. Two cells of margin
+  // keep their first/last segments on-canvas at every nested group level.
+  for (const p of placed) {
+    p.x += 2
+    p.y += 2
+    p.cx += 2
+    p.cy += 2
+  }
+  for (const route of routes) {
+    route.points = route.points.map(([x, y]) => [x + 2, y + 2])
+    route.labels = route.labels.map((label) => ({ ...label, row: label.row + 2, x: label.x + 2 }))
+    if (route.laneLabel !== undefined) {
+      route.laneLabel = {
+        ...route.laneLabel,
+        y: route.laneLabel.y + 2,
+        lo: route.laneLabel.lo + 2,
+        hi: route.laneLabel.hi + 2,
+      }
+    }
+    if (route.through !== undefined)
+      route.through = route.through.map(([x, y, kind]) => [x + 2, y + 2, kind])
+  }
+  return { canvasW: canvasW + 4, canvasH: canvasH + 4, routes }
 }
 
 // -------------------------------------------------------------------- canvas
@@ -2211,6 +2241,50 @@ function chainRoute(
   const headRow = to.y - 1
   points.push([entryX, headRow])
   return { points, labels: chainLabel(edge, headRow, entryX, labelLeft, labelAt, max) }
+}
+
+/** An orthogonal route that leaves and enters the exact requested box sides. */
+function portRoute(from: Placed, to: Placed, fromSide: PortSide, toSide: PortSide): Route {
+  const normal = (side: PortSide): [number, number] =>
+    side === 'left' ? [-1, 0] : side === 'right' ? [1, 0] : side === 'top' ? [0, -1] : [0, 1]
+  const border = (p: Placed, side: PortSide): [number, number] =>
+    side === 'left'
+      ? [p.x, p.cy]
+      : side === 'right'
+        ? [p.x + p.w - 1, p.cy]
+        : side === 'top'
+          ? [p.cx, p.y]
+          : [p.cx, p.y + p.h - 1]
+  const move = ([x, y]: [number, number], [dx, dy]: [number, number]): [number, number] => [x + dx, y + dy]
+
+  const fromNormal = normal(fromSide)
+  const toNormal = normal(toSide)
+  const start = border(from, fromSide)
+  const startOut = move(start, fromNormal)
+  const head = move(border(to, toSide), toNormal)
+  const targetOut = move(head, toNormal)
+  const fromHorizontal = fromNormal[0] !== 0
+  const toHorizontal = toNormal[0] !== 0
+  let middle: [number, number][]
+
+  if (fromHorizontal !== toHorizontal) {
+    middle = [fromHorizontal ? [targetOut[0], startOut[1]] : [startOut[0], targetOut[1]]]
+  } else if (fromHorizontal) {
+    const direction = Math.sign(targetOut[0] - startOut[0])
+    const direct = direction === fromNormal[0] && direction === -toNormal[0]
+    const lane = Math.max(from.y + from.h, to.y + to.h) + 1
+    middle = direct ? [] : [[startOut[0], lane], [targetOut[0], lane]]
+  } else {
+    const direction = Math.sign(targetOut[1] - startOut[1])
+    const direct = direction === fromNormal[1] && direction === -toNormal[1]
+    const lane = Math.max(from.x + from.w, to.x + to.w) + 1
+    middle = direct ? [] : [[lane, startOut[1]], [lane, targetOut[1]]]
+  }
+
+  const points = [start, startOut, ...middle, targetOut, head].filter(
+    ([x, y], i, all) => i === 0 || x !== all[i - 1][0] || y !== all[i - 1][1],
+  ) as [number, number][]
+  return { points, labels: [] }
 }
 
 /**

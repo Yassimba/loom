@@ -97,17 +97,34 @@ test("renders architecture groups, services, junctions, and arrows", () => {
   group data(database)[Data] in cloud
   service api(server)[API] in cloud
   service db(database)[Database] in data
+  service cdn(logos:aws-cloudfront)[CDN] in cloud
   junction route in cloud
   api:R <--> L:route
   route:R --> L:db{group}`);
 
   assert.ok(drawn);
   const text = drawn.plain.join("\n");
-  for (const label of ["Cloud", "Data", "API", "Database", "•"])
-    assert.match(text, new RegExp(label));
+  for (const label of ["☁ Cloud", "Data", "▣ API", "◉ Database", "[aws-cloudfront] CDN", "•"])
+    assert.ok(text.includes(label), label);
   assert.match(text, /◄/);
   assert.match(text, /▶/);
   assert.deepEqual(drawn.warnings, []);
+});
+
+test("architecture edges honor all four requested target ports", () => {
+  for (const [ports, arrow] of [
+    ["R --> L", "▶"],
+    ["L --> R", "◄"],
+    ["B --> T", "▼"],
+    ["T --> B", "▲"],
+  ]) {
+    const drawn = render(`architecture-beta
+  service a(server)[A]
+  service b(server)[B]
+  a:${ports}:b`);
+    assert.ok(drawn);
+    assert.match(drawn.plain.join("\n"), new RegExp(arrow), ports);
+  }
 });
 
 test("a diagram wider than the space is laid out again with tighter labels", () => {
