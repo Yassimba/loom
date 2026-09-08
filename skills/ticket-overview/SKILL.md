@@ -12,7 +12,7 @@ Turn Beads structure into a concise product map. Use reads only; leave the graph
 Use the requested view. If none is specified, ask:
 
 1. **Next ticket** — preview the next actionable ticket.
-2. **Roadmap** — map the current non-closed tickets.
+2. **Roadmap** — map the current open tickets.
 3. **Complete graph** — map every open and closed ticket.
 
 For named tickets, explain their one-hop dependency neighborhood. When combining Roadmap and Complete graph, show Roadmap first.
