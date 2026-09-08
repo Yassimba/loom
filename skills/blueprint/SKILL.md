@@ -5,20 +5,17 @@ description: "Sketch a proposed code change visually with Mermaid before impleme
 
 # Blueprint
 
-Make the proposed change clear enough to decide whether and how to build it:
-the goal, current versus proposed behavior, affected code, key trade-offs,
-and how success will be verified. Ground existing behavior in source;
-distinguish proposals and unknowns from facts.
+Design the proposed change, load the `ponytail` skill if available and reuse as much of the existing code and interfaces before adding abstractions or dependencies.
 
-Prefer the smallest change that meets the goal. Reuse existing code and
-interfaces before introducing new abstractions or dependencies.
+Then present the change using mermaid diagrams, clear enough to decide whether and how to build it:
+the goal, current versus proposed behavior, affected code, key trade-offs,
+and how success will be verified. Ground existing behavior in source; distinguish
+proposals and unknowns from facts.
 
 Use fenced `mermaid` blocks; they render automatically in the user's session.
-Show structure, data in and out flow, object lineage, interfaces, or lifecycles
-with the diagram types that fit. Use complementary views for distinct questions.
-Mark changes with `:::red` removed, `:::green` added, and `:::orange` changed
-where supported.
+At least show structure and data in and out flow and interfaces
 
-Deliver directly in chat with short labels and brief prose. Include implementation
-steps when useful. Create files only when requested; leave review tooling to
-the user. Begin implementation only after explicit approval.
+But also object lineage, interfaces, or lifecycles and more if that makes it easier to understand and decide if this is how it should work.
+Use the diagram types that fit and use multiple diagram (types) and complementary views for distinct questions.
+
+Mark (upcomming) changes with `:::red` for removed, `:::green` for added, and `:::orange` for changed.
