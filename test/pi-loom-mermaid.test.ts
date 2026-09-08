@@ -18,16 +18,10 @@ test("adds Mermaid guidance to the existing system prompt on each agent start", 
   for (const base of ["Original instructions", "Updated instructions"]) {
     const { systemPrompt } = handler({ systemPrompt: base });
     assert.ok(systemPrompt.startsWith(`${base}\n\n`));
-    assert.match(systemPrompt, /fenced `mermaid` blocks/);
-    assert.match(
-      systemPrompt,
-      /flowchart, sequence, state, class, ER, mindmap, timeline, pie, and git graph/,
-    );
-    assert.match(systemPrompt, /Always visualize node diffs when it makes sense/);
-    assert.match(
-      systemPrompt,
-      /`:::red` for removed, `:::green` for added, and `:::orange` for changed nodes/,
-    );
+    assert.match(systemPrompt, /Use Mermaid proactively/);
+    assert.match(systemPrompt, /flowchart for dependencies\/decisions/);
+    assert.match(systemPrompt, /:::red removed, :::green added, :::orange changed/);
+    assert.match(systemPrompt, /prefer colored outlines/);
   }
 });
 
