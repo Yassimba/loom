@@ -51,6 +51,8 @@ export interface Diagram {
     warnings: string[]
     classDefs: Record<string, Record<string, string>>
   } | null
+  /** Optional top-down retry; `null` means this source cannot change direction. */
+  renderDown?: Diagram['render']
 }
 
 const DIAGRAMS: Diagram[] = [

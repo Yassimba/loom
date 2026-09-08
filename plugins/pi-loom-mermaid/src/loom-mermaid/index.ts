@@ -20,8 +20,11 @@ export type { MermaidArt, Role, Span } from './types.ts'
  *
  * The diagram is laid out at whatever size it needs; `art.width` reports the
  * columns that turned out to be. Given `maxWidth`, a diagram wider than that
- * is laid out again with progressively tighter label limits and the first
- * fit is returned. Deciding what to do when even the tightest exceeds the
+ * is laid out again with progressively tighter label limits. LR flowcharts
+ * without explicit group directions or cross-scope member edges then retry
+ * top-down before collapsing subgraphs. The first fit is returned; the source
+ * is never rewritten.
+ * Deciding what to do when even the final fallback exceeds the
  * space at hand is the caller's — `sourceBox` is the usual answer:
  *
  * ```ts
@@ -44,18 +47,29 @@ export function render(src: string, options: { maxWidth?: number } = {}): Mermai
   if (src.trim() === '') return null
   const diagram = diagramFor(src)
   if (diagram === null) return null
-  // Too wide for the space given: lay out again with shorter labels and
-  // tighter wrapping, tightest last, and keep the first that fits (else
-  // the tightest, for the caller to judge against `art.width`).
+  // Preserve the requested direction while tightening labels, then try TD
+  // before the existing collapsed fallback. Each attempt parses fresh source.
   let drawn: ReturnType<Diagram['render']> = null
   let art: ReturnType<Canvas['toLines']> = { plain: [], styled: [], width: 0 }
   let collapsed = false
-  for (const limits of LIMITS) {
-    drawn = diagram.render(src, limits)
-    if (drawn === null) return null
-    collapsed = limits.collapse === true
-    art = drawn.canvas.toLines()
-    if (options.maxWidth === undefined || art.width <= options.maxWidth) break
+  fitting: for (const [draw, collapse] of [
+    [diagram.render, false],
+    [diagram.renderDown, false],
+    [diagram.render, true],
+  ] as const) {
+    if (draw === undefined) continue
+    for (const limits of LIMITS) {
+      if ((limits.collapse === true) !== collapse) continue
+      const candidate = draw(src, limits)
+      if (candidate === null) {
+        if (draw === diagram.renderDown) break
+        return null
+      }
+      drawn = candidate
+      collapsed = collapse
+      art = drawn.canvas.toLines()
+      if (options.maxWidth === undefined || art.width <= options.maxWidth) break fitting
+    }
   }
   if (drawn === null) return null
   if (collapsed && /^\s*subgraph\b|^\s*state\s+\S+\s*\{/m.test(src)) {
