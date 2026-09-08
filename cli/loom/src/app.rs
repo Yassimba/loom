@@ -123,13 +123,14 @@ pub fn install_selected(
         );
     }
 
-    let mut selected = resolve_selectors(catalog, selectors)?;
+    let selected = resolve_selectors(catalog, selectors)?;
+    let mut resources =
+        expand_skill_dependencies(&catalog.resources, selected, &destination.agents);
     include_automatic_pi_package(
         catalog,
-        &mut selected,
+        &mut resources,
         mode == SelectionMode::Setup && status.pi,
     );
-    let resources = expand_skill_dependencies(&catalog.resources, selected, &destination.agents);
     if platform == Platform::Windows {
         if let Some(resource) = resources.iter().find(|resource| resource.windows_wsl) {
             bail!(
@@ -963,6 +964,20 @@ mod tests {
         let mut selected = vec![pi];
         include_automatic_pi_package(&catalog, &mut selected, false);
         assert!(selected.iter().any(Resource::is_automatic_pi_package));
+
+        let implement = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.id == "skill:implement")
+            .unwrap()
+            .clone();
+        let mut expanded =
+            expand_skill_dependencies(&catalog.resources, vec![implement], &[SkillAgent::Pi]);
+        assert!(expanded.iter().any(|resource| {
+            resource.kind == ResourceKind::PiPackage && !resource.is_automatic_pi_package()
+        }));
+        include_automatic_pi_package(&catalog, &mut expanded, false);
+        assert!(expanded.iter().any(Resource::is_automatic_pi_package));
     }
 
     #[test]
