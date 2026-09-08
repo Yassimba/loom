@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Yassimba/loom/compare/loom-v1.3.0...loom-v1.4.0) (2026-09-08)
+
+
+### Features
+
+* **skills:** prefer Mermaid-first visual guidance ([#196](https://github.com/Yassimba/loom/issues/196)) ([f22d258](https://github.com/Yassimba/loom/commit/f22d2584bb4ea43b794d26121e9987a047656403))
+
 ## [1.3.0](https://github.com/Yassimba/loom/compare/loom-v1.2.0...loom-v1.3.0) (2026-09-08)
 
 
