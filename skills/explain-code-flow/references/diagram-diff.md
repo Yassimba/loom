@@ -7,10 +7,7 @@ for atlas drift before classifying the requested difference.
 Inspect changed source and affected callers at both revisions with targeted Git reads.
 Classify additions, removals, and changed responsibilities/contracts/routes.
 
-Follow the [shared output preference](../../system-atlas/references/overlays.md).
-Reuse matching atlas figures and element IDs. Preserve layout and removed
-elements’ original positions where possible. A separate unchanged figure is needed only when
-it explains context the diff cannot show.
+Draw the comparison in Mermaid from the selected atlas facts. A separate unchanged figure is needed only when it explains context the diff cannot show.
 
 Use added (green +), removed (red dashed −), and modified (amber ~), with a
 legend and text cues. Below each figure list the actual changes and their

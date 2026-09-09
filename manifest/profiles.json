@@ -39,7 +39,8 @@
         "pi-package:pi-web-access",
         "pi-package:@yassimba/pi-add-dir",
         "pi-package:@yassimba/pi-skill-autocomplete",
-        "pi-package:pi-rewind-hook"
+        "pi-package:pi-rewind-hook",
+        "pi-package:pi-permission-modes"
       ]
     },
     {

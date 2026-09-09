@@ -69,9 +69,6 @@ enum Command {
         /// Editor used for clickable source links
         #[arg(long, value_enum)]
         editor: Option<Editor>,
-        /// Diagram style for this project; inherit uses your Loom setup default
-        #[arg(long, value_enum)]
-        diagrams: Option<loom::diagrams::DiagramStyle>,
         /// Add the project's CODING_STANDARDS.md review checklist
         #[arg(long, overrides_with = "no_coding_standards")]
         coding_standards: bool,
@@ -416,7 +413,6 @@ fn main() -> Result<()> {
             tracker,
             domain,
             editor,
-            diagrams,
             coding_standards,
             no_coding_standards,
             gortex,
@@ -444,7 +440,6 @@ fn main() -> Result<()> {
                     tracker,
                     domain,
                     editor,
-                    diagrams,
                     coding_standards: flag(coding_standards, no_coding_standards),
                     gortex: flag(gortex, no_gortex),
                     yes,

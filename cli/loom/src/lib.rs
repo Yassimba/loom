@@ -1,7 +1,6 @@
 pub mod app;
 mod bundled_skills;
 mod catalog;
-pub mod diagrams;
 mod fs_tx;
 pub mod init;
 mod install;

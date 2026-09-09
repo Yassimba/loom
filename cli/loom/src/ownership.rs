@@ -15,7 +15,6 @@ const INIT_FILES: &[&str] = &[
     "ai-docs/agents/issue-tracker.md",
     "ai-docs/agents/domain.md",
     "ai-docs/agents/editor.md",
-    crate::diagrams::PROJECT_PATH,
 ];
 const INIT_TREES: &[&str] = &[".beads"];
 

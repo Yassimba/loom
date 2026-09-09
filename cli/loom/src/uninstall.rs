@@ -226,7 +226,6 @@ fn uninstall_wizard_selection(
                 zed_keymap: home.join(".config/zed/keymap.json"),
                 pi_fff_config: home.join(".pi/agent/pi-fff.json"),
                 pi_adhd_flag: home.join(".pi/agent/.i-have-adhd-always"),
-                diagrams: home.join(".config/loom/diagrams.json"),
             },
             status: crate::PrerequisiteStatus {
                 pi: true,

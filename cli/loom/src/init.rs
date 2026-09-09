@@ -7,7 +7,6 @@
 //! land wrapped in `<!-- loom:section:<name> -->` markers so a re-run
 //! appends missing sections and never touches anything else.
 
-use crate::diagrams::{self, DiagramStyle};
 use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, CommandSpec, System};
 use anyhow::{Context, Result};
@@ -86,7 +85,6 @@ pub struct InitOptions {
     pub tracker: Option<Tracker>,
     pub domain: Option<DomainLayout>,
     pub editor: Option<Editor>,
-    pub diagrams: Option<DiagramStyle>,
     pub coding_standards: Option<bool>,
     pub gortex: Option<bool>,
     pub yes: bool,
@@ -249,7 +247,6 @@ struct InitFeatures {
     tracker: Option<Tracker>,
     domain: Option<DomainLayout>,
     editor: Option<Editor>,
-    diagrams: Option<DiagramStyle>,
     coding_standards: bool,
     gortex: bool,
 }
@@ -264,10 +261,6 @@ fn has_project_selection(options: &InitOptions) -> bool {
         || options.coding_standards == Some(true)
 }
 
-fn has_explicit_selection(options: &InitOptions) -> bool {
-    has_project_selection(options) || options.diagrams.is_some() || options.gortex == Some(true)
-}
-
 fn choose_features(
     project: &Path,
     beads_tools_installed: bool,
@@ -276,7 +269,7 @@ fn choose_features(
     options: &InitOptions,
     mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
 ) -> Result<InitFeatures> {
-    if has_explicit_selection(options) {
+    if has_project_selection(options) || options.gortex == Some(true) {
         if options.tracker == Some(Tracker::Beads) && !beads_tools_installed {
             anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
         }
@@ -291,7 +284,6 @@ fn choose_features(
             tracker: options.tracker,
             domain: options.domain,
             editor: options.editor,
-            diagrams: options.diagrams,
             coding_standards: options.coding_standards.unwrap_or(false),
             gortex: options.gortex.unwrap_or(false),
         });
@@ -400,17 +392,6 @@ fn choose_features(
         )?,
         None => false,
     };
-    let diagrams = if project_instructions {
-        Some(select_choice(
-            "Choose a diagram style for this project",
-            "Use your setup default (Polished if unset), or choose a style for this project. Both use the same atlas facts.",
-            vec![DiagramStyle::Inherit, DiagramStyle::Polished, DiagramStyle::Economical],
-            DiagramStyle::Inherit,
-            options.yes,
-        )?)
-    } else {
-        None
-    };
     Ok(InitFeatures {
         project_instructions,
         python,
@@ -419,13 +400,18 @@ fn choose_features(
         tracker,
         domain,
         editor,
-        diagrams,
         coding_standards,
         gortex,
     })
 }
 
-fn setup_gortex(system: &dyn System, project: &Path) -> Result<()> {
+// gortex v0.64.0 injects mandatory tool guidance even with --no-hooks; remove this
+// compatibility patch once the pinned adapter gates orientation on ENFORCE itself.
+const GORTEX_ORIENTATION: &str = "if (decision.orientation) parts.push(decision.orientation);";
+const SAFE_GORTEX_ORIENTATION: &str =
+    "if (ENFORCE && decision.orientation) parts.push(decision.orientation);";
+
+fn setup_gortex(system: &dyn System, project: &Path, home: &Path) -> Result<()> {
     let result = system
         .run(
             &CommandSpec::new(
@@ -451,7 +437,21 @@ fn setup_gortex(system: &dyn System, project: &Path) -> Result<()> {
             crate::install::command_failure_message(&result)
         );
     }
-    Ok(())
+
+    let extension = home.join(".pi/agent/extensions/gortex/index.ts");
+    let source = fs::read_to_string(&extension)
+        .with_context(|| format!("could not read {}", extension.display()))?;
+    if source.contains(SAFE_GORTEX_ORIENTATION) {
+        return Ok(());
+    }
+    if !source.contains(GORTEX_ORIENTATION) {
+        anyhow::bail!(
+            "Gortex's Pi adapter changed; refusing to patch {}",
+            extension.display()
+        );
+    }
+    let patched = source.replacen(GORTEX_ORIENTATION, SAFE_GORTEX_ORIENTATION, 1);
+    crate::fs_tx::atomic_write(&extension, patched.as_bytes()).map_err(anyhow::Error::msg)
 }
 
 fn setup_beads(system: &dyn System, project: &Path) -> Result<bool> {
@@ -539,7 +539,6 @@ fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
         || options.editor.is_some()
         || options.coding_standards.is_some()
         || options.gortex.is_some()
-        || options.diagrams.is_some()
 }
 
 pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
@@ -561,27 +560,12 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     let out = Out::detect();
     let home = system.home_dir().context("home directory is unavailable")?;
     out.title("init", tidy_path(&project, &home));
-    if let Some(style) = features.diagrams {
-        let path = project.join(diagrams::PROJECT_PATH);
-        // --yes accepts defaults without resetting an existing project override.
-        let preserve = options.yes && options.diagrams.is_none() && path.exists();
-        let changed = !preserve && diagrams::write_style(&path, style)?;
-        out.row(
-            Mark::Ok,
-            "Diagrams",
-            if changed {
-                style.to_string()
-            } else {
-                "project preference unchanged".into()
-            },
-        );
-    }
     if features.gortex {
-        setup_gortex(system, &project)?;
+        setup_gortex(system, &project, &home)?;
         out.row(Mark::Ok, "Gortex", "Pi and Zed wired; repository tracked");
     }
     if !features.project_instructions {
-        if features.diagrams.is_some() || features.gortex {
+        if features.gortex {
             out.verdict(true, "Done");
         } else {
             out.verdict(true, "Nothing selected; no changes made");
@@ -1058,6 +1042,13 @@ mod tests {
         commands: Mutex<Vec<CommandSpec>>,
     }
 
+    fn write_gortex_extension(home: &Path) -> std::path::PathBuf {
+        let path = home.join(".pi/agent/extensions/gortex/index.ts");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, format!("before\n{GORTEX_ORIENTATION}\nafter\n")).unwrap();
+        path
+    }
+
     impl System for RecordingSystem {
         fn command_exists(&self, _name: &str) -> bool {
             false
@@ -1084,7 +1075,6 @@ mod tests {
             tracker: None,
             domain: None,
             editor: None,
-            diagrams: None,
             coding_standards: None,
             gortex: None,
             yes: false,
@@ -1111,7 +1101,6 @@ mod tests {
             tracker: Some(Tracker::Beads),
             domain: None,
             editor: None,
-            diagrams: None,
             coding_standards: None,
             gortex: None,
             yes: false,
@@ -1138,7 +1127,6 @@ mod tests {
                 tracker: Some(Tracker::Beads),
                 domain: None,
                 editor: None,
-                diagrams: None,
                 coding_standards: false,
                 gortex: false,
             }
@@ -1156,7 +1144,6 @@ mod tests {
             tracker: None,
             domain: None,
             editor: None,
-            diagrams: None,
             coding_standards: None,
             gortex: None,
             yes: true,
@@ -1187,7 +1174,6 @@ mod tests {
                 tracker: Some(Tracker::Beads),
                 domain: Some(DomainLayout::Single),
                 editor: Some(Editor::Cursor),
-                diagrams: Some(DiagramStyle::Inherit),
                 coding_standards: true,
                 gortex: true,
             }
@@ -1320,6 +1306,7 @@ mod tests {
             current: nested,
             commands: Mutex::new(Vec::new()),
         };
+        write_gortex_extension(&root);
         let options = InitOptions {
             python: None,
             rust: None,
@@ -1327,7 +1314,6 @@ mod tests {
             tracker: None,
             domain: None,
             editor: None,
-            diagrams: None,
             coding_standards: None,
             gortex: Some(true),
             yes: false,
@@ -1346,8 +1332,14 @@ mod tests {
             commands: Mutex::new(Vec::new()),
         };
         let project = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let home = std::env::temp_dir().join(format!("loom-gortex-{}", std::process::id()));
+        let extension = write_gortex_extension(&home);
 
-        setup_gortex(&system, project).unwrap();
+        setup_gortex(&system, project, &home).unwrap();
+        assert!(fs::read_to_string(extension)
+            .unwrap()
+            .contains(SAFE_GORTEX_ORIENTATION));
+        fs::remove_dir_all(home).unwrap();
 
         assert_eq!(
             *system.commands.lock().unwrap(),

@@ -62,7 +62,3 @@ The HTML is the deliverable, the manifests and `assemble.py` are the source. If 
 ```
 
 `assemble.py` extracts the `<svg>` from each html, orders sections by `order`, nests figures by `level` in the sidebar, appends the glossary last. Individual diagram HTML is the editable visual source; JSON is a semantic inventory of IDs, labels, edges and source bindings, without geometry. `question` is how Blueprint picks a figure to overlay instead of redrawing.
-
-## Reuse existing figures
-
-For later change plans, follow [references/overlays.md](references/overlays.md). This preference does not change atlas creation.

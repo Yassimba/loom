@@ -3,7 +3,6 @@
 //! preserving — `toml_edit` for Herdr's config.toml, a span-splicing JSONC
 //! editor for Zed's commented settings.json.
 
-use crate::diagrams::{self, DiagramStyle};
 use crate::jsonc;
 use anyhow::{Context, Result};
 use serde_json::{json, Value as Json};
@@ -32,10 +31,7 @@ pub enum SettingChange {
     /// for the same command already exists.
     HerdrKeyCommands(Vec<KeyCommand>),
     /// Set (or subset-merge into) a top-level key in Zed's settings.json.
-    ZedValue {
-        key: String,
-        value: Json,
-    },
+    ZedValue { key: String, value: Json },
     /// Bind keys in one `context` block of Zed's keymap.json by appending a
     /// block at the end (a later block wins in Zed). A key the user already
     /// bound anywhere in that context is left alone.
@@ -48,7 +44,6 @@ pub enum SettingChange {
     PiFffDefaults(Json),
     /// Create the upstream Pi ADHD plugin's always-on flag without replacing it.
     PiAdhdAlwaysOn,
-    DiagramStyle(DiagramStyle),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -75,7 +70,6 @@ pub struct SettingsPaths {
     pub zed_keymap: PathBuf,
     pub pi_fff_config: PathBuf,
     pub pi_adhd_flag: PathBuf,
-    pub diagrams: PathBuf,
 }
 
 impl SettingsPaths {
@@ -118,7 +112,6 @@ impl SettingsPaths {
             zed_keymap: zed_dir.join("keymap.json"),
             pi_fff_config: pi_agent_dir.join("pi-fff.json"),
             pi_adhd_flag: pi_agent_dir.join(".i-have-adhd-always"),
-            diagrams: home_config_dir()?.join("loom/diagrams.json"),
         })
     }
 }
@@ -156,7 +149,7 @@ pub fn pi_adhd_setting() -> SettingSpec {
 }
 
 pub fn curated_settings() -> Vec<SettingSpec> {
-    let mut settings = vec![
+    vec![
         SettingSpec {
             id: "herdr:annotate-keybindings".into(),
             group: "Herdr".into(),
@@ -231,18 +224,7 @@ pub fn curated_settings() -> Vec<SettingSpec> {
                 "mode": "override"
             })),
         },
-    ];
-    for style in [DiagramStyle::Polished, DiagramStyle::Economical] {
-        settings.push(SettingSpec {
-            id: format!("loom:diagrams-{}", style.value()),
-            group: "Diagrams (choose one)".into(),
-            label: style.to_string(),
-            description: "Default for plans, explanations and reviews. A project or request can override it. Both styles use the same atlas facts.".into(),
-            related_resource: None,
-            change: SettingChange::DiagramStyle(style),
-        });
-    }
-    settings
+    ]
 }
 
 impl SettingSpec {
@@ -253,7 +235,6 @@ impl SettingSpec {
             SettingChange::ZedKeymap { .. } => &paths.zed_keymap,
             SettingChange::PiFffDefaults(_) => &paths.pi_fff_config,
             SettingChange::PiAdhdAlwaysOn => &paths.pi_adhd_flag,
-            SettingChange::DiagramStyle(_) => &paths.diagrams,
         }
     }
 
@@ -270,9 +251,6 @@ impl SettingSpec {
     pub fn change_summary(&self) -> Vec<String> {
         match &self.change {
             SettingChange::PiAdhdAlwaysOn => vec!["Enable ADHD-friendly responses for future Pi sessions; leave existing settings unchanged".into()],
-            SettingChange::DiagramStyle(style) => {
-                vec![format!("Personal diagram default: {}", style.value())]
-            }
             SettingChange::HerdrKeyCommands(commands) => commands
                 .iter()
                 .map(|command| format!("[[keys.command]] {} → {}", command.key, command.command))
@@ -322,9 +300,6 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
             .unwrap_or(false),
         SettingChange::PiFffDefaults(_) => true,
         SettingChange::PiAdhdAlwaysOn => unreachable!(),
-        SettingChange::DiagramStyle(style) => serde_json::from_str::<Json>(&content)
-            .map(|value| value["style"] == style.value())
-            .unwrap_or(false),
     };
     if applied {
         SettingState::Applied
@@ -350,9 +325,6 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
                 Err(error).with_context(|| format!("could not create {}", path.display()))
             }
         };
-    }
-    if let SettingChange::DiagramStyle(style) = spec.change {
-        return diagrams::write_style(path, style);
     }
     let defaults = match &spec.change {
         SettingChange::PiFffDefaults(defaults) => Some(defaults),
@@ -381,9 +353,7 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
             SettingChange::HerdrKeyCommands(_) => String::new(),
             SettingChange::ZedValue { .. } => "{}\n".into(),
             SettingChange::ZedKeymap { .. } => "[]\n".into(),
-            SettingChange::PiFffDefaults(_)
-            | SettingChange::DiagramStyle(_)
-            | SettingChange::PiAdhdAlwaysOn => unreachable!(),
+            SettingChange::PiFffDefaults(_) | SettingChange::PiAdhdAlwaysOn => unreachable!(),
         },
         Err(error) => {
             return Err(error).with_context(|| format!("could not read {}", path.display()))
@@ -395,9 +365,7 @@ pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> 
         SettingChange::ZedKeymap { context, bindings } => {
             apply_zed_keymap(&existing, context, bindings)?
         }
-        SettingChange::PiFffDefaults(_)
-        | SettingChange::DiagramStyle(_)
-        | SettingChange::PiAdhdAlwaysOn => unreachable!(),
+        SettingChange::PiFffDefaults(_) | SettingChange::PiAdhdAlwaysOn => unreachable!(),
     };
     let Some(updated) = updated else {
         return Ok(false);
@@ -782,7 +750,6 @@ mod tests {
             zed_keymap: root.join("zed-keymap.json"),
             pi_fff_config: root.join("agent/pi-fff.json"),
             pi_adhd_flag: root.join("agent/.i-have-adhd-always"),
-            diagrams: root.join("diagrams.json"),
         };
         let fff = curated_settings()
             .into_iter()
