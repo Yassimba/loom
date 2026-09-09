@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.5.0...pi-loom-mermaid-v0.6.0) (2026-09-09)
+
+
+### Features
+
+* distribute colored Mermaid review support ([#211](https://github.com/Yassimba/loom/issues/211)) ([e128afb](https://github.com/Yassimba/loom/commit/e128afbbbbf55fc48e54503b2a6f7fb63d4f89b6))
+
 ## [0.5.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.4.1...pi-loom-mermaid-v0.5.0) (2026-09-08)
 
 
