@@ -3,7 +3,7 @@
 //! handling, and install progress. Everything here is terminal-free so the whole flow is
 //! unit-testable; rendering lives in `render.rs`.
 
-use crate::settings::{SettingChange, SettingSpec, SettingState, SettingsPaths};
+use crate::settings::{SettingSpec, SettingState, SettingsPaths};
 use crate::{
     build_install_plan, InstallPlan, InstallReport, Platform, PrerequisiteStatus, Resource,
     ResourceKind, SkillAgent, SkillDestination, SkillScope,
@@ -633,10 +633,7 @@ impl Wizard {
     fn precheck_settings(&mut self) {
         let selection = self.selection();
         for (index, spec) in self.model.settings.iter().enumerate() {
-            if self.setting_touched[index]
-                || self.setting_applied(index)
-                || matches!(spec.change, SettingChange::DiagramStyle(_))
-            {
+            if self.setting_touched[index] || self.setting_applied(index) {
                 continue;
             }
             self.setting_on[index] = match &spec.related_resource {
@@ -658,17 +655,6 @@ impl Wizard {
         match item {
             Item::Resource(index) => self.selected[index] = on,
             Item::Setting(index) => {
-                if matches!(
-                    self.model.settings[index].change,
-                    SettingChange::DiagramStyle(_)
-                ) {
-                    for (other, spec) in self.model.settings.iter().enumerate() {
-                        if matches!(spec.change, SettingChange::DiagramStyle(_)) {
-                            self.setting_on[other] = false;
-                            self.setting_touched[other] = true;
-                        }
-                    }
-                }
                 self.setting_on[index] = on;
                 self.setting_touched[index] = true;
             }
@@ -685,11 +671,7 @@ impl Wizard {
     }
 
     fn toggle_group(&mut self, items: &[Item]) {
-        // Diagram styles are alternatives, not bulk-selectable settings.
-        let items: Vec<_> = items.iter().copied().filter(|item| !matches!(item,
-            Item::Setting(index) if matches!(self.model.settings[*index].change, SettingChange::DiagramStyle(_))
-        )).collect();
-        let actionable = self.actionable(&items);
+        let actionable = self.actionable(items);
         let all_on = actionable.iter().all(|item| self.item_on(*item));
         for item in actionable {
             self.set_item(item, !all_on);

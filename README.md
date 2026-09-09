@@ -63,8 +63,6 @@ Run the macOS or Linux install command inside Ubuntu.
 
 Interactive setup can enable ADHD-friendly Pi responses. It installs `i-have-adhd` and writes the Pi flag under `~/.pi/agent` or `PI_CODING_AGENT_DIR`. Run `/reload` in Pi after enabling it.
 
-You can also choose polished atlas diagrams or economical Mermaid diagrams. Loom stores the user default in `~/.config/loom/diagrams.json` and the project choice in `ai-docs/agents/diagrams.json`. Use `loom init --diagrams economical`, `polished`, or `inherit` to set the project choice.
-
 When Pi is installed or selected, Loom automatically installs [pi-loom](plugins/pi-loom/README.md) for its Loom header and startup update notice.
 
 </details>

@@ -36,6 +36,4 @@ files unchanged. Use references to retained facts instead of rewriting them.
 
 ## When figures help
 
-For an explanation, proposal, or finding that needs a figure, read
-[overlays.md](overlays.md). It resolves the personal/project diagram preference and covers
-atlas overlays, Mermaid views, and historical bindings. A text-only review stops after retrieval.
+For an explanation, proposal, or finding that needs a figure, use the selected atlas facts as reference and draw the needed structure, flow, state, or model in Mermaid. Keep source references and referenced atlas figure IDs beside the view, mark planned code as PROJECTED, and show removed code only in a diff illustration. A text-only review stops after retrieval.

@@ -135,7 +135,6 @@ fn model(status: PrerequisiteStatus) -> Model {
             zed_keymap: "/tmp/zed-keymap.json".into(),
             pi_fff_config: "/tmp/pi-fff.json".into(),
             pi_adhd_flag: "/tmp/.i-have-adhd-always".into(),
-            diagrams: "/tmp/loom-diagrams.json".into(),
         },
         status,
         platform: Platform::Unix,
@@ -1371,38 +1370,6 @@ fn bundled_skill_rows_are_included_for_selected_and_verified_installed_packages(
     .unwrap();
     assert!(wizard.included_note(1).is_none());
     std::fs::remove_dir_all(home).unwrap();
-}
-
-#[test]
-fn diagram_choices_are_exclusive_and_not_automatically_or_bulk_selected() {
-    for applied in [false, true] {
-        let mut model = model(ready());
-        model.zed_present = true;
-        model.settings = crate::settings::curated_settings()
-            .into_iter()
-            .filter(|spec| matches!(spec.change, SettingChange::DiagramStyle(_)))
-            .collect();
-        model.setting_states = vec![SettingState::NotApplied; 2];
-        if applied {
-            model.setting_states[0] = SettingState::Applied;
-        }
-        let mut wizard = Wizard::new(model);
-        assert_eq!(wizard.setting_on, [false, false]);
-        go_to(&mut wizard, Row::Setting(1));
-        press(&mut wizard, &[KeyCode::Char(' ')]);
-        assert_eq!(wizard.setting_on, [false, true]);
-        assert_eq!(wizard.selected_settings()[0].id, "loom:diagrams-economical");
-        if !applied {
-            go_to(&mut wizard, Row::Setting(0));
-            press(&mut wizard, &[KeyCode::Char(' ')]);
-            assert_eq!(wizard.setting_on, [true, false]);
-        }
-        // The Settings group must not choose a different mode on the user's behalf.
-        let before = wizard.setting_on.clone();
-        go_to_group(&mut wizard, "Everything");
-        press(&mut wizard, &[KeyCode::Char(' ')]);
-        assert_eq!(wizard.setting_on, before);
-    }
 }
 
 fn adhd_wizard() -> Wizard {

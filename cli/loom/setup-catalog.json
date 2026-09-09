@@ -40,7 +40,8 @@
         "pi-package:pi-web-access",
         "pi-package:@yassimba/pi-add-dir",
         "pi-package:@yassimba/pi-skill-autocomplete",
-        "pi-package:pi-rewind-hook"
+        "pi-package:pi-rewind-hook",
+        "pi-package:pi-permission-modes"
       ]
     },
     {
@@ -309,6 +310,16 @@
       "installTarget": "pi-mcp-adapter",
       "version": "2.32.1",
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
+    },
+    {
+      "id": "pi-package:pi-permission-modes",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "permission-modes",
+      "description": "Switch between configurable Default, Plan, Build, and YOLO permission modes with path, tool, skill, network, and sandbox controls. By Wyna Informatik.",
+      "installTarget": "pi-permission-modes",
+      "version": "2.2.0",
+      "nextAction": "Run /reload in Pi, then /perm to choose a permission mode."
     },
     {
       "id": "pi-package:@plannotator/pi-extension",
