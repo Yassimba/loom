@@ -28,6 +28,12 @@
       "dependencies": ["pi-mcp-adapter"]
     },
     {
+      "key": "bun",
+      "label": "bun",
+      "description": "TypeScript runtime for Herdr Annotate and the Mermaid document CLI.",
+      "nextAction": "Run `bun --version` to check the runtime. Select it with Herdr Annotate."
+    },
+    {
       "key": "herdr",
       "label": "herdr",
       "description": "Terminal multiplexer for coding agents (macOS/Linux; use WSL2 on Windows).",

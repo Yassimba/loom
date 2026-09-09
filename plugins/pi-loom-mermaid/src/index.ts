@@ -90,15 +90,21 @@ export function transformMermaidForDocument(markdown: string, availableWidth = 1
     .lexer(markdown)
     .map((token) => {
       if (!isMermaid(token)) return token.raw;
-      const art = render(withDiffClasses(token.text).source, { maxWidth: availableWidth });
+      const styledSource = withDiffClasses(token.text);
+      const art = render(styledSource.source, { maxWidth: availableWidth });
       if (!art || art.width > availableWidth) return token.raw;
-      const text = art.plain.join("\n");
+      // The document viewer accepts SGR styling only, not terminal hyperlinks.
+      const withoutLinks = {
+        ...art,
+        styled: art.styled.map((row) => row.map((span) => ({ ...span, href: undefined }))),
+      };
+      const text = dimDefaultBorders(toAnsi(withoutLinks), styledSource.dimSgr).join("\n");
       const longestRun = Math.max(
         0,
         ...Array.from(text.matchAll(/`+/g), (match) => match[0].length),
       );
       const fence = "`".repeat(Math.max(3, longestRun + 1));
-      return `${fence}\n${text}\n${fence}\n`;
+      return `${fence}loom-mermaid\n${text}\n${fence}\n`;
     })
     .join("");
 }
