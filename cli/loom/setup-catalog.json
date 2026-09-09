@@ -22,6 +22,9 @@
         "skill:ponytail",
         "tool:pi",
         "tool:herdr",
+        "herdr-plugin:annotate",
+        "pi-package:@yassimba/pi-loom-mermaid",
+        "tool:bun",
         "tool:gortex",
         "mcp-server:sem",
         "tool:tuicr",
@@ -1045,7 +1048,7 @@
       "kind": "herdr-plugin",
       "group": "Herdr plugins",
       "label": "Annotate",
-      "description": "Annotate terminal selections, review documents and agent replies, and render Mermaid in Pi replies. Needs Bun and pi-loom-mermaid.",
+      "description": "Annotate selections and review replies with Loom's colored Mermaid TUI fork. Needs Bun and the pi-loom-mermaid renderer.",
       "installTarget": "Yassimba/herdr-annotate",
       "nextAction": "Run `herdr server reload-config`, then use your Herdr prefix with `A`, `O`, or `Shift+O`.",
       "windowsWsl": true
@@ -1096,6 +1099,17 @@
       "dependencies": [
         "pi-mcp-adapter"
       ]
+    },
+    {
+      "id": "tool:bun",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "bun",
+      "description": "TypeScript runtime for Herdr Annotate and the Mermaid document CLI.",
+      "installTarget": "bun",
+      "nextAction": "Run `bun --version` to check the runtime. Select it with Herdr Annotate.",
+      "bin": "bun",
+      "companions": []
     },
     {
       "id": "tool:herdr",

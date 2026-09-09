@@ -103,6 +103,20 @@ async function createCatalogFixture() {
   return repoRoot;
 }
 
+test("Software Engineer installs the Annotate fork with the Mermaid renderer", async () => {
+  const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
+  const profile = catalog.profiles.find(({ id }) => id === "software-engineer");
+  const annotate = catalog.resources.find(({ id }) => id === "herdr-plugin:annotate");
+  const mermaid = catalog.resources.find(({ id }) => id === "pi-package:@yassimba/pi-loom-mermaid");
+  assert.equal(annotate.installTarget, "Yassimba/herdr-annotate");
+  assert.equal(mermaid.installTarget, "@yassimba/pi-loom-mermaid");
+  assert.ok(profile.resources.includes(annotate.id));
+  assert.ok(profile.resources.includes(mermaid.id));
+  const bun = catalog.resources.find(({ id }) => id === "tool:bun");
+  assert.equal(bun.installTarget, "bun");
+  assert.ok(profile.resources.includes(bun.id));
+});
+
 test("Pi, Sem, and Context7 select the Pi MCP adapter", async () => {
   const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
   const sem = catalog.resources.find(({ id }) => id === "mcp-server:sem");
