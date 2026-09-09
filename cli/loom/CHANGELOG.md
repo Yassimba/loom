@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/Yassimba/loom/compare/loom-v1.6.0...loom-v1.7.0) (2026-09-09)
+
+
+### Features
+
+* **setup:** improve Loom setup capabilities ([d21bea1](https://github.com/Yassimba/loom/commit/d21bea10106bf5a9d69e3932c9b48651724eb38d))
+* **tools:** add Magnitude local inference server ([335770c](https://github.com/Yassimba/loom/commit/335770cba93c6ada36096edb058b0b36a0434ab1))
+
 ## [1.6.0](https://github.com/Yassimba/loom/compare/loom-v1.5.0...loom-v1.6.0) (2026-09-09)
 
 
