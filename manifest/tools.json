@@ -56,6 +56,14 @@
       "nextAction": "Run `magnitude setup` to profile your Mac, choose a model, and connect your coding agent."
     },
     {
+      "key": "ubi:AlexsJones/llmfit",
+      "label": "llmfit",
+      "bin": "llmfit",
+      "group": "Local models",
+      "description": "Hardware-aware TUI for finding local models that fit, with estimated and measured speed.",
+      "nextAction": "Run `llmfit` to compare models, then `llmfit bench` to measure tokens per second."
+    },
+    {
       "key": "npm:@tobilu/qmd",
       "label": "qmd",
       "bin": "qmd",

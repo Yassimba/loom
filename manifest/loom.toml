@@ -55,6 +55,9 @@ herdr = { version = "0.8.2", os = ["macos", "linux"] }
 # local inference server for Apple silicon Macs
 "npm:@magnitudedev/cli" = { version = "0.0.14", os = ["macos"] }
 
+# hardware-aware local model TUI for Linux and Windows
+"ubi:AlexsJones/llmfit" = { version = "v1.1.14", os = ["linux", "windows"] }
+
 # local hybrid search for Markdown knowledge bases
 "npm:@tobilu/qmd" = "2.8.3"
 

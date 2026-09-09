@@ -1157,6 +1157,17 @@
       "companions": []
     },
     {
+      "id": "tool:llmfit",
+      "kind": "tool",
+      "group": "Local models",
+      "label": "llmfit",
+      "description": "Hardware-aware TUI for finding local models that fit, with estimated and measured speed.",
+      "installTarget": "ubi:AlexsJones/llmfit",
+      "nextAction": "Run `llmfit` to compare models, then `llmfit bench` to measure tokens per second.",
+      "bin": "llmfit",
+      "companions": []
+    },
+    {
       "id": "tool:qmd",
       "kind": "tool",
       "group": "Wiki",
