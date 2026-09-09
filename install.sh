@@ -8,7 +8,7 @@ set -eu
 
 NAME="loom"
 REPO="Yassimba/loom"
-MANIFEST_URL="https://raw.githubusercontent.com/${REPO}/main/manifest/loom.toml"
+MANIFEST_URL="${LOOM_MANIFEST_URL:-https://raw.githubusercontent.com/${REPO}/main/manifest/loom.toml}"
 CONF_D="${HOME}/.config/mise/conf.d"
 
 case "$(uname -s)" in

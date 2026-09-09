@@ -145,6 +145,7 @@ jobs:
           LOOM_E2E_LOOM_BIN: ${{ !inputs.published && format('{0}/cli/loom/target/release/loom', github.workspace) || '' }}
           LOOM_REPO_DIR: ${{ !inputs.published && github.workspace || '' }}
           LOOM_E2E_PUBLISHED: ${{ inputs.published }}
+          LOOM_MANIFEST_URL: https://raw.githubusercontent.com/Yassimba/loom/${{ inputs.checkout_ref || github.sha }}/manifest/loom.toml
         run: bash scripts/e2e-install-unix.sh
       - name: Upload evidence
         if: always()
@@ -188,6 +189,7 @@ jobs:
           LOOM_E2E_LOOM_BIN: ${{ !inputs.published && format('{0}/cli/loom/target/release/loom.exe', github.workspace) || '' }}
           LOOM_REPO_DIR: ${{ !inputs.published && github.workspace || '' }}
           LOOM_E2E_PUBLISHED: ${{ inputs.published }}
+          LOOM_MANIFEST_URL: https://raw.githubusercontent.com/Yassimba/loom/${{ inputs.checkout_ref || github.sha }}/manifest/loom.toml
           LOOM_E2E_POWERSHELL: ${{ matrix.engine }}
           LOOM_E2E_SKILL: ${{ matrix.skill }}
           LOOM_E2E_TOKEI: ${{ matrix.tokei }}
