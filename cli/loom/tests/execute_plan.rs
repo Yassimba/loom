@@ -298,7 +298,9 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
         system.fail_install = fail_install;
         system.expose_runtime = expose_runtime;
         let catalog = loom::Catalog::embedded().unwrap();
-        let resources = catalog.find(&["herdr-plugin:annotate".into()]).unwrap();
+        let resources = catalog
+            .find(&["herdr-plugin:annotate".into(), "tool:bun".into()])
+            .unwrap();
         let destination = SkillDestination::new(
             vec![SkillAgent::Pi],
             SkillScope::Global,
@@ -316,13 +318,17 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
             &destination,
         )
         .unwrap();
+        assert!(plan.prerequisites.iter().any(|step| {
+            matches!(&step.action, StepAction::SyncTools { tools }
+                if tools.contains(&"bun".into()) && tools.contains(&"herdr".into()))
+        }));
         let mut statuses = Vec::new();
         let report = execute_install_plan_with(&plan, &system, &mut |index, status| {
             statuses.push((index, status));
         });
         assert!(
             !system.runtime_started_early.load(Ordering::SeqCst),
-            "Herdr plugins must wait until mise has installed Herdr"
+            "Herdr plugins must wait until mise has installed Herdr and Bun"
         );
         if fail_install || !expose_runtime {
             assert!(report.installed.is_empty(), "{report:?}");

@@ -38,6 +38,17 @@ To show changes, add `:::red` after a box for removed code, `:::orange` for chan
 
 If a diagram is too wide, Pi shows its code instead. Widen the terminal or ask Pi to split it into smaller diagrams.
 
+## Plannotator document export
+
+`loom-mermaid-render` requires Bun on `PATH` (also required by Herdr Annotate).
+The CLI uses Bun because Node cannot strip TypeScript inside installed `node_modules`;
+the Pi extension runtime is unchanged. It reads Markdown on stdin and writes
+pre-rendered diagrams in `loom-mermaid` fences. Set `LOOM_MERMAID_WIDTH` to change the default 100-column limit.
+This format requires the Loom-patched Plannotator TUI: it hides the fences and maps
+SGR colors, bold, and dim into terminal spans. Hyperlinks are omitted; unsupported
+or oversized diagrams keep their original Mermaid source. Ordinary Markdown viewers
+do not understand this colored interchange format.
+
 ## The same diagram in Pi and GitHub
 
 All three views below use the same Mermaid code.
