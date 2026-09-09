@@ -48,6 +48,14 @@
       "nextAction": "Run `rtk init --global` for Claude Code or `rtk init --global --agent cursor` for Cursor, then restart the agent."
     },
     {
+      "key": "npm:@magnitudedev/cli",
+      "label": "magnitude",
+      "bin": "magnitude",
+      "group": "Local models",
+      "description": "Local inference server for Apple silicon Macs with hardware-aware model recommendations and tuning.",
+      "nextAction": "Run `magnitude setup` to profile your Mac, choose a model, and connect your coding agent."
+    },
+    {
       "key": "npm:@tobilu/qmd",
       "label": "qmd",
       "bin": "qmd",

@@ -1146,6 +1146,17 @@
       "companions": []
     },
     {
+      "id": "tool:magnitude",
+      "kind": "tool",
+      "group": "Local models",
+      "label": "magnitude",
+      "description": "Local inference server for Apple silicon Macs with hardware-aware model recommendations and tuning.",
+      "installTarget": "npm:@magnitudedev/cli",
+      "nextAction": "Run `magnitude setup` to profile your Mac, choose a model, and connect your coding agent.",
+      "bin": "magnitude",
+      "companions": []
+    },
+    {
       "id": "tool:qmd",
       "kind": "tool",
       "group": "Wiki",
