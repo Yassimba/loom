@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/Yassimba/loom/compare/loom-v1.7.0...loom-v1.8.0) (2026-09-09)
+
+
+### Features
+
+* **tools:** add llmfit for non-mac systems ([cf4ed29](https://github.com/Yassimba/loom/commit/cf4ed297be2730d93051ed8db6fc21dec113611f))
+
 ## [1.7.0](https://github.com/Yassimba/loom/compare/loom-v1.6.0...loom-v1.7.0) (2026-09-09)
 
 

@@ -1,5 +1,5 @@
 {
-  "cli/loom": "1.7.0",
+  "cli/loom": "1.8.0",
   "cli/loom-teams": "0.2.2",
   "plugins/pi-fast": "2.0.0",
   "plugins/pi-add-dir": "0.3.0",
