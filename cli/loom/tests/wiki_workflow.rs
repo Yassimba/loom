@@ -67,6 +67,7 @@ fn request(operation: WikiOperation, vault: impl AsRef<Path>) -> WikiRequest {
         vault: vault.as_ref().to_path_buf(),
         feynman: false,
         confluence: false,
+        qmd: false,
         yes: true,
     }
 }
@@ -83,6 +84,24 @@ fn unregister_removes_only_machine_state_and_preserves_vault_files() {
     );
     let registry = fs::read_to_string(home.join(".config/loom/wiki-vaults.json")).unwrap();
     assert!(!registry.contains(&vault.display().to_string()));
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn unregister_rejects_a_path_that_is_not_registered() {
+    let (home, vault, system) = fixture("unregister-missing", true);
+    let err = run_wiki(
+        &request(WikiOperation::Unregister, "missing-vault"),
+        &system,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.contains("not registered"),
+        "{err}"
+    );
+    let registry = fs::read_to_string(home.join(".config/loom/wiki-vaults.json")).unwrap();
+    assert!(registry.contains(&vault.display().to_string()));
     fs::remove_dir_all(home).unwrap();
 }
 

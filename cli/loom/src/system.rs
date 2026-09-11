@@ -204,6 +204,29 @@ fn registry_path_entries(system: &dyn System) -> Vec<PathBuf> {
         .collect()
 }
 
+fn prefer_mise_shims(home: &Path, paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut shims = vec![home.join(".local").join("share").join("mise").join("shims")];
+    if cfg!(windows) {
+        shims.push(
+            home.join("AppData")
+                .join("Local")
+                .join("mise")
+                .join("shims"),
+        );
+    }
+    let mut preferred = Vec::new();
+    let mut rest = Vec::new();
+    for path in paths {
+        if shims.iter().any(|shim| shim == &path) {
+            preferred.push(path);
+        } else {
+            rest.push(path);
+        }
+    }
+    preferred.extend(rest);
+    preferred
+}
+
 impl System for RealSystem {
     fn command_exists(&self, name: &str) -> bool {
         resolve_program(&self.path_value(), name).is_some()
@@ -228,19 +251,20 @@ impl System for RealSystem {
     fn refresh_path(&self) {
         let mut paths = env::split_paths(&self.path_value()).collect::<Vec<_>>();
         if let Some(home) = env::home_dir() {
+            // mise shims first: a cargo-installed loom on PATH must not beat
+            // the pinned mise binary.
+            let shims = home.join(".local").join("share").join("mise").join("shims");
+            paths.insert(0, shims);
             paths.push(home.join(".local").join("bin"));
-            paths.push(home.join(".cargo").join("bin"));
-            // mise-managed tools resolve through its shims until the user's
-            // shell activation takes over.
-            paths.push(home.join(".local").join("share").join("mise").join("shims"));
             if cfg!(windows) {
-                paths.push(home.join("AppData").join("Roaming").join("npm"));
-                paths.push(
+                paths.insert(
+                    0,
                     home.join("AppData")
                         .join("Local")
                         .join("mise")
                         .join("shims"),
                 );
+                paths.push(home.join("AppData").join("Roaming").join("npm"));
             }
         }
         if cfg!(windows) {
@@ -269,6 +293,9 @@ impl System for RealSystem {
         paths.retain(|path| path.is_dir());
         let mut seen = HashSet::new();
         paths.retain(|path| seen.insert(path.clone()));
+        if let Some(home) = env::home_dir() {
+            paths = prefer_mise_shims(&home, paths);
+        }
         if let Ok(path) = env::join_paths(paths) {
             *self.path.lock().expect("PATH lock poisoned") = path;
         }
@@ -386,6 +413,15 @@ fn capture_stream(mut reader: impl Read, output: &(dyn Fn(&[u8]) + Sync)) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mise_shims_stay_ahead_of_cargo_bin() {
+        let home = PathBuf::from("/home/user");
+        let cargo = home.join(".cargo").join("bin");
+        let shims = home.join(".local").join("share").join("mise").join("shims");
+        let ordered = prefer_mise_shims(&home, vec![cargo.clone(), shims.clone()]);
+        assert_eq!(ordered, vec![shims, cargo]);
+    }
 
     #[cfg(unix)]
     #[test]

@@ -109,6 +109,8 @@ enum WikiCommand {
         #[arg(long)]
         confluence: bool,
         #[arg(long)]
+        qmd: bool,
+        #[arg(long)]
         yes: bool,
     },
     /// Adopt an existing Obsidian Vault
@@ -118,6 +120,8 @@ enum WikiCommand {
         feynman: bool,
         #[arg(long)]
         confluence: bool,
+        #[arg(long)]
+        qmd: bool,
         #[arg(long)]
         yes: bool,
     },
@@ -320,24 +324,28 @@ fn main() -> Result<()> {
                         path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     } => WikiRequest {
                         operation: WikiOperation::Create,
                         vault: path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     },
                     WikiCommand::Adopt {
                         path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     } => WikiRequest {
                         operation: WikiOperation::Adopt,
                         vault: path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     },
                     WikiCommand::Status => WikiRequest {
@@ -345,6 +353,7 @@ fn main() -> Result<()> {
                         vault: PathBuf::new(),
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Repair { path } => WikiRequest {
@@ -352,6 +361,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Unregister { path } => WikiRequest {
@@ -359,6 +369,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Open { path } => WikiRequest {
@@ -366,6 +377,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Launch { path } => WikiRequest {
@@ -373,6 +385,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                 };

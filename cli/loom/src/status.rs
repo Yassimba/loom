@@ -176,7 +176,7 @@ fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
             .is_some_and(|binary| system.command_exists(binary));
         style.row(
             if present { Mark::Ok } else { Mark::Bad },
-            &resource.label,
+            &status_label(resource, &catalog),
             if present {
                 "selected tool available"
             } else {
@@ -250,6 +250,9 @@ fn print_manager_inventory(
                         || output.contains(resource.id.trim_start_matches("herdr-plugin:"))
                 };
                 let expected = selected.contains(&resource.id);
+                if !installed && !expected {
+                    continue;
+                }
                 healthy &= installed || !expected;
                 style.row(
                     if installed {
@@ -259,7 +262,7 @@ fn print_manager_inventory(
                     } else {
                         Mark::Off
                     },
-                    &resource.label,
+                    &status_label(resource, catalog),
                     if installed {
                         "catalog item installed"
                     } else if expected {
@@ -283,6 +286,21 @@ fn print_manager_inventory(
             style.row(Mark::Bad, manager, error.to_string());
             false
         }
+    }
+}
+
+fn status_label(resource: &crate::Resource, catalog: &crate::Catalog) -> String {
+    let clash = catalog.resources.iter().any(|other| {
+        other.label == resource.label && other.kind != resource.kind && other.group != "Wiki"
+    });
+    if !clash {
+        return resource.label.clone();
+    }
+    match resource.kind {
+        crate::ResourceKind::PiPackage => format!("{} · Pi", resource.label),
+        crate::ResourceKind::HerdrPlugin => format!("{} · Herdr", resource.label),
+        crate::ResourceKind::Tool => resource.label.clone(),
+        crate::ResourceKind::Skill | crate::ResourceKind::McpServer => resource.label.clone(),
     }
 }
 
@@ -358,6 +376,10 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
         .map(|agent| (agent, agent.global_skill_tree(&home)))
         .filter(|(_, tree)| tree.parent().is_some_and(|parent| parent.is_dir()))
         .collect::<Vec<_>>();
+    let global_trees = trees
+        .iter()
+        .map(|(_, tree)| tree.clone())
+        .collect::<HashSet<_>>();
     let mut projects = match skills::prune_registered_skill_projects(&home) {
         Ok(projects) => projects,
         Err(error) => {
@@ -420,6 +442,9 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
             .iter()
             .filter(|name| tree.join(name.as_str()).join("SKILL.md").is_file())
             .count();
+        if installed == 0 && !global_trees.contains(&tree) {
+            continue;
+        }
         let health = if installed == catalog_skills.len() {
             Health::Good
         } else {

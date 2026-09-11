@@ -471,10 +471,7 @@ fn run_interactive(
 /// Which catalog resources are already on this machine. Uses the same
 /// probes as post-install verification: manager list output for plugins and
 /// packages, and the currently selected destination trees for skills.
-fn pi_packages_from_settings(
-    home: &std::path::Path,
-    project_root: &std::path::Path,
-) -> Option<String> {
+fn pi_packages_from_settings(home: &std::path::Path) -> Option<String> {
     let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
         .filter(|value| !value.is_empty())
         .map(std::path::PathBuf::from)
@@ -482,11 +479,7 @@ fn pi_packages_from_settings(
     let agent_dir = agent_dir
         .strip_prefix("~")
         .map_or_else(|_| agent_dir.clone(), |relative| home.join(relative));
-    pi_packages_listing(
-        &agent_dir.join("settings.json"),
-        project_root,
-        "User packages:",
-    )
+    pi_packages_listing(&agent_dir.join("settings.json"), "User packages:")
 }
 
 /// A `pi list`-shaped listing read straight from a Pi settings file, so the
@@ -494,7 +487,6 @@ fn pi_packages_from_settings(
 /// cannot be read safely; a missing file lists nothing.
 pub(crate) fn pi_packages_listing(
     settings_path: &std::path::Path,
-    project_root: &std::path::Path,
     heading: &str,
 ) -> Option<String> {
     let content = match std::fs::read_to_string(settings_path) {
@@ -518,8 +510,13 @@ pub(crate) fn pi_packages_listing(
             let path = std::path::Path::new(source);
             let resolved = path
                 .is_relative()
-                .then(|| project_root.join(path))
-                .filter(|path| path.join("package.json").is_file())
+                .then(|| {
+                    settings_path
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new(""))
+                        .join(path)
+                })
+                .filter(|path| path.is_dir())
                 .map(|path| path.canonicalize().unwrap_or(path));
             listed.push_str("  ");
             listed.push_str(
@@ -551,9 +548,7 @@ pub(crate) fn detect_installed(
             .map(|result| result.stdout)
     };
     let home = system.home_dir();
-    let settings_packages = home
-        .as_deref()
-        .and_then(|home| pi_packages_from_settings(home, &destination.project_root));
+    let settings_packages = home.as_deref().and_then(pi_packages_from_settings);
     // Prefer Pi's settings file: `pi list` boots the full Node CLI and was the
     // dominant checkmark delay. Fall back when the file cannot be read safely.
     let (herdr_plugins, pi_packages) = std::thread::scope(|scope| {
@@ -1031,6 +1026,21 @@ mod tests {
         ))
     }
 
+    #[test]
+    fn pi_package_paths_are_relative_to_the_settings_file() {
+        let root = temp_root("relative-pi-package");
+        let settings = root.join("home/projects/wiki/.pi/settings.json");
+        let package = root.join("home/.local/package");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(&settings, r#"{"packages":["../../../.local/package"]}"#).unwrap();
+
+        let listed = pi_packages_listing(&settings, "Project packages:").unwrap();
+
+        assert!(listed.contains(package.to_str().unwrap()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     struct NoCommands;
 
     impl System for NoCommands {
@@ -1220,9 +1230,9 @@ mod tests {
     fn installed_pi_packages_are_read_directly_from_settings() {
         let root = temp_root("direct-pi-settings");
         std::fs::create_dir_all(root.join(".pi/agent")).unwrap();
-        std::fs::create_dir_all(root.join("plugins/skill-autocomplete")).unwrap();
+        std::fs::create_dir_all(root.join(".pi/agent/plugins/skill-autocomplete")).unwrap();
         std::fs::write(
-            root.join("plugins/skill-autocomplete/package.json"),
+            root.join(".pi/agent/plugins/skill-autocomplete/package.json"),
             r#"{"name":"@yassimba/pi-skill-autocomplete"}"#,
         )
         .unwrap();

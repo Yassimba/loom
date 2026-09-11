@@ -16,13 +16,15 @@ pub(super) enum Capability {
     Essentials,
     Feynman,
     Confluence,
+    Qmd,
     Skill(&'static str),
 }
 
-pub(super) const CAPABILITIES: [Capability; 9] = [
+pub(super) const CAPABILITIES: [Capability; 10] = [
     Capability::Essentials,
     Capability::Feynman,
     Capability::Confluence,
+    Capability::Qmd,
     Capability::Skill("research"),
     Capability::Skill("write-simply"),
     Capability::Skill("explain-simply"),
@@ -34,9 +36,10 @@ pub(super) const CAPABILITIES: [Capability; 9] = [
 impl Capability {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Essentials => "Wiki essentials · claude-obsidian + QMD",
+            Self::Essentials => "Wiki essentials · claude-obsidian",
             Self::Feynman => "Feynman · research companion",
             Self::Confluence => "Confluence · export notes",
+            Self::Qmd => "QMD · local search",
             Self::Skill(name) => name,
         }
     }
@@ -107,6 +110,7 @@ impl WikiBrowser {
                 path: path.clone(),
                 feynman: false,
                 confluence: false,
+                qmd: false,
             });
             self.pending.insert(
                 path,
@@ -176,10 +180,10 @@ impl WikiBrowser {
                     .get(&record.path)
                     .is_some_and(|p| p.operation.is_some())
                     && self.health_ready(record, "claude-obsidian")
-                    && self.health_ready(record, "qmd")
             }
             Capability::Feynman => self.health_ready(record, "Feynman"),
             Capability::Confluence => self.health_ready(record, "Confluence"),
+            Capability::Qmd => self.health_ready(record, "qmd"),
             Capability::Skill(name) => {
                 crate::skills::skill_present_in(&record.path.join(".agents/skills"), name)
             }

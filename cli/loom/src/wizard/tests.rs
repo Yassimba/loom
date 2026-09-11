@@ -1382,6 +1382,7 @@ fn wiki_browser_keeps_three_lanes_and_inspects_only_the_selected_vault() {
         path: path.into(),
         feynman: false,
         confluence: false,
+        qmd: false,
     });
     let browser = wizard.wiki.as_mut().unwrap();
     browser.vaults = records.to_vec();
@@ -1472,6 +1473,7 @@ fn wiki_browser_selects_new_registrations_and_does_not_replace_a_broken_registry
         path: root.join(name),
         feynman: false,
         confluence: false,
+        qmd: false,
     };
     let mut registry = crate::wiki::WikiRegistry::default();
     registry.vaults.push(record("Old Wiki"));
