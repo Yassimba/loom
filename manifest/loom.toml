@@ -41,7 +41,7 @@ python = "3.13.7"
 bun = "1.4.2"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its
 # manual install instruction and mise skips this entry.
-herdr = { version = "0.8.2", os = ["macos", "linux"] }
+herdr = { version = "0.9.0", os = ["macos", "linux"] }
 
 # Semantic code MCP server (Pi gateway setup uses sem mcp)
 "github:Ataraxy-Labs/sem[exe=sem]" = "v0.24.0"
