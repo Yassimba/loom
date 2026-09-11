@@ -1036,8 +1036,14 @@ mod tests {
         std::fs::write(&settings, r#"{"packages":["../../../.local/package"]}"#).unwrap();
 
         let listed = pi_packages_listing(&settings, "Project packages:").unwrap();
-
-        assert!(listed.contains(package.to_str().unwrap()));
+        let listed_path = listed
+            .lines()
+            .find_map(|line| line.strip_prefix("  "))
+            .expect("listing includes a package path");
+        assert_eq!(
+            std::path::Path::new(listed_path).canonicalize().unwrap(),
+            package.canonicalize().unwrap()
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
