@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.6.0...pi-loom-mermaid-v0.6.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **pi-loom-mermaid:** draw fans as honest buses, keep chains straight ([689ddeb](https://github.com/Yassimba/loom/commit/689ddeb75c62c700a8a1158a11afe415a1cba6b2))
+* **pi-loom-mermaid:** render mermaid fences nested in list items ([9d7c4b7](https://github.com/Yassimba/loom/commit/9d7c4b7bc2c34cb234a15f511cb5d4d770449c7f))
+
 ## [0.6.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.5.0...pi-loom-mermaid-v0.6.0) (2026-09-09)
 
 

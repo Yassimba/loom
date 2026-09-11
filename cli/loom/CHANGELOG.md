@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/Yassimba/loom/compare/loom-v1.8.0...loom-v1.9.0) (2026-09-11)
+
+
+### Features
+
+* **loom:** goal-based wizard with Wiki Vault setup and update ([dc15a64](https://github.com/Yassimba/loom/commit/dc15a648f1325a47000dc1d2d642bdc0a27a5931))
+* **loom:** polish and declutter the wizard TUI ([972dcc5](https://github.com/Yassimba/loom/commit/972dcc5bd38e1770eee39c528d1b2d34a29cc149))
+
+
+### Performance Improvements
+
+* **loom:** read Vault Pi packages from settings instead of pi list ([c769309](https://github.com/Yassimba/loom/commit/c769309841d319e6dcce57781aec4e694f41cb9a))
+
 ## [1.8.0](https://github.com/Yassimba/loom/compare/loom-v1.7.0...loom-v1.8.0) (2026-09-09)
 
 
