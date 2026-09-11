@@ -107,8 +107,7 @@ pub fn probe_herdr_server_running(system: &dyn System) -> bool {
     result.success && herdr_server_running(&result.stdout)
 }
 
-pub const HERDR_SKIP_INSIDE: &str =
-    "skipped · run `loom update` from a regular terminal";
+pub const HERDR_SKIP_INSIDE: &str = "skipped · run `loom update` from a regular terminal";
 pub const HERDR_SKIP_SERVER: &str =
     "skipped · close the server with `herdr server stop`, then rerun";
 
@@ -119,11 +118,7 @@ pub enum HerdrLane {
     Skip(&'static str),
 }
 
-pub fn run_updates(
-    system: &(dyn System + Sync),
-    catalog: &Catalog,
-    herdr: HerdrLane,
-) -> bool {
+pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: HerdrLane) -> bool {
     let out = Out::detect();
     out.title("update", concat!("v", env!("CARGO_PKG_VERSION")));
 

@@ -96,10 +96,7 @@ fn unregister_rejects_a_path_that_is_not_registered() {
     )
     .unwrap_err()
     .to_string();
-    assert!(
-        err.contains("not registered"),
-        "{err}"
-    );
+    assert!(err.contains("not registered"), "{err}");
     let registry = fs::read_to_string(home.join(".config/loom/wiki-vaults.json")).unwrap();
     assert!(registry.contains(&vault.display().to_string()));
     fs::remove_dir_all(home).unwrap();

@@ -10,7 +10,9 @@ use loom::update::{
     HERDR_SKIP_SERVER,
 };
 use loom::wiki::{WikiOperation, WikiRequest};
-use loom::{Catalog, CommandSpec, RealSystem, ResourceKind, SkillAgent, SkillScope, UninstallOptions};
+use loom::{
+    Catalog, CommandSpec, RealSystem, ResourceKind, SkillAgent, SkillScope, UninstallOptions,
+};
 use std::path::PathBuf;
 
 #[derive(Parser)]
