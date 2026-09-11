@@ -49,8 +49,10 @@ fn skill_with_deps(id: &str, target: &str, dependencies: &[&str]) -> Resource {
 }
 
 #[test]
-fn sem_mcp_requires_a_verified_destination() {
-    let error = build_install_plan(
+fn sem_mcp_rejects_destinations_without_pi() {
+    let mut destination = skill_destination();
+    destination.agents = vec![SkillAgent::Claude];
+    let error = build_plan(
         &[resource(ResourceKind::McpServer, "mcp-server:sem", "sem")],
         PrerequisiteStatus {
             pi: false,
@@ -58,6 +60,7 @@ fn sem_mcp_requires_a_verified_destination() {
             mise: false,
         },
         Platform::Unix,
+        &destination,
     )
     .unwrap_err();
     assert!(error

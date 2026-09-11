@@ -3,8 +3,8 @@
   "profiles": [
     {
       "id": "software-engineer",
-      "label": "Software Engineer",
-      "description": "Build, test, debug, review, release, and inspect software.",
+      "label": "Build software",
+      "description": "Plan, code, test, review, and release software. Choose this goal, then adjust any item.",
       "resources": [
         "skill:implement",
         "skill:blueprint",
@@ -19,6 +19,7 @@
         "skill:browser-usage",
         "skill:codebase-design",
         "skill:explain-code-flow",
+        "skill:system-atlas",
         "skill:ponytail",
         "tool:pi",
         "tool:herdr",
@@ -45,44 +46,23 @@
       ]
     },
     {
-      "id": "data-engineer",
-      "label": "Data Engineer",
-      "description": "Build data systems with database, infrastructure, diagram, Python, and observability support.",
+      "id": "research",
+      "label": "Research deeply",
+      "description": "Find trusted sources, compare evidence, and save a clear research brief.",
       "resources": [
-        "skill:implement",
-        "skill:blueprint",
-        "skill:tdd",
-        "skill:diagnosing-bugs",
-        "skill:code-review",
-        "skill:commit",
-        "skill:release",
-        "skill:database-pro",
-        "skill:terraform-engineer",
-        "skill:diagram-design",
-        "skill:mermaid-skill",
         "skill:research",
-        "skill:datadog",
+        "skill:explain-simply",
+        "skill:write-simply",
+        "skill:write-documentation",
+        "skill:show-me",
         "tool:pi",
-        "tool:herdr",
-        "tool:gortex",
-        "tool:gh",
-        "tool:glab",
-        "tool:tokei",
-        "tool:uv",
-        "tool:mermaid-cli",
-        "tool:gitleaks",
-        "tool:zoxide",
-        "tool:pup",
-        "tool:plannotator",
-        "pi-package:@ff-labs/pi-fff",
-        "pi-package:pi-subagents",
         "pi-package:pi-web-access"
       ]
     },
     {
-      "id": "product-owner",
-      "label": "Product Owner",
-      "description": "Discover, specify, prioritize, document, and present product work.",
+      "id": "product-work",
+      "label": "Manage product work",
+      "description": "Turn ideas into requirements and tickets, inspect progress, and coordinate delivery.",
       "resources": [
         "skill:brainstorming",
         "skill:bdd",
@@ -92,60 +72,7 @@
         "skill:to-spec",
         "skill:to-tickets",
         "skill:ticket-overview",
-        "skill:frontend-slides",
         "skill:write-documentation",
-        "skill:explain-simply",
-        "skill:show-me",
-        "tool:pi",
-        "tool:loom-teams",
-        "tool:confluence-markdown-exporter",
-        "tool:beads",
-        "tool:beads-viewer",
-        "tool:plannotator",
-        "pi-package:pi-web-access"
-      ]
-    },
-    {
-      "id": "architect",
-      "label": "Architect",
-      "description": "Model domains, design systems, explain flows, and review structural change.",
-      "resources": [
-        "skill:blueprint",
-        "skill:grilling",
-        "skill:codebase-design",
-        "skill:domain-modeling",
-        "skill:explain-code-flow",
-        "skill:improve-codebase-architecture",
-        "skill:system-atlas",
-        "skill:diagram-design",
-        "skill:mermaid-skill",
-        "skill:literate-programming",
-        "skill:research",
-        "skill:show-me",
-        "tool:pi",
-        "tool:gortex",
-        "tool:tokei",
-        "tool:mermaid-cli",
-        "tool:plannotator",
-        "tool:tuicr",
-        "tool:confluence-markdown-exporter",
-        "pi-package:pi-subagents"
-      ]
-    },
-    {
-      "id": "scrum-master",
-      "label": "Scrum Master",
-      "description": "Refine work, inspect task flow, run ceremonies, and coordinate handoffs.",
-      "resources": [
-        "skill:bdd",
-        "skill:brainstorming",
-        "skill:grilling",
-        "skill:jira",
-        "skill:ticket-overview",
-        "skill:to-spec",
-        "skill:to-tickets",
-        "skill:implement",
-        "skill:frontend-slides",
         "skill:write-simply",
         "skill:explain-simply",
         "skill:handoff",
@@ -153,38 +80,33 @@
         "tool:loom-teams",
         "tool:beads",
         "tool:beads-viewer",
-        "tool:confluence-markdown-exporter"
-      ]
-    },
-    {
-      "id": "management",
-      "label": "Management",
-      "description": "Research, explain, present, document, coordinate, and read delivery status.",
-      "resources": [
-        "skill:brainstorming",
-        "skill:grilling",
-        "skill:research",
-        "skill:frontend-slides",
-        "skill:explain-simply",
-        "skill:write-simply",
-        "skill:write-documentation",
-        "skill:ticket-overview",
-        "skill:handoff",
-        "skill:jira",
-        "tool:pi",
-        "tool:loom-teams",
-        "tool:confluence-markdown-exporter",
-        "tool:beads-viewer",
+        "tool:plannotator",
         "pi-package:pi-web-access"
       ]
     },
     {
       "id": "knowledge-wiki",
-      "label": "Knowledge & Wiki",
-      "description": "Create or adopt an Obsidian Vault and add Feynman Wiki capabilities.",
+      "label": "Knowledgebase",
+      "description": "Create or connect a private Wiki Vault, organize notes, and search them locally.",
       "resources": [
         "pi-package:@companion-ai/feynman",
         "tool:obsidian-guidance"
+      ]
+    },
+    {
+      "id": "present-ideas",
+      "label": "Present ideas",
+      "description": "Explain clearly with diagrams, documentation, and browser-based presentations.",
+      "resources": [
+        "skill:frontend-slides",
+        "skill:diagram-design",
+        "skill:mermaid-skill",
+        "skill:show-me",
+        "skill:explain-simply",
+        "skill:write-simply",
+        "tool:pi",
+        "tool:mermaid-cli",
+        "pi-package:@yassimba/pi-loom-mermaid"
       ]
     }
   ],
@@ -573,13 +495,10 @@
       "kind": "skill",
       "group": "Coding",
       "label": "refactor",
-      "description": "Five-angle refactor review with before/after proposals, annotation approval, and verified implementation.",
+      "description": "Strict refactor review with visual before/after proposals and verified implementation.",
       "installTarget": "refactor",
       "nextAction": "Ask your coding agent to use the refactor skill.",
-      "dependencies": [
-        "write-simply",
-        "plannotator"
-      ]
+      "dependencies": []
     },
     {
       "id": "skill:release",
@@ -861,6 +780,18 @@
       ]
     },
     {
+      "id": "skill:markitdown",
+      "kind": "skill",
+      "group": "Wiki",
+      "label": "markitdown",
+      "description": "Convert local documents, media, archives, and URLs to Markdown in a Wiki Vault. Use when importing PDF, DOCX, PPTX, XLSX, images, audio, EPUB, ZIP, YouTube, or web content into wiki notes.",
+      "installTarget": "markitdown",
+      "nextAction": "Ask your coding agent to use the markitdown skill.",
+      "dependencies": [
+        "uv"
+      ]
+    },
+    {
       "id": "skill:qmd",
       "kind": "skill",
       "group": "Wiki",
@@ -934,6 +865,18 @@
       "installTarget": "i-have-adhd",
       "nextAction": "Ask your coding agent to use the i-have-adhd skill.",
       "dependencies": []
+    },
+    {
+      "id": "skill:glab",
+      "kind": "skill",
+      "group": "General",
+      "label": "glab",
+      "description": "Use when creating, reading, updating, or closing GitLab issues and merge requests with the glab CLI.",
+      "installTarget": "glab",
+      "nextAction": "Ask your coding agent to use the glab skill.",
+      "dependencies": [
+        "glab"
+      ]
     },
     {
       "id": "skill:jira",

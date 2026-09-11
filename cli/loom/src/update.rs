@@ -24,7 +24,7 @@ impl Lane {
         Self {
             ok: false,
             label,
-            detail: detail.into(),
+            detail: crate::ui::failure_text(&detail.into()),
             notes: Vec::new(),
         }
     }
@@ -42,38 +42,22 @@ fn progress_status(completed: usize, total: usize, running: &[&str], elapsed: u6
 }
 
 fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) -> Vec<CommandSpec> {
-    let mut scope = None;
-    let mut user = Vec::new();
-    let mut project = Vec::new();
-    for line in listed.lines().map(str::trim) {
-        match line {
-            "User packages:" => scope = Some(false),
-            "Project packages:" => scope = Some(true),
-            _ => match scope {
-                Some(false) => user.push(line),
-                Some(true) => project.push(line),
-                None => {}
-            },
-        }
-    }
     catalog
         .resources
         .iter()
-        .filter(|resource| resource.kind == ResourceKind::PiPackage)
+        .filter(|resource| resource.kind == ResourceKind::PiPackage && resource.group != "Wiki")
         // MCP setup preserves the shared gateway; a catalog reinstall would
         // downgrade compatible newer installs to the setup prerequisite pin.
         .filter(|resource| resource.install_target != "pi-mcp-adapter")
         .filter(|resource| !native_windows || !resource.windows_wsl)
         .flat_map(|resource| {
             let spec = resource.pi_install_spec();
-            let global = user
-                .iter()
-                .any(|line| line.contains(&resource.install_target))
-                .then(|| CommandSpec::new("pi", ["install", &spec]));
-            let local = project
-                .iter()
-                .any(|line| line.contains(&resource.install_target))
-                .then(|| CommandSpec::new("pi", ["install", "-l", &spec]));
+            let global =
+                crate::install::pi_package_installed(listed, &resource.install_target, false)
+                    .then(|| CommandSpec::new("pi", ["install", &spec]));
+            let local =
+                crate::install::pi_package_installed(listed, &resource.install_target, true)
+                    .then(|| CommandSpec::new("pi", ["install", "-l", &spec]));
             [global, local].into_iter().flatten()
         })
         .collect()
@@ -94,24 +78,34 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     }
 
     let mut tasks = Vec::new();
+    let mut inventory_error = None;
     let mut pi_compat_targets = Vec::new();
     if system.command_exists("pi") {
         // Cataloged reinstalls instead of `pi update --all`: external packages
         // use their pin, first-party packages request npm's latest release, and
         // Pi itself is the mise manifest's job. Packages outside the catalog
         // are left alone.
-        let listed = system
-            .run_probe(&CommandSpec::new("pi", ["list"]))
-            .ok()
-            .filter(|result| result.success)
-            .map(|result| format!("{}\n{}", result.stdout, result.stderr))
-            .unwrap_or_default();
+        let listed = match system.run_probe(&CommandSpec::new("pi", ["list"])) {
+            Ok(result) if result.success => result.stdout,
+            Ok(result) => {
+                inventory_error = Some(crate::install::command_failure_message(&result));
+                String::new()
+            }
+            Err(error) => {
+                inventory_error = Some(error.to_string());
+                String::new()
+            }
+        };
         let commands = pi_package_commands(catalog, &listed, cfg!(windows));
         pi_compat_targets = catalog
             .resources
             .iter()
-            .filter(|resource| crate::pi_compat::is_managed(&resource.id))
-            .filter(|resource| listed.contains(&resource.install_target))
+            .filter(|resource| {
+                resource.group != "Wiki" && crate::pi_compat::is_managed(&resource.id)
+            })
+            .filter(|resource| {
+                crate::install::pi_package_installed(&listed, &resource.install_target, false)
+            })
             .map(|resource| resource.id.clone())
             .collect();
         if !commands.is_empty() {
@@ -137,6 +131,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     // Skills, projects, tools, Pi, and Herdr touch disjoint state, so every
     // lane runs at once; rows print in a fixed order once all are done.
     let repository = &skills::Repository::default();
+    let active_details = &std::sync::Mutex::new(std::collections::BTreeMap::new());
     type Job<'a> = Box<dyn FnOnce() -> Lane + Send + 'a>;
     let mut jobs: Vec<(&'static str, Job<'_>)> = vec![
         (
@@ -166,14 +161,24 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
     }
     for task in tasks {
         let label = task.label;
-        jobs.push((label, Box::new(move || run_command_lane(system, task))));
+        jobs.push((
+            label,
+            Box::new(move || {
+                run_command_lane(system, task, &|detail| {
+                    active_details.lock().unwrap().insert(label, detail);
+                })
+            }),
+        ));
     }
     // Rows keep a fixed order, so the report cannot stream; a status line
     // names the lanes still running instead, or the wait reads as a hang
     // (Pi reinstalls and the repo download take minutes together).
     let labels = jobs.iter().map(|(label, _)| *label).collect::<Vec<_>>();
     let (sender, results) = std::sync::mpsc::channel::<(usize, Lane)>();
-    let mut lanes = Vec::new();
+    let mut lanes = inventory_error
+        .into_iter()
+        .map(|error| (labels.len() + 2, Lane::failed("Pi inventory", error)))
+        .collect::<Vec<_>>();
     std::thread::scope(|scope| {
         for (index, (_, job)) in jobs.into_iter().enumerate() {
             let sender = sender.clone();
@@ -198,13 +203,24 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
-            let active = running.join(" + ");
+            let details = active_details.lock().unwrap();
+            let active_names = running
+                .iter()
+                .map(|label| {
+                    details
+                        .get(label)
+                        .cloned()
+                        .unwrap_or_else(|| (*label).to_string())
+                })
+                .collect::<Vec<_>>();
+            drop(details);
+            let active = active_names.join(" + ");
             if out.is_terminal() || active != last_active {
                 out.progress(
                     progress_status(
                         total - running.len(),
                         total,
-                        &running,
+                        &active_names.iter().map(String::as_str).collect::<Vec<_>>(),
                         started.elapsed().as_secs(),
                     ),
                     (started.elapsed().as_millis() / 100) as usize,
@@ -250,18 +266,15 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             failed += 1;
         }
     }
-    let updated = lanes.len() - failed;
-    if failed == 0 {
-        out.verdict(true, format!("Up to date · {updated} lanes refreshed"));
-    } else {
-        out.verdict(false, format!("{updated} refreshed · {failed} failed"));
-    }
     failed == 0
 }
 
 /// Refresh mise's conf.d copy of the published manifest and install its pins.
 /// Tools move only when a new manifest landed on main since the last sync.
 fn sync_tool_manifest(system: &dyn System, repository: &skills::Repository) -> Lane {
+    let before = system
+        .home_dir()
+        .and_then(|home| std::fs::read(crate::manifest::conf_d_target(&home)).ok());
     match crate::manifest::sync_selected_from(
         system,
         &[],
@@ -270,7 +283,13 @@ fn sync_tool_manifest(system: &dyn System, repository: &skills::Repository) -> L
     ) {
         Ok(target) => {
             let home = system.home_dir().unwrap_or_default();
-            Lane::ok("Tools", tidy_path(&target, &home))
+            let current = std::fs::read(&target).ok();
+            let state = if before.is_some() && before == current {
+                "pins already current; installation checked"
+            } else {
+                "selection updated; installation checked"
+            };
+            Lane::ok("Tools", format!("{state} · {}", tidy_path(&target, &home)))
         }
         Err(message) => Lane::failed("Tools", message),
     }
@@ -291,27 +310,117 @@ fn reconcile_pi_compat(system: &dyn System, targets: &[String]) -> Lane {
     )
 }
 
-fn run_command_lane(system: &dyn System, task: CommandLane) -> Lane {
-    for command in &task.commands {
+fn package_version(system: &dyn System, command: &CommandSpec) -> Option<String> {
+    let spec = command.args.last()?.strip_prefix("npm:")?;
+    let (name, _) = spec.rsplit_once('@')?;
+    let root = if command.args.iter().any(|arg| arg == "-l") {
+        system.current_dir()?.join(".pi")
+    } else {
+        std::env::var_os("PI_CODING_AGENT_DIR")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+            .or_else(|| system.home_dir().map(|home| home.join(".pi/agent")))?
+    };
+    let content = std::fs::read(
+        root.join("npm/node_modules")
+            .join(name)
+            .join("package.json"),
+    )
+    .ok()?;
+    let package: serde_json::Value = serde_json::from_slice(&content).ok()?;
+    package["version"]
+        .as_str()
+        .filter(|version| {
+            version.len() <= 64
+                && version.as_bytes().first().is_some_and(u8::is_ascii_digit)
+                && version
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b".+-".contains(&byte))
+        })
+        .map(str::to_owned)
+}
+
+fn run_command_lane(system: &dyn System, task: CommandLane, progress: &dyn Fn(String)) -> Lane {
+    let mut lane = Lane::ok(task.label, task.detail);
+    for (index, command) in task.commands.iter().enumerate() {
+        let before = package_version(system, command);
+        let target = if command.program == "pi" {
+            command.args.last().map_or("package", String::as_str)
+        } else {
+            "plugins"
+        };
+        let scope = if command.args.iter().any(|arg| arg == "-l") {
+            "this project"
+        } else {
+            "global"
+        };
+        progress(format!(
+            "{}: installing {}/{} · {target} · {scope}",
+            task.label,
+            index + 1,
+            task.commands.len()
+        ));
         let cancelled = std::sync::atomic::AtomicBool::new(false);
-        match system.run_controlled(command, crate::system::MANAGER_COMMAND_TIMEOUT, &cancelled) {
-            Ok(result) if result.success => {}
-            Ok(result) => {
-                return Lane::failed(
-                    task.label,
-                    format!(
-                        "{} — {}",
-                        command.display(),
-                        crate::install::command_failure_message(&result)
-                    ),
+        let result = system
+            .run_controlled(command, crate::system::MANAGER_COMMAND_TIMEOUT, &cancelled)
+            .map_err(|error| error.to_string())
+            .and_then(|result| {
+                if result.success {
+                    Ok(())
+                } else {
+                    Err(crate::install::command_failure_message(&result))
+                }
+            });
+        let result = result.and_then(|()| {
+            progress(format!(
+                "{}: verifying {}/{} · {target}",
+                task.label,
+                index + 1,
+                task.commands.len()
+            ));
+            let probe = if command.program == "pi" {
+                CommandSpec::new("pi", ["list"])
+            } else {
+                CommandSpec::new("herdr", ["plugin", "list"])
+            };
+            let result = system
+                .run_probe(&probe)
+                .map_err(|error| format!("verification failed: {error}"))?;
+            if !result.success {
+                return Err(format!(
+                    "verification failed: {}",
+                    crate::install::command_failure_message(&result)
+                ));
+            }
+            if command.program == "pi"
+                && !crate::install::pi_package_installed(&result.stdout, target, scope != "global")
+            {
+                return Err(
+                    "verification did not find the selected package in its destination".into(),
                 );
             }
-            Err(error) => {
-                return Lane::failed(task.label, format!("{}: {error}", command.display()))
-            }
+            Ok(())
+        });
+        if let Err(error) = result {
+            lane.ok = false;
+            lane.detail = format!(
+                "{index}/{} completed; remaining work not updated. {}",
+                task.commands.len(),
+                crate::ui::failure_text(&error)
+            );
+            lane.notes.push(format!("Failed: {target} · {scope}"));
+            return lane;
         }
+        let after = package_version(system, command);
+        let outcome = match (before, after) {
+            (Some(before), Some(after)) if before == after => format!("already current ({after})"),
+            (Some(before), Some(after)) => format!("updated {before} → {after}"),
+            (None, Some(after)) => format!("installed {after}"),
+            _ => "refreshed; version not reported".into(),
+        };
+        lane.notes.push(format!("{target} · {scope} · {outcome}"));
     }
-    Lane::ok(task.label, task.detail)
+    lane
 }
 
 /// Refresh catalog skills in the exact global and current-project trees where
@@ -326,9 +435,13 @@ fn update_installed_skills(
         Ok(reports) => {
             let home = system.home_dir().unwrap_or_default();
             let total: usize = reports.iter().map(|report| report.installed).sum();
+            let unchanged: usize = reports.iter().map(|report| report.unchanged).sum();
             let mut lane = Lane::ok(
                 "Skills",
-                format!("{total} refreshed across {} trees", reports.len()),
+                format!(
+                    "{total} updated · {unchanged} already current across {} trees",
+                    reports.len()
+                ),
             );
             for report in reports {
                 let mut notes = Vec::new();
@@ -347,9 +460,10 @@ fn update_installed_skills(
                     format!(" · {}", notes.join(" · "))
                 };
                 lane.notes.push(format!(
-                    "{}  {}{detail}",
+                    "{}  {} updated · {} already current{detail}",
                     tidy_path(&report.tree, &home),
-                    report.installed
+                    report.installed,
+                    report.unchanged
                 ));
             }
             lane
@@ -371,6 +485,185 @@ fn sync_projects_lane(system: &dyn System, repository: &skills::Repository) -> L
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn package_verification_requires_the_exact_identity_and_destination() {
+        let listed = "User packages:\n npm:pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:pi-subagents@0.66.0\n npm:@example/foo@1";
+        assert!(!crate::install::pi_package_installed(
+            listed,
+            "pi-subagents",
+            false
+        ));
+        assert!(crate::install::pi_package_installed(
+            listed,
+            "npm:pi-subagents@latest",
+            true
+        ));
+        assert!(!crate::install::pi_package_installed(
+            listed,
+            "@example/foo",
+            false
+        ));
+        assert!(crate::install::pi_package_installed(
+            listed,
+            "@example/foo",
+            true
+        ));
+        assert!(!crate::install::pi_package_installed(
+            "npm:pi-subagents",
+            "pi-subagents",
+            false
+        ));
+    }
+
+    #[test]
+    fn update_reports_verified_versions_and_preserves_success_notes_on_failure() {
+        struct PackageSystem {
+            root: std::path::PathBuf,
+            after: Option<&'static str>,
+            wrong_scope: bool,
+        }
+        impl System for PackageSystem {
+            fn command_exists(&self, _: &str) -> bool {
+                true
+            }
+            fn refresh_path(&self) {}
+            fn home_dir(&self) -> Option<std::path::PathBuf> {
+                Some(self.root.clone())
+            }
+            fn current_dir(&self) -> Option<std::path::PathBuf> {
+                Some(self.root.clone())
+            }
+            fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
+                let failed = command
+                    .args
+                    .last()
+                    .is_some_and(|arg| arg.contains("failing"));
+                if command.args[0] == "install" && !failed {
+                    if let Some(version) = self.after {
+                        std::fs::write(
+                            self.root
+                                .join(".pi/npm/node_modules/@test/pkg/package.json"),
+                            serde_json::to_vec(
+                                &serde_json::json!({"name":"@test/pkg", "version":version}),
+                            )?,
+                        )?;
+                    }
+                }
+                Ok(crate::CommandResult {
+                    success: !failed,
+                    stdout: if self.wrong_scope {
+                        "User packages:\n npm:@test/pkg@2.0.0".into()
+                    } else {
+                        "Project packages:\n npm:@test/pkg@2.0.0".into()
+                    },
+                    stderr: if failed {
+                        "ETIMEDOUT Authorization: Bearer SECRET".into()
+                    } else {
+                        String::new()
+                    },
+                })
+            }
+        }
+        for (index, (before, after, fail_next, wrong_scope, expected)) in [
+            (
+                Some("1.0.0"),
+                Some("2.0.0"),
+                false,
+                false,
+                "updated 1.0.0 → 2.0.0",
+            ),
+            (
+                Some("2.0.0"),
+                Some("2.0.0"),
+                false,
+                false,
+                "already current (2.0.0)",
+            ),
+            (None, Some("2.0.0"), false, false, "installed 2.0.0"),
+            (None, None, false, false, "version not reported"),
+            (
+                None,
+                Some("2.0.0\nSECRET"),
+                false,
+                false,
+                "version not reported",
+            ),
+            (
+                Some("1.0.0"),
+                Some("2.0.0"),
+                true,
+                false,
+                "updated 1.0.0 → 2.0.0",
+            ),
+            (
+                Some("1.0.0"),
+                Some("2.0.0"),
+                false,
+                true,
+                "Installation could not be verified",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let root = std::env::temp_dir().join(format!(
+                "loom-update-versions-{}-{index}",
+                std::process::id()
+            ));
+            let package = root.join(".pi/npm/node_modules/@test/pkg/package.json");
+            std::fs::create_dir_all(package.parent().unwrap()).unwrap();
+            if let Some(version) = before {
+                std::fs::write(
+                    &package,
+                    serde_json::to_vec(&serde_json::json!({"version":version})).unwrap(),
+                )
+                .unwrap();
+            }
+            let system = PackageSystem {
+                root: root.clone(),
+                after,
+                wrong_scope,
+            };
+            let mut commands = vec![CommandSpec::new(
+                "pi",
+                ["install", "-l", "npm:@test/pkg@latest"],
+            )];
+            if fail_next {
+                commands.push(CommandSpec::new(
+                    "pi",
+                    ["install", "-l", "npm:@test/failing@latest"],
+                ));
+            }
+            let progress = std::cell::RefCell::new(Vec::new());
+            let lane = run_command_lane(
+                &system,
+                CommandLane {
+                    label: "Pi packages",
+                    detail: "refresh".into(),
+                    commands,
+                },
+                &|detail| progress.borrow_mut().push(detail),
+            );
+            assert_eq!(lane.ok, !fail_next && !wrong_scope);
+            let text = format!("{}\n{}", lane.detail, lane.notes.join("\n"));
+            assert!(text.contains(expected), "{text}");
+            assert!(!text.contains("SECRET"), "{text}");
+            assert!(text.contains("this project"), "{text}");
+            assert!(progress
+                .borrow()
+                .iter()
+                .any(|line| line.contains("installing 1/")));
+            assert!(progress
+                .borrow()
+                .iter()
+                .any(|line| line.contains("verifying 1/")));
+            if fail_next {
+                assert!(lane.detail.contains("1/2 completed"), "{text}");
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
 
     #[test]
     fn progress_shows_measurable_completion_and_active_lanes() {
@@ -395,13 +688,6 @@ mod tests {
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
         let listed = "User packages:\n  npm:pi-subagents\n  npm:@yassimba/pi-add-dir\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
-        let feynman = catalog
-            .resources
-            .iter()
-            .find(|resource| resource.id == "pi-package:@companion-ai/feynman")
-            .unwrap()
-            .pi_install_spec();
-
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
             .map(|command| command.display())
@@ -416,8 +702,10 @@ mod tests {
         assert!(commands
             .iter()
             .any(|command| command == "pi install -l npm:pi-subagents@0.66.0"));
-        assert!(commands.contains(&format!("pi install -l {feynman}")));
-        assert!(!commands.contains(&format!("pi install {feynman}")));
+        assert!(
+            !commands.iter().any(|command| command.contains("feynman")),
+            "Wiki packages are updated only in registered Vaults"
+        );
 
         let windows_commands = pi_package_commands(&catalog, listed, true)
             .into_iter()

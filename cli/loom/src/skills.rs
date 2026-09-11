@@ -363,6 +363,7 @@ pub enum CopyOutcome {
 pub struct TreeReport {
     pub tree: PathBuf,
     pub installed: usize,
+    pub unchanged: usize,
     pub skipped_existing: usize,
     pub skipped_symlinks: usize,
 }
@@ -407,6 +408,7 @@ pub(crate) fn install_skills(
             TreeReport {
                 tree,
                 installed: 0,
+                unchanged: 0,
                 skipped_existing: 0,
                 skipped_symlinks: 0,
             }
@@ -554,6 +556,7 @@ pub(crate) fn refresh_installed_skills(
             .map(|(tree, _, preserved)| TreeReport {
                 tree,
                 installed: 0,
+                unchanged: 0,
                 skipped_existing: preserved,
                 skipped_symlinks: 0,
             })
@@ -569,11 +572,18 @@ pub(crate) fn refresh_installed_skills(
                 let mut report = TreeReport {
                     tree: tree.clone(),
                     installed: 0,
+                    unchanged: 0,
                     skipped_existing: *preserved,
                     skipped_symlinks: 0,
                 };
                 for name in names {
                     let path = tree.join(name);
+                    if crate::ownership::digest_path(&source_root.join(name))?
+                        == crate::ownership::digest_path(&path)?
+                    {
+                        report.unchanged += 1;
+                        continue;
+                    }
                     refresh_skill(&source_root, tree, name)?;
                     state.refresh_path_digest(&path, crate::ownership::digest_path(&path)?);
                     report.installed += 1;
@@ -678,6 +688,7 @@ fn copy_into_tree(
     let mut report = TreeReport {
         tree,
         installed: 0,
+        unchanged: 0,
         skipped_existing: 0,
         skipped_symlinks: 0,
     };

@@ -17,10 +17,7 @@ use ratatui::widgets::{
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-pub(crate) const ACCENT: Color = Color::Cyan;
-const OK: Color = Color::Green;
-const WARN: Color = Color::Yellow;
-const ERR: Color = Color::Red;
+pub(crate) use crate::ui::theme::{ACCENT, ERR, OK, WARN};
 const ON: &str = "[x]";
 const OFF: &str = "[ ]";
 const PART: &str = "[-]";
@@ -80,6 +77,7 @@ impl Wizard {
         };
         self.hits.list = list;
         self.render_footer(frame, footer);
+        self.render_wiki_unregister(frame);
         if self.show_help {
             self.render_help(frame);
         }
@@ -190,8 +188,16 @@ impl Wizard {
     }
 
     fn render_footer(&mut self, frame: &mut Frame, area: Rect) {
-        let hint = if self.search.is_some() {
+        let searching = self.search.is_some()
+            || (self.browsing_wiki()
+                && self
+                    .wiki
+                    .as_ref()
+                    .is_some_and(|browser| browser.search.is_some()));
+        let hint = if searching {
             " type to filter · ↑↓ move · space pick · enter keep place · esc cancel"
+        } else if self.browsing_wiki() {
+            " ↑↓ browse · ←→ column · space/enter pick · / search · n review · esc back"
         } else {
             match &self.stages[self.stage_index] {
                 Stage::Choose(_) => {
@@ -201,19 +207,24 @@ impl Wizard {
                 Stage::Responses { .. } => " ↑↓ choose · enter continue · esc back",
                 Stage::Review { .. } => {
                     if self.model.purpose == super::state::WizardPurpose::Uninstall {
-                        " enter review removal · ↑↓ scroll · esc back"
+                        " ↑↓ scroll · enter review removal · esc back"
                     } else {
-                        " enter install · ↑↓ scroll · esc back"
+                        " ↑↓ scroll · enter install · esc back"
                     }
                 }
                 Stage::Install(stage) if stage.running && self.confirm_cancel => {
                     " press ctrl-c again to cancel · install may be partial"
                 }
                 Stage::Install(stage) if stage.running => " installing… · ctrl-c cancel",
-                Stage::Install(_) => " enter finish · ↑↓ scroll",
+                Stage::Install(_) if self.can_retry() => {
+                    " ↑↓ inspect · d details · enter/r retry failed · esc finish"
+                }
+                Stage::Install(_) => " ↑↓ inspect · d details · enter finish",
             }
         };
         let short = match &self.stages[self.stage_index] {
+            Stage::Choose(_) if searching => " type · space pick · esc",
+            Stage::Choose(_) if self.browsing_wiki() => " ↑↓ ←→ enter n",
             Stage::Choose(_) => " ↑↓ ←→ space / enter ?",
             Stage::Where(_) => " ↑↓ space enter esc",
             Stage::Responses { .. } => " ↑↓ enter esc",
@@ -273,6 +284,9 @@ impl Wizard {
 
     fn button_states(&self) -> (bool, &'static str, bool) {
         match &self.stages[self.stage_index] {
+            Stage::Choose(stage) if self.browsing_wiki() => {
+                (stage.focus != Pane::Groups, "Next", true)
+            }
             Stage::Choose(_) => (false, "Next", true),
             Stage::Where(_) | Stage::Responses { .. } => (true, "Next", true),
             Stage::Review { .. } => (
@@ -286,7 +300,11 @@ impl Wizard {
                     || self.nothing_chosen()
                     || self.plan().is_ok(),
             ),
-            Stage::Install(stage) => (false, "Finish", stage.report.is_some()),
+            Stage::Install(stage) => (
+                false,
+                if self.can_retry() { "Retry" } else { "Finish" },
+                stage.report.is_some(),
+            ),
         }
     }
 
@@ -413,9 +431,24 @@ impl Wizard {
         let searching = self.search.is_some();
         let profile_mode = self.model.purpose == super::state::WizardPurpose::Install
             && !self.model.profiles.is_empty();
-        // Like Yazi's Miller columns, profile mode shows a three-pane window
-        // over four hierarchy levels. Entering capabilities slides the window
-        // from Profiles | Types | Capabilities to Types | Capabilities | Overview.
+        let wiki_mode = self.browsing_wiki();
+        let area = if profile_mode {
+            let [question, body] =
+                Layout::vertical([Constraint::Length(2), Constraint::Min(1)]).areas(area);
+            frame.render_widget(
+                Paragraph::new(if wiki_mode {
+                    "Choose a Wiki → pick its capabilities. Connect/Create returns here; n opens Review."
+                } else { "What do you want to do? Choose one or more goals, then adjust any capability." })
+                .wrap(Wrap { trim: true })
+                .style(Style::new().fg(ACCENT)),
+                question,
+            );
+            body
+        } else {
+            area
+        };
+        // Keep the sliding Miller columns: Goals | Types | Capabilities,
+        // then Types | Capabilities | Overview when inspecting an item.
         let widest = stage
             .groups
             .iter()
@@ -432,8 +465,9 @@ impl Wizard {
             .max()
             .unwrap_or(0) as u16
             + 12;
+        let kinds_width = if wiki_mode { 30 } else { kinds_width };
         let narrow = area.width < 70;
-        let deep = profile_mode && (searching || stage.focus == Pane::Items);
+        let deep = profile_mode && !wiki_mode && (searching || stage.focus == Pane::Items);
         let [groups_area, kinds_area, items_area, details_area] = if narrow {
             let [only] = Layout::horizontal([Constraint::Min(1)]).areas(area);
             let empty = Rect::new(area.x, area.y, 0, 0);
@@ -451,7 +485,7 @@ impl Wizard {
             .spacing(1)
             .areas(area);
             [Rect::default(), kinds, items, details]
-        } else if profile_mode {
+        } else if profile_mode || wiki_mode {
             let [groups, kinds, items] = Layout::horizontal([
                 Constraint::Length(groups_width),
                 Constraint::Length(kinds_width),
@@ -476,7 +510,8 @@ impl Wizard {
         let groups = stage
             .groups
             .iter()
-            .map(|group| self.group_item(group, group_width))
+            .enumerate()
+            .map(|(index, group)| self.group_item(index, group, group_width))
             .collect::<Vec<_>>();
         let group_offset = list_offset(
             stage.groups.len(),
@@ -486,8 +521,9 @@ impl Wizard {
         let groups_focused = stage.focus == Pane::Groups && !searching;
         if groups_area.width > 0 {
             let title = match (narrow, profile_mode) {
-                (true, true) => " Profiles · combine · → types ",
-                (false, true) => " Profiles · combine ",
+                (true, true) if wiki_mode => " Goals · → Wikis ",
+                (true, true) => " Goals · combine · → types ",
+                (false, true) => " Goals · combine ",
                 (true, false) => " Groups · → items ",
                 (false, false) => " Groups ",
             };
@@ -502,6 +538,24 @@ impl Wizard {
             );
         }
 
+        if wiki_mode {
+            let browser = self.wiki.as_ref().unwrap();
+            browser.draw(
+                frame,
+                kinds_area,
+                items_area,
+                stage.focus,
+                &self.model.skill_destination.home,
+            );
+            return (
+                (groups_area.width > 0).then_some((groups_area, group_offset)),
+                (kinds_area.width > 0).then_some((kinds_area, browser.offset(kinds_area))),
+                (items_area.width > 0 && browser.record().is_some()).then_some((
+                    super::wiki::WikiBrowser::item_area(items_area),
+                    browser.item_offset(items_area),
+                )),
+            );
+        }
         // Column two: capability types within the focused profile.
         let kinds = stage
             .group()
@@ -517,7 +571,7 @@ impl Wizard {
         let kinds_focused = stage.focus == Pane::Kinds && !searching;
         if kinds_area.width > 0 {
             let title = if narrow {
-                " Types · ← profiles · → capabilities "
+                " Types · ← goals · → capabilities "
             } else {
                 " Types "
             };
@@ -655,12 +709,38 @@ impl Wizard {
         counts
     }
 
-    fn group_item(&self, group: &Group, width: usize) -> ListItem<'_> {
-        self.selection_group_item(&group.title, &self.group_items(group), width)
+    fn group_item(&self, index: usize, group: &Group, width: usize) -> ListItem<'_> {
+        if self.is_wiki_group(group) {
+            let browser = self.wiki.as_ref().unwrap();
+            let ready = !browser.vaults.is_empty()
+                && browser.vaults.iter().all(|record| {
+                    browser
+                        .health
+                        .get(&record.path)
+                        .is_some_and(|health| health.healthy)
+                });
+            return ListItem::new(format!(
+                "  {} {}  {}",
+                if browser.count() > 0 {
+                    "[x]"
+                } else if ready {
+                    "✓"
+                } else {
+                    "›"
+                },
+                cut(&group.title, width.saturating_sub(8)),
+                browser.vaults.len()
+            ));
+        }
+        let goal_selected = (!group.everything
+            && !self.model.profiles.is_empty()
+            && self.model.purpose == super::state::WizardPurpose::Install)
+            .then(|| self.picked_goals.contains(&index));
+        self.selection_group_item(&group.title, &self.group_items(group), width, goal_selected)
     }
 
     fn kind_item(&self, kind: &super::state::KindGroup, width: usize) -> ListItem<'_> {
-        self.selection_group_item(&kind.title, &kind.bulk_items(), width)
+        self.selection_group_item(&kind.title, &kind.bulk_items(), width, None)
     }
 
     fn selection_group_item(
@@ -668,6 +748,7 @@ impl Wizard {
         title: &str,
         items: &[super::state::Item],
         width: usize,
+        goal_selected: Option<bool>,
     ) -> ListItem<'_> {
         let (mark, mark_style, count) = if items.is_empty() {
             ("   ", Style::new(), String::new())
@@ -678,6 +759,8 @@ impl Wizard {
                 (" ! ", Style::new().fg(WARN))
             } else if actionable == 0 && counts.required == 0 {
                 (" ✓ ", Style::new().fg(OK).dim())
+            } else if let Some(selected) = goal_selected {
+                mark_for(selected)
             } else if counts.picked == 0 && counts.required == 0 {
                 (OFF, Style::new().dim())
             } else if counts.picked == actionable {
@@ -788,7 +871,16 @@ impl Wizard {
                     }
                 } else {
                     let (mark, style) = mark_for(self.selected[*index]);
-                    (mark, style, false, resource.description.clone())
+                    (
+                        mark,
+                        style,
+                        false,
+                        if self.selected[*index] {
+                            self.selection_reason(*index)
+                        } else {
+                            format!("Optional · {}", resource.description)
+                        },
+                    )
                 }
             }
             Row::Setting(index) => {
@@ -810,6 +902,19 @@ impl Wizard {
                 }
             }
         };
+        let scope = match row {
+            Row::Resource(index) if self.model.resources[*index].group == "Wiki" => "Vault",
+            Row::Resource(index)
+                if matches!(
+                    self.model.resources[*index].kind,
+                    ResourceKind::Skill | ResourceKind::McpServer
+                ) && self.skill_scope == crate::SkillScope::Project =>
+            {
+                "This project"
+            }
+            _ => "Global",
+        };
+        let note = format!("{scope} · {note}");
         let kind = show_kind
             .then(|| Span::styled(format!("{:<12} ", self.row_kind(row)), Style::new().dim()));
         let mut spans = vec![Span::styled(format!(" {mark} "), mark_style)];
@@ -891,8 +996,8 @@ impl Wizard {
                 && !self.model.profiles.is_empty();
             lines.push(Line::styled(
                 match (profile_mode, actionable == 0) {
-                    (true, true) => "→ opens the profile's types",
-                    (true, false) => "space picks or clears this profile · → opens its types",
+                    (true, true) => "→ opens the goal's types",
+                    (true, false) => "space adds or removes this goal · → opens its types",
                     (false, true) => "→ opens the group",
                     (false, false) => "space picks or clears available items · → opens it",
                 },
@@ -921,6 +1026,29 @@ impl Wizard {
             Line::from(resource.description.clone()),
             Line::from(""),
         ];
+        lines.push(field("why", self.selection_reason(index), ACCENT));
+        if resource.group == "Wiki" {
+            lines.push(field("scope", "Vault-local".into(), ACCENT));
+            lines.push(Line::from(
+                "Choose a Vault in Wiki setup to check or install this resource.",
+            ));
+            lines.push(Line::from(
+                "Global installs do not count as installed in a Vault.",
+            ));
+            return lines;
+        }
+        lines.push(field(
+            "scope",
+            if matches!(resource.kind, ResourceKind::Skill | ResourceKind::McpServer)
+                && self.skill_scope == crate::SkillScope::Project
+            {
+                "This project"
+            } else {
+                "Global"
+            }
+            .into(),
+            ACCENT,
+        ));
         if !resource.dependencies.is_empty() {
             lines.push(field("pulls in", resource.dependencies.join(", "), WARN));
         }
@@ -1236,172 +1364,8 @@ impl Wizard {
                 Style::new().fg(OK),
             ));
         } else {
-            let expanded = self.expanded_selection();
-            let direct_ids = self
-                .selection()
-                .iter()
-                .map(|resource| resource.id.clone())
-                .collect::<std::collections::HashSet<_>>();
-            let parent_of = |target: &str| {
-                expanded
-                    .iter()
-                    .find(|parent| parent.dependencies.iter().any(|dep| dep == target))
-                    .map(|parent| parent.label.clone())
-            };
-            let plan = self.plan();
-            let label_width = expanded
-                .iter()
-                .map(|resource| resource.label.width())
-                .chain(
-                    self.selected_settings()
-                        .iter()
-                        .map(|spec| spec.label.width()),
-                )
-                .chain(
-                    plan.iter()
-                        .flat_map(|plan| plan.prerequisites.iter())
-                        .map(|step| step.target.width()),
-                )
-                .max()
-                .unwrap_or(0);
-            if let Ok(plan) = &plan {
-                if !plan.prerequisites.is_empty() {
-                    lines.push(heading("Installs first", plan.prerequisites.len()));
-                    for step in &plan.prerequisites {
-                        lines.push(Line::from(vec![
-                            Span::styled("  ! ", Style::new().fg(WARN).bold()),
-                            Span::raw(format!("{} ", pad(&step.target, label_width))),
-                            Span::styled(step.action.display(), Style::new().dim()),
-                        ]));
-                    }
-                    lines.push(Line::from(""));
-                }
-            }
-            let wiki = expanded
-                .iter()
-                .filter(|resource| resource.group == "Wiki")
-                .collect::<Vec<_>>();
-            for (kind, title) in [
-                (ResourceKind::Skill, "Skills"),
-                (ResourceKind::Tool, "Tools"),
-                (ResourceKind::PiPackage, "Pi packages"),
-                (ResourceKind::HerdrPlugin, "Herdr plugins"),
-                (ResourceKind::McpServer, "MCP servers"),
-            ] {
-                let of_kind = expanded
-                    .iter()
-                    .filter(|resource| resource.kind == kind && resource.group != "Wiki")
-                    .collect::<Vec<_>>();
-                if of_kind.is_empty() {
-                    continue;
-                }
-                lines.push(heading(title, of_kind.len()));
-                if kind == ResourceKind::McpServer {
-                    lines.push(Line::from(format!(
-                        "  → {}",
-                        crate::mcp::config_path(&self.skill_destination()).display()
-                    )));
-                    lines.push(Line::from(
-                        "  Pi gateway is selected automatically; required local tools are machine-wide.",
-                    ));
-                    lines.push(Line::from(crate::mcp::EXPOSURE_NOTE));
-                }
-                if kind == ResourceKind::Skill {
-                    let destination = self.skill_destination();
-                    if destination.agents.is_empty() {
-                        lines.push(Line::styled("  ! no agent chosen", Style::new().fg(ERR)));
-                    } else {
-                        for tree in destination.trees() {
-                            lines.push(Line::styled(
-                                format!("  → {}", tidy(&tree, &destination.home)),
-                                Style::new().dim(),
-                            ));
-                        }
-                    }
-                }
-                for resource in of_kind {
-                    let mut spans = vec![
-                        Span::styled("  + ", Style::new().fg(OK).bold()),
-                        Span::raw(format!("{} ", pad(&resource.label, label_width))),
-                    ];
-                    if !direct_ids.contains(&resource.id) {
-                        spans.push(Span::styled(
-                            format!(
-                                "needed by {}",
-                                parent_of(&resource.install_target)
-                                    .unwrap_or_else(|| "a picked skill".into())
-                            ),
-                            Style::new().dim(),
-                        ));
-                    }
-                    lines.push(Line::from(spans));
-                }
-                lines.push(Line::from(""));
-            }
-            if !wiki.is_empty() {
-                lines.push(heading("Vault setup", wiki.len()));
-                lines.push(Line::styled(
-                    "  → choose Create or Connect after this review",
-                    Style::new().fg(ACCENT),
-                ));
-                for resource in &wiki {
-                    let mut spans = vec![
-                        Span::styled("  + ", Style::new().fg(OK).bold()),
-                        Span::raw(format!("{} ", pad(&resource.label, label_width))),
-                    ];
-                    if !direct_ids.contains(&resource.id) {
-                        spans.push(Span::styled(
-                            format!(
-                                "needed by {}",
-                                parent_of(&resource.install_target)
-                                    .unwrap_or_else(|| "a picked capability".into())
-                            ),
-                            Style::new().dim(),
-                        ));
-                    }
-                    lines.push(Line::from(spans));
-                }
-                lines.push(Line::styled(
-                    "  Vault files get their own preview before anything changes.",
-                    Style::new().dim(),
-                ));
-                lines.push(Line::from(""));
-            }
-            let settings = self.selected_settings();
-            if !settings.is_empty() {
-                lines.push(heading("Settings", settings.len()));
-                for spec in &settings {
-                    lines.push(Line::from(vec![
-                        Span::styled("  ~ ", Style::new().fg(WARN).bold()),
-                        Span::raw(format!("{} ", pad(&spec.label, label_width))),
-                        Span::styled(
-                            spec.target_path(&self.model.settings_paths)
-                                .display()
-                                .to_string(),
-                            Style::new().dim(),
-                        ),
-                    ]));
-                }
-                lines.push(Line::from(""));
-            }
-            match plan {
-                Ok(_) => lines.push(Line::styled(
-                    if self.model.dry_run {
-                        "Dry run: enter prints this plan and exits."
-                    } else if !wiki.is_empty() && expanded.len() == wiki.len() {
-                        "Enter opens Vault setup. Esc goes back."
-                    } else if !wiki.is_empty() {
-                        "Enter installs these items, then opens Vault setup. Esc goes back."
-                    } else {
-                        "Enter installs all of this. Esc goes back."
-                    },
-                    Style::new().fg(OK),
-                )),
-                Err(error) => lines.push(Line::styled(
-                    format!("Cannot install: {error}"),
-                    Style::new().fg(ERR),
-                )),
-            }
+            self.render_setup_review(frame, area, scroll);
+            return;
         }
         let paragraph = Paragraph::new(lines)
             .block(bordered(" Review ", true).padding(Padding::horizontal(1)))
@@ -1412,20 +1376,35 @@ impl Wizard {
     // ---- install -----------------------------------------------------------
 
     fn render_install(&self, frame: &mut Frame, area: Rect, stage: &InstallStage) {
-        let actions = stage
+        let wiki_next = self
+            .expanded_selection()
+            .iter()
+            .any(|resource| resource.group == "Wiki");
+        let mut goal_actions = stage
             .report
             .as_ref()
-            .map(|report| self.next_actions(report))
+            .map(|report| self.goal_next_actions(report))
             .unwrap_or_default();
-        let summary_height = if let Some(report) = &stage.report {
-            let setup_actions = if self.model.mode == crate::app::SelectionMode::Setup
-                && report.failures.is_empty()
-            {
-                3
-            } else {
-                0
-            };
-            (7 + actions.len() as u16 + report.failures.len() as u16 + setup_actions)
+        if let Some(report) = &stage.report {
+            for wiki in self.reviewed_job.iter().flat_map(|job| &job.wikis) {
+                if report.installed.contains(&wiki.id()) {
+                    goal_actions.push((
+                        wiki.label(),
+                        format!(
+                            "Open {} and run pi{}",
+                            wiki.record.path.display(),
+                            if wiki.record.confluence {
+                                "; configure Confluence with cme config edit auth.confluence"
+                            } else {
+                                ""
+                            }
+                        ),
+                    ));
+                }
+            }
+        }
+        let summary_height = if stage.report.is_some() {
+            (if stage.show_details { 14 } else { 10 } + goal_actions.len() as u16 * 2)
                 .min(area.height.saturating_sub(6))
         } else {
             0
@@ -1441,7 +1420,12 @@ impl Wizard {
         let done = stage
             .items
             .iter()
-            .filter(|item| !matches!(item.status, ExecStatus::Pending | ExecStatus::Running))
+            .filter(|item| {
+                !matches!(
+                    item.status,
+                    ExecStatus::Pending | ExecStatus::Running | ExecStatus::Verifying
+                )
+            })
             .count();
         let failed = stage
             .items
@@ -1450,10 +1434,26 @@ impl Wizard {
         let gauge_color = if failed { ERR } else { OK };
         frame.render_widget(
             Gauge::default()
-                .block(bordered(" Installing ", true))
+                .block(bordered(
+                    if stage.running {
+                        " Install and verify "
+                    } else {
+                        " Result "
+                    },
+                    true,
+                ))
                 .gauge_style(Style::new().fg(gauge_color).bg(Color::DarkGray))
                 .ratio(done as f64 / total as f64)
-                .label(format!("{done} of {total}")),
+                .label(format!(
+                    "{done} of {total} · {}s elapsed",
+                    if stage.running {
+                        stage
+                            .started
+                            .map_or(0, |started| started.elapsed().as_secs())
+                    } else {
+                        stage.elapsed.as_secs()
+                    }
+                )),
             gauge_area,
         );
 
@@ -1479,10 +1479,17 @@ impl Wizard {
                         Style::new().fg(ACCENT),
                         item.detail.clone(),
                     ),
+                    ExecStatus::Verifying => (
+                        spinner.to_string(),
+                        Style::new().fg(ACCENT),
+                        "Verifying installation".into(),
+                    ),
                     ExecStatus::Ok(note) => ("✓".into(), Style::new().fg(OK), note.clone()),
-                    ExecStatus::Failed(message) => {
-                        ("✗".into(), Style::new().fg(ERR), message.clone())
-                    }
+                    ExecStatus::Failed(message) => (
+                        "✗".into(),
+                        Style::new().fg(ERR),
+                        crate::ui::failure_advice(message).0.into(),
+                    ),
                     ExecStatus::Skipped(message) => {
                         ("⊘".into(), Style::new().fg(WARN), message.clone())
                     }
@@ -1491,6 +1498,15 @@ impl Wizard {
                     Span::styled(format!(" {mark} "), style),
                     Span::raw(format!("{} ", pad(&item.label, label_width))),
                 ];
+                if !matches!(item.status, ExecStatus::Pending) {
+                    let elapsed = item
+                        .started
+                        .map_or(item.elapsed, |started| started.elapsed());
+                    spans.push(Span::styled(
+                        format!("{}s · ", elapsed.as_secs()),
+                        Style::new().dim(),
+                    ));
+                }
                 if !note.is_empty() {
                     spans.push(Span::styled(
                         first_line(&note).to_owned(),
@@ -1505,7 +1521,7 @@ impl Wizard {
             stage
                 .items
                 .iter()
-                .position(|item| matches!(item.status, ExecStatus::Running))
+                .position(|item| matches!(item.status, ExecStatus::Running | ExecStatus::Verifying))
                 .unwrap_or(done.saturating_sub(1))
         } else {
             (stage.scroll as usize).min(stage.items.len().saturating_sub(1))
@@ -1522,7 +1538,14 @@ impl Wizard {
         if let Some(report) = &stage.report {
             let mut lines = Vec::new();
             if report.failures.is_empty() {
-                lines.push(Line::styled("✓ Done", Style::new().fg(OK).bold()));
+                lines.push(Line::styled(
+                    if wiki_next {
+                        "✓ General setup done; Wiki setup is next"
+                    } else {
+                        "✓ Ready to try"
+                    },
+                    Style::new().fg(OK).bold(),
+                ));
                 lines.push(Line::from(format!(
                     "{} installed, nothing failed.",
                     report.installed.len()
@@ -1534,36 +1557,68 @@ impl Wizard {
                     Style::new().fg(ERR).bold(),
                 ));
                 lines.push(Line::from(format!(
-                    "{} installed · the failed rows above say why.",
+                    "{} installed. Completed work stays.",
                     report.installed.len()
                 )));
             }
             if let Some(item) = stage.items.get(active) {
-                let detail = match &item.status {
-                    ExecStatus::Failed(message) | ExecStatus::Skipped(message) => message,
-                    ExecStatus::Ok(message) => message,
-                    _ => &item.detail,
-                };
-                if !detail.is_empty() {
-                    lines.push(field("detail", detail.clone(), ACCENT));
+                if let ExecStatus::Failed(message) = &item.status {
+                    let (cause, recovery) = crate::ui::failure_advice(message);
+                    lines.push(field("cause", cause.into(), ERR));
+                    lines.push(Line::from(recovery));
+                }
+                if stage.show_details {
+                    lines.push(field("details", item.detail.clone(), ACCENT));
+                    lines.push(Line::styled(
+                        "Raw tool output stays hidden to protect secrets.",
+                        Style::new().dim(),
+                    ));
                 }
             }
-            for action in &actions {
-                lines.push(field("next", action.clone(), ACCENT));
-            }
-            if self.model.mode == crate::app::SelectionMode::Setup && report.failures.is_empty() {
-                for action in crate::app::SETUP_NEXT_ACTIONS {
-                    lines.push(field("next", action.into(), ACCENT));
+            if report.failures.is_empty() {
+                for (goal, action) in &goal_actions {
+                    lines.push(Line::styled(goal.clone(), Style::new().fg(ACCENT).bold()));
+                    lines.push(Line::from(action.clone()));
+                }
+                lines.push(Line::styled(
+                    "Installed locally; account access and live connections are not verified.",
+                    Style::new().dim(),
+                ));
+                if wiki_next || goal_actions.is_empty() {
+                    lines.push(field(
+                        "next",
+                        if wiki_next {
+                            "continue to choose a Wiki Vault".into()
+                        } else {
+                            crate::app::install_next_action(
+                                self.model.mode,
+                                &self.expanded_selection(),
+                                report,
+                            )
+                        },
+                        ACCENT,
+                    ));
                 }
             }
-            lines.push(Line::from(vec![
-                Span::styled("enter", Style::new().fg(ACCENT).bold()),
-                Span::raw(" to finish."),
-            ]));
+            lines.push(Line::styled(
+                if self.can_retry() {
+                    "enter/r retry failed · esc finish · d details"
+                } else {
+                    "enter finish · d details"
+                },
+                Style::new().fg(ACCENT),
+            ));
+            let paragraph = Paragraph::new(lines).wrap(Wrap { trim: true });
+            let max_scroll = paragraph
+                .line_count(summary_area.width.saturating_sub(4))
+                .saturating_sub(summary_area.height.saturating_sub(2) as usize);
             frame.render_widget(
-                Paragraph::new(lines)
-                    .wrap(Wrap { trim: true })
-                    .block(bordered(" Result ", true).padding(Padding::horizontal(1))),
+                paragraph
+                    .block(bordered(" Result · ↑↓ scroll ", true).padding(Padding::horizontal(1)))
+                    .scroll((
+                        stage.scroll.min(max_scroll.min(u16::MAX as usize) as u16),
+                        0,
+                    )),
                 summary_area,
             );
         }
@@ -1601,7 +1656,7 @@ fn cut(text: &str, width: usize) -> String {
 }
 
 /// A path with the home directory folded to `~`.
-fn tidy(path: &std::path::Path, home: &std::path::Path) -> String {
+pub(super) fn tidy(path: &std::path::Path, home: &std::path::Path) -> String {
     match path.strip_prefix(home) {
         Ok(rest) => format!("~/{}", rest.display()),
         Err(_) => path.display().to_string(),
@@ -1631,7 +1686,7 @@ fn mark_for(on: bool) -> (&'static str, Style) {
     }
 }
 
-fn bordered(title: &str, focused: bool) -> Block<'_> {
+pub(super) fn bordered(title: &str, focused: bool) -> Block<'_> {
     let border_style = if focused {
         Style::new().fg(ACCENT)
     } else {
@@ -1667,7 +1722,7 @@ fn list_offset(len: usize, visible: u16, cursor: usize) -> usize {
     }
 }
 
-fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
+pub(super) fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
     Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
         y: area.y + area.height.saturating_sub(height) / 2,

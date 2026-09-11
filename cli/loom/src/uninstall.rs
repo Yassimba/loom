@@ -92,7 +92,7 @@ pub fn run_uninstall(system: &(dyn System + Sync), options: &UninstallOptions) -
             crate::wizard::WizardOutcome::UninstallSelection(chosen) => Some(chosen),
             crate::wizard::WizardOutcome::Cancelled
             | crate::wizard::WizardOutcome::NothingSelected => {
-                println!("Cancelled; no changes made.");
+                Out::detect().verdict(true, "Cancelled; no changes made");
                 return Ok(true);
             }
             _ => bail!("uninstall wizard returned an install result"),

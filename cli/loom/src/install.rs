@@ -230,7 +230,6 @@ pub fn build_install_plan(
         .map(|resource| crate::mcp::Server::from_name(&resource.install_target))
         .collect::<Result<Vec<_>>>()?;
     for server in &mcp_servers {
-        anyhow::ensure!(resources.iter().any(|r| r.kind == ResourceKind::Skill) || skill_destination.agents == [crate::SkillAgent::Pi], "MCP setup supports Pi in this release; other agent adapters are not yet verified (use --agent pi)");
         crate::mcp::preflight(*server, skill_destination)?;
     }
     let needs_pi = !mcp_servers.is_empty()
@@ -364,6 +363,7 @@ pub fn build_install_plan(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StepStatus {
     Running,
+    Verifying,
     Prepared,
     Installed,
     Failed(String),
@@ -422,7 +422,7 @@ pub fn execute_install_plan_with_control(
     let (status_sender, statuses) = std::sync::mpsc::channel::<(usize, StepStatus)>();
     let (finish_sender, finishes) = std::sync::mpsc::channel::<(String, LaneOutcome)>();
     let mut handle_status = |index: usize, status: StepStatus| {
-        if !matches!(status, StepStatus::Running) {
+        if !matches!(status, StepStatus::Running | StepStatus::Verifying) {
             outcomes[index] = Some(status.clone());
         }
         observer(index, status);
@@ -636,7 +636,10 @@ fn execute_lane(
             return LaneOutcome { unavailable: true };
         }
         let _ = sender.send((indexed.index, StepStatus::Running));
-        let failure = execute_step(indexed.step, system, cancelled, repository).or_else(|| {
+        let failure = execute_step(indexed.step, system, cancelled, repository, || {
+            let _ = sender.send((indexed.index, StepStatus::Verifying));
+        })
+        .or_else(|| {
             system.refresh_path();
             (!system.command_exists(lane.manager)).then(|| {
                 format!(
@@ -664,17 +667,19 @@ fn execute_lane(
             continue;
         }
         let _ = sender.send((indexed.index, StepStatus::Running));
-        let failure = execute_step(indexed.step, system, cancelled, repository)
-            .or_else(|| {
-                cancelled
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                    .then(|| "cancelled".into())
-            })
-            .or_else(|| {
-                crate::pi_compat::apply_for_package(&indexed.step.target, system)
-                    .err()
-                    .map(|error| error.to_string())
-            });
+        let failure = execute_step(indexed.step, system, cancelled, repository, || {
+            let _ = sender.send((indexed.index, StepStatus::Verifying));
+        })
+        .or_else(|| {
+            cancelled
+                .load(std::sync::atomic::Ordering::Relaxed)
+                .then(|| "cancelled".into())
+        })
+        .or_else(|| {
+            crate::pi_compat::apply_for_package(&indexed.step.target, system)
+                .err()
+                .map(|error| error.to_string())
+        });
         let status = match failure {
             Some(message) => {
                 failed = true;
@@ -694,9 +699,69 @@ fn execute_step(
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
     repository: &crate::skills::Repository,
+    verifying: impl FnOnce(),
 ) -> Option<String> {
-    execute_action(step, system, cancelled, repository)
-        .or_else(|| verify_step(step, system, cancelled))
+    execute_action(step, system, cancelled, repository).or_else(|| {
+        if step.verification.is_some() {
+            verifying();
+        }
+        verify_step(step, system, cancelled)
+    })
+}
+
+/// Recheck completed work before a retry. A step without evidence is rerun.
+pub(crate) fn step_is_present(
+    step: &InstallStep,
+    system: &dyn System,
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> bool {
+    if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+        return false;
+    }
+    if step.verification.is_some() {
+        return verify_step(step, system, cancelled).is_none();
+    }
+    match &step.action {
+        StepAction::ConfigureMcp {
+            server,
+            destination,
+        } => crate::mcp::configured(*server, destination, system),
+        StepAction::CopySkills {
+            skills,
+            destination,
+        } => {
+            !destination.trees().is_empty()
+                && destination.trees().iter().all(|tree| {
+                    skills.iter().all(|name| {
+                        crate::skills::skill_present_in(tree, name)
+                            || crate::bundled_skills::provided_in_tree(
+                                &destination.home,
+                                tree,
+                                name,
+                            )
+                    })
+                })
+        }
+        StepAction::SyncTools { tools } => {
+            let Some(home) = system.home_dir() else {
+                return false;
+            };
+            let selected = crate::manifest::selected_keys(&home);
+            let Ok(catalog) = crate::Catalog::embedded() else {
+                return false;
+            };
+            tools.iter().all(|key| {
+                selected.contains(key)
+                    && catalog
+                        .resources
+                        .iter()
+                        .find(|resource| resource.install_target == *key)
+                        .and_then(|resource| resource.bin.as_deref())
+                        .is_some_and(|bin| system.command_exists(bin))
+            })
+        }
+        StepAction::Command(_) => false,
+    }
 }
 
 fn execute_action(
@@ -739,6 +804,60 @@ fn execute_action(
     }
 }
 
+/// Pi may list both scopes; only the reviewed destination is evidence.
+pub(crate) fn pi_package_installed(listed: &str, target: &str, project: bool) -> bool {
+    let target = target.strip_prefix("npm:").unwrap_or(target);
+    let target = target
+        .rsplit_once('@')
+        .filter(|(name, _)| !name.is_empty())
+        .map_or(target, |(name, _)| name);
+    let target = target.strip_prefix("git:").map_or(target, |source| {
+        source
+            .rsplit('/')
+            .next()
+            .unwrap_or(source)
+            .trim_end_matches(".git")
+    });
+    let mut in_scope = false;
+    let unscoped = target.rsplit('/').next().unwrap_or(target);
+    listed.lines().map(str::trim).any(|line| {
+        match line {
+            "User packages:" => {
+                in_scope = !project;
+                return false;
+            }
+            "Project packages:" => {
+                in_scope = project;
+                return false;
+            }
+            _ => {}
+        }
+        if !in_scope {
+            return false;
+        }
+        if let Some(spec) = line.strip_prefix("npm:") {
+            return spec
+                .strip_prefix(target)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('@'));
+        }
+        if let Some(source) = line.strip_prefix("git:") {
+            return source.rsplit('/').next().is_some_and(|name| {
+                name.split('@')
+                    .next()
+                    .unwrap_or_default()
+                    .trim_end_matches(".git")
+                    == unscoped
+            });
+        }
+        let path = std::path::Path::new(line);
+        path.is_absolute()
+            && std::fs::read(path.join("package.json"))
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                .is_some_and(|package| package["name"].as_str() == Some(target))
+    })
+}
+
 fn verify_step(
     step: &InstallStep,
     system: &dyn System,
@@ -752,22 +871,29 @@ fn verify_step(
             command_failure_message(&result)
         )),
         Ok(result) => {
-            let output = format!("{}\n{}", result.stdout, result.stderr);
-            needle
-                .as_ref()
-                .filter(|needle| !output.contains(needle.as_str()))
-                .map(|needle| format!("verification did not find {needle}"))
+            needle.as_ref().filter(|needle| {
+                if command.program == "pi" && command.args.first().is_some_and(|arg| arg == "list") {
+                    let project = matches!(&step.action, StepAction::Command(install) if install.args.iter().any(|arg| arg == "-l"));
+                    !pi_package_installed(&result.stdout, needle, project)
+                } else { !result.stdout.contains(needle.as_str()) }
+            }).map(|needle| format!("verification did not find {needle} in the selected destination"))
         }
         Err(error) => Some(format!("verification failed: {error}")),
     }
 }
 
-/// The interesting half of a failed command's output: stderr, else stdout.
+/// Reduce tool diagnostics to a safe cause and recovery action. Never echo
+/// arbitrary stderr/stdout: installers can include credentials or private text.
 pub(crate) fn command_failure_message(result: &crate::CommandResult) -> String {
-    if result.stderr.trim().is_empty() {
-        result.stdout.trim().to_owned()
+    let message = if result.stderr.trim().is_empty() {
+        result.stdout.trim()
     } else {
-        result.stderr.trim().to_owned()
+        result.stderr.trim()
+    };
+    if message.is_empty() {
+        "The tool exited without an error message. Retry the failed item.".into()
+    } else {
+        crate::ui::failure_text(message)
     }
 }
 

@@ -74,16 +74,26 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
     for check in &checks {
         style.row(check.health.mark(), check.name, style.muted(&check.detail));
     }
-    let healthy = mcp_healthy
+    style.blank();
+    let wiki_healthy = crate::wiki::status_registered(system);
+    let healthy = wiki_healthy
+        && mcp_healthy
         && resources_healthy
         && skills_healthy
         && checks.iter().all(|check| check.health != Health::Bad);
     if healthy {
-        style.verdict(true, "Selected resources and runtimes checked");
+        style.verdict(
+            true,
+            "Selected resources, runtimes, and Wiki Vaults checked",
+        );
         style.hint("optional managers are installed on demand by `loom setup`");
     } else {
         style.verdict(false, "Some checks need attention");
-        style.next("repair the failed managers, then run `loom status` again");
+        style.next(if wiki_healthy {
+            "repair the failed managers, then run `loom status` again"
+        } else {
+            "run `loom wiki` to repair the flagged Vaults, then run `loom status` again"
+        });
     }
     healthy
 }
@@ -205,10 +215,13 @@ fn print_manager_inventory(
     kind: crate::ResourceKind,
     selected: &HashSet<String>,
 ) -> bool {
-    let selected_for_manager = catalog
+    let resources = catalog
         .resources
         .iter()
-        .any(|resource| resource.kind == kind && selected.contains(&resource.id));
+        .filter(|resource| resource.kind == kind && resource.group != "Wiki");
+    let selected_for_manager = resources
+        .clone()
+        .any(|resource| selected.contains(&resource.id));
     if !system.command_exists(manager) {
         style.row(
             if selected_for_manager {
@@ -227,15 +240,15 @@ fn print_manager_inventory(
     }
     match system.run_probe(&CommandSpec::new(manager, args.iter().copied())) {
         Ok(result) if result.success => {
-            let output = format!("{}\n{}", result.stdout, result.stderr);
+            let output = result.stdout;
             let mut healthy = true;
-            for resource in catalog
-                .resources
-                .iter()
-                .filter(|resource| resource.kind == kind)
-            {
-                let installed = output.contains(&resource.install_target)
-                    || output.contains(resource.id.trim_start_matches("herdr-plugin:"));
+            for resource in resources {
+                let installed = if kind == crate::ResourceKind::PiPackage {
+                    crate::install::pi_package_installed(&output, &resource.install_target, false)
+                } else {
+                    output.contains(&resource.install_target)
+                        || output.contains(resource.id.trim_start_matches("herdr-plugin:"))
+                };
                 let expected = selected.contains(&resource.id);
                 healthy &= installed || !expected;
                 style.row(
@@ -357,7 +370,19 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
     }
     projects.sort();
     projects.dedup();
-    for project in projects {
+    let vaults = crate::wiki::WikiRegistry::load(&home)
+        .map(|registry| {
+            registry
+                .vaults
+                .into_iter()
+                .map(|vault| vault.path.canonicalize().unwrap_or(vault.path))
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default(); // Registry errors are reported in the Wiki section.
+    for project in projects
+        .into_iter()
+        .filter(|project| !vaults.contains(project))
+    {
         trees.extend(
             crate::SkillAgent::ALL
                 .into_iter()
@@ -383,7 +408,9 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
             catalog
                 .resources
                 .into_iter()
-                .filter(|resource| resource.kind == crate::ResourceKind::Skill)
+                .filter(|resource| {
+                    resource.kind == crate::ResourceKind::Skill && resource.group != "Wiki"
+                })
                 .map(|resource| resource.install_target)
                 .collect::<Vec<_>>()
         })

@@ -24,7 +24,7 @@ struct Credentials {
 }
 impl Credentials {
     fn text(&self) -> String {
-        format!("Confluence URL: {}\nEmail / username: {}\nToken: {}\nAuthentication: {}\n\nEditing: {}\n\nShared CME config: plaintext, owner-only permissions.\nNot saved in the Vault or Keychain.\nNo network authentication check will run.\n\nTab / ↑↓ field · type or paste · Space switches auth mode\nEnter on authentication submits · Esc keeps existing config",
+        format!("Confluence URL: {}\nEmail / username: {}\nToken: {}\nAuthentication: {}\n\nEditing: {}\n\nShared CME config: plaintext, owner-only permissions.\nNot saved in the Vault or Keychain.\nNo network authentication check will run.\n\ntab/↑↓ field · type or paste · space switch auth mode\nenter on authentication submit · esc keep existing config",
             self.url, self.username, if self.token.is_empty() { "" } else { "********" },
             if self.pat { "PAT (username optional)" } else { "API token (username required)" },
             ["URL", "email / username", "token", "authentication mode"][self.field])

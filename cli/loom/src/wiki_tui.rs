@@ -14,13 +14,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 use unicode_width::UnicodeWidthStr;
 
-const ACCENT: Color = Color::Cyan;
-const OK: Color = Color::Green;
-const ERR: Color = Color::Red;
+use crate::ui::theme::{ACCENT, ERR, OK};
 
 pub(crate) enum WikiChoice {
     Request(WikiRequest),
     PickPath(WikiOperation),
+    InspectVault,
     OpenObsidianDownload,
     Cancelled,
 }
@@ -30,7 +29,7 @@ enum Page {
     Home,
     Capabilities,
     Review,
-    Vaults,
+    Status,
     Actions,
     ConfirmUnregister,
 }
@@ -46,6 +45,7 @@ struct WikiWizard {
     selected_vault: usize,
     obsidian_installed: bool,
     error: Option<String>,
+    health: Option<crate::wiki::VaultHealth>,
 }
 
 impl WikiWizard {
@@ -66,21 +66,24 @@ impl WikiWizard {
             selected_vault: 0,
             obsidian_installed,
             error: None,
+            health: None,
         }
     }
 
-    fn home_items(&self) -> Vec<&'static str> {
-        let mut items = if cfg!(windows) {
-            vec!["Manage registered Vaults"]
-        } else {
-            vec![
-                "Create a new Vault",
-                "Connect an existing Vault",
-                "Manage registered Vaults",
-            ]
-        };
+    fn home_items(&self) -> Vec<String> {
+        let mut items = self
+            .vaults
+            .iter()
+            .map(|record| record.path.display().to_string())
+            .collect::<Vec<_>>();
+        if !cfg!(windows) {
+            items.extend([
+                "Create a new Vault".into(),
+                "Connect an existing Vault".into(),
+            ]);
+        }
         if !self.obsidian_installed {
-            items.push("Open Obsidian download page");
+            items.push("Open Obsidian download page".into());
         }
         items
     }
@@ -136,37 +139,39 @@ impl WikiWizard {
         self.error = None;
         match self.page {
             Page::Home => {
-                let choice = self.home_items()[self.cursor];
+                if self.cursor < self.vaults.len() {
+                    self.selected_vault = self.cursor;
+                    self.page = Page::Status;
+                    self.cursor = 0;
+                    self.health = None;
+                    return Some(WikiChoice::InspectVault);
+                }
+                let choices = self.home_items();
+                let choice = choices.get(self.cursor)?;
                 if choice == "Open Obsidian download page" {
                     return Some(WikiChoice::OpenObsidianDownload);
                 }
-                if choice == "Manage registered Vaults" {
-                    if self.vaults.is_empty() {
-                        self.error = Some("No registered Vaults yet".into());
-                    } else {
-                        self.page = Page::Vaults;
-                        self.cursor = 0;
-                    }
+                let operation = if choice == "Create a new Vault" {
+                    WikiOperation::Create
                 } else {
-                    let operation = if choice == "Create a new Vault" {
-                        WikiOperation::Create
-                    } else {
-                        WikiOperation::Adopt
-                    };
-                    return Some(WikiChoice::PickPath(operation));
-                }
+                    WikiOperation::Adopt
+                };
+                return Some(WikiChoice::PickPath(operation));
             }
             Page::Capabilities => self.page = Page::Review,
             Page::Review => return Some(WikiChoice::Request(self.request(self.operation.clone()))),
-            Page::Vaults => {
-                self.selected_vault = self.cursor;
+            Page::Status => {
                 self.page = Page::Actions;
                 self.cursor = 0;
             }
             Page::Actions => {
                 let action = self.action_items()[self.cursor];
                 let operation = match action {
-                    "Status" => WikiOperation::Status,
+                    "Status" => {
+                        self.page = Page::Status;
+                        self.cursor = 0;
+                        return Some(WikiChoice::InspectVault);
+                    }
                     "Repair" => WikiOperation::Repair,
                     "Open in Obsidian" => WikiOperation::Open,
                     "Launch Pi" => WikiOperation::Launch,
@@ -192,8 +197,8 @@ impl WikiWizard {
             Page::Home => return Some(WikiChoice::Cancelled),
             Page::Capabilities => self.page = Page::Home,
             Page::Review => self.page = Page::Capabilities,
-            Page::Vaults => self.page = Page::Home,
-            Page::Actions => self.page = Page::Vaults,
+            Page::Status => self.page = Page::Home,
+            Page::Actions => self.page = Page::Status,
             Page::ConfirmUnregister => self.page = Page::Actions,
         }
         self.cursor = 0;
@@ -227,6 +232,12 @@ impl WikiWizard {
                 KeyCode::Enter => return self.enter(),
                 _ => {}
             },
+            Page::Status => match key.code {
+                KeyCode::Up | KeyCode::Char('k') => self.cursor = self.cursor.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => self.cursor = (self.cursor + 1).min(100),
+                KeyCode::Enter => return self.enter(),
+                _ => {}
+            },
             Page::ConfirmUnregister => {
                 if key.code == KeyCode::Enter {
                     return self.enter();
@@ -235,7 +246,6 @@ impl WikiWizard {
             _ => {
                 let len = match self.page {
                     Page::Home => self.home_items().len(),
-                    Page::Vaults => self.vaults.len(),
                     Page::Actions => self.action_items().len(),
                     _ => 0,
                 };
@@ -272,14 +282,7 @@ impl WikiWizard {
             Page::Home => self.draw_home(frame, body),
             Page::Capabilities => self.draw_capabilities(frame, body),
             Page::Review => self.draw_review(frame, body),
-            Page::Vaults => self.draw_list(
-                frame,
-                body,
-                " Registered Vaults ",
-                self.vaults
-                    .iter()
-                    .map(|record| record.path.to_string_lossy()),
-            ),
+            Page::Status => self.draw_status(frame, body),
             Page::Actions => self.draw_list(frame, body, " Manage Vault ", self.action_items()),
             Page::ConfirmUnregister => self.draw_unregister(frame, body),
         }
@@ -327,7 +330,7 @@ impl WikiWizard {
                 ("✓ Capabilities", false),
                 ("Review", true),
             ],
-            Page::Vaults => vec![("Vaults", true), ("Action", false)],
+            Page::Status => vec![("✓ Vaults", false), ("Status", true), ("Action", false)],
             Page::Actions | Page::ConfirmUnregister => vec![("✓ Vaults", false), ("Action", true)],
         };
         if area.width < 80 {
@@ -375,13 +378,14 @@ impl WikiWizard {
             Page::Capabilities => " ↑↓ move · space toggle",
             Page::Review => " exact files are reviewed next",
             Page::ConfirmUnregister => " enter unregister · esc keep",
-            _ => " ↑↓ move · enter select",
+            Page::Status => " ↑↓ scroll · enter actions · esc back",
+            _ => " ↑↓ move · enter continue",
         };
         let (back, next) = match self.page {
             Page::Home => ("", "Select"),
             Page::Capabilities => ("Back", "Next"),
             Page::Review => ("Back", "Set up"),
-            Page::Vaults => ("Back", "Select"),
+            Page::Status => ("Vaults", "Actions"),
             Page::Actions => ("Back", "Run"),
             Page::ConfirmUnregister => ("Keep", "Remove"),
         };
@@ -415,6 +419,15 @@ impl WikiWizard {
     }
 
     fn draw_home(&self, frame: &mut Frame, area: Rect) {
+        if self.home_items().is_empty() {
+            frame.render_widget(
+                Paragraph::new("No registered Wikis yet. Create or connect a Wiki from WSL2.")
+                    .wrap(Wrap { trim: true })
+                    .block(panel(" Your Wikis ", true)),
+                area,
+            );
+            return;
+        }
         let [menu, details] = if area.width >= 72 {
             Layout::horizontal([Constraint::Percentage(56), Constraint::Percentage(44)])
                 .spacing(1)
@@ -426,7 +439,17 @@ impl WikiWizard {
         if details.width == 0 {
             return;
         }
-        let choice = self.home_items()[self.cursor];
+        if let Some(record) = self.vaults.get(self.cursor) {
+            frame.render_widget(Paragraph::new(vec![
+                Line::styled(record.path.display().to_string(), Style::new().fg(ACCENT).bold()),
+                Line::from(""),
+                Line::from("Enter inspects tools configured for this Wiki. Browsing does not install or repair anything."),
+                Line::from("Shared machine tools are reported separately from Vault configuration."),
+            ]).wrap(Wrap { trim: true }).block(panel(" This Wiki ", false).padding(Padding::horizontal(1))), details);
+            return;
+        }
+        let choices = self.home_items();
+        let choice = choices.get(self.cursor).map(String::as_str).unwrap_or("");
         let (title, copy) = match choice {
             "Create a new Vault" => (
                 "Create",
@@ -435,10 +458,6 @@ impl WikiWizard {
             "Connect an existing Vault" => (
                 "Connect",
                 "Choose an Obsidian Vault with your system folder picker. Existing notes stay in place.",
-            ),
-            "Manage registered Vaults" => (
-                "Manage",
-                "Check, repair, open, launch, or unregister a Vault already known to Loom.",
             ),
             _ => (
                 "Obsidian",
@@ -481,6 +500,30 @@ impl WikiWizard {
         );
     }
 
+    fn draw_status(&self, frame: &mut Frame, area: Rect) {
+        let mut lines = vec![
+            Line::styled(
+                self.selected_record()
+                    .map(|record| record.path.display().to_string())
+                    .unwrap_or_default(),
+                Style::new().fg(ACCENT).bold(),
+            ),
+            Line::from(""),
+        ];
+        if let Some(health) = &self.health {
+            lines.extend(health_lines(health));
+        } else {
+            lines.push(Line::from("Checking this Vault…"));
+        }
+        frame.render_widget(
+            Paragraph::new(lines)
+                .wrap(Wrap { trim: true })
+                .scroll((self.cursor as u16, 0))
+                .block(panel(" Installed in this Vault ", true).padding(Padding::horizontal(1))),
+            area,
+        );
+    }
+
     fn draw_capabilities(&self, frame: &mut Frame, area: Rect) {
         let option = |selected: bool, label: &'static str, active: bool| {
             Line::from(vec![
@@ -498,6 +541,7 @@ impl WikiWizard {
         frame.render_widget(
             Paragraph::new(vec![
                 Line::styled("Optional capabilities", Style::new().bold()),
+                Line::from(format!("Vault: {}", self.path.trim())),
                 Line::from(""),
                 option(self.feynman, "Feynman research tools", self.cursor == 0),
                 option(
@@ -541,6 +585,7 @@ impl WikiWizard {
                     }
                 )),
                 Line::from(""),
+                Line::from("First search setup can download about 2 GB of models."),
                 Line::styled(
                     "Loom will preview the exact Vault files before applying them.",
                     Style::new().dim(),
@@ -569,6 +614,24 @@ impl WikiWizard {
             area,
         );
     }
+}
+
+pub(crate) fn health_lines(health: &crate::wiki::VaultHealth) -> Vec<Line<'static>> {
+    health
+        .rows
+        .iter()
+        .map(|(mark, label, detail)| {
+            let (symbol, color) = match mark {
+                crate::ui::Mark::Ok => ("✓", OK),
+                crate::ui::Mark::Bad => ("!", ERR),
+                crate::ui::Mark::Off => ("○", Color::Yellow),
+            };
+            Line::styled(
+                format!("{symbol} {label}: {detail}"),
+                Style::new().fg(color),
+            )
+        })
+        .collect()
 }
 
 fn panel(title: &str, focused: bool) -> Block<'_> {
@@ -647,7 +710,7 @@ end run"#
     )
 }
 
-fn pick_vault_path(
+pub(crate) fn pick_vault_path(
     system: &dyn System,
     operation: &WikiOperation,
     current: &std::path::Path,
@@ -694,16 +757,33 @@ pub(crate) fn run(
     let current = system.current_dir().unwrap_or_else(|| PathBuf::from("."));
     let vaults = WikiRegistry::load(&home)?.vaults;
     let mut wizard = WikiWizard::new(current.clone(), vaults, feynman_default, obsidian_installed);
+    run_session(system, &mut wizard, &current)
+}
+
+fn run_session(
+    system: &(dyn System + Sync),
+    wizard: &mut WikiWizard,
+    current: &std::path::Path,
+) -> Result<WikiChoice> {
     loop {
         let mut terminal = ratatui::init();
-        let outcome = run_loop(&mut terminal, &mut wizard);
+        let outcome = run_loop(&mut terminal, wizard);
         ratatui::restore();
         match outcome? {
-            WikiChoice::PickPath(operation) => {
-                match pick_vault_path(system, &operation, &current) {
-                    Ok(Some(path)) => wizard.set_picked_path(operation, path),
-                    Ok(None) => {}
-                    Err(error) => wizard.error = Some(error.to_string()),
+            WikiChoice::PickPath(operation) => match pick_vault_path(system, &operation, current) {
+                Ok(Some(path)) => wizard.set_picked_path(operation, path),
+                Ok(None) => {}
+                Err(error) => wizard.error = Some(error.to_string()),
+            },
+            WikiChoice::InspectVault => {
+                if let Some(record) = wizard.selected_record() {
+                    let out = crate::ui::Out::detect();
+                    out.progress(
+                        format!("Checking registered Vault {}", record.path.display()),
+                        0,
+                    );
+                    wizard.health = Some(crate::wiki::inspect_vault(system, record));
+                    out.progress_done();
                 }
             }
             choice => return Ok(choice),
@@ -786,41 +866,48 @@ fn draw_confirmation(
 
 pub(crate) fn confirm(title: &str, lines: &[String]) -> Result<bool> {
     require_terminal()?;
+    let mut terminal = ratatui::init();
+    let result = confirm_in(&mut terminal, title, lines);
+    ratatui::restore();
+    result
+}
+
+/// Reuse the setup terminal for an exact file-plan approval, not another setup wizard.
+pub(crate) fn confirm_in(
+    terminal: &mut DefaultTerminal,
+    title: &str,
+    lines: &[String],
+) -> Result<bool> {
     let mut yes = false;
     let mut scroll = 0u16;
     let mut max_scroll = 0u16;
-    let mut terminal = ratatui::init();
-    let result = (|| -> Result<bool> {
-        loop {
-            terminal.draw(|frame| {
-                max_scroll = draw_confirmation(frame, title, lines, scroll, yes);
-            })?;
-            let Event::Key(key) = event::read()? else {
-                continue;
-            };
-            if key.kind == KeyEventKind::Release {
-                continue;
-            }
-            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                break Ok(false);
-            }
-            match key.code {
-                KeyCode::Up | KeyCode::Char('k') => scroll = scroll.saturating_sub(1),
-                KeyCode::Down | KeyCode::Char('j') => scroll = (scroll + 1).min(max_scroll),
-                KeyCode::Home => scroll = 0,
-                KeyCode::End => scroll = max_scroll,
-                KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if scroll >= max_scroll => {
-                    yes = !yes
-                }
-                KeyCode::Char('y') if scroll >= max_scroll => break Ok(true),
-                KeyCode::Char('n') | KeyCode::Esc => break Ok(false),
-                KeyCode::Enter if !yes || scroll >= max_scroll => break Ok(yes),
-                _ => {}
-            }
+    loop {
+        terminal.draw(|frame| {
+            max_scroll = draw_confirmation(frame, title, lines, scroll, yes);
+        })?;
+        let Event::Key(key) = event::read()? else {
+            continue;
+        };
+        if key.kind == KeyEventKind::Release {
+            continue;
         }
-    })();
-    ratatui::restore();
-    result
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+            break Ok(false);
+        }
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => scroll = scroll.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => scroll = (scroll + 1).min(max_scroll),
+            KeyCode::Home => scroll = 0,
+            KeyCode::End => scroll = max_scroll,
+            KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if scroll >= max_scroll => {
+                yes = !yes
+            }
+            KeyCode::Char('y') if scroll >= max_scroll => break Ok(true),
+            KeyCode::Char('n') | KeyCode::Esc => break Ok(false),
+            KeyCode::Enter if !yes || scroll >= max_scroll => break Ok(yes),
+            _ => {}
+        }
+    }
 }
 
 pub(crate) fn select(title: &str, choices: &[&str]) -> Result<Option<usize>> {
@@ -1028,6 +1115,52 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))]
+    fn folder_picker_validates_existing_and_new_paths_without_writing() {
+        struct Picked {
+            path: PathBuf,
+            cancelled: bool,
+        }
+        impl System for Picked {
+            fn command_exists(&self, _: &str) -> bool {
+                true
+            }
+            fn refresh_path(&self) {}
+            fn run(&self, _: &CommandSpec) -> Result<crate::CommandResult> {
+                Ok(crate::CommandResult {
+                    success: !self.cancelled,
+                    stdout: self.path.display().to_string(),
+                    stderr: String::new(),
+                })
+            }
+        }
+        let root = std::env::temp_dir().join(format!("loom-wiki-picker-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("Existing Wiki/.obsidian")).unwrap();
+        let target = root.join("New Wiki");
+        let mut system = Picked {
+            path: target.clone(),
+            cancelled: false,
+        };
+        assert_eq!(
+            pick_vault_path(&system, &WikiOperation::Create, &root).unwrap(),
+            Some(target.clone())
+        );
+        assert!(!target.exists(), "choosing a name must not create the Wiki");
+        assert!(pick_vault_path(&system, &WikiOperation::Adopt, &root).is_err());
+        system.path = root.join("Existing Wiki");
+        assert_eq!(
+            pick_vault_path(&system, &WikiOperation::Adopt, &root).unwrap(),
+            Some(system.path.clone())
+        );
+        assert!(pick_vault_path(&system, &WikiOperation::Create, &root).is_err());
+        system.cancelled = true;
+        assert!(pick_vault_path(&system, &WikiOperation::Create, &root)
+            .unwrap()
+            .is_none());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn unregister_requires_a_second_enter_and_keeps_the_registered_path() {
         let record = VaultRecord {
             path: PathBuf::from("/tmp/Vault"),
@@ -1035,12 +1168,11 @@ mod tests {
             confluence: false,
         };
         let mut wizard = WikiWizard::new(PathBuf::from("/tmp"), vec![record], false, true);
-        wizard.cursor = wizard
-            .home_items()
-            .iter()
-            .position(|item| *item == "Manage registered Vaults")
-            .unwrap();
-        wizard.handle_key(key(KeyCode::Enter));
+        assert!(matches!(
+            wizard.handle_key(key(KeyCode::Enter)),
+            Some(WikiChoice::InspectVault)
+        ));
+        assert_eq!(wizard.page, Page::Status);
         wizard.handle_key(key(KeyCode::Enter));
         wizard.cursor = wizard.action_items().len() - 1;
         assert!(wizard.handle_key(key(KeyCode::Enter)).is_none());

@@ -120,18 +120,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn embedded_catalog_carries_ordered_role_profiles() {
+    fn embedded_catalog_carries_ordered_goals() {
         let catalog = Catalog::embedded().unwrap();
 
-        assert_eq!(catalog.profiles.len(), 7);
+        assert_eq!(
+            catalog
+                .profiles
+                .iter()
+                .map(|p| p.label.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Build software",
+                "Research deeply",
+                "Manage product work",
+                "Knowledgebase",
+                "Present ideas",
+            ]
+        );
         assert_eq!(catalog.profiles[0].id, "software-engineer");
-        assert_eq!(catalog.profiles[0].label, "Software Engineer");
         assert!(catalog.profiles[0]
             .resources
             .contains(&"tool:pi".to_string()));
-        assert!(catalog.profiles[3]
+        assert!(catalog.profiles[0]
             .resources
             .contains(&"skill:system-atlas".to_string()));
-        assert_eq!(catalog.profiles[6].id, "knowledge-wiki");
+        assert_eq!(catalog.profiles[3].id, "knowledge-wiki");
     }
 }

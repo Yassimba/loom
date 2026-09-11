@@ -103,8 +103,12 @@ async function createCatalogFixture() {
   return repoRoot;
 }
 
-test("Software Engineer installs the Annotate fork with the Mermaid renderer", async () => {
+test("setup offers combinable goals; Build software includes Annotate and Mermaid", async () => {
   const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
+  assert.deepEqual(
+    catalog.profiles.map(({ label }) => label),
+    ["Build software", "Research deeply", "Manage product work", "Knowledgebase", "Present ideas"],
+  );
   const profile = catalog.profiles.find(({ id }) => id === "software-engineer");
   const annotate = catalog.resources.find(({ id }) => id === "herdr-plugin:annotate");
   const mermaid = catalog.resources.find(({ id }) => id === "pi-package:@yassimba/pi-loom-mermaid");

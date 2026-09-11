@@ -194,12 +194,10 @@ fn select_yes_no(prompt: &str, help: &str, default: bool, assume_yes: bool) -> R
     if assume_yes || !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
         return Ok(default);
     }
-    Ok(Select::new(prompt, vec!["Yes", "No"])
+    Ok(inquire::Confirm::new(prompt)
         .with_help_message(help)
-        .with_starting_cursor(usize::from(!default))
-        .without_filtering()
-        .prompt()?
-        == "Yes")
+        .with_default(default)
+        .prompt()?)
 }
 
 fn select_choice<T>(

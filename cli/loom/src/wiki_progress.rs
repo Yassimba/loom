@@ -8,35 +8,114 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Padding, Paragraph, Wrap};
 use ratatui::Frame;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-const ACCENT: Color = Color::Cyan;
+use crate::ui::theme::ACCENT;
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 struct ProgressSystem<'a> {
     system: &'a (dyn System + Sync),
     cancelled: &'a AtomicBool,
-    stage: Mutex<&'static str>,
-    bytes: AtomicUsize,
+    progress: Mutex<ProgressState>,
+    observer: Option<&'a (dyn Fn(&str) + Sync)>,
 }
 
-fn stage(command: &CommandSpec) -> &'static str {
-    match command.program.as_str() {
-        "qmd" if command.args.iter().any(|a| a == "pull") => {
-            "Downloading search models (may total about 2 GB)"
+impl<'a> ProgressSystem<'a> {
+    fn new(
+        system: &'a (dyn System + Sync),
+        cancelled: &'a AtomicBool,
+        observer: Option<&'a (dyn Fn(&str) + Sync)>,
+    ) -> Self {
+        Self {
+            system,
+            cancelled,
+            observer,
+            progress: Mutex::new(ProgressState {
+                current: "Preparing setup",
+                started: Instant::now(),
+                last_output: Instant::now(),
+                completed: Vec::new(),
+            }),
         }
-        "qmd" if command.args.iter().any(|a| a == "embed") => "Building search embeddings",
-        "qmd" if command.args.iter().any(|a| a == "update") => "Indexing Vault Markdown",
-        "qmd" if command.args.iter().any(|a| a == "query") => {
-            "First-search check (up to 120 seconds)"
-        }
-        "qmd" => "Preparing Vault search",
-        "pi" => "Installing Vault-local Pi packages",
-        "mise" => "Installing selected tools, including QMD",
-        _ => "Preparing setup prerequisites",
     }
+}
+
+/// Forward trusted stage labels to the parent chooser; it retains its terminal.
+pub(crate) fn in_setup<T>(
+    system: &(dyn System + Sync),
+    cancelled: &AtomicBool,
+    observer: &(dyn Fn(&str) + Sync),
+    work: impl FnOnce(&(dyn System + Sync)) -> Result<T>,
+) -> Result<T> {
+    work(&ProgressSystem::new(system, cancelled, Some(observer)))
+}
+
+#[derive(Clone)]
+struct ProgressState {
+    current: &'static str,
+    started: Instant,
+    last_output: Instant,
+    completed: Vec<(&'static str, Duration)>,
+}
+
+#[derive(Clone, Copy)]
+struct Stage {
+    active: &'static str,
+    completed: Option<&'static str>,
+}
+
+fn stage(command: &CommandSpec) -> Stage {
+    let (active, completed) = match command.program.as_str() {
+        "qmd" if command.args.iter().any(|a| a == "pull") => (
+            "Downloading search models (may total about 2 GB)",
+            Some("Search models ready"),
+        ),
+        "qmd" if command.args.iter().any(|a| a == "embed") => (
+            "Building search embeddings",
+            Some("Search embeddings built"),
+        ),
+        "qmd" if command.args.iter().any(|a| a == "update") => {
+            ("Indexing Vault Markdown", Some("Vault Markdown indexed"))
+        }
+        "qmd" if command.args.iter().any(|a| a == "query") => (
+            "First-search check (up to 120 seconds)",
+            Some("First search checked"),
+        ),
+        "qmd" => ("Preparing Vault search", None),
+        "pi" if command.args.first().is_some_and(|arg| arg == "list") => (
+            "Verifying Vault-local Pi packages",
+            Some("Vault packages verified"),
+        ),
+        "pi" if command
+            .args
+            .iter()
+            .any(|arg| arg.contains("@companion-ai/feynman")) =>
+        {
+            (
+                "Installing Feynman in this Vault",
+                Some("Feynman installed"),
+            )
+        }
+        "pi" => (
+            "Installing claude-obsidian in this Vault",
+            Some("claude-obsidian installed"),
+        ),
+        "mise" if command.args.first().is_some_and(|arg| arg == "where") => {
+            ("Locating the pinned Wiki runtime", None)
+        }
+        "mise" if command.args.iter().any(|arg| arg == "doctor") => (
+            "Checking Vault configuration",
+            Some("Vault configuration checked"),
+        ),
+        "mise" => (
+            "Installing selected tools, including QMD",
+            Some("Selected tools installed"),
+        ),
+        _ => ("Preparing setup prerequisites", None),
+    };
+    Stage { active, completed }
 }
 
 impl System for ProgressSystem<'_> {
@@ -68,34 +147,60 @@ impl System for ProgressSystem<'_> {
         timeout: Duration,
         _: &AtomicBool,
     ) -> Result<CommandResult> {
-        *self.stage.lock().unwrap() = stage(command);
-        self.bytes.store(0, Ordering::Relaxed);
+        anyhow::ensure!(
+            !self.cancelled.load(Ordering::Relaxed),
+            "Wiki setup cancelled"
+        );
+        let stage = stage(command);
+        if let Some(observer) = self.observer {
+            observer(stage.active);
+        }
+        {
+            let mut progress = self.progress.lock().unwrap();
+            progress.current = stage.active;
+            progress.started = Instant::now();
+            progress.last_output = progress.started;
+        }
         // Arbitrary installer output can include URLs, credentials and document text.
         // Stream activity, never its contents: no ANSI/OSC, CR, partial lines or secrets
-        // can reach the terminal. Atomic counters keep progress memory bounded.
-        self.system
-            .run_streamed(command, timeout, self.cancelled, None, &|chunk| {
-                self.bytes.fetch_add(chunk.len(), Ordering::Relaxed);
-            })
-            .map_err(|_| anyhow::anyhow!("{} failed, timed out or was cancelled", stage(command)))
-    }
-}
-
-fn readable_bytes(bytes: usize) -> String {
-    if bytes < 1024 {
-        format!("{bytes} B")
-    } else if bytes < 1024 * 1024 {
-        format!("{:.1} KB", bytes as f64 / 1024.0)
-    } else {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+        // can reach the terminal. Retain only the last activity time.
+        let result = self
+            .system
+            .run_streamed(command, timeout, self.cancelled, None, &|_| {
+                self.progress.lock().unwrap().last_output = Instant::now();
+            });
+        if result.as_ref().is_ok_and(|result| result.success) {
+            if let Some(completed) = stage.completed {
+                let mut progress = self.progress.lock().unwrap();
+                let duration = progress.started.elapsed();
+                progress.completed.push((completed, duration));
+                if progress.completed.len() > 3 {
+                    progress.completed.remove(0);
+                }
+            }
+        }
+        result.map_err(|error| {
+            let message = error.to_string();
+            if message.contains("timed out") {
+                anyhow::anyhow!(
+                    "{} timed out after {}s. Completed work stays; check the connection and retry.",
+                    stage.active,
+                    timeout.as_secs()
+                )
+            } else {
+                anyhow::anyhow!("{}: {}", stage.active, crate::ui::failure_text(&message))
+            }
+        })
     }
 }
 
 fn draw_progress(
     frame: &mut Frame,
+    activity: &str,
     stage: &str,
+    completed: &[(&str, Duration)],
     elapsed: Duration,
-    bytes: usize,
+    quiet_seconds: u64,
     confirm_cancel: bool,
 ) {
     let [header, body, footer] = Layout::vertical([
@@ -106,7 +211,7 @@ fn draw_progress(
     .areas(frame.area());
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(" loom wiki", Style::new().fg(ACCENT).bold()),
+            Span::styled(" loom", Style::new().fg(ACCENT).bold()),
             Span::styled(
                 concat!("  v", env!("CARGO_PKG_VERSION")),
                 Style::new().dim(),
@@ -116,7 +221,7 @@ fn draw_progress(
     );
     frame.render_widget(
         Paragraph::new(Span::styled(
-            "Setting up Vault ",
+            format!("{activity} "),
             Style::new().fg(ACCENT).bold(),
         ))
         .alignment(Alignment::Right),
@@ -124,7 +229,7 @@ fn draw_progress(
     );
 
     let width = 64.min(body.width.saturating_sub(4));
-    let height = 9.min(body.height);
+    let height = (10 + completed.len().min(3) as u16).min(body.height);
     let panel_area = Rect::new(
         body.x + body.width.saturating_sub(width) / 2,
         body.y + body.height.saturating_sub(height) / 2,
@@ -138,7 +243,7 @@ fn draw_progress(
     };
     let status = if confirm_cancel {
         Line::styled(
-            "Cancel setup? Completed work will stay in place.",
+            "Cancel Wiki work? Completed work will stay in place.",
             Style::new().fg(Color::Yellow),
         )
     } else {
@@ -147,26 +252,36 @@ fn draw_progress(
             Span::styled(stage.to_owned(), Style::new().bold()),
         ])
     };
+    let mut lines = vec![
+        status,
+        Line::from(""),
+        Line::styled(
+            format!(
+                "{}s elapsed · last tool activity {}s ago",
+                elapsed.as_secs(),
+                quiet_seconds
+            ),
+            Style::new().dim(),
+        ),
+    ];
+    if !completed.is_empty() {
+        lines.push(Line::from(""));
+        lines.extend(completed.iter().map(|(label, duration)| {
+            Line::styled(
+                format!("✓ {label} · {}s", duration.as_secs()),
+                Style::new().fg(Color::Green),
+            )
+        }));
+    }
+    lines.extend([
+        Line::from(""),
+        Line::styled(
+            "Tool output stays hidden while setup runs.",
+            Style::new().dim(),
+        ),
+    ]);
     frame.render_widget(
-        Paragraph::new(vec![
-            status,
-            Line::from(""),
-            Line::styled(
-                format!(
-                    "{}s elapsed  ·  {} activity",
-                    elapsed.as_secs(),
-                    readable_bytes(bytes)
-                ),
-                Style::new().dim(),
-            ),
-            Line::from(""),
-            Line::styled(
-                "Tool output stays hidden while setup runs.",
-                Style::new().dim(),
-            ),
-        ])
-        .wrap(Wrap { trim: true })
-        .block(
+        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
             Block::bordered()
                 .border_type(BorderType::Rounded)
                 .border_style(Style::new().fg(ACCENT))
@@ -200,18 +315,14 @@ fn handle_cancel_key(confirm_cancel: &mut bool, key: ratatui::crossterm::event::
 pub(crate) fn run<T: Send>(
     system: &(dyn System + Sync),
     interactive: bool,
+    activity: &str,
     work: impl FnOnce(&dyn System, &AtomicBool) -> Result<T> + Send,
 ) -> Result<T> {
     if !interactive {
         return work(system, &AtomicBool::new(false));
     }
     let cancelled = AtomicBool::new(false);
-    let progress = ProgressSystem {
-        system,
-        cancelled: &cancelled,
-        stage: Mutex::new("Preparing setup"),
-        bytes: AtomicUsize::new(0),
-    };
+    let progress = ProgressSystem::new(system, &cancelled, None);
     let mut terminal = ratatui::init();
     let result = std::thread::scope(|scope| {
         let worker = scope.spawn(|| work(&progress, &cancelled));
@@ -220,11 +331,14 @@ pub(crate) fn run<T: Send>(
             let mut confirm_cancel = false;
             while !worker.is_finished() {
                 terminal.draw(|frame| {
+                    let state = progress.progress.lock().unwrap().clone();
                     draw_progress(
                         frame,
-                        *progress.stage.lock().unwrap(),
+                        activity,
+                        state.current,
+                        &state.completed,
                         started.elapsed(),
-                        progress.bytes.load(Ordering::Relaxed),
+                        state.last_output.elapsed().as_secs(),
                         confirm_cancel,
                     );
                 })?;
@@ -275,19 +389,57 @@ mod tests {
             .draw(|frame| {
                 draw_progress(
                     frame,
+                    "Vault 1/3 · second-brain",
                     "Building search embeddings",
+                    &[
+                        ("Vault Markdown indexed", Duration::from_secs(4)),
+                        ("Search models ready", Duration::from_secs(2)),
+                    ],
                     Duration::from_secs(12),
-                    2048,
+                    5,
                     false,
                 )
             })
             .unwrap();
 
         let screen = screen(&terminal);
-        assert!(screen.contains("loom wiki"));
+        assert!(screen.contains("loom"));
+        assert!(screen.contains("Vault 1/3 · second-brain"));
         assert!(screen.contains("Building search embeddings"));
-        assert!(screen.contains("12s elapsed  ·  2.0 KB activity"));
+        assert!(screen.contains("Vault Markdown indexed · 4s"));
+        assert!(screen.contains("Search models ready · 2s"));
+        assert!(screen.contains("12s elapsed · last tool activity 5s ago"));
+        assert!(!screen.contains("KB activity"));
         assert!(screen.contains("esc or ctrl-c cancels"));
+    }
+
+    #[test]
+    fn progress_keeps_the_three_latest_completed_stages() {
+        struct Fake;
+        impl System for Fake {
+            fn command_exists(&self, _: &str) -> bool {
+                true
+            }
+            fn refresh_path(&self) {}
+            fn run(&self, _: &CommandSpec) -> Result<CommandResult> {
+                Ok(CommandResult {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            }
+        }
+        let cancelled = AtomicBool::new(false);
+        let progress = ProgressSystem::new(&Fake, &cancelled, None);
+
+        for command in ["update", "pull", "embed", "query"] {
+            progress.run(&CommandSpec::new("qmd", [command])).unwrap();
+        }
+
+        let state = progress.progress.lock().unwrap();
+        assert_eq!(state.completed.len(), 3);
+        assert_eq!(state.completed[0].0, "Search models ready");
+        assert_eq!(state.completed[2].0, "First search checked");
     }
 
     #[test]
@@ -311,7 +463,10 @@ mod tests {
     #[test]
     fn progress_names_never_contain_command_arguments() {
         let command = CommandSpec::new("qmd", ["query", "secret\x1b]0;title\x07\rtext"]);
-        assert_eq!(stage(&command), "First-search check (up to 120 seconds)");
+        assert_eq!(
+            stage(&command).active,
+            "First-search check (up to 120 seconds)"
+        );
     }
     #[test]
     fn scripted_work_has_no_terminal() {
@@ -326,7 +481,7 @@ mod tests {
             }
         }
         assert_eq!(
-            run(&Fake, false, |_, cancelled| {
+            run(&Fake, false, "Refreshing Wiki Vault", |_, cancelled| {
                 assert!(!cancelled.load(Ordering::Relaxed));
                 Ok(42)
             })

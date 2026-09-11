@@ -128,6 +128,33 @@ fn plan_servers(destination: &SkillDestination, names: &[&str]) -> loom::Install
 }
 
 #[test]
+fn mcp_with_shared_agent_selection_does_not_require_pending_skill_copies() {
+    std::env::set_var("LOOM_REPO_DIR", common::repo_root());
+    for scope in [SkillScope::Global, SkillScope::Project] {
+        let mut d = destination("mcp-shared-agents", scope);
+        d.agents = SkillAgent::ALL.to_vec();
+        let stub = Stub::new(&d.home);
+        let claude = d.home.join(".claude.json");
+        write_json(&claude, json!({"mcpServers":{"keep":{"command":"custom"}}}));
+        let before = fs::read(&claude).unwrap();
+        let report = loom::execute_install_plan(&plan(&d), &stub);
+        assert!(report.failures.is_empty(), "{report:?}");
+        assert!(mcp::config_path(&d).is_file());
+        assert_eq!(
+            fs::read(claude).unwrap(),
+            before,
+            "only Pi receives MCP configuration"
+        );
+        d.agents = vec![SkillAgent::Claude];
+        assert!(
+            mcp::preflight(mcp::Server::Sem, &d).is_err(),
+            "Pi must still be selected"
+        );
+        fs::remove_dir_all(d.home).unwrap();
+    }
+}
+
+#[test]
 fn sem_mcp_merge_is_idempotent_private_and_entry_owned_in_both_scopes() {
     for scope in [SkillScope::Global, SkillScope::Project] {
         let d = destination("mcp-merge", scope);
@@ -278,6 +305,25 @@ fn sem_mcp_conflicts_and_malformed_files_fail_before_any_commands() {
 }
 
 #[test]
+fn sem_mcp_upgrades_an_older_official_adapter() {
+    std::env::set_var("LOOM_REPO_DIR", common::repo_root());
+    let d = destination("mcp-adapter-upgrade", SkillScope::Global);
+    adapter(&d.home, "2.31.0");
+    let stub = Stub::new(&d.home);
+
+    let report = loom::execute_install_plan(&plan(&d), &stub);
+
+    assert!(report.failures.is_empty(), "{report:?}");
+    assert!(stub
+        .commands
+        .lock()
+        .unwrap()
+        .contains(&format!("pi install {}", mcp::ADAPTER_SPEC)));
+    assert!(!mcp::adapter_needed(&d).unwrap());
+    fs::remove_dir_all(d.home).unwrap();
+}
+
+#[test]
 fn sem_mcp_rejects_disabled_unverified_and_project_adapter_sources() {
     for package in [
         json!({"source":mcp::ADAPTER_SPEC,"extensions":[]}),
@@ -306,17 +352,23 @@ fn sem_mcp_rejects_disabled_unverified_and_project_adapter_sources() {
 }
 
 #[test]
-fn sem_mcp_other_scopes_and_modified_owned_entries_are_preserved() {
+fn sem_mcp_installs_selected_scope_and_preserves_other_scopes() {
     let d = destination("mcp-scope-conflict", SkillScope::Global);
     adapter(&d.home, "2.32.1");
     let stub = Stub::new(&d.home);
+    let project_path = d.project_root.join(".pi/mcp.json");
+    let project_entry = json!({"mcpServers":{"sem":{"command":"/opt/homebrew/bin/sem","args":["mcp"],"lifecycle":"lazy","directTools":false}}});
+    write_json(&project_path, project_entry.clone());
+
+    assert!(!mcp::configured(mcp::Server::Sem, &d, &stub));
+    assert!(mcp::preflight(mcp::Server::Sem, &d).is_ok());
     mcp::install(mcp::Server::Sem, &d, &stub).unwrap();
-    let mut local = d.clone();
-    local.scope = SkillScope::Project;
-    assert!(mcp::preflight(mcp::Server::Sem, &local)
-        .unwrap_err()
-        .to_string()
-        .contains("already has a definition"));
+    assert!(mcp::configured(mcp::Server::Sem, &d, &stub));
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&fs::read(&project_path).unwrap()).unwrap(),
+        project_entry,
+        "installing globally must preserve the project entry"
+    );
     let path = mcp::config_path(&d);
     let state = ownership::InstallState::load(&d.home).unwrap();
     let receipt = &state.resources.values().next().unwrap().receipts[0];
@@ -454,6 +506,11 @@ fn sem_mcp_cli_yes_configures_without_reinstalling_an_existing_gateway() {
         let d = destination("mcp-cli-yes", scope);
         adapter(&d.home, "2.33.0");
         let settings = d.home.join(".pi/agent/settings.json");
+        // Both settings and `pi list` describe the same pre-existing packages.
+        write_json(
+            &settings,
+            json!({"theme":"keep", "packages":["npm:pi-mcp-adapter@2.33.0", "npm:@yassimba/pi-loom@latest"]}),
+        );
         let before = fs::read(&settings).unwrap();
         let bin = d.home.join("bin");
         fs::create_dir_all(&bin).unwrap();
@@ -991,10 +1048,11 @@ fn context7_conflicts_stop_all_lanes_and_preserve_secrets_and_other_scopes() {
     mcp::install(mcp::Server::Context7, &d, &Stub::new(&d.home)).unwrap();
     let mut local = d.clone();
     local.scope = SkillScope::Project;
-    assert!(mcp::preflight(mcp::Server::Context7, &local)
-        .unwrap_err()
-        .to_string()
-        .contains("already has a definition"));
+    let stub = Stub::new(&d.home);
+    assert!(!mcp::configured(mcp::Server::Context7, &local, &stub));
+    assert!(mcp::preflight(mcp::Server::Context7, &local).is_ok());
+    mcp::install(mcp::Server::Context7, &local, &stub).unwrap();
+    assert!(mcp::configured(mcp::Server::Context7, &local, &stub));
     assert!(
         mcp::preflight(mcp::Server::Sem, &local).is_ok(),
         "Context7 must not block a different server in another scope"
@@ -1076,6 +1134,10 @@ fn context7_cli_add_and_status_use_context7_identity_even_when_sem_is_configured
     use std::process::{Command, Stdio};
     let d = destination("context7-cli", SkillScope::Global);
     adapter(&d.home, "2.33.0");
+    write_json(
+        &d.home.join(".pi/agent/settings.json"),
+        json!({"theme":"keep", "packages":["npm:pi-mcp-adapter@2.33.0", "npm:@yassimba/pi-loom@latest"]}),
+    );
     mcp::install(mcp::Server::Sem, &d, &Stub::new(&d.home)).unwrap();
     let bin = d.home.join("bin");
     fs::create_dir_all(&bin).unwrap();

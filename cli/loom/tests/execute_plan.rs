@@ -341,7 +341,7 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
                 assert!(report
                     .failures
                     .iter()
-                    .any(|failure| failure.message.contains("runtime install failed")));
+                    .any(|failure| failure.message.contains("The operation did not complete")));
             }
         } else {
             assert!(report.failures.is_empty(), "{report:?}");
@@ -383,7 +383,10 @@ fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
     assert_eq!(report.installed, vec!["pi-package:sample"]);
     assert_eq!(report.failures.len(), 2);
     assert_eq!(report.failures[0].target, "Herdr");
-    assert_eq!(report.failures[0].message, "network unavailable");
+    assert!(report.failures[0]
+        .message
+        .contains("package source could not be reached"));
+    assert!(report.failures[0].message.contains("retry"));
     assert_eq!(report.failures[1].target, "herdr-plugin:jumplist");
     assert_eq!(report.failures[1].message, "Herdr is unavailable");
     let mut commands = system.commands.into_inner().unwrap();
@@ -873,7 +876,7 @@ impl System for PackageInstallSystem {
         }
         Ok(CommandResult {
             success: !self.fail,
-            stdout: "npm:@dietrichgebert/ponytail@4.9.0".into(),
+            stdout: "User packages:\n  npm:@dietrichgebert/ponytail@4.9.0".into(),
             stderr: "package failed".into(),
         })
     }

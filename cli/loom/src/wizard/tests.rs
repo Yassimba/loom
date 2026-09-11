@@ -1,3 +1,6 @@
+#[path = "wiki_tests.rs"]
+mod inline_wiki;
+
 use super::state::*;
 use crate::settings::{
     KeyCommand, SettingChange, SettingSpec, SettingState, SettingsPaths, ZedKeybinding,
@@ -315,7 +318,7 @@ fn choose_lists_profiles_then_settings_in_catalog_order() {
             .collect::<Vec<_>>(),
         ["Skills", "Tools", "Settings"]
     );
-    // Start in the first role profile, ready to move left-to-right.
+    // Start on the first goal without selecting it, ready to move left-to-right.
     assert_eq!(choose(&wizard).focus, Pane::Groups);
     assert_eq!(choose(&wizard).group().title, "Engineer");
     assert_eq!(current_row(&wizard), Row::Resource(3));
@@ -347,6 +350,64 @@ fn filtered_and_empty_profiles_use_only_resources_in_the_model() {
 }
 
 #[test]
+fn fully_installed_sections_show_a_checkmark_instead_of_a_goal_checkbox() {
+    let section_mark = |output: &str, title: &str| {
+        output
+            .lines()
+            .filter_map(|line| line.split('│').nth(1))
+            .find(|cell| cell.contains(title))
+            .unwrap()
+            .split_once(title)
+            .unwrap()
+            .0
+            .trim()
+            .to_owned()
+    };
+    for width in [60, 160] {
+        for pick_goal in [false, true] {
+            let mut model = model(ready());
+            model.settings.clear();
+            let mut wizard = Wizard::new(model);
+            if pick_goal {
+                press(&mut wizard, &[KeyCode::Char(' ')]);
+            }
+            let checkbox = if pick_goal { "[x]" } else { "[ ]" };
+            assert_eq!(
+                section_mark(&screen(&mut wizard, width, 24), "Engineer"),
+                checkbox
+            );
+
+            let mut installed = vec![false; catalog().len()];
+            installed[3] = true;
+            wizard.set_installed(installed.clone());
+            assert_eq!(
+                section_mark(&screen(&mut wizard, width, 24), "Engineer"),
+                checkbox,
+                "partly installed or merely picked is not complete"
+            );
+
+            installed[4] = true;
+            installed[6] = true;
+            wizard.set_installed(installed);
+            let output = screen(&mut wizard, width, 24);
+            assert_eq!(section_mark(&output, "Engineer"), "✓", "{output}");
+            assert_ne!(section_mark(&output, "Everything"), "✓");
+            press(&mut wizard, &[KeyCode::Right]);
+            let types = screen(&mut wizard, 60, 24);
+            assert_eq!(section_mark(&types, "Skills"), "✓");
+            assert_eq!(section_mark(&types, "Tools"), "✓");
+
+            wizard.set_installed(vec![true; catalog().len()]);
+            press(&mut wizard, &[KeyCode::Left]);
+            assert_eq!(
+                section_mark(&screen(&mut wizard, width, 24), "Everything"),
+                "✓"
+            );
+        }
+    }
+}
+
+#[test]
 fn choose_renders_profiles_mixed_kinds_and_required_tools() {
     let mut model = model(ready());
     model.resources[3].dependencies = vec!["gh".into()];
@@ -361,7 +422,7 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
     );
 
     let profile_output = screen(&mut wizard, 160, 28);
-    assert!(profile_output.contains("Profiles"));
+    assert!(profile_output.contains("Goals"));
     assert!(profile_output.contains("Types"));
     assert!(profile_output.contains("Capabilities"));
     assert!(!profile_output.contains("Overview"));
@@ -372,7 +433,7 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
     go_to(&mut wizard, Row::Resource(6));
     let output = screen(&mut wizard, 160, 28);
 
-    assert!(!output.contains("Profiles"));
+    assert!(!output.contains("Goals"));
     assert!(output.contains("Types"));
     assert!(output.contains("Capabilities"));
     assert!(output.contains("Overview"));
@@ -382,7 +443,7 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
 
     press(&mut wizard, &[KeyCode::Left]);
     let restored = screen(&mut wizard, 160, 28);
-    assert!(restored.contains("Profiles"));
+    assert!(restored.contains("Goals"));
     assert!(!restored.contains("Overview"));
 }
 
@@ -441,6 +502,142 @@ fn space_on_a_profile_toggles_only_its_direct_members() {
     assert_eq!(choose(&wizard).focus, Pane::Groups);
     press(&mut wizard, &[KeyCode::Char(' ')]);
     assert!(wizard.selected.iter().all(|on| !*on));
+}
+
+#[test]
+fn combined_goals_keep_shared_items_and_respect_individual_choices() {
+    let mut wizard = wizard();
+    go_to_group(&mut wizard, "Engineer");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    go_to_group(&mut wizard, "Data Engineer");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    go_to_group(&mut wizard, "Engineer");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(wizard.selected[3], "Data Engineer still needs tdd");
+    assert!(wizard.selected[6], "Data Engineer still includes gh");
+    assert!(!wizard.selected[4], "refactor belonged only to Engineer");
+    go_to(&mut wizard, Row::Resource(3));
+    let output = screen(&mut wizard, 160, 32);
+    assert!(output.contains("Included by Data Engineer"), "{output}");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    go_to_group(&mut wizard, "Engineer");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(
+        !wizard.selected[3],
+        "an explicit exclusion survives goal changes"
+    );
+    assert_eq!(
+        wizard
+            .expanded_selection()
+            .iter()
+            .filter(|r| r.label == "gh")
+            .count(),
+        1,
+    );
+}
+
+#[test]
+fn review_separates_picks_dependencies_and_safe_changes_at_both_widths() {
+    let mut model = model(ready());
+    model.resources[3].dependencies = vec!["mermaid".into()];
+    model.settings.clear();
+    let mut wizard = Wizard::new(model);
+    go_to_group(&mut wizard, "Engineer");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    go_to(&mut wizard, Row::Resource(1));
+    press(
+        &mut wizard,
+        &[KeyCode::Char(' '), KeyCode::Enter, KeyCode::Enter],
+    );
+    assert_eq!(title(&wizard), "Review");
+    let wide = screen(&mut wizard, 160, 32);
+    for text in [
+        "Selected capabilities",
+        "Required to work",
+        "Repairs & next steps",
+        "Included by Engineer",
+        "Picked individually",
+        "Needed by tdd",
+        "No automatic repairs planned.",
+    ] {
+        assert!(wide.contains(text), "missing {text}:\n{wide}");
+    }
+    let mut narrow = screen(&mut wizard, 40, 14);
+    for _ in 0..80 {
+        press(&mut wizard, &[KeyCode::Down]);
+        narrow.push_str(&screen(&mut wizard, 40, 14));
+    }
+    for text in [
+        "Selected capabilities",
+        "Required to work",
+        "Repairs & next steps",
+        "themes",
+        "mermaid",
+        "Engineer",
+    ] {
+        assert!(narrow.contains(text), "missing {text}:\n{narrow}");
+    }
+    assert!(
+        !wizard.install_running(),
+        "review and scrolling never install"
+    );
+}
+
+#[test]
+fn ready_uses_successful_goal_actions_and_freezes_completed_step_time() {
+    let mut model = model(ready());
+    model.resources[3].next_action = "Run /tdd in Pi".into();
+    model.resources[5].next_action = "Run /mermaid-skill in Pi".into();
+    model.profiles[1].resources.swap(0, 1);
+    let mut wizard = Wizard::new(model);
+    go_to_group(&mut wizard, "Engineer");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    go_to_group(&mut wizard, "Data Engineer");
+    press(
+        &mut wizard,
+        &[
+            KeyCode::Char(' '),
+            KeyCode::Enter,
+            KeyCode::Enter,
+            KeyCode::Enter,
+        ],
+    );
+    wizard.begin_install().unwrap();
+    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Running));
+    if let Stage::Install(stage) = &mut wizard.stages[wizard.stage_index] {
+        stage.items[0].started =
+            Some(std::time::Instant::now() - std::time::Duration::from_secs(3));
+    }
+    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
+    if let Stage::Install(stage) = &wizard.stages[wizard.stage_index] {
+        assert!(stage.items[0].started.is_none());
+        assert!(stage.items[0].elapsed.as_secs() >= 3);
+    }
+    let report = crate::InstallReport {
+        installed: vec!["skills".into()],
+        failures: vec![],
+    };
+    assert_eq!(
+        wizard.goal_next_actions(&report),
+        vec![
+            ("Engineer".into(), "Run /tdd in Pi".into()),
+            ("Data Engineer".into(), "Run /mermaid-skill in Pi".into()),
+        ]
+    );
+    assert!(wizard
+        .goal_next_actions(&crate::InstallReport::default())
+        .is_empty());
+    wizard.handle_install_event(InstallEvent::Done(report));
+    let output = screen(&mut wizard, 100, 32);
+    for text in [
+        "Ready to try",
+        "Run /tdd in Pi",
+        "Run /mermaid-skill in Pi",
+        "not verified",
+        "3s",
+    ] {
+        assert!(output.contains(text), "missing {text}:\n{output}");
+    }
 }
 
 #[test]
@@ -695,6 +892,182 @@ fn dry_run_exits_with_the_plan_instead_of_installing() {
 }
 
 #[test]
+fn wiki_resources_are_exclusive_to_wiki_even_when_globally_present() {
+    let mut model = model(ready());
+    let wiki = resource(ResourceKind::PiPackage, "Wiki", "feynman");
+    model.resources.push(wiki.clone());
+    model.installed.push(true);
+    model.profiles[0].resources.push(wiki.id.clone());
+    model.profiles.push(Profile {
+        id: "knowledge-wiki".into(),
+        label: "Wiki".into(),
+        description: "Choose a Vault".into(),
+        resources: vec![wiki.id],
+    });
+    let mut wizard = Wizard::new(model);
+    let index = wizard.model.resources.len() - 1;
+    for group in &choose(&wizard).groups {
+        assert_eq!(
+            group.rows.contains(&Row::Resource(index)),
+            group.title == "Wiki"
+        );
+    }
+    assert!(!wizard.resource_installed(index));
+    go_to(&mut wizard, Row::Resource(index));
+    let rendered = screen(&mut wizard, 120, 30);
+    assert!(rendered.contains("Choose a Vault"), "{rendered}");
+    assert!(!rendered.contains("pi install npm:feynman"), "{rendered}");
+}
+
+#[test]
+fn retry_keeps_the_reviewed_plan_destination_and_completed_items() {
+    let mut wizard = wizard();
+    wizard.selected[0] = true;
+    wizard.selected[1] = true;
+    press(&mut wizard, &[KeyCode::Enter, KeyCode::Enter]);
+    let initial = wizard.begin_install().unwrap();
+    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
+    wizard.handle_install_event(InstallEvent::Status(
+        1,
+        ExecStatus::Failed("timed out after 30s".into()),
+    ));
+    wizard.handle_install_event(InstallEvent::Done(crate::InstallReport {
+        installed: vec!["Pi packages:subagents".into()],
+        failures: vec![crate::InstallFailure {
+            target: "Pi packages:themes".into(),
+            message: "timed out after 30s".into(),
+        }],
+    }));
+    let rendered = screen(&mut wizard, 100, 28);
+    assert!(rendered.contains("Retry"), "{rendered}");
+    assert!(rendered.contains("Completed work stays"), "{rendered}");
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::StartInstall)
+    ));
+    let retried = wizard.begin_install().unwrap();
+    assert_eq!(retried.plan, initial.plan);
+    assert_eq!(retried.completed, vec![0]);
+    assert!(!retried.cancelled.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+#[test]
+fn retry_rechecks_completed_packages_and_reinstalls_only_missing_or_failed_work() {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    };
+    struct RetrySystem {
+        installed: Mutex<Vec<String>>,
+        commands: Mutex<Vec<crate::CommandSpec>>,
+        fail_once: AtomicBool,
+    }
+    impl crate::System for RetrySystem {
+        fn command_exists(&self, _: &str) -> bool {
+            true
+        }
+        fn refresh_path(&self) {}
+        fn run(&self, command: &crate::CommandSpec) -> anyhow::Result<crate::CommandResult> {
+            self.commands.lock().unwrap().push(command.clone());
+            if command.args[0] == "list" {
+                return Ok(crate::CommandResult {
+                    success: true,
+                    stdout: format!(
+                        "User packages:\n{}\nProject packages:\n  npm:subagents@latest",
+                        self.installed.lock().unwrap().join("\n")
+                    ),
+                    stderr: String::new(),
+                });
+            }
+            let name = command.args.last().unwrap().clone();
+            let success =
+                !name.contains("themes") || !self.fail_once.swap(false, Ordering::Relaxed);
+            if success {
+                self.installed.lock().unwrap().push(name);
+            }
+            Ok(crate::CommandResult {
+                success,
+                stdout: String::new(),
+                stderr: if success {
+                    String::new()
+                } else {
+                    "ETIMEDOUT Authorization: Bearer PRIVATE-TOKEN".into()
+                },
+            })
+        }
+    }
+    for (removed_after_success, cancel_retry) in [(false, false), (true, false), (false, true)] {
+        let system = RetrySystem {
+            installed: Mutex::new(Vec::new()),
+            commands: Mutex::new(Vec::new()),
+            fail_once: AtomicBool::new(true),
+        };
+        let mut wizard = wizard();
+        wizard.selected[0] = true;
+        wizard.selected[1] = true;
+        press(&mut wizard, &[KeyCode::Enter, KeyCode::Enter]);
+        let reviewed_destination = wizard.skill_destination();
+        let initial = wizard.begin_install().unwrap();
+        let (sender, events) = std::sync::mpsc::channel();
+        super::run_install_job(initial.clone(), &system, &sender);
+        for event in events.try_iter() {
+            wizard.handle_install_event(event);
+        }
+        let rendered = screen(&mut wizard, 100, 28);
+        assert!(rendered.contains("timed out"), "{rendered}");
+        assert!(!rendered.contains("PRIVATE-TOKEN"));
+        assert!(wizard.can_retry());
+        if removed_after_success {
+            system.installed.lock().unwrap().clear();
+        }
+        // Late initial probes must not discard the frozen selection.
+        wizard.set_installed(vec![true; wizard.model.resources.len()]);
+        assert!(wizard.selected[0] && wizard.selected[1]);
+        assert!(matches!(
+            press(&mut wizard, &[KeyCode::Char('r')]),
+            Some(Action::StartInstall)
+        ));
+        let retry = wizard.begin_install().unwrap();
+        assert_eq!(retry.plan, initial.plan);
+        retry.cancelled.store(cancel_retry, Ordering::Relaxed);
+        super::run_install_job(retry, &system, &sender);
+        for event in events.try_iter() {
+            wizard.handle_install_event(event);
+        }
+        assert_eq!(wizard.can_retry(), cancel_retry);
+        let Some(Action::Exit(WizardOutcome::Installed {
+            report,
+            resources,
+            destination,
+            written,
+        })) = press(&mut wizard, &[KeyCode::Esc])
+        else {
+            panic!("expected install result");
+        };
+        assert_eq!(report.installed.len(), if cancel_retry { 0 } else { 2 });
+        assert_eq!(report.failures.is_empty(), !cancel_retry);
+        assert_eq!(resources.len(), 2);
+        assert_eq!(destination, reviewed_destination);
+        assert_eq!(written.len(), if cancel_retry { 1 } else { 2 });
+        assert!(written.contains(&"Pi packages:subagents".into()));
+        let commands = system.commands.lock().unwrap();
+        let installs = |name: &str| {
+            commands
+                .iter()
+                .filter(|command| {
+                    command.args[0] == "install" && command.args.last().unwrap().contains(name)
+                })
+                .count()
+        };
+        assert_eq!(
+            installs("subagents"),
+            if removed_after_success { 2 } else { 1 }
+        );
+        assert_eq!(installs("themes"), if cancel_retry { 1 } else { 2 });
+    }
+}
+
+#[test]
 fn install_events_drive_the_install_screen_to_completion() {
     let mut wizard = wizard();
     go_to(&mut wizard, Row::Resource(0));
@@ -714,7 +1087,7 @@ fn install_events_drive_the_install_screen_to_completion() {
     assert!(!wizard.install_running());
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
-        Some(Action::Exit(WizardOutcome::Installed(report, _, _))) if report.installed.len() == 1
+        Some(Action::Exit(WizardOutcome::Installed { report, .. })) if report.installed.len() == 1
     ));
 }
 
@@ -853,6 +1226,24 @@ fn render_gallery() {
         }
         println!("{out}");
     };
+    // Also show the shipped goal names and dependency explanations, not just fixtures.
+    let mut catalog_model = model(ready());
+    let catalog = crate::Catalog::embedded().unwrap();
+    catalog_model.resources = catalog.resources;
+    catalog_model.profiles = catalog.profiles;
+    catalog_model.installed = vec![false; catalog_model.resources.len()];
+    catalog_model.settings.clear();
+    let mut goals = Wizard::new(catalog_model);
+    let mut wide = Terminal::new(TestBackend::new(160, 34)).unwrap();
+    show(&mut goals, &mut wide);
+    go_to_group(&mut goals, "Research deeply");
+    press(
+        &mut goals,
+        &[KeyCode::Char(' '), KeyCode::Enter, KeyCode::Enter],
+    );
+    show(&mut goals, &mut wide);
+    show(&mut goals, &mut terminal);
+
     go_to(&mut wizard, Row::Resource(2));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     go_to(&mut wizard, Row::Resource(3));
@@ -893,13 +1284,206 @@ fn automatic_pi_loom_package_is_hidden_and_selected_for_existing_pi() {
 }
 
 #[test]
-fn setup_starts_in_the_first_role_profile() {
+fn setup_starts_on_the_first_goal_without_picking_it() {
     let mut model = model(ready());
     model.mode = crate::app::SelectionMode::Setup;
     let wizard = Wizard::new(model);
 
     assert_eq!(choose(&wizard).group().title, "Engineer");
     assert_eq!(choose(&wizard).focus, Pane::Groups);
+}
+
+fn vault_browser_wizard() -> Wizard {
+    let mut model = model(ready());
+    model
+        .resources
+        .push(resource(ResourceKind::Tool, "Wiki", "claude-obsidian"));
+    model.installed.push(false);
+    model.profiles.push(Profile {
+        id: "knowledge-wiki".into(),
+        label: "Wiki".into(),
+        description: "Your Wikis".into(),
+        resources: vec!["Wiki:claude-obsidian".into()],
+    });
+    let mut wizard = Wizard::new(model);
+    wizard.wiki = Some(super::wiki::WikiBrowser::default());
+    go_to_group(&mut wizard, "Wiki");
+    wizard
+}
+
+#[test]
+fn wiki_browser_keeps_three_lanes_and_inspects_only_the_selected_vault() {
+    use crate::wiki::{VaultHealth, VaultRecord};
+    let mut wizard = vault_browser_wizard();
+    wizard.selected[0] = true; // An unrelated setup choice survives Wiki navigation.
+    let picks = wizard.selected.clone();
+    let records = ["/tmp/Vault A", "/tmp/Vault B"].map(|path| VaultRecord {
+        path: path.into(),
+        feynman: false,
+        confluence: false,
+    });
+    let browser = wizard.wiki.as_mut().unwrap();
+    browser.vaults = records.to_vec();
+    assert_eq!(browser.next_probe().unwrap(), records[0]);
+    assert!(
+        browser.next_probe().is_none(),
+        "only one health probe at a time"
+    );
+    browser.checking = false;
+    browser.health.insert(
+        records[0].path.clone(),
+        VaultHealth {
+            healthy: false,
+            rows: vec![
+                (
+                    crate::ui::Mark::Ok,
+                    "Feynman",
+                    "A-only Vault package".into(),
+                ),
+                (crate::ui::Mark::Off, "qmd", "missing from this Wiki".into()),
+                (
+                    crate::ui::Mark::Ok,
+                    "QMD (shared)",
+                    "installed on this machine".into(),
+                ),
+            ],
+        },
+    );
+    let wide = screen(&mut wizard, 160, 28);
+    for text in [
+        "Goals",
+        "Your Wikis",
+        "This Wiki",
+        "Vault A",
+        "Vault B",
+        "✓ Feynman",
+        "QMD (shared)",
+    ] {
+        assert!(wide.contains(text), "missing {text}:\n{wide}");
+    }
+    if !cfg!(windows) {
+        assert!(wide.contains("Connect existing Wiki") && wide.contains("Create new Wiki"));
+    }
+    println!("{wide}");
+    press(&mut wizard, &[KeyCode::Right]);
+    let narrow = screen(&mut wizard, 50, 18);
+    assert!(
+        narrow.contains("Your Wikis") && narrow.contains("Vault A"),
+        "{narrow}"
+    );
+    assert!(
+        press(&mut wizard, &[KeyCode::Enter]).is_none(),
+        "opening a Wiki only inspects"
+    );
+    let details = screen(&mut wizard, 50, 24);
+    assert!(details.contains("✓ Feynman"), "{details}");
+    assert!(
+        press(&mut wizard, &[KeyCode::Enter]).is_none(),
+        "capabilities stay in the chooser, never open a separate manager"
+    );
+    press(&mut wizard, &[KeyCode::Esc, KeyCode::Down]);
+    let second = screen(&mut wizard, 160, 28);
+    assert!(
+        second.contains("Checking this Wiki") && !second.contains("✓ Feynman"),
+        "{second}"
+    );
+    assert_eq!(
+        wizard.wiki.as_mut().unwrap().next_probe().unwrap(),
+        records[1]
+    );
+    assert_eq!(wizard.selected, picks);
+    assert!(wizard
+        .selection()
+        .iter()
+        .all(|resource| resource.group != "Wiki"));
+    wizard.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    assert_eq!(
+        title(&wizard),
+        "Review",
+        "Ctrl-Enter continues the other setup choices"
+    );
+}
+
+#[test]
+fn wiki_browser_selects_new_registrations_and_does_not_replace_a_broken_registry() {
+    let root = std::env::temp_dir().join(format!("loom-vault-browser-{}", std::process::id()));
+    let record = |name: &str| crate::wiki::VaultRecord {
+        path: root.join(name),
+        feynman: false,
+        confluence: false,
+    };
+    let mut registry = crate::wiki::WikiRegistry::default();
+    registry.vaults.push(record("Old Wiki"));
+    registry.save(&root).unwrap();
+    let mut browser = super::wiki::WikiBrowser::default();
+    browser.load(&root);
+    browser.cursor = browser.vaults.len(); // The Connect action.
+    registry.vaults.push(record("New Wiki"));
+    registry.save(&root).unwrap();
+    browser.load(&root);
+    assert_eq!(browser.record(), Some(&record("New Wiki")));
+    let path = root.join(".config/loom/wiki-vaults.json");
+    std::fs::write(&path, "broken registry").unwrap();
+    browser.load(&root);
+    assert!(browser.entry().is_none());
+    assert!(browser.next_probe().is_none());
+    assert!(browser.vaults.is_empty());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "broken registry");
+    assert!(
+        !root.join("New Wiki").exists(),
+        "browsing must not recreate missing Vaults"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+#[cfg(not(windows))]
+fn empty_wiki_browser_opens_explicit_folder_actions_by_keyboard_and_mouse() {
+    let mut wizard = vault_browser_wizard();
+    let picks = wizard.selected.clone();
+    let output = screen(&mut wizard, 160, 28);
+    assert!(output.contains("No registered Wikis yet"), "{output}");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::PickWiki(crate::wiki::WikiOperation::Adopt))
+    ));
+    press(&mut wizard, &[KeyCode::Down]);
+    assert!(matches!(
+        press(&mut wizard, &[KeyCode::Enter]),
+        Some(Action::PickWiki(crate::wiki::WikiOperation::Create))
+    ));
+    screen(&mut wizard, 160, 28);
+    let (area, _) = wizard.hits.kinds.unwrap();
+    assert!(matches!(
+        wizard.handle_click(area.x + 3, area.y + 1),
+        Some(Action::PickWiki(crate::wiki::WikiOperation::Adopt))
+    ));
+    assert!(matches!(
+        wizard.handle_click(area.x + 3, area.y + 2),
+        Some(Action::PickWiki(crate::wiki::WikiOperation::Create))
+    ));
+    assert_eq!(wizard.selected, picks);
+    assert!(wizard.picked_goals.is_empty());
+    for accept in [KeyCode::Enter, KeyCode::Char(' ')] {
+        press(&mut wizard, &[KeyCode::Char('/')]);
+        for c in "claude-obsidian".chars() {
+            press(&mut wizard, &[KeyCode::Char(c)]);
+        }
+        press(&mut wizard, &[accept]);
+        assert!(wizard.browsing_wiki());
+        assert_eq!(choose(&wizard).focus, Pane::Kinds);
+        assert_eq!(
+            wizard.selected, picks,
+            "search opens Wiki navigation instead of selecting global Wiki tools"
+        );
+    }
+    press(&mut wizard, &[KeyCode::Char('n')]);
+    assert_eq!(
+        title(&wizard),
+        "Review",
+        "Next also works without extended terminal key support"
+    );
 }
 
 #[test]
@@ -1187,7 +1771,7 @@ fn profile_choose_plain_terminal_child() {
     where_scope_options_fit_a_standard_terminal();
     let mut wizard = wizard();
     let output = screen(&mut wizard, 104, 24);
-    assert!(output.contains("Profiles"));
+    assert!(output.contains("Goals"));
     assert!(output.contains("Types"));
     assert!(output.contains("Capabilities"));
     assert!(!output.contains("Overview"));
@@ -1521,7 +2105,7 @@ impl crate::System for AdhdInstallSystem {
     fn run(&self, _: &crate::CommandSpec) -> anyhow::Result<crate::CommandResult> {
         Ok(crate::CommandResult {
             success: self.0,
-            stdout: "i-have-adhd".into(),
+            stdout: "User packages:\n  npm:i-have-adhd".into(),
             stderr: "package install failed".into(),
         })
     }

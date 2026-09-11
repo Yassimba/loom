@@ -1,3 +1,4 @@
+use crate::ui::{Mark, Out};
 use crate::{manifest, CommandSpec, System};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -103,6 +104,12 @@ impl WikiRegistry {
         fs::write(&temporary, serde_json::to_vec_pretty(self)?)?;
         fs::rename(temporary, path)?;
         Ok(())
+    }
+
+    pub fn unregister(&mut self, path: &Path) -> bool {
+        let before = self.vaults.len();
+        self.vaults.retain(|record| record.path != path);
+        self.vaults.len() != before
     }
 
     fn register(&mut self, path: PathBuf, feynman: bool, confluence: bool) {
@@ -222,17 +229,13 @@ fn python_command(product: &Path, args: impl IntoIterator<Item = String>) -> Com
     CommandSpec::new("mise", argv)
 }
 
-fn approve_plan(plan: &ReviewedPlan, yes: bool) -> Result<bool> {
+type Confirm<'a> = &'a mut dyn FnMut(&str, &[String]) -> Result<bool>;
+
+fn approve_plan(plan: &ReviewedPlan, confirm: Confirm<'_>) -> Result<bool> {
     if plan.status == "noop" {
         return Ok(true);
     }
-    if yes {
-        for path in &plan.changed_paths {
-            println!("  {path}");
-        }
-        return Ok(true);
-    }
-    crate::wiki_tui::confirm("Apply this exact reviewed Vault plan?", &plan.changed_paths)
+    confirm("Apply this exact reviewed Vault plan?", &plan.changed_paths)
 }
 
 fn initialize_vault(
@@ -240,7 +243,7 @@ fn initialize_vault(
     product: &Path,
     operation: &WikiOperation,
     vault: &Path,
-    yes: bool,
+    confirm: Confirm<'_>,
 ) -> Result<bool> {
     match operation {
         WikiOperation::Create if vault.exists() => {
@@ -253,10 +256,6 @@ fn initialize_vault(
             anyhow::ensure!(
                 doctor_ok(system, product, vault),
                 "existing partial Vault failed claude-obsidian doctor; use Adopt or inspect the Vault before repair"
-            );
-            println!(
-                "Resuming partially completed Vault setup at {}.",
-                vault.display()
             );
             return Ok(true);
         }
@@ -299,8 +298,7 @@ fn initialize_vault(
         "unsupported claude-obsidian plan status: {}",
         plan.status
     );
-    if !approve_plan(&plan, yes)? {
-        println!("Cancelled; no plan applied.");
+    if !approve_plan(&plan, confirm)? {
         return Ok(false);
     }
     if plan.status != "noop" {
@@ -323,7 +321,7 @@ fn ensure_pi_ignored(
     home: &Path,
     product: &Path,
     vault: &Path,
-    yes: bool,
+    confirm: Confirm<'_>,
 ) -> Result<bool> {
     let path = vault.join(".gitignore");
     let (before, existed) = match fs::read(&path) {
@@ -376,9 +374,7 @@ fn ensure_pi_ignored(
             "ignore transaction changed unexpected paths"
         );
         let approval = inspected.approval_sha256;
-        if yes {
-            println!("  .gitignore: add .pi/");
-        } else if !crate::wiki_tui::confirm(
+        if !confirm(
             "Apply this reviewed machine-local ignore rule?",
             &[".gitignore: add .pi/".into()],
         )? {
@@ -597,10 +593,19 @@ fn setup_qmd(system: &dyn System, vault: &Path) -> Result<String> {
         return Ok("Search check skipped: the Vault index is empty.".into());
     }
     run_checked(system, &command(&["pull", "--progress"]))?;
-    let embedded = run_checked(system, &command(&["embed"]))?;
+    let embed_command = command(&["embed"]);
+    let embedded = system.run(&embed_command)?;
+    if !embedded.success {
+        bail!(
+            "{} failed: {}",
+            embed_command.display(),
+            crate::install::command_failure_message(&embedded)
+        );
+    }
+    let embed_output = format!("{}\n{}", embedded.stdout, embedded.stderr);
     anyhow::ensure!(
-        !embedded.contains("Another embed process is already running")
-            && !embedded.contains("chunks still failed after retries"),
+        !embed_output.contains("Another embed process is already running")
+            && !embed_output.contains("chunks still failed after retries"),
         "QMD embeddings are incomplete or busy; rerun Wiki repair"
     );
     let status = run_checked(system, &command(&["status"]))?;
@@ -682,7 +687,11 @@ fn canonical_vault(path: &Path) -> Result<PathBuf> {
         .with_context(|| format!("Vault is unavailable: {}", path.display()))
 }
 
-fn absolute_vault_target(system: &dyn System, path: &Path, create: bool) -> Result<PathBuf> {
+pub(crate) fn absolute_vault_target(
+    system: &dyn System,
+    path: &Path,
+    create: bool,
+) -> Result<PathBuf> {
     let candidate = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -750,7 +759,55 @@ fn registry_match_path(system: &dyn System, registry: &WikiRegistry, path: &Path
         .unwrap_or(candidate)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WikiOutcome {
+    Finished(bool),
+    Incomplete,
+}
+
+impl WikiOutcome {
+    fn successful_exit(self) -> bool {
+        self != Self::Finished(false)
+    }
+}
+
 pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<bool> {
+    run_wiki_outcome(request, system).map(WikiOutcome::successful_exit)
+}
+
+fn run_wiki_outcome(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<WikiOutcome> {
+    setup_with_confirmation(
+        request,
+        system,
+        None,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut Vec::new(),
+    )
+}
+
+/// The setup chooser supplies its own file-approval dialog and cancellation token.
+/// No nested terminal, authentication, launch, or global-package removal in this mode.
+pub(crate) fn setup_with_confirmation(
+    request: &WikiRequest,
+    system: &(dyn System + Sync),
+    confirm: Option<Confirm<'_>>,
+    cancelled: &std::sync::atomic::AtomicBool,
+    notes: &mut Vec<String>,
+) -> Result<WikiOutcome> {
+    let inline = confirm.is_some();
+    let interactive = !request.yes && !inline;
+    let yes = request.yes;
+    let mut default_confirm = move |title: &str, paths: &[String]| {
+        if yes {
+            for path in paths {
+                println!("  {path}");
+            }
+            Ok(true)
+        } else {
+            crate::wiki_tui::confirm(title, paths)
+        }
+    };
+    let confirm = confirm.unwrap_or(&mut default_confirm);
     let writes_vault_or_local_pi = matches!(
         request.operation,
         WikiOperation::Create
@@ -765,17 +822,17 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
     let home = system.home_dir().context("home directory is unavailable")?;
     let mut registered = None;
     match request.operation {
-        WikiOperation::Status => return Ok(status_registered(system)),
+        WikiOperation::Status => return Ok(WikiOutcome::Finished(status_registered(system))),
         WikiOperation::Unregister => {
             let mut registry = WikiRegistry::load(&home)?;
             let path = registry_match_path(system, &registry, &request.vault);
-            registry.vaults.retain(|record| record.path != path);
+            registry.unregister(&path);
             registry.save(&home)?;
             println!(
                 "Unregistered {}; Vault files were not changed.",
                 path.display()
             );
-            return Ok(true);
+            return Ok(WikiOutcome::Finished(true));
         }
         WikiOperation::Open | WikiOperation::Launch | WikiOperation::Repair => {
             let registry = WikiRegistry::load(&home)?;
@@ -798,7 +855,7 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
             "registered Vault is missing: {}",
             vault.display()
         );
-        return open_obsidian(system, &vault);
+        return open_obsidian(system, &vault).map(WikiOutcome::Finished);
     }
     if request.operation == WikiOperation::Launch {
         let vault = registered.context("registered Vault")?.path;
@@ -809,11 +866,15 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
         );
         system
             .spawn_detached(&CommandSpec::new("pi", std::iter::empty::<&str>()).in_dir(&vault))?;
-        return Ok(true);
+        return Ok(WikiOutcome::Finished(true));
     }
 
     let (vault_target, feynman, confluence) = if let Some(record) = registered {
-        (record.path, record.feynman, record.confluence)
+        (
+            record.path,
+            record.feynman || request.feynman,
+            record.confluence || request.confluence,
+        )
     } else {
         (
             absolute_vault_target(
@@ -826,56 +887,72 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
         )
     };
     let repository = crate::skills::Repository::default();
-    crate::wiki_progress::run(system, !request.yes, |system, cancelled| {
-        manifest::sync_selected_from(system, &wiki_tool_keys(confluence), cancelled, &repository)
+    crate::wiki_progress::run(
+        system,
+        interactive,
+        "Preparing Wiki Vault",
+        |system, local_cancelled| {
+            let cancelled = if inline { cancelled } else { local_cancelled };
+            manifest::sync_selected_from(
+                system,
+                &wiki_tool_keys(confluence),
+                cancelled,
+                &repository,
+            )
             .map_err(anyhow::Error::msg)
-    })?;
+        },
+    )?;
     let product = product_root(system)?;
     if matches!(
         request.operation,
         WikiOperation::Create | WikiOperation::Adopt
-    ) && !initialize_vault(
-        system,
-        &product,
-        &request.operation,
-        &vault_target,
-        request.yes,
-    )? {
-        return Ok(true);
+    ) && !initialize_vault(system, &product, &request.operation, &vault_target, confirm)?
+    {
+        return Ok(WikiOutcome::Incomplete);
     }
     let vault = canonical_vault(&vault_target)?;
     if matches!(
         request.operation,
         WikiOperation::Create | WikiOperation::Adopt
-    ) && !ensure_pi_ignored(system, &home, &product, &vault, request.yes)?
+    ) && !ensure_pi_ignored(system, &home, &product, &vault, confirm)?
     {
-        return Ok(true);
+        return Ok(WikiOutcome::Incomplete);
     }
-    let search_note = crate::wiki_progress::run(system, !request.yes, |system, cancelled| {
-        install_packages(system, &product, &vault, feynman)?;
-        crate::skills::install_skills(
-            system,
-            &repository,
-            &wiki_skill_names(confluence),
-            &crate::skills::SkillDestination {
-                agents: vec![crate::skills::SkillAgent::AgentsStandard],
-                scope: crate::skills::SkillScope::Project,
-                home: home.clone(),
-                project_root: vault.clone(),
-            },
-            cancelled,
-        )
-        .map_err(anyhow::Error::msg)?;
-        setup_qmd(system, &vault)
-    })?;
-    println!("{search_note}");
+    let search_note = crate::wiki_progress::run(
+        system,
+        interactive,
+        "Setting up Wiki Vault",
+        |system, local_cancelled| {
+            let cancelled = if inline { cancelled } else { local_cancelled };
+            install_packages(system, &product, &vault, feynman)?;
+            crate::skills::install_skills(
+                system,
+                &repository,
+                &wiki_skill_names(confluence),
+                &crate::skills::SkillDestination {
+                    agents: vec![crate::skills::SkillAgent::AgentsStandard],
+                    scope: crate::skills::SkillScope::Project,
+                    home: home.clone(),
+                    project_root: vault.clone(),
+                },
+                cancelled,
+            )
+            .map_err(anyhow::Error::msg)?;
+            setup_qmd(system, &vault)
+        },
+    )?;
+    if !inline {
+        println!("{search_note}");
+    }
+    notes.push(search_note);
     let mut registry = WikiRegistry::load(&home)?;
     registry.register(vault.clone(), feynman, confluence);
     registry.save(&home)?;
-    if confluence && !request.yes {
+    if confluence && interactive {
         crate::wiki_confluence::configure(system)?;
     }
     if feynman
+        && !inline
         && matches!(
             request.operation,
             WikiOperation::Create | WikiOperation::Adopt
@@ -885,15 +962,17 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
             println!("Global Feynman was left unchanged: {error}");
         }
     }
-    println!("Wiki ready. Run: cd {} && pi", vault.display());
-    println!(
-        "Search: qmd --index {} query \"your question\"",
-        qmd_index(&vault)
-    );
-    if confluence && request.yes {
+    if !inline {
+        println!("Wiki ready. Run: cd {} && pi", vault.display());
+        println!(
+            "Search: qmd --index {} query \"your question\"",
+            qmd_index(&vault)
+        );
+    }
+    if confluence && request.yes && !inline {
         println!("Confluence: run `cme config edit auth.confluence` to configure authentication.");
     }
-    if !request.yes
+    if interactive
         && matches!(
             request.operation,
             WikiOperation::Create | WikiOperation::Adopt
@@ -901,107 +980,178 @@ pub fn run_wiki(request: &WikiRequest, system: &(dyn System + Sync)) -> Result<b
     {
         offer_finish_actions(system, &vault)?;
     }
-    Ok(true)
+    Ok(WikiOutcome::Finished(true))
 }
 
 pub fn status_registered(system: &(dyn System + Sync)) -> bool {
+    use crate::ui::tidy_path;
+
+    let style = Out::detect();
+    style.section("Wiki");
     let Some(home) = system.home_dir() else {
-        println!("  ✗ Wiki: home directory is unavailable");
+        style.row(Mark::Bad, "Vaults", "home directory is unavailable");
         return false;
     };
     let registry = match WikiRegistry::load(&home) {
         Ok(registry) => registry,
         Err(error) => {
-            println!("  ✗ Wiki registry — {error}");
+            style.row(Mark::Bad, "registry", error.to_string());
             return false;
         }
     };
     if registry.vaults.is_empty() {
-        println!("  Wiki: no registered Vaults");
+        style.hint("no registered Vaults — run `loom wiki` to set one up");
         return true;
     }
-    let product = product_root(system).ok();
-    let selected = manifest::selected_keys(&home);
-    let pins_ready = selected.iter().any(|key| key == PRODUCT_KEY)
-        && selected.iter().any(|key| key == PYTHON_KEY)
-        && selected.iter().any(|key| key == QMD_KEY)
-        && selected
-            .iter()
-            .any(|key| key == crate::manifest::PI_TOOL_KEY);
     let mut healthy = true;
     for record in registry.vaults {
-        if !record.path.is_dir() {
-            println!("  ✗ {} — missing; not recreated", record.path.display());
-            healthy = false;
-            continue;
-        }
-        let marker = record.path.join(".claude-obsidian.json").is_file();
-        let doctor = product
-            .as_ref()
-            .is_some_and(|root| doctor_ok(system, root, &record.path));
-        let packages = system
-            .run_probe(&CommandSpec::new("pi", ["list", "--approve"]).in_dir(&record.path))
-            .ok()
-            .filter(|result| result.success)
-            .map(|result| result.stdout)
-            .unwrap_or_default();
-        let core = product
-            .as_ref()
-            .is_some_and(|path| has_project_packages(&packages, path, false));
-        let optional = !record.feynman
-            || project_package_lines(&packages)
-                .any(|line| line.starts_with("npm:@companion-ai/feynman@"));
-        let confluence = !record.confluence
-            || (selected.iter().any(|key| key == CONFLUENCE_KEY) && system.command_exists("cme"));
-        let ok = marker && doctor && pins_ready && core && optional && confluence;
-        println!(
-            "  {} {} — core {} · doctor {} · Feynman {} · Confluence {} · Obsidian {}",
-            if ok { "✓" } else { "✗" },
-            record.path.display(),
-            if core && pins_ready {
-                "ready"
-            } else {
-                "repair needed"
-            },
-            if doctor { "ok" } else { "failed" },
-            if record.feynman {
-                if optional {
-                    "ready"
-                } else {
-                    "missing"
-                }
-            } else {
-                "not selected"
-            },
-            if record.confluence {
-                if confluence {
-                    "ready"
-                } else {
-                    "missing"
-                }
-            } else {
-                "not selected"
-            },
-            if obsidian_installed(system) {
-                "available"
-            } else {
-                "optional; run `loom wiki` for install guidance"
-            }
+        let health = inspect_vault(system, &record);
+        style.row(
+            if health.healthy { Mark::Ok } else { Mark::Bad },
+            &tidy_path(&record.path, &home),
+            "",
         );
-        healthy &= ok;
+        for (mark, label, detail) in health.rows {
+            style.row(mark, label, detail);
+        }
+        healthy &= health.healthy;
     }
     healthy
 }
 
-pub fn update_registered(system: &(dyn System + Sync)) -> bool {
+pub(crate) struct VaultHealth {
+    pub healthy: bool,
+    pub rows: Vec<(crate::ui::Mark, &'static str, String)>,
+}
+
+/// Inspect only the chosen Vault. Shared by the status report and Wiki picker.
+pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) -> VaultHealth {
+    use crate::ui::Mark;
+    if !record.path.is_dir() {
+        return VaultHealth {
+            healthy: false,
+            rows: vec![(Mark::Bad, "Vault", "missing; not recreated".into())],
+        };
+    }
+    let product = product_root(system).ok();
+    let selected = system
+        .home_dir()
+        .map(|home| manifest::selected_keys(&home))
+        .unwrap_or_default();
+    let pins_ready = selected.iter().any(|key| key == PRODUCT_KEY)
+        && selected.iter().any(|key| key == PYTHON_KEY)
+        && selected
+            .iter()
+            .any(|key| key == crate::manifest::PI_TOOL_KEY);
+    let mut rows = Vec::new();
+    let marker = record.path.join(".claude-obsidian.json").is_file();
+    let doctor = product
+        .as_ref()
+        .is_some_and(|root| doctor_ok(system, root, &record.path));
+    let packages = system
+        .run_probe(&CommandSpec::new("pi", ["list", "--approve"]).in_dir(&record.path))
+        .ok()
+        .filter(|result| result.success)
+        .map(|result| result.stdout)
+        .unwrap_or_default();
+    let core = product
+        .as_ref()
+        .is_some_and(|path| has_project_packages(&packages, path, false));
+    let feynman =
+        project_package_lines(&packages).any(|line| line.starts_with("npm:@companion-ai/feynman@"));
+    let vault_skills = record.path.join(".agents/skills");
+    let qmd_tool = system.command_exists("qmd");
+    let qmd = selected.iter().any(|key| key == QMD_KEY)
+        && qmd_tool
+        && vault_skills.join("qmd/SKILL.md").is_file();
+    let confluence_tool = system.command_exists("cme");
+    let confluence = selected.iter().any(|key| key == CONFLUENCE_KEY)
+        && confluence_tool
+        && vault_skills
+            .join(CONFLUENCE_SKILL)
+            .join("SKILL.md")
+            .is_file();
+    let core_ready = marker && doctor && pins_ready && core;
+    let ok =
+        core_ready && qmd && (!record.feynman || feynman) && (!record.confluence || confluence);
+    rows.push((
+        if core_ready { Mark::Ok } else { Mark::Bad },
+        "claude-obsidian",
+        format!(
+            "{} — Vault package {}; marker {}; prerequisites {}; doctor {}",
+            if core_ready { "ready" } else { "repair needed" },
+            if core { "installed" } else { "missing" },
+            if marker { "present" } else { "missing" },
+            if pins_ready { "ready" } else { "missing" },
+            if doctor { "ok" } else { "failed" },
+        ),
+    ));
+    for (label, installed, required, detail) in [
+        ("Feynman", feynman, record.feynman, "Vault Pi package"),
+        ("qmd", qmd, true, "tool + Vault skill"),
+        (
+            "Confluence",
+            confluence,
+            record.confluence,
+            "tool + Vault skill",
+        ),
+    ] {
+        rows.push((
+            if installed {
+                Mark::Ok
+            } else if required {
+                Mark::Bad
+            } else {
+                Mark::Off
+            },
+            label,
+            if installed {
+                format!("ready — {detail}")
+            } else if required {
+                format!("missing — {detail}; run `loom wiki` to repair")
+            } else {
+                "not selected for this Vault".into()
+            },
+        ));
+    }
+    for (label, installed) in [
+        ("QMD (shared)", qmd_tool),
+        ("Confluence (shared)", confluence_tool),
+    ] {
+        rows.push((
+            if installed { Mark::Ok } else { Mark::Off },
+            label,
+            if installed {
+                "installed on this machine; does not imply Vault configuration"
+            } else {
+                "not installed on this machine"
+            }
+            .into(),
+        ));
+    }
+    let obsidian = obsidian_installed(system);
+    rows.push((
+        if obsidian { Mark::Ok } else { Mark::Off },
+        "Obsidian",
+        if obsidian {
+            "shared desktop app available"
+        } else {
+            "optional; run `loom wiki` for install guidance"
+        }
+        .into(),
+    ));
+    VaultHealth { healthy: ok, rows }
+}
+
+pub fn update_registered(system: &(dyn System + Sync), interactive: bool, out: &Out) -> bool {
     let Some(home) = system.home_dir() else {
-        println!("  ✗ Wiki: home directory is unavailable");
+        out.row(Mark::Bad, "Wiki", "home directory is unavailable");
         return false;
     };
     let registry = match WikiRegistry::load(&home) {
         Ok(registry) => registry,
         Err(error) => {
-            println!("  ✗ Wiki registry — {error}");
+            out.row(Mark::Bad, "Wiki registry", error.to_string());
             return false;
         }
     };
@@ -1009,7 +1159,8 @@ pub fn update_registered(system: &(dyn System + Sync)) -> bool {
         Ok(product) => product,
         Err(_) if registry.vaults.is_empty() => return true,
         Err(error) => {
-            println!("  ✗ Wiki product — {error}; rerun `loom wiki` to repair prerequisites");
+            out.row(Mark::Bad, "Wiki product", error.to_string());
+            out.note("rerun `loom wiki` to repair prerequisites");
             return false;
         }
     };
@@ -1022,26 +1173,42 @@ pub fn update_registered(system: &(dyn System + Sync)) -> bool {
     }
     if !missing_tools.is_empty() {
         if let Err(error) = manifest::sync_selected(system, &missing_tools) {
-            println!("  ✗ Wiki tools — {error}");
+            out.row(Mark::Bad, "Wiki tools", &error);
             return false;
         }
     }
     let mut healthy = true;
-    for record in registry.vaults {
+    let vault_count = registry.vaults.len();
+    for (index, record) in registry.vaults.into_iter().enumerate() {
+        let label = crate::ui::tidy_path(&record.path, &home);
         if !record.path.is_dir() {
-            println!(
-                "  ✗ Wiki {} — missing; not recreated",
-                record.path.display()
+            out.row(
+                Mark::Bad,
+                "Wiki",
+                format!("{label} · missing; not recreated"),
             );
             healthy = false;
             continue;
         }
-        match install_packages(system, &product, &record.path, record.feynman)
-            .and_then(|()| setup_qmd(system, &record.path))
-        {
-            Ok(note) => println!("  ✓ Wiki {} — refreshed. {note}", record.path.display()),
+        let vault_name = record
+            .path
+            .file_name()
+            .unwrap_or(record.path.as_os_str())
+            .to_string_lossy();
+        let activity = format!("Vault {}/{} · {vault_name}", index + 1, vault_count);
+        let refreshed = crate::wiki_progress::run(system, interactive, &activity, |system, _| {
+            install_packages(system, &product, &record.path, record.feynman)?;
+            setup_qmd(system, &record.path)
+        });
+        match refreshed {
+            Ok(note) => {
+                out.row(Mark::Ok, "Wiki", format!("{label} · refreshed"));
+                if !note.is_empty() {
+                    out.note(note);
+                }
+            }
             Err(error) => {
-                println!("  ✗ Wiki {} — {error}", record.path.display());
+                out.row(Mark::Bad, "Wiki", format!("{label} · {error}"));
                 healthy = false;
             }
         }
@@ -1049,7 +1216,7 @@ pub fn update_registered(system: &(dyn System + Sync)) -> bool {
     healthy
 }
 
-fn obsidian_installed(system: &dyn System) -> bool {
+pub(crate) fn obsidian_installed(system: &dyn System) -> bool {
     if system.command_exists("obsidian") {
         return true;
     }
@@ -1131,14 +1298,23 @@ pub fn run_interactive_with_default(
     system: &(dyn System + Sync),
     feynman_default: bool,
 ) -> Result<bool> {
+    run_interactive_outcome(system, feynman_default).map(WikiOutcome::successful_exit)
+}
+
+pub(crate) fn run_interactive_outcome(
+    system: &(dyn System + Sync),
+    feynman_default: bool,
+) -> Result<WikiOutcome> {
     match crate::wiki_tui::run(system, feynman_default, obsidian_installed(system))? {
-        crate::wiki_tui::WikiChoice::Request(request) => run_wiki(&request, system),
+        crate::wiki_tui::WikiChoice::Request(request) => run_wiki_outcome(&request, system),
         crate::wiki_tui::WikiChoice::OpenObsidianDownload => {
             open_url(system, "https://obsidian.md/download".into())?;
-            Ok(true)
+            Ok(WikiOutcome::Incomplete)
         }
-        crate::wiki_tui::WikiChoice::Cancelled => Ok(true),
-        crate::wiki_tui::WikiChoice::PickPath(_) => unreachable!(),
+        crate::wiki_tui::WikiChoice::Cancelled => Ok(WikiOutcome::Incomplete),
+        crate::wiki_tui::WikiChoice::PickPath(_) | crate::wiki_tui::WikiChoice::InspectVault => {
+            unreachable!()
+        }
     }
 }
 
@@ -1150,6 +1326,67 @@ mod tests {
 
     fn temp(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("loom-wiki-{name}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn vault_inspection_distinguishes_shared_tools_and_global_packages_from_vault_setup() {
+        struct SharedOnly {
+            root: PathBuf,
+            commands: Mutex<Vec<String>>,
+        }
+        impl System for SharedOnly {
+            fn command_exists(&self, name: &str) -> bool {
+                matches!(name, "pi" | "qmd")
+            }
+            fn refresh_path(&self) {
+                panic!("inspection must not install")
+            }
+            fn home_dir(&self) -> Option<PathBuf> {
+                Some(self.root.clone())
+            }
+            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
+                self.commands.lock().unwrap().push(command.display());
+                Ok(CommandResult {
+                    success: command.program == "pi",
+                    stdout:
+                        "User packages:\n  npm:@companion-ai/feynman@latest\nProject packages:\n"
+                            .into(),
+                    stderr: String::new(),
+                })
+            }
+        }
+        let root = temp("shared-status");
+        fs::create_dir_all(&root).unwrap();
+        let system = SharedOnly {
+            root: root.clone(),
+            commands: Mutex::new(Vec::new()),
+        };
+        let health = inspect_vault(
+            &system,
+            &VaultRecord {
+                path: root.clone(),
+                feynman: true,
+                confluence: false,
+            },
+        );
+        assert!(!health.healthy);
+        for (label, expected) in [
+            ("qmd", crate::ui::Mark::Bad),
+            ("Feynman", crate::ui::Mark::Bad),
+            ("QMD (shared)", crate::ui::Mark::Ok),
+        ] {
+            assert!(health
+                .rows
+                .iter()
+                .any(|(mark, name, _)| *name == label && *mark == expected));
+        }
+        assert!(system
+            .commands
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|command| command.starts_with("mise where") || command.starts_with("pi list")));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1258,6 +1495,7 @@ mod tests {
             fail_embed: bool,
             empty: bool,
             embed_message: String,
+            embed_stderr: String,
             fail_search: bool,
             pending: bool,
         }
@@ -1318,7 +1556,11 @@ mod tests {
                     } else {
                         String::new()
                     },
-                    stderr: "embedding failed".into(),
+                    stderr: if command.args[2] == "embed" && !self.embed_stderr.is_empty() {
+                        self.embed_stderr.clone()
+                    } else {
+                        "embedding failed".into()
+                    },
                 })
             }
             fn run_controlled(
@@ -1429,6 +1671,14 @@ mod tests {
                 usize::from(fail_search)
             );
         }
+        let stderr_busy = QmdSystem {
+            embed_stderr: "Another embed process is already running. Skipping.".into(),
+            ..Default::default()
+        };
+        assert!(setup_qmd(&stderr_busy, &first)
+            .unwrap_err()
+            .to_string()
+            .contains("incomplete or busy"));
         let pending = QmdSystem {
             pending: true,
             ..Default::default()
@@ -1450,7 +1700,7 @@ mod tests {
         assert!(setup_qmd(&failing, &first)
             .unwrap_err()
             .to_string()
-            .contains("embedding failed"));
+            .contains("The operation did not complete"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1507,7 +1757,7 @@ mod tests {
             home: home.clone(),
             commands: Mutex::new(Vec::new()),
         };
-        assert!(!update_registered(&system));
+        assert!(!update_registered(&system, false, &Out::plain()));
         assert!(!missing.exists());
         assert!(system
             .commands
@@ -1556,7 +1806,7 @@ mod tests {
             Path::new("/product"),
             &WikiOperation::Adopt,
             &vault,
-            true,
+            &mut |_, _| Ok(true),
         )
         .unwrap());
         let commands = system.commands.into_inner().unwrap();
@@ -1632,7 +1882,33 @@ mod tests {
         let system = TransactionSystem {
             commands: Mutex::new(Vec::new()),
         };
-        assert!(ensure_pi_ignored(&system, &home, Path::new("/product"), &vault, true).unwrap());
+        assert!(!ensure_pi_ignored(
+            &system,
+            &home,
+            Path::new("/product"),
+            &vault,
+            &mut |_, paths| {
+                assert_eq!(paths, [".gitignore: add .pi/"]);
+                Ok(false)
+            }
+        )
+        .unwrap());
+        assert_eq!(fs::read_to_string(vault.join(".gitignore")).unwrap(), "");
+        assert!(!system
+            .commands
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|command| command.args.iter().any(|arg| arg == "apply")));
+        system.commands.lock().unwrap().clear();
+        assert!(ensure_pi_ignored(
+            &system,
+            &home,
+            Path::new("/product"),
+            &vault,
+            &mut |_, _| Ok(true)
+        )
+        .unwrap());
         assert!(fs::read_to_string(vault.join(".gitignore"))
             .unwrap()
             .contains(".pi/"));
@@ -1765,7 +2041,7 @@ mod tests {
             Path::new("/product"),
             &WikiOperation::Create,
             &vault,
-            true
+            &mut |_, _| Ok(true)
         )
         .unwrap());
         let commands = system.commands.into_inner().unwrap();

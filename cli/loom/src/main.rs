@@ -379,11 +379,7 @@ fn main() -> Result<()> {
                 loom::wiki::run_wiki(&request, &system)?
             }
         },
-        Command::Status => {
-            let core = run_status(&system);
-            let wiki = loom::wiki::status_registered(&system);
-            core && wiki
-        }
+        Command::Status => run_status(&system),
         Command::Sync => {
             let out = Out::detect();
             out.title("sync", "project AGENTS.md files");
@@ -482,12 +478,29 @@ fn main() -> Result<()> {
                 .with_default(true)
                 .prompt()?
             {
-                println!("Cancelled; no changes made.");
+                Out::detect().verdict(true, "Cancelled; no changes made");
                 true
             } else {
+                let out = Out::detect();
                 let updated = run_updates(&system, &Catalog::embedded()?);
-                let wikis_updated = loom::wiki::update_registered(&system);
-                updated && wikis_updated
+                let wikis_updated = loom::wiki::update_registered(&system, !yes, &out);
+                let success = updated && wikis_updated;
+                out.verdict(
+                    success,
+                    if success {
+                        "Update complete"
+                    } else {
+                        "Update incomplete · completed work stays"
+                    },
+                );
+                out.next(if !wikis_updated {
+                    "run `loom wiki` to repair the flagged Vault"
+                } else if !updated {
+                    "resolve the reported cause, then run `loom update --yes` again"
+                } else {
+                    "run `loom status` to verify the updated setup"
+                });
+                success
             }
         }
     };

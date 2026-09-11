@@ -74,7 +74,17 @@ fn update_recovers_an_owned_skill_interrupted_between_renames() {
 
     assert!(target.join("SKILL.md").is_file());
     assert!(!backup.exists());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("1 refreshed"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("1 updated"));
+    assert_eq!(
+        stdout
+            .lines()
+            .filter(|line| line.contains("Update complete") || line.contains("Update incomplete"))
+            .count(),
+        1,
+        "{stdout}"
+    );
+    assert!(!stdout.contains("Up to date"), "{stdout}");
     let state = InstallState::load(&home).unwrap();
     let refreshed = digest_path(&target).unwrap();
     assert_eq!(state.owned_path_digest(&target), Some(refreshed.as_str()));

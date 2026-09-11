@@ -11,11 +11,7 @@ use inquire::Confirm;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
-pub(crate) const SETUP_NEXT_ACTIONS: [&str; 3] = [
-    "if a newly installed command is missing, open a new shell",
-    "run `loom status` to verify the setup",
-    "run `loom init` inside your first project",
-];
+pub(crate) const SETUP_NEXT_ACTION: &str = "run `loom status` to verify the setup";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SelectionMode {
@@ -170,7 +166,7 @@ pub fn install_selected(
         return crate::wiki::run_interactive_with_default(system, feynman);
     }
     if resources.is_empty() {
-        println!("Nothing selected; no changes made.");
+        Out::detect().verdict(true, "Nothing selected; no changes made");
         return Ok(true);
     }
     // Preflight before installed filtering: conflicts must not become silent no-ops.
@@ -229,15 +225,8 @@ pub fn install_selected(
             message,
         });
     }
-    print_report(&out, catalog, &report);
-    for action in next_actions(&resources, &report) {
-        out.next(action);
-    }
-    if mode == SelectionMode::Setup && report.failures.is_empty() {
-        for action in SETUP_NEXT_ACTIONS {
-            out.next(action);
-        }
-    }
+    print_report(&out, catalog, &report, true);
+    out.next(install_next_action(mode, &resources, &report));
     Ok(report.failures.is_empty())
 }
 
@@ -288,7 +277,7 @@ fn first_wsl2_distribution(output: &str) -> Option<String> {
 
 fn prepare_wsl(system: &(dyn System + Sync), dry_run: bool) -> Result<bool> {
     if dry_run {
-        println!("\nWould prepare WSL2; no changes made.");
+        Out::detect().verdict(true, "Dry run; would prepare WSL2, no changes made");
         return Ok(true);
     }
     let mut distribution = system
@@ -346,12 +335,24 @@ fn run_interactive(
     // Installed marks arrive from a background probe once the wizard is on
     // screen; starting all-false keeps the first frame instant.
     let installed = vec![false; resources.len()];
-    let ownership_destination = skill_destination.clone();
+    let before_destinations =
+        [SkillScope::Global, SkillScope::Project].map(|scope| SkillDestination {
+            scope,
+            agents: SkillAgent::ALL.to_vec(),
+            ..skill_destination.clone()
+        });
     let mut ownership_settings = settings.clone();
     ownership_settings.push(crate::settings::pi_adhd_setting());
     let setting_before = setting_snapshots(&ownership_settings, &settings_paths);
-    let adapter_existed = adapter_existed(&ownership_destination);
-    let skills_before = existing_skill_paths(&resources, &ownership_destination);
+    let adapters_before = before_destinations
+        .iter()
+        .filter(|destination| adapter_existed(destination))
+        .map(SkillDestination::opencode_adapter_path)
+        .collect::<BTreeSet<_>>();
+    let skills_before = before_destinations
+        .iter()
+        .flat_map(|destination| existing_skill_paths(&resources, destination))
+        .collect::<BTreeSet<_>>();
     let model = Model {
         mode,
         purpose: crate::wizard::WizardPurpose::Install,
@@ -370,11 +371,11 @@ fn run_interactive(
     };
     match run_wizard(model, system)? {
         WizardOutcome::Cancelled => {
-            println!("Cancelled; no changes made.");
+            Out::detect().verdict(true, "Cancelled; no changes made");
             Ok(true)
         }
         WizardOutcome::NothingSelected => {
-            println!("Nothing selected; no changes made.");
+            Out::detect().verdict(true, "Nothing selected; no changes made");
             Ok(true)
         }
         WizardOutcome::DryRun(plan, setting_changes) => {
@@ -393,7 +394,12 @@ fn run_interactive(
         WizardOutcome::WikiSelection { feynman } => {
             crate::wiki::run_interactive_with_default(system, feynman)
         }
-        WizardOutcome::Installed(mut report, actions, selected_resources) => {
+        WizardOutcome::Installed {
+            mut report,
+            resources: selected_resources,
+            destination,
+            written,
+        } => {
             let wiki_feynman = selected_resources
                 .iter()
                 .any(|resource| resource.install_target == "@companion-ai/feynman");
@@ -404,17 +410,19 @@ fn run_interactive(
                 .into_iter()
                 .filter(|resource| resource.group != "Wiki")
                 .collect::<Vec<_>>();
+            let mut ownership_report = report.clone();
+            ownership_report.installed = written;
             if let Err(message) = record_install_ownership(
                 system,
                 &generic_resources,
-                &ownership_destination,
+                &destination,
                 &ownership_settings,
                 &setting_before,
                 &settings_paths,
-                adapter_existed,
+                adapters_before.contains(&destination.opencode_adapter_path()),
                 &skills_before,
                 status,
-                &report,
+                &ownership_report,
             ) {
                 report.failures.push(InstallFailure {
                     target: "ownership ledger".into(),
@@ -423,18 +431,37 @@ fn run_interactive(
             }
             let out = Out::detect();
             out.blank();
-            print_report(&out, catalog, &report);
-            for action in actions {
-                out.next(action);
-            }
-            if mode == SelectionMode::Setup && report.failures.is_empty() {
-                for action in SETUP_NEXT_ACTIONS {
-                    out.next(action);
+            let continue_to_wiki = has_wiki && report.failures.is_empty();
+            print_report(&out, catalog, &report, !continue_to_wiki);
+            if continue_to_wiki {
+                out.section("Wiki setup");
+                let wiki = crate::wiki::run_interactive_outcome(system, wiki_feynman);
+                if matches!(wiki.as_ref(), Ok(crate::wiki::WikiOutcome::Incomplete)) {
+                    out.row(
+                        Mark::Off,
+                        "Setup paused",
+                        "General resources remain installed; Wiki setup is not complete.",
+                    );
+                    out.next("run `loom wiki` to continue");
+                    return Ok(true);
                 }
+                let ok = matches!(wiki.as_ref(), Ok(crate::wiki::WikiOutcome::Finished(true)));
+                out.verdict(
+                    ok,
+                    if ok {
+                        "Setup finished"
+                    } else {
+                        "Setup incomplete; completed work stays"
+                    },
+                );
+                out.next(if ok {
+                    SETUP_NEXT_ACTION
+                } else {
+                    "run `loom wiki` to continue in the same folder"
+                });
+                return wiki.map(|outcome| outcome == crate::wiki::WikiOutcome::Finished(true));
             }
-            if has_wiki && report.failures.is_empty() {
-                return crate::wiki::run_interactive_with_default(system, wiki_feynman);
-            }
+            out.next(install_next_action(mode, &generic_resources, &report));
             Ok(report.failures.is_empty())
         }
     }
@@ -443,6 +470,53 @@ fn run_interactive(
 /// Which catalog resources are already on this machine. Uses the same
 /// probes as post-install verification: manager list output for plugins and
 /// packages, and the currently selected destination trees for skills.
+fn pi_packages_from_settings(
+    home: &std::path::Path,
+    project_root: &std::path::Path,
+) -> Option<String> {
+    let agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| home.join(".pi/agent"));
+    let agent_dir = agent_dir
+        .strip_prefix("~")
+        .map_or_else(|_| agent_dir.clone(), |relative| home.join(relative));
+    let content = match std::fs::read_to_string(agent_dir.join("settings.json")) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Some("User packages:\n".into());
+        }
+        Err(_) => return None,
+    };
+    let settings: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let mut listed = String::from("User packages:\n");
+    let Some(packages) = settings.get("packages") else {
+        return Some(listed);
+    };
+    let packages = packages.as_array()?;
+    for package in packages {
+        if let Some(source) = package
+            .as_str()
+            .or_else(|| package.get("source").and_then(serde_json::Value::as_str))
+        {
+            let path = std::path::Path::new(source);
+            let resolved = path
+                .is_relative()
+                .then(|| project_root.join(path))
+                .filter(|path| path.join("package.json").is_file());
+            listed.push_str("  ");
+            listed.push_str(
+                resolved
+                    .as_deref()
+                    .and_then(std::path::Path::to_str)
+                    .unwrap_or(source),
+            );
+            listed.push('\n');
+        }
+    }
+    Some(listed)
+}
+
 pub(crate) fn detect_installed(
     resources: &[Resource],
     status: PrerequisiteStatus,
@@ -457,30 +531,34 @@ pub(crate) fn detect_installed(
             .run_probe(&CommandSpec::new(program, args.iter().copied()))
             .ok()
             .filter(|result| result.success)
-            .map(|result| format!("{}\n{}", result.stdout, result.stderr))
+            .map(|result| result.stdout)
     };
-    // Both list commands shell out to their manager; probe them concurrently.
+    let home = system.home_dir();
+    let settings_packages = home
+        .as_deref()
+        .and_then(|home| pi_packages_from_settings(home, &destination.project_root));
+    // Prefer Pi's settings file: `pi list` boots the full Node CLI and was the
+    // dominant checkmark delay. Fall back when the file cannot be read safely.
     let (herdr_plugins, pi_packages) = std::thread::scope(|scope| {
         let herdr = scope.spawn(|| list_output(status.herdr, "herdr", &["plugin", "list"]));
-        let pi = scope.spawn(|| list_output(status.pi, "pi", &["list"]));
+        let pi =
+            scope.spawn(|| settings_packages.or_else(|| list_output(status.pi, "pi", &["list"])));
         (
             herdr.join().expect("herdr probe thread"),
             pi.join().expect("pi probe thread"),
         )
     });
     let skill_trees = destination.trees();
-    let selected_tools = system
-        .home_dir()
+    let selected_tools = home
         .map(|home| crate::manifest::selected_keys(&home))
         .unwrap_or_default();
 
     resources
         .iter()
         .map(|resource| {
-            // This catalog row means “set up Feynman inside a chosen Vault.”
-            // A user-level package cannot satisfy a destination that has not
-            // been chosen yet, so keep the row actionable in the setup wizard.
-            if resource.id == "pi-package:@companion-ai/feynman" && resource.group == "Wiki" {
+            // Wiki rows are checked only after choosing a Vault, never against
+            // this shell's global or project installation.
+            if resource.group == "Wiki" {
                 return false;
             }
             match resource.kind {
@@ -500,22 +578,7 @@ pub(crate) fn detect_installed(
                     output.contains(resource.id.trim_start_matches("herdr-plugin:"))
                 }),
                 ResourceKind::PiPackage => pi_packages.as_ref().is_some_and(|output| {
-                    // `pi list` prints npm specs for registry installs and
-                    // directory paths for local ones; accept either shape.
-                    let unscoped = resource
-                        .install_target
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or(&resource.install_target);
-                    let plain = unscoped.strip_prefix("pi-").unwrap_or(unscoped);
-                    let last_component_is = |line: &str, name: &str| {
-                        line.ends_with(&format!("/{name}")) || line.ends_with(&format!("\\{name}"))
-                    };
-                    output.lines().map(str::trim).any(|line| {
-                        line.contains(&resource.install_target)
-                            || last_component_is(line, unscoped)
-                            || last_component_is(line, plain)
-                    })
+                    crate::install::pi_package_installed(output, &resource.install_target, false)
                 }),
                 ResourceKind::Skill => {
                     !skill_trees.is_empty()
@@ -575,7 +638,7 @@ fn setting_snapshots(
         .collect()
 }
 
-fn existing_skill_paths(
+pub(crate) fn existing_skill_paths(
     resources: &[Resource],
     destination: &SkillDestination,
 ) -> BTreeSet<std::path::PathBuf> {
@@ -601,7 +664,7 @@ fn adapter_existed(destination: &SkillDestination) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn record_install_ownership(
+pub(crate) fn record_install_ownership(
     system: &dyn System,
     resources: &[Resource],
     destination: &SkillDestination,
@@ -651,7 +714,21 @@ fn record_install_ownership(
         let mut dependencies = resource
             .dependencies
             .iter()
-            .map(|dependency| owned_id(&resource_scope, &format!("skill:{dependency}")))
+            .map(|dependency| {
+                let target = resources.iter().find(|candidate| {
+                    candidate.id == *dependency || candidate.install_target == *dependency
+                });
+                let scope = if target.is_some_and(|target| target.kind != ResourceKind::Skill) {
+                    &OwnershipScope::Global
+                } else {
+                    &resource_scope
+                };
+                owned_id(
+                    scope,
+                    &target
+                        .map_or_else(|| format!("skill:{dependency}"), |target| target.id.clone()),
+                )
+            })
             .collect::<Vec<_>>();
         match resource.kind {
             ResourceKind::PiPackage => dependencies.push("tool:pi".into()),
@@ -813,7 +890,27 @@ pub(crate) fn next_actions(resources: &[Resource], report: &InstallReport) -> Ve
     actions
 }
 
-fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
+pub(crate) fn install_next_action(
+    mode: SelectionMode,
+    resources: &[Resource],
+    report: &InstallReport,
+) -> String {
+    if !report.failures.is_empty() {
+        format!(
+            "run `loom {}` to retry; completed work stays installed",
+            mode.command()
+        )
+    } else if mode == SelectionMode::Setup {
+        SETUP_NEXT_ACTION.into()
+    } else {
+        next_actions(resources, report)
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| SETUP_NEXT_ACTION.into())
+    }
+}
+
+fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport, finish: bool) {
     let settings = curated_settings();
     let label = |target: &str| {
         catalog
@@ -841,7 +938,14 @@ fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
         );
     }
     for failure in &report.failures {
-        out.row(Mark::Bad, &label(&failure.target), &failure.message);
+        out.row(
+            Mark::Bad,
+            &label(&failure.target),
+            crate::ui::failure_text(&failure.message),
+        );
+    }
+    if !finish {
+        return;
     }
     let installed = report.installed.len();
     let failed = report.failures.len();
@@ -1049,7 +1153,7 @@ mod tests {
             Ok(crate::CommandResult {
                 success: command.program == "pi",
                 stdout: if command.program == "pi" {
-                    "@example/already-there\n".into()
+                    "User packages:\n  npm:@example/already-there\n".into()
                 } else {
                     String::new()
                 },
@@ -1064,6 +1168,79 @@ mod tests {
         fn current_dir(&self) -> Option<std::path::PathBuf> {
             Some(self.home.clone())
         }
+    }
+
+    struct SettingsOnlySystem {
+        home: std::path::PathBuf,
+    }
+
+    impl System for SettingsOnlySystem {
+        fn command_exists(&self, name: &str) -> bool {
+            name == "pi"
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
+            panic!(
+                "installed-state detection shelled out to {}",
+                command.display()
+            )
+        }
+
+        fn home_dir(&self) -> Option<std::path::PathBuf> {
+            Some(self.home.clone())
+        }
+    }
+
+    #[test]
+    fn installed_pi_packages_are_read_directly_from_settings() {
+        let root = temp_root("direct-pi-settings");
+        std::fs::create_dir_all(root.join(".pi/agent")).unwrap();
+        std::fs::create_dir_all(root.join("plugins/skill-autocomplete")).unwrap();
+        std::fs::write(
+            root.join("plugins/skill-autocomplete/package.json"),
+            r#"{"name":"@yassimba/pi-skill-autocomplete"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".pi/agent/settings.json"),
+            r#"{"packages":["npm:pi-subagents@0.66.0",{"source":"git:github.com/ayghri/i-have-adhd@abc"},"plugins/skill-autocomplete"]}"#,
+        )
+        .unwrap();
+        let catalog = Catalog::embedded().unwrap();
+        let resources = [
+            "pi-subagents",
+            "i-have-adhd",
+            "@yassimba/pi-skill-autocomplete",
+            "pi-web-access",
+        ]
+        .into_iter()
+        .map(|target| {
+            catalog
+                .resources
+                .iter()
+                .find(|resource| resource.install_target == target)
+                .unwrap()
+                .clone()
+        })
+        .collect::<Vec<_>>();
+        let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
+
+        assert_eq!(
+            detect_installed(
+                &resources,
+                PrerequisiteStatus {
+                    pi: true,
+                    herdr: false,
+                    mise: true,
+                },
+                &SettingsOnlySystem { home: root.clone() },
+                &destination,
+            ),
+            [true, true, true, false]
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     struct GlobalFeynmanSystem;
@@ -1195,6 +1372,12 @@ mod tests {
     #[test]
     fn no_op_package_selection_does_not_claim_preexisting_ownership() {
         let root = temp_root("record-noop");
+        std::fs::create_dir_all(root.join(".pi/agent")).unwrap();
+        std::fs::write(
+            root.join(".pi/agent/settings.json"),
+            r#"{"packages":["npm:@example/already-there"]}"#,
+        )
+        .unwrap();
         let package = Resource {
             id: "pi-package:already-there".into(),
             kind: ResourceKind::PiPackage,

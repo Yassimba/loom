@@ -51,7 +51,12 @@ pub enum WizardOutcome {
     Cancelled,
     NothingSelected,
     DryRun(InstallPlan, Vec<String>),
-    Installed(InstallReport, Vec<String>, Vec<Resource>),
+    Installed {
+        report: InstallReport,
+        resources: Vec<Resource>,
+        destination: SkillDestination,
+        written: Vec<String>,
+    },
     /// A Wiki row routes to the Vault-scoped workflow instead of the global installer.
     WikiSelection {
         feynman: bool,
@@ -63,6 +68,8 @@ pub enum WizardOutcome {
 pub enum Action {
     Exit(WizardOutcome),
     StartInstall,
+    PickWiki(crate::wiki::WikiOperation),
+    UnregisterWiki(std::path::PathBuf),
 }
 
 /// One selectable thing under a group header.
@@ -230,6 +237,7 @@ pub(crate) struct WhereStage {
 pub enum ExecStatus {
     Pending,
     Running,
+    Verifying,
     Ok(String),
     Failed(String),
     Skipped(String),
@@ -240,6 +248,8 @@ pub struct ExecItem {
     pub label: String,
     pub detail: String,
     pub status: ExecStatus,
+    pub started: Option<std::time::Instant>,
+    pub elapsed: std::time::Duration,
 }
 
 pub(crate) struct InstallStage {
@@ -248,6 +258,9 @@ pub(crate) struct InstallStage {
     pub report: Option<InstallReport>,
     pub tick: usize,
     pub scroll: u16,
+    pub started: Option<std::time::Instant>,
+    pub elapsed: std::time::Duration,
+    pub show_details: bool,
 }
 
 pub(crate) enum Stage {
@@ -273,13 +286,19 @@ impl Stage {
 /// Events sent by the install worker thread.
 #[derive(Debug)]
 pub enum InstallEvent {
+    Confirm(String, Vec<String>, std::sync::mpsc::Sender<bool>),
+    Detail(usize, String),
     Status(usize, ExecStatus),
     Done(InstallReport),
 }
 
 /// The work handed to the install worker thread.
+#[derive(Clone)]
 pub struct InstallJob {
+    pub completed: Vec<usize>,
+    pub previously_installed: Vec<String>,
     pub plan: InstallPlan,
+    pub(super) wikis: Vec<super::wiki_install::WikiInstall>,
     pub settings: Vec<SettingSpec>,
     pub paths: SettingsPaths,
     pub cancelled: Arc<AtomicBool>,
@@ -300,7 +319,11 @@ pub(crate) struct HitMap {
 
 pub struct Wizard {
     pub(crate) model: Model,
+    pub(super) wiki: Option<super::wiki::WikiBrowser>,
     pub(crate) selected: Vec<bool>,
+    /// Goal membership and explicit item overrides keep overlapping picks independent.
+    pub(crate) picked_goals: HashSet<usize>,
+    custom_picks: BTreeMap<usize, bool>,
     pub(crate) setting_on: Vec<bool>,
     pub(crate) agent_on: Vec<bool>,
     pub(crate) skill_scope: SkillScope,
@@ -322,6 +345,8 @@ pub struct Wizard {
     /// First Ctrl-C during install arms cancellation; a second confirms it.
     pub(crate) confirm_cancel: bool,
     pub(crate) cancelled: Arc<AtomicBool>,
+    pub(super) reviewed_job: Option<InstallJob>,
+    completed_writes: Vec<String>,
 }
 
 const CHOOSE: usize = 0;
@@ -343,6 +368,9 @@ impl Wizard {
                 report: None,
                 tick: 0,
                 scroll: 0,
+                started: None,
+                elapsed: std::time::Duration::ZERO,
+                show_details: false,
             }),
         ];
         let agent_on = SkillAgent::ALL
@@ -362,7 +390,10 @@ impl Wizard {
             }
         }
         let mut wizard = Self {
+            wiki: None,
             selected,
+            picked_goals: HashSet::new(),
+            custom_picks: BTreeMap::new(),
             setting_on: vec![false; model.settings.len()],
             agent_on,
             skill_scope,
@@ -379,6 +410,8 @@ impl Wizard {
             confirm_quit: false,
             confirm_cancel: false,
             cancelled: Arc::new(AtomicBool::new(false)),
+            reviewed_job: None,
+            completed_writes: Vec::new(),
         };
         wizard.precheck_settings();
         wizard
@@ -412,6 +445,7 @@ impl Wizard {
                     || (self.adhd_enabled
                         && self.model.resources[*index].id == "pi-package:i-have-adhd"
                         && !self.resource_installed(*index)))
+                    && (self.wiki.is_none() || resource.group != "Wiki")
                     && (self.model.purpose == WizardPurpose::Install
                         || self.required_note(*index).is_none())
             })
@@ -500,6 +534,10 @@ impl Wizard {
             return false;
         }
         let resource = &self.model.resources[index];
+        // A global install cannot satisfy a Vault that has not been chosen.
+        if resource.group == "Wiki" {
+            return false;
+        }
         // Keep MCP selectable across scope changes; configuration is not live health.
         if resource.kind == ResourceKind::McpServer {
             return false;
@@ -542,10 +580,11 @@ impl Wizard {
     }
 
     pub(crate) fn nothing_chosen(&self) -> bool {
-        self.selection().is_empty() && self.selected_settings().is_empty()
+        self.total_selected() == 0
     }
 
     pub(crate) fn plan(&self) -> Result<InstallPlan> {
+        self.wiki_jobs()?;
         let resources = self
             .expanded_selection()
             .into_iter()
@@ -560,7 +599,9 @@ impl Wizard {
     }
 
     pub(crate) fn total_selected(&self) -> usize {
-        self.selection().len() + self.selected_settings().len()
+        self.selection().len()
+            + self.selected_settings().len()
+            + self.wiki.as_ref().map_or(0, |browser| browser.count())
     }
 
     /// The items a group stands for: its rows, or every resource for the
@@ -571,6 +612,11 @@ impl Wizard {
 
     pub(crate) fn item_state(&self, item: Item) -> ItemState {
         match item {
+            Item::Resource(index)
+                if self.wiki.is_some() && self.model.resources[index].group == "Wiki" =>
+            {
+                ItemState::Unavailable("Choose a knowledgebase to pick this capability".into())
+            }
             Item::Resource(index) => match self.included_note(index) {
                 Some(note)
                     if self.resource_installed(index)
@@ -653,7 +699,10 @@ impl Wizard {
 
     fn set_item(&mut self, item: Item, on: bool) {
         match item {
-            Item::Resource(index) => self.selected[index] = on,
+            Item::Resource(index) => {
+                self.selected[index] = on;
+                self.custom_picks.insert(index, on);
+            }
             Item::Setting(index) => {
                 self.setting_on[index] = on;
                 self.setting_touched[index] = true;
@@ -679,13 +728,97 @@ impl Wizard {
         self.precheck_settings();
     }
 
+    fn toggle_goal(&mut self, group_index: usize) {
+        let Stage::Choose(stage) = &self.stages[CHOOSE] else {
+            return;
+        };
+        let group = &stage.groups[group_index];
+        if group.everything
+            || self.model.profiles.is_empty()
+            || self.model.purpose == WizardPurpose::Uninstall
+        {
+            let items = group.bulk_items();
+            self.toggle_group(&items);
+            return;
+        }
+        if !self.picked_goals.remove(&group_index) {
+            self.picked_goals.insert(group_index);
+        }
+        for row in &group.bulk_rows {
+            let Row::Resource(index) = row else {
+                continue;
+            };
+            if self.resource_installed(*index) {
+                continue;
+            }
+            self.selected[*index] = self.custom_picks.get(index).copied().unwrap_or_else(|| {
+                self.picked_goals
+                    .iter()
+                    .any(|goal| stage.groups[*goal].bulk_rows.contains(row))
+            });
+        }
+        self.precheck_settings();
+    }
+
+    pub(crate) fn setup_requirement(&self, index: usize) -> bool {
+        let resource = &self.model.resources[index];
+        resource.is_automatic_pi_package()
+            || (resource.install_target == "pi-mcp-adapter"
+                && self.model.status.pi
+                && !self.custom_picks.contains_key(&index))
+    }
+
+    pub(crate) fn selection_reason(&self, index: usize) -> String {
+        if let Some(note) = self.included_note(index) {
+            return note;
+        }
+        if let Some(parent) = self.required_note(index) {
+            return format!("Needed by {parent}");
+        }
+        if self.resource_installed(index) {
+            return "Already installed".into();
+        }
+        if self.setup_requirement(index) {
+            return "Needed by Pi setup".into();
+        }
+        if self.adhd_enabled && self.model.resources[index].id == "pi-package:i-have-adhd" {
+            return "Included by your Pi response choice".into();
+        }
+        if !self.selected[index] {
+            return "Optional addition".into();
+        }
+        if !self.custom_picks.contains_key(&index) {
+            if let Stage::Choose(stage) = &self.stages[CHOOSE] {
+                let goals = stage
+                    .groups
+                    .iter()
+                    .enumerate()
+                    .filter(|(goal, group)| {
+                        self.picked_goals.contains(goal)
+                            && group.bulk_rows.contains(&Row::Resource(index))
+                    })
+                    .map(|(_, group)| group.title.as_str())
+                    .collect::<Vec<_>>();
+                if !goals.is_empty() {
+                    return format!("Included by {}", goals.join(", "));
+                }
+            }
+        }
+        "Picked individually".into()
+    }
+
     /// The background probe finished: adopt the real installed marks and
     /// drop any picks the probe proved redundant.
     pub fn set_installed(&mut self, installed: Vec<bool>) {
+        if self.reviewed_job.is_some() {
+            self.probing = false;
+            return; // A late probe cannot change an already-reviewed selection.
+        }
         if installed.len() == self.model.installed.len() {
             self.model.installed = installed;
             for (index, present) in self.model.installed.iter().enumerate() {
                 if *present
+                    && self.model.resources[index].group != "Wiki"
                     && !matches!(
                         self.model.resources[index].kind,
                         ResourceKind::Skill | ResourceKind::McpServer
@@ -863,6 +996,20 @@ impl Wizard {
                 summary
                     .push("Wiki: would enter the Vault-scoped setup; no Vault changes made".into());
             }
+            for wiki in self.wiki_jobs().unwrap_or_default() {
+                summary.push(format!(
+                    "Knowledgebase {}: {}",
+                    wiki.record.path.display(),
+                    wiki.labels.join(", ")
+                ));
+                summary.extend(
+                    wiki.plan
+                        .prerequisites
+                        .iter()
+                        .chain(&wiki.plan.resources)
+                        .map(|step| step.action.display()),
+                );
+            }
             return Some(Action::Exit(WizardOutcome::DryRun(plan, summary)));
         }
         self.stage_index = INSTALL;
@@ -871,16 +1018,46 @@ impl Wizard {
 
     // ---- install execution -------------------------------------------------
 
-    /// Build the worker job and seed the install screen's step list.
+    pub(crate) fn can_retry(&self) -> bool {
+        matches!(&self.stages[self.stage_index], Stage::Install(stage)
+            if !stage.running && stage.report.as_ref().is_some_and(|report| !report.failures.is_empty()))
+    }
+
+    /// Retries use the exact reviewed plan, not a new selection or destination.
     pub fn begin_install(&mut self) -> Result<InstallJob> {
-        let plan = self.plan()?;
-        let settings = self.selected_settings();
+        let mut job = match &self.reviewed_job {
+            Some(job) => job.clone(),
+            None => InstallJob {
+                completed: Vec::new(),
+                previously_installed: Vec::new(),
+                plan: self.plan()?,
+                wikis: self.wiki_jobs()?,
+                settings: self.selected_settings(),
+                paths: self.model.settings_paths.clone(),
+                cancelled: Arc::clone(&self.cancelled),
+            },
+        };
+        if let Stage::Install(stage) = &self.stages[self.stage_index] {
+            job.previously_installed = self.completed_writes.clone();
+            job.completed = stage
+                .items
+                .iter()
+                .enumerate()
+                .filter_map(|(index, item)| {
+                    matches!(item.status, ExecStatus::Ok(_)).then_some(index)
+                })
+                .collect();
+        }
+        let plan = &job.plan;
+        let settings = &job.settings;
         let mut items = Vec::new();
         for step in &plan.prerequisites {
             items.push(ExecItem {
                 label: format!("Install {}", step.target),
                 detail: step.action.display(),
                 status: ExecStatus::Pending,
+                started: None,
+                elapsed: std::time::Duration::ZERO,
             });
         }
         for step in &plan.resources {
@@ -896,9 +1073,11 @@ impl Wizard {
                 label: format!("Install {name}"),
                 detail: step.action.display(),
                 status: ExecStatus::Pending,
+                started: None,
+                elapsed: std::time::Duration::ZERO,
             });
         }
-        for spec in &settings {
+        for spec in settings {
             items.push(ExecItem {
                 label: format!("Configure {}", spec.label),
                 detail: spec
@@ -906,6 +1085,17 @@ impl Wizard {
                     .display()
                     .to_string(),
                 status: ExecStatus::Pending,
+                started: None,
+                elapsed: std::time::Duration::ZERO,
+            });
+        }
+        for wiki in &job.wikis {
+            items.push(ExecItem {
+                label: wiki.label(),
+                detail: wiki.labels.join(", "),
+                status: ExecStatus::Pending,
+                started: None,
+                elapsed: std::time::Duration::ZERO,
             });
         }
         let Stage::Install(stage) = &mut self.stages[self.stage_index] else {
@@ -913,14 +1103,15 @@ impl Wizard {
         };
         stage.items = items;
         stage.running = true;
+        stage.report = None;
+        stage.started = Some(std::time::Instant::now());
+        stage.elapsed = std::time::Duration::ZERO;
+        stage.scroll = 0;
+        stage.show_details = false;
         self.confirm_cancel = false;
         self.cancelled.store(false, Ordering::Relaxed);
-        Ok(InstallJob {
-            plan,
-            settings,
-            paths: self.model.settings_paths.clone(),
-            cancelled: Arc::clone(&self.cancelled),
-        })
+        self.reviewed_job = Some(job.clone());
+        Ok(job)
     }
 
     pub fn handle_install_event(&mut self, event: InstallEvent) {
@@ -928,13 +1119,41 @@ impl Wizard {
             return;
         };
         match event {
+            InstallEvent::Confirm(_, _, reply) => {
+                let _ = reply.send(false);
+            }
+            InstallEvent::Detail(index, detail) => {
+                if let Some(item) = stage.items.get_mut(index) {
+                    item.detail = detail;
+                }
+            }
             InstallEvent::Status(index, status) => {
                 if let Some(item) = stage.items.get_mut(index) {
+                    if matches!(status, ExecStatus::Running | ExecStatus::Verifying) {
+                        item.started.get_or_insert_with(std::time::Instant::now);
+                    } else if let Some(started) = item.started.take() {
+                        item.elapsed = started.elapsed();
+                    }
                     item.status = status;
                 }
             }
             InstallEvent::Done(report) => {
+                for target in &report.installed {
+                    if !self.completed_writes.contains(target) {
+                        self.completed_writes.push(target.clone());
+                    }
+                }
                 stage.running = false;
+                stage.elapsed = stage
+                    .started
+                    .map_or(std::time::Duration::ZERO, |started| started.elapsed());
+                stage.scroll = stage
+                    .items
+                    .iter()
+                    .position(|item| {
+                        matches!(item.status, ExecStatus::Failed(_) | ExecStatus::Skipped(_))
+                    })
+                    .unwrap_or(0) as u16;
                 stage.report = Some(report);
                 self.confirm_cancel = false;
             }
@@ -986,6 +1205,60 @@ impl Wizard {
         }
         if is_ctrl_c {
             return Some(Action::Exit(self.exit_outcome()));
+        }
+        if self
+            .wiki
+            .as_ref()
+            .is_some_and(|browser| browser.confirm_unregister.is_some())
+        {
+            return self.wiki_key(key.code);
+        }
+        if self.browsing_wiki() {
+            let scoped_search = self.wiki.as_ref().is_some_and(|browser| browser.search.is_some()
+                || (key.code == KeyCode::Char('/') && browser.record().is_some()
+                    && matches!(&self.stages[self.stage_index], Stage::Choose(stage) if stage.focus != Pane::Groups)));
+            if scoped_search {
+                return self.wiki_key(key.code);
+            }
+            if key.code == KeyCode::Char('n')
+                || (key.code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::CONTROL))
+            {
+                return self.handle_enter();
+            }
+            let focus = match &self.stages[self.stage_index] {
+                Stage::Choose(stage) => stage.focus,
+                _ => unreachable!(),
+            };
+            let navigation = matches!(
+                key.code,
+                KeyCode::Up
+                    | KeyCode::Down
+                    | KeyCode::Char('j')
+                    | KeyCode::Char('k')
+                    | KeyCode::Home
+                    | KeyCode::End
+                    | KeyCode::PageUp
+                    | KeyCode::PageDown
+            );
+            if (focus != Pane::Groups && (navigation || key.code == KeyCode::Esc))
+                || matches!(
+                    key.code,
+                    KeyCode::Left
+                        | KeyCode::Right
+                        | KeyCode::Char('h')
+                        | KeyCode::Char('l')
+                        | KeyCode::Tab
+                        | KeyCode::BackTab
+                        | KeyCode::Enter
+                        | KeyCode::Char(' ')
+                        | KeyCode::Char('u')
+                )
+            {
+                return self.wiki_key(key.code);
+            }
+        }
+        if key.code == KeyCode::Char('r') && self.can_retry() {
+            return Some(Action::StartInstall);
         }
         if key.code == KeyCode::Char('q') {
             return self.quit();
@@ -1054,9 +1327,8 @@ impl Wizard {
                 }
                 KeyCode::Char(' ') => match stage.focus {
                     Pane::Groups => {
-                        let group = stage.group().clone();
-                        let items = self.group_items(&group);
-                        self.toggle_group(&items);
+                        let index = stage.group_cursor;
+                        self.toggle_goal(index);
                     }
                     Pane::Kinds => {
                         let items = stage.kind().bulk_items();
@@ -1116,11 +1388,11 @@ impl Wizard {
                 _ => {}
             },
             Stage::Install(stage) => match key.code {
+                KeyCode::Char('d') => stage.show_details = !stage.show_details,
                 KeyCode::Up | KeyCode::Char('k') => stage.scroll = stage.scroll.saturating_sub(1),
-                KeyCode::Down | KeyCode::Char('j') => {
-                    stage.scroll =
-                        (stage.scroll + 1).min(stage.items.len().saturating_sub(1) as u16)
-                }
+                KeyCode::Down | KeyCode::Char('j') => stage.scroll = stage.scroll.saturating_add(1),
+                KeyCode::PageUp => stage.scroll = stage.scroll.saturating_sub(10),
+                KeyCode::PageDown => stage.scroll = stage.scroll.saturating_add(10),
                 _ => {}
             },
         }
@@ -1132,11 +1404,12 @@ impl Wizard {
     fn exit_outcome(&self) -> WizardOutcome {
         if let Stage::Install(stage) = &self.stages[self.stage_index] {
             if let Some(report) = &stage.report {
-                return WizardOutcome::Installed(
-                    report.clone(),
-                    self.next_actions(report),
-                    self.expanded_selection(),
-                );
+                return WizardOutcome::Installed {
+                    report: report.clone(),
+                    resources: self.expanded_selection(),
+                    destination: self.skill_destination(),
+                    written: self.completed_writes.clone(),
+                };
             }
         }
         WizardOutcome::Cancelled
@@ -1154,15 +1427,15 @@ impl Wizard {
     }
 
     fn handle_enter(&mut self) -> Option<Action> {
+        if self.can_retry() {
+            return Some(Action::StartInstall);
+        }
         match &self.stages[self.stage_index] {
             Stage::Review { .. } => self.confirm_review(),
-            Stage::Install(stage) => stage.report.as_ref().map(|report| {
-                Action::Exit(WizardOutcome::Installed(
-                    report.clone(),
-                    self.next_actions(report),
-                    self.expanded_selection(),
-                ))
-            }),
+            Stage::Install(stage) => stage
+                .report
+                .as_ref()
+                .map(|_| Action::Exit(self.exit_outcome())),
             Stage::Responses { cursor } => {
                 self.adhd_enabled = *cursor == 0;
                 self.go_forward();
@@ -1180,6 +1453,22 @@ impl Wizard {
     }
 
     fn activate_row(&mut self, row: &Row) {
+        if self.wiki.is_some()
+            && matches!(row, Row::Resource(index) if self.model.resources[*index].group == "Wiki")
+        {
+            if let Stage::Choose(stage) = &mut self.stages[CHOOSE] {
+                if let Some(group) = stage
+                    .groups
+                    .iter()
+                    .position(|group| !group.everything && group.rows.contains(row))
+                {
+                    stage.group_cursor = group;
+                    stage.focus = Pane::Kinds;
+                    self.search = None;
+                }
+            }
+            return;
+        }
         match row {
             Row::Resource(index) => self.toggle_item(Item::Resource(*index)),
             Row::Setting(index) => self.toggle_item(Item::Setting(*index)),
@@ -1202,8 +1491,43 @@ impl Wizard {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn next_actions(&self, report: &crate::InstallReport) -> Vec<String> {
         crate::app::next_actions(&self.expanded_selection(), report)
+    }
+
+    pub(crate) fn goal_next_actions(&self, report: &InstallReport) -> Vec<(String, String)> {
+        let Stage::Choose(stage) = &self.stages[CHOOSE] else {
+            return Vec::new();
+        };
+        let selected = self.expanded_selection();
+        stage
+            .groups
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| self.picked_goals.contains(index))
+            .filter_map(|(_, group)| {
+                let profile = self
+                    .model
+                    .profiles
+                    .iter()
+                    .find(|p| p.label == group.title)?;
+                let resources = profile
+                    .resources
+                    .iter()
+                    .filter_map(|id| {
+                        selected
+                            .iter()
+                            .find(|r| &r.id == id && r.group != "Wiki")
+                            .cloned()
+                    })
+                    .collect::<Vec<_>>();
+                crate::app::next_actions(&resources, report)
+                    .into_iter()
+                    .next()
+                    .map(|action| (group.title.clone(), action))
+            })
+            .collect()
     }
 
     // ---- search ------------------------------------------------------------
@@ -1342,21 +1666,38 @@ impl Wizard {
                 stage.kind_cursor = kind;
                 stage.item_cursor = item;
             }
-            stage.focus = Pane::Items;
+            stage.focus = if self.wiki.is_some()
+                && matches!(target, Row::Resource(index) if self.model.resources[index].group == "Wiki")
+            {
+                Pane::Kinds
+            } else {
+                Pane::Items
+            };
         }
     }
 
     // ---- mouse -------------------------------------------------------------
 
     pub fn handle_click(&mut self, column: u16, row: u16) -> Option<Action> {
-        if self.show_help || self.confirm_quit || self.install_running() {
+        if self.show_help
+            || self.confirm_quit
+            || self.install_running()
+            || self
+                .wiki
+                .as_ref()
+                .is_some_and(|browser| browser.confirm_unregister.is_some())
+        {
             return None;
         }
         if contains(self.hits.back_button, column, row) {
+            if self.browsing_wiki() {
+                return self.wiki_key(KeyCode::Left);
+            }
             self.go_back();
             return None;
         }
         if contains(self.hits.next_button, column, row) {
+            // Continue setup without treating a Wiki navigation row as an install pick.
             return self.handle_enter();
         }
         if let Some((area, offset)) = self.hits.groups {
@@ -1371,6 +1712,48 @@ impl Wizard {
                     }
                 }
                 return None;
+            }
+        }
+        if self.browsing_wiki() {
+            if let Some((area, offset)) = self.hits.kinds {
+                if contains(area, column, row)
+                    && row > area.y
+                    && row < area.bottom().saturating_sub(1)
+                {
+                    let index = offset + row.saturating_sub(area.y + 1) as usize;
+                    if let Some(browser) = &mut self.wiki {
+                        if index < browser.len() {
+                            browser.cursor = index;
+                            browser.item_cursor = 0;
+                            browser.search = None;
+                            if let Stage::Choose(stage) = &mut self.stages[self.stage_index] {
+                                stage.focus = Pane::Kinds;
+                            }
+                            if browser.record().is_none() {
+                                return browser.entry().map(Action::PickWiki);
+                            }
+                        }
+                    }
+                    return None;
+                }
+            }
+            if let Some((area, offset)) = self.hits.list {
+                if contains(area, column, row)
+                    && row > area.y
+                    && row < area.bottom().saturating_sub(1)
+                {
+                    if let Stage::Choose(stage) = &mut self.stages[self.stage_index] {
+                        stage.focus = Pane::Items;
+                    }
+                    if let Some(browser) = &mut self.wiki {
+                        let index = offset + row.saturating_sub(area.y + 1) as usize;
+                        if index < browser.capabilities().len() {
+                            browser.item_cursor = index;
+                            browser.toggle();
+                        }
+                    }
+                    return None;
+                }
             }
         }
         if let Some((area, offset)) = self.hits.kinds {
@@ -1469,13 +1852,25 @@ fn choose_groups(model: &Model) -> Vec<Group> {
 
 fn profile_groups(model: &Model) -> Vec<Group> {
     let all_resources = (0..model.resources.len())
-        .filter(|index| !model.resources[*index].is_automatic_pi_package())
+        .filter(|index| {
+            !model.resources[*index].is_automatic_pi_package()
+                && model.resources[*index].group != "Wiki"
+        })
         .map(Row::Resource)
         .collect::<Vec<_>>();
     let mut groups = Vec::new();
     for profile in &model.profiles {
-        let direct = profile
-            .resources
+        let members = if profile.id == "knowledge-wiki" {
+            model
+                .resources
+                .iter()
+                .filter(|resource| resource.group == "Wiki")
+                .map(|resource| resource.id.clone())
+                .collect()
+        } else {
+            profile.resources.clone()
+        };
+        let direct = members
             .iter()
             .filter_map(|id| {
                 model
@@ -1483,7 +1878,10 @@ fn profile_groups(model: &Model) -> Vec<Group> {
                     .iter()
                     .position(|resource| &resource.id == id)
             })
-            .filter(|index| !model.resources[*index].is_automatic_pi_package())
+            .filter(|index| {
+                !model.resources[*index].is_automatic_pi_package()
+                    && (profile.id == "knowledge-wiki") == (model.resources[*index].group == "Wiki")
+            })
             .map(Row::Resource)
             .collect::<Vec<_>>();
         if direct.is_empty() {
@@ -1502,6 +1900,7 @@ fn profile_groups(model: &Model) -> Vec<Group> {
             &model.skill_destination.agents,
         )
         .iter()
+        .filter(|resource| (profile.id == "knowledge-wiki") == (resource.group == "Wiki"))
         .filter_map(|resource| {
             model
                 .resources
@@ -1531,7 +1930,7 @@ fn profile_groups(model: &Model) -> Vec<Group> {
         .collect();
     groups.push(Group {
         title: "Everything".into(),
-        description: "Every capability available on this platform.".into(),
+        description: "Every general capability. Vault-scoped resources are under Wiki.".into(),
         rows,
         bulk_rows: all_resources,
         kinds,
@@ -1572,7 +1971,11 @@ fn profile_kinds(model: &Model, rows: &[Row], bulk_rows: &[Row]) -> Vec<KindGrou
             bulk_rows: direct,
         });
     }
-    if !model.settings.is_empty() {
+    if !model.settings.is_empty()
+        && !rows.iter().any(
+            |row| matches!(row, Row::Resource(index) if model.resources[*index].group == "Wiki"),
+        )
+    {
         let settings = (0..model.settings.len())
             .map(Row::Setting)
             .collect::<Vec<_>>();
@@ -1592,13 +1995,13 @@ fn resource_groups(model: &Model) -> Vec<Group> {
             || !model.resources[index].is_automatic_pi_package()
     };
     let rows = (0..model.resources.len())
-        .filter(|index| visible(*index))
+        .filter(|index| visible(*index) && model.resources[*index].group != "Wiki")
         .map(Row::Resource)
         .collect::<Vec<_>>();
     if !rows.is_empty() {
         groups.push(Group {
             title: "Everything".into(),
-            description: "Every available resource.".into(),
+            description: "Every general resource. Vault-scoped resources are under Wiki.".into(),
             rows: rows.clone(),
             bulk_rows: rows.clone(),
             kinds: vec![KindGroup {
@@ -1634,7 +2037,10 @@ fn resource_groups(model: &Model) -> Vec<Group> {
         "Wiki".into(),
         indices(&model.resources, |resource| resource.group == "Wiki"),
     );
-    for category in groups_of(&model.resources, ResourceKind::Skill) {
+    for category in groups_of(&model.resources, ResourceKind::Skill)
+        .into_iter()
+        .filter(|category| category != "Wiki")
+    {
         let items = indices(&model.resources, |resource| {
             resource.kind == ResourceKind::Skill && resource.group == category
         });
