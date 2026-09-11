@@ -29,6 +29,25 @@ pub enum Mark {
     Bad,
 }
 
+impl Mark {
+    /// The same glyph in reports and TUI screens.
+    pub fn glyph(self) -> &'static str {
+        match self {
+            Mark::Ok => "✓",
+            Mark::Off => "○",
+            Mark::Bad => "!",
+        }
+    }
+
+    pub fn color(self) -> ratatui::style::Color {
+        match self {
+            Mark::Ok => theme::OK,
+            Mark::Off => theme::WARN,
+            Mark::Bad => theme::ERR,
+        }
+    }
+}
+
 /// Only fixed, recognized causes reach compact reports. Tool output may contain
 /// credentials or private document text, so it is never the details view.
 pub(crate) fn failure_advice(message: &str) -> (&'static str, &'static str) {
@@ -104,6 +123,229 @@ pub(crate) mod theme {
     pub const OK: Color = Color::Green;
     pub const WARN: Color = Color::Yellow;
     pub const ERR: Color = Color::Red;
+}
+
+/// The shared TUI frame: one-line header, body, one-line footer, panels, and
+/// centered modals. Every full-screen Loom view draws through here so the
+/// wizard, `loom wiki`, and progress screens look like one program.
+pub(crate) mod chrome {
+    use super::theme::{ACCENT, ERR};
+    use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+    use ratatui::style::{Modifier, Style};
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph, Wrap};
+    use ratatui::Frame;
+
+    pub const MIN_WIDTH: u16 = 40;
+    pub const MIN_HEIGHT: u16 = 10;
+
+    /// Header, body, footer. Returns `None` after drawing a resize notice when
+    /// the terminal is too small.
+    pub fn frame_areas(frame: &mut Frame, fallback: &str) -> Option<[Rect; 3]> {
+        let area = frame.area();
+        if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
+            frame.render_widget(
+                Paragraph::new(vec![
+                    Line::styled("loom needs a little more room", Style::new().bold()),
+                    Line::from(format!(
+                        "Resize to at least {MIN_WIDTH} columns by {MIN_HEIGHT} rows."
+                    )),
+                    Line::from(fallback.to_owned()),
+                ])
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true }),
+                area,
+            );
+            return None;
+        }
+        Some(
+            Layout::vertical([
+                Constraint::Length(1),
+                Constraint::Min(1),
+                Constraint::Length(1),
+            ])
+            .areas(area),
+        )
+    }
+
+    /// A breadcrumb step: label plus whether it is done.
+    pub struct Crumb {
+        pub label: String,
+        pub done: bool,
+    }
+
+    /// ` loom <command>  vX.Y.Z` on the left; on the right either the full
+    /// `✓ Done › Current › Next` trail or, when narrow, `step 2/4 · Current`.
+    /// `status` (for example `3 picked`) sits before the trail.
+    pub fn header(
+        frame: &mut Frame,
+        area: Rect,
+        command: &str,
+        status: Vec<Span<'static>>,
+        crumbs: &[Crumb],
+        current: usize,
+    ) {
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(format!(" loom {command}"), Style::new().fg(ACCENT).bold()),
+                Span::styled(
+                    concat!("  v", env!("CARGO_PKG_VERSION")),
+                    Style::new().dim(),
+                ),
+            ])),
+            area,
+        );
+        let mut spans = status;
+        if area.width < 80 {
+            spans.push(Span::styled(
+                format!("step {}/{} · ", current + 1, crumbs.len()),
+                Style::new().dim(),
+            ));
+            if let Some(crumb) = crumbs.get(current) {
+                spans.push(Span::styled(
+                    crumb.label.clone(),
+                    Style::new().fg(ACCENT).bold(),
+                ));
+            }
+        } else {
+            for (index, crumb) in crumbs.iter().enumerate() {
+                if index > 0 {
+                    spans.push(Span::styled(" › ", Style::new().dim()));
+                }
+                spans.push(if index == current {
+                    Span::styled(crumb.label.clone(), Style::new().fg(ACCENT).bold())
+                } else if crumb.done {
+                    Span::styled(format!("✓ {}", crumb.label), Style::new().dim())
+                } else {
+                    Span::styled(crumb.label.clone(), Style::new().dim())
+                });
+            }
+        }
+        spans.push(Span::raw(" "));
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
+            area,
+        );
+    }
+
+    pub const BACK_WIDTH: u16 = 11;
+    pub const NEXT_WIDTH: u16 = 13;
+
+    /// Dim key hint on the left, `[ ◂ Back ]  [ Next ▸ ]` on the right.
+    /// Returns the back and next button rects for mouse hit testing; a
+    /// disabled button is drawn dim and returns an empty rect.
+    pub fn footer(
+        frame: &mut Frame,
+        area: Rect,
+        hint: &str,
+        back: Option<(&str, bool)>,
+        next: (&str, bool),
+    ) -> (Rect, Rect) {
+        let [hint_area, back_area, _, next_area, _] = Layout::horizontal([
+            Constraint::Min(0),
+            Constraint::Length(if back.is_some() { BACK_WIDTH } else { 0 }),
+            Constraint::Length(if back.is_some() { 1 } else { 0 }),
+            Constraint::Length(NEXT_WIDTH),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(hint, Style::new().dim()))),
+            hint_area,
+        );
+        let mut back_hit = Rect::default();
+        if let Some((label, enabled)) = back {
+            let style = if enabled {
+                Style::new().fg(ACCENT)
+            } else {
+                Style::new().dim()
+            };
+            frame.render_widget(
+                Paragraph::new(Line::from(Span::styled(format!("[ ◂ {label:<4} ]"), style))),
+                back_area,
+            );
+            if enabled {
+                back_hit = back_area;
+            }
+        }
+        let (label, enabled) = next;
+        let style = if enabled {
+            Style::new()
+                .fg(ACCENT)
+                .add_modifier(Modifier::REVERSED)
+                .bold()
+        } else {
+            Style::new().dim()
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(format!("[ {label:^7} ▸ ]"), style))),
+            next_area,
+        );
+        (back_hit, if enabled { next_area } else { Rect::default() })
+    }
+
+    /// A rounded, titled panel; accent when focused, dim otherwise. Content
+    /// always gets one column of horizontal padding.
+    pub fn panel(title: &str, focused: bool) -> Block<'_> {
+        let style = if focused {
+            Style::new().fg(ACCENT)
+        } else {
+            Style::new().dim()
+        };
+        Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(style)
+            .title_style(if focused { style.bold() } else { style })
+            .title(title.to_owned())
+            .padding(Padding::horizontal(1))
+    }
+
+    pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
+        Rect {
+            x: area.x + area.width.saturating_sub(width) / 2,
+            y: area.y + area.height.saturating_sub(height) / 2,
+            width: width.min(area.width),
+            height: height.min(area.height),
+        }
+    }
+
+    /// A centered question over the current screen. `danger` is the key that
+    /// commits (drawn red), `safe` the key that backs out (drawn accent).
+    pub fn confirm_modal(
+        frame: &mut Frame,
+        title: &str,
+        body: Vec<Line<'static>>,
+        danger: (&str, &str),
+        safe: (&str, &str),
+    ) {
+        let width = body
+            .iter()
+            .map(|line| line.width() as u16)
+            .max()
+            .unwrap_or(0)
+            .max(40)
+            + 4;
+        let mut lines = body;
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled(danger.0.to_owned(), Style::new().fg(ERR).bold()),
+            Span::raw(format!(" {}   ", danger.1)),
+            Span::styled(safe.0.to_owned(), Style::new().fg(ACCENT).bold()),
+            Span::raw(format!(" {}", safe.1)),
+        ]));
+        let area = centered(
+            frame.area(),
+            width.min(frame.area().width.saturating_sub(4)),
+            lines.len() as u16 + 2,
+        );
+        frame.render_widget(Clear, area);
+        frame.render_widget(
+            Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .block(panel(title, true)),
+            area,
+        );
+    }
 }
 
 const LABEL_WIDTH: usize = 20;

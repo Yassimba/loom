@@ -1,12 +1,12 @@
 //! Vault-scoped picks inside the setup chooser. Selecting a folder never writes to it.
-use super::render::{bordered, centered_rect, ACCENT};
+use super::render::{bordered, ACCENT, ERR};
 use super::state::{Action, Group, Pane, Row, Stage, Wizard};
 use crate::wiki::{VaultHealth, VaultRecord, WikiOperation, WikiRegistry};
 use ratatui::crossterm::event::KeyCode;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Clear, List, ListItem, ListState, Padding, Paragraph, Wrap};
+use ratatui::widgets::{List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -356,10 +356,9 @@ impl WikiBrowser {
             lines.insert(0, Line::from(message.clone()));
         }
         frame.render_widget(
-            Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-                bordered(" This Wiki · capabilities ", focus == Pane::Items)
-                    .padding(Padding::horizontal(1)),
-            ),
+            Paragraph::new(lines)
+                .wrap(Wrap { trim: true })
+                .block(bordered(" This Wiki · capabilities ", focus == Pane::Items)),
             details,
         );
     }
@@ -603,23 +602,17 @@ impl Wizard {
         else {
             return;
         };
-        let area = centered_rect(
-            frame.area(),
-            64.min(frame.area().width.saturating_sub(4)),
-            7,
-        );
-        frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(vec![
-                Line::styled("Unregister this Wiki?", Style::new().fg(Color::Red).bold()),
+        crate::ui::chrome::confirm_modal(
+            frame,
+            " Unregister Wiki ",
+            vec![
+                Line::styled("Unregister this Wiki?", Style::new().fg(ERR).bold()),
                 Line::from(path.display().to_string()),
                 Line::from(""),
                 Line::from("Its files will remain untouched."),
-                Line::from("enter unregister · esc keep"),
-            ])
-            .alignment(Alignment::Center)
-            .block(bordered(" Unregister Wiki ", true)),
-            area,
+            ],
+            ("enter", "unregister"),
+            ("esc", "keep"),
         );
     }
 }

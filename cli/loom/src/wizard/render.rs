@@ -8,15 +8,14 @@ use super::state::{
 };
 use crate::settings::SettingSpec;
 use crate::{ResourceKind, SkillAgent};
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, BorderType, Clear, Gauge, List, ListItem, ListState, Padding, Paragraph, Wrap,
-};
+use ratatui::widgets::{Clear, Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+use crate::ui::chrome::{self, Crumb};
 pub(crate) use crate::ui::theme::{ACCENT, ERR, OK, WARN};
 const ON: &str = "[x]";
 const OFF: &str = "[ ]";
@@ -37,25 +36,11 @@ struct ItemCounts {
 impl Wizard {
     pub fn draw(&mut self, frame: &mut Frame) {
         self.hits = HitMap::default();
-        if frame.area().width < 40 || frame.area().height < 10 {
-            frame.render_widget(
-                Paragraph::new(vec![
-                    Line::styled("loom needs a little more room", Style::new().bold()),
-                    Line::from("Resize to at least 40 columns by 10 rows."),
-                    Line::from("Or use `loom add --help` for scripted setup."),
-                ])
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true }),
-                frame.area(),
-            );
+        let Some([header, body, footer]) =
+            chrome::frame_areas(frame, "Or use `loom add --help` for scripted setup.")
+        else {
             return;
-        }
-        let [header, body, footer] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Min(1),
-            Constraint::Length(1),
-        ])
-        .areas(frame.area());
+        };
         self.render_header(frame, header);
         let list = match &self.stages[self.stage_index] {
             Stage::Choose(stage) => {
@@ -116,75 +101,35 @@ impl Wizard {
     // ---- chrome ------------------------------------------------------------
 
     fn render_header(&self, frame: &mut Frame, area: Rect) {
-        let title = Line::from(vec![
-            Span::styled(
-                format!(
-                    " loom {}",
-                    if self.model.purpose == super::state::WizardPurpose::Uninstall {
-                        "uninstall"
-                    } else {
-                        self.model.mode.command()
-                    }
-                ),
-                Style::new().fg(ACCENT).bold(),
-            ),
-            Span::styled(
-                concat!("  v", env!("CARGO_PKG_VERSION")),
-                Style::new().dim(),
-            ),
-        ]);
-        frame.render_widget(Paragraph::new(title), area);
-
-        let mut spans = Vec::new();
+        let command = if self.model.purpose == super::state::WizardPurpose::Uninstall {
+            "uninstall"
+        } else {
+            self.model.mode.command()
+        };
+        let mut status = Vec::new();
         if self.probing {
-            spans.push(Span::styled("scanning installed…   ", Style::new().dim()));
+            status.push(Span::styled("scanning installed…   ", Style::new().dim()));
         }
         let count = self.total_selected();
         if count > 0 {
-            spans.push(Span::styled(
+            status.push(Span::styled(
                 format!("{count} picked   "),
                 Style::new().fg(OK),
             ));
         }
         let visible = self.visible_stages();
-        if area.width < 80 {
-            // No room for the breadcrumb: "step 2/4 · Where".
-            let step = visible
-                .iter()
-                .position(|&index| index == self.stage_index)
-                .unwrap_or(0)
-                + 1;
-            spans.push(Span::styled(
-                format!("step {step}/{} · ", visible.len()),
-                Style::new().dim(),
-            ));
-            spans.push(Span::styled(
-                self.stages[self.stage_index].title(),
-                Style::new().fg(ACCENT).bold(),
-            ));
-            spans.push(Span::raw(" "));
-            frame.render_widget(
-                Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
-                area,
-            );
-            return;
-        }
-        for (position, &index) in visible.iter().enumerate() {
-            if position > 0 {
-                spans.push(Span::styled(" › ", Style::new().dim()));
-            }
-            let title = self.stages[index].title();
-            spans.push(match index.cmp(&self.stage_index) {
-                std::cmp::Ordering::Less => Span::styled(format!("✓ {title}"), Style::new().dim()),
-                std::cmp::Ordering::Equal => Span::styled(title, Style::new().fg(ACCENT).bold()),
-                std::cmp::Ordering::Greater => Span::styled(title, Style::new().dim()),
-            });
-        }
-        spans.push(Span::raw(" "));
-        frame.render_widget(
-            Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
-            area,
-        );
+        let current = visible
+            .iter()
+            .position(|&index| index == self.stage_index)
+            .unwrap_or(0);
+        let crumbs: Vec<Crumb> = visible
+            .iter()
+            .map(|&index| Crumb {
+                label: self.stages[index].title().to_owned(),
+                done: index < self.stage_index,
+            })
+            .collect();
+        chrome::header(frame, area, command, status, &crumbs, current);
     }
 
     fn render_footer(&mut self, frame: &mut Frame, area: Rect) {
@@ -231,55 +176,23 @@ impl Wizard {
             Stage::Review { .. } => " enter ↑↓ esc",
             Stage::Install(_) => " enter",
         };
-        let hint = if area.width < hint.chars().count() as u16 + 26 {
+        let hint = if area.width
+            < hint.chars().count() as u16 + chrome::BACK_WIDTH + chrome::NEXT_WIDTH + 3
+        {
             short
         } else {
             hint
         };
-        let [hint_area, back_area, _, next_area, _] = Layout::horizontal([
-            Constraint::Min(0),
-            Constraint::Length(10),
-            Constraint::Length(1),
-            Constraint::Length(13),
-            Constraint::Length(1),
-        ])
-        .areas(area);
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(hint, Style::new().dim()))),
-            hint_area,
-        );
-
         let (back_enabled, next_label, next_enabled) = self.button_states();
-        let back_style = if back_enabled {
-            Style::new().fg(ACCENT)
-        } else {
-            Style::new().dim()
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled("[ ◂ Back ]", back_style))),
-            back_area,
+        let (back, next) = chrome::footer(
+            frame,
+            area,
+            hint,
+            Some(("Back", back_enabled)),
+            (next_label, next_enabled),
         );
-        let next_style = if next_enabled {
-            Style::new()
-                .fg(ACCENT)
-                .add_modifier(Modifier::REVERSED)
-                .bold()
-        } else {
-            Style::new().dim()
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                format!("[ {next_label:^7} ▸ ]"),
-                next_style,
-            ))),
-            next_area,
-        );
-        if back_enabled {
-            self.hits.back_button = back_area;
-        }
-        if next_enabled {
-            self.hits.next_button = next_area;
-        }
+        self.hits.back_button = back;
+        self.hits.next_button = next;
     }
 
     fn button_states(&self) -> (bool, &'static str, bool) {
@@ -363,60 +276,32 @@ impl Wizard {
         let height = (lines.len() as u16 + 2).min(frame.area().height.saturating_sub(2));
         let area = centered_rect(frame.area(), width, height);
         frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(lines).block(bordered(" Keys ", true).padding(Padding::horizontal(1))),
-            area,
-        );
+        frame.render_widget(Paragraph::new(lines).block(bordered(" Keys ", true)), area);
     }
 
     fn render_confirm_quit(&self, frame: &mut Frame) {
         let count = self.total_selected();
-        let lines = vec![
-            Line::from(format!("Quit and drop {} picked?", plural(count, "item"))),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("enter", Style::new().fg(ERR).bold()),
-                Span::raw(" quit   "),
-                Span::styled("any other key", Style::new().fg(ACCENT).bold()),
-                Span::raw(" stay"),
-            ]),
-        ];
-        let area = centered_rect(
-            frame.area(),
-            46.min(frame.area().width.saturating_sub(4)),
-            5,
-        );
-        frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .alignment(Alignment::Center)
-                .block(bordered(" Quit? ", true)),
-            area,
+        chrome::confirm_modal(
+            frame,
+            " Quit? ",
+            vec![Line::from(format!(
+                "Quit and drop {} picked?",
+                plural(count, "item")
+            ))],
+            ("enter", "quit"),
+            ("any other key", "stay"),
         );
     }
 
     fn render_confirm_cancel(&self, frame: &mut Frame) {
-        let lines = vec![
-            Line::from("Cancel the running install? Completed changes stay in place."),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("ctrl-c", Style::new().fg(ERR).bold()),
-                Span::raw(" cancel   "),
-                Span::styled("wait", Style::new().fg(ACCENT).bold()),
-                Span::raw(" continue installing"),
-            ]),
-        ];
-        let area = centered_rect(
-            frame.area(),
-            64.min(frame.area().width.saturating_sub(4)),
-            5,
-        );
-        frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .alignment(Alignment::Center)
-                .block(bordered(" Cancel install? ", true)),
-            area,
+        chrome::confirm_modal(
+            frame,
+            " Cancel install? ",
+            vec![Line::from(
+                "Cancel the running install? Completed changes stay in place.",
+            )],
+            ("ctrl-c", "cancel"),
+            ("wait", "continue installing"),
         );
     }
 
@@ -674,17 +559,16 @@ impl Wizard {
         };
         if details_area.width > 0 {
             frame.render_widget(
-                Paragraph::new(details).wrap(Wrap { trim: true }).block(
-                    bordered(
+                Paragraph::new(details)
+                    .wrap(Wrap { trim: true })
+                    .block(bordered(
                         if profile_mode {
                             " Overview "
                         } else {
                             " Details "
                         },
                         false,
-                    )
-                    .padding(Padding::horizontal(1)),
-                ),
+                    )),
                 details_area,
             );
         }
@@ -1302,7 +1186,7 @@ impl Wizard {
         frame.render_widget(
             Paragraph::new(details)
                 .wrap(Wrap { trim: true })
-                .block(bordered(" Details ", false).padding(Padding::horizontal(1))),
+                .block(bordered(" Details ", false)),
             details_area,
         );
         Some((list_area, 0))
@@ -1368,7 +1252,7 @@ impl Wizard {
             return;
         }
         let paragraph = Paragraph::new(lines)
-            .block(bordered(" Review ", true).padding(Padding::horizontal(1)))
+            .block(bordered(" Review ", true))
             .scroll((scroll, 0));
         frame.render_widget(paragraph, area);
     }
@@ -1614,7 +1498,7 @@ impl Wizard {
                 .saturating_sub(summary_area.height.saturating_sub(2) as usize);
             frame.render_widget(
                 paragraph
-                    .block(bordered(" Result · ↑↓ scroll ", true).padding(Padding::horizontal(1)))
+                    .block(bordered(" Result · ↑↓ scroll ", true))
                     .scroll((
                         stage.scroll.min(max_scroll.min(u16::MAX as usize) as u16),
                         0,
@@ -1686,25 +1570,8 @@ fn mark_for(on: bool) -> (&'static str, Style) {
     }
 }
 
-pub(super) fn bordered(title: &str, focused: bool) -> Block<'_> {
-    let border_style = if focused {
-        Style::new().fg(ACCENT)
-    } else {
-        Style::new().dim()
-    };
-    Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(border_style)
-        .title_style(if focused {
-            Style::new().fg(ACCENT).bold()
-        } else {
-            Style::new().dim()
-        })
-        .title(title.to_owned())
-}
+pub(super) use crate::ui::chrome::{centered as centered_rect, panel as bordered};
 
-/// The cursor row: the terminal's own colors inverted, tinted with the
-/// accent when the column has focus, so contrast holds on any palette.
 fn highlight(focused: bool) -> Style {
     if focused {
         Style::new().fg(ACCENT).add_modifier(Modifier::REVERSED)
@@ -1719,15 +1586,6 @@ fn list_offset(len: usize, visible: u16, cursor: usize) -> usize {
         0
     } else {
         (cursor + 1 - visible).min(len - visible)
-    }
-}
-
-pub(super) fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
-    Rect {
-        x: area.x + area.width.saturating_sub(width) / 2,
-        y: area.y + area.height.saturating_sub(height) / 2,
-        width: width.min(area.width),
-        height: height.min(area.height),
     }
 }
 

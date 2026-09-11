@@ -2,17 +2,17 @@
 use crate::{CommandResult, CommandSpec, System};
 use anyhow::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Padding, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::ui::theme::ACCENT;
+use crate::ui::chrome::{self, Crumb};
+use crate::ui::theme::{ACCENT, OK, WARN};
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 struct ProgressSystem<'a> {
@@ -203,39 +203,18 @@ fn draw_progress(
     quiet_seconds: u64,
     confirm_cancel: bool,
 ) {
-    let [header, body, footer] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Min(1),
-        Constraint::Length(1),
-    ])
-    .areas(frame.area());
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" loom", Style::new().fg(ACCENT).bold()),
-            Span::styled(
-                concat!("  v", env!("CARGO_PKG_VERSION")),
-                Style::new().dim(),
-            ),
-        ])),
-        header,
-    );
-    frame.render_widget(
-        Paragraph::new(Span::styled(
-            format!("{activity} "),
-            Style::new().fg(ACCENT).bold(),
-        ))
-        .alignment(Alignment::Right),
-        header,
-    );
+    let Some([header, body, footer]) = chrome::frame_areas(frame, "") else {
+        return;
+    };
+    let crumbs = [Crumb {
+        label: activity.to_owned(),
+        done: false,
+    }];
+    chrome::header(frame, header, "wiki", Vec::new(), &crumbs, 0);
 
     let width = 64.min(body.width.saturating_sub(4));
     let height = (10 + completed.len().min(3) as u16).min(body.height);
-    let panel_area = Rect::new(
-        body.x + body.width.saturating_sub(width) / 2,
-        body.y + body.height.saturating_sub(height) / 2,
-        width,
-        height,
-    );
+    let panel_area = chrome::centered(body, width, height);
     let spinner = if std::env::var("TERM").is_ok_and(|term| term == "dumb") {
         "."
     } else {
@@ -244,7 +223,7 @@ fn draw_progress(
     let status = if confirm_cancel {
         Line::styled(
             "Cancel Wiki work? Completed work will stay in place.",
-            Style::new().fg(Color::Yellow),
+            Style::new().fg(WARN),
         )
     } else {
         Line::from(vec![
@@ -269,7 +248,7 @@ fn draw_progress(
         lines.extend(completed.iter().map(|(label, duration)| {
             Line::styled(
                 format!("✓ {label} · {}s", duration.as_secs()),
-                Style::new().fg(Color::Green),
+                Style::new().fg(OK),
             )
         }));
     }
@@ -281,14 +260,9 @@ fn draw_progress(
         ),
     ]);
     frame.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .border_style(Style::new().fg(ACCENT))
-                .title_style(Style::new().fg(ACCENT).bold())
-                .title(" Progress ")
-                .padding(Padding::uniform(1)),
-        ),
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: true })
+            .block(chrome::panel(" Progress ", true)),
         panel_area,
     );
     frame.render_widget(

@@ -5,7 +5,7 @@ use crate::{InstallPlan, Resource, ResourceKind, SkillScope};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Padding, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 
 const TITLES: [&str; 3] = [
@@ -58,7 +58,7 @@ impl Wizard {
                     .saturating_sub(area.height.saturating_sub(2) as usize);
                 frame.render_widget(
                     paragraph
-                        .block(bordered(title, true).padding(Padding::horizontal(1)))
+                        .block(bordered(title, true))
                         .scroll((scroll.min(max_scroll.min(u16::MAX as usize) as u16), 0)),
                     *area,
                 );
@@ -93,10 +93,7 @@ impl Wizard {
                 .saturating_sub(body.height.saturating_sub(2) as usize);
             frame.render_widget(
                 paragraph
-                    .block(
-                        bordered(" Review · scroll to inspect ", true)
-                            .padding(Padding::horizontal(1)),
-                    )
+                    .block(bordered(" Review · scroll to inspect ", true))
                     .scroll((scroll.min(max_scroll.min(u16::MAX as usize) as u16), 0)),
                 body,
             );

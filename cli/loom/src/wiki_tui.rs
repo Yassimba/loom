@@ -3,17 +3,16 @@ use crate::{CommandSpec, System};
 use anyhow::{Context, Result};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, BorderType, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap,
-};
+use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
 use unicode_width::UnicodeWidthStr;
 
+use crate::ui::chrome::{self, Crumb};
 use crate::ui::theme::{ACCENT, ERR, OK};
 
 pub(crate) enum WikiChoice {
@@ -263,20 +262,11 @@ impl WikiWizard {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        if frame.area().width < 40 || frame.area().height < 10 {
-            frame.render_widget(
-                Paragraph::new("loom wiki needs at least 40 columns by 10 rows")
-                    .alignment(Alignment::Center),
-                frame.area(),
-            );
+        let Some([header, body, footer]) =
+            chrome::frame_areas(frame, "Or use `loom wiki --help` for scripted setup.")
+        else {
             return;
-        }
-        let [header, body, footer] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Min(1),
-            Constraint::Length(1),
-        ])
-        .areas(frame.area());
+        };
         self.draw_header(frame, header);
         match self.page {
             Page::Home => self.draw_home(frame, body),
@@ -284,9 +274,14 @@ impl WikiWizard {
             Page::Review => self.draw_review(frame, body),
             Page::Status => self.draw_status(frame, body),
             Page::Actions => self.draw_list(frame, body, " Manage Vault ", self.action_items()),
-            Page::ConfirmUnregister => self.draw_unregister(frame, body),
+            Page::ConfirmUnregister => {
+                self.draw_list(frame, body, " Manage Vault ", self.action_items());
+            }
         }
         self.draw_footer(frame, footer);
+        if self.page == Page::ConfirmUnregister {
+            self.draw_unregister(frame);
+        }
         if let Some(error) = &self.error {
             let area = centered(
                 frame.area(),
@@ -308,69 +303,22 @@ impl WikiWizard {
     }
 
     fn draw_header(&self, frame: &mut Frame, area: Rect) {
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(" loom wiki", Style::new().fg(ACCENT).bold()),
-                Span::styled(
-                    concat!("  v", env!("CARGO_PKG_VERSION")),
-                    Style::new().dim(),
-                ),
-            ])),
-            area,
-        );
-        let trail = match self.page {
-            Page::Home => vec![("Choose", true), ("Capabilities", false), ("Review", false)],
-            Page::Capabilities => vec![
-                ("✓ Choose", false),
-                ("Capabilities", true),
-                ("Review", false),
-            ],
-            Page::Review => vec![
-                ("✓ Choose", false),
-                ("✓ Capabilities", false),
-                ("Review", true),
-            ],
-            Page::Status => vec![("✓ Vaults", false), ("Status", true), ("Action", false)],
-            Page::Actions | Page::ConfirmUnregister => vec![("✓ Vaults", false), ("Action", true)],
+        let (labels, current): (&[&str], usize) = match self.page {
+            Page::Home => (&["Choose", "Capabilities", "Review"], 0),
+            Page::Capabilities => (&["Choose", "Capabilities", "Review"], 1),
+            Page::Review => (&["Choose", "Capabilities", "Review"], 2),
+            Page::Status => (&["Vaults", "Status", "Actions"], 1),
+            Page::Actions | Page::ConfirmUnregister => (&["Vaults", "Actions"], 1),
         };
-        if area.width < 80 {
-            let active = trail.iter().position(|(_, active)| *active).unwrap_or(0);
-            frame.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::styled(
-                        format!("step {}/{} · ", active + 1, trail.len()),
-                        Style::new().dim(),
-                    ),
-                    Span::styled(
-                        trail[active].0.trim_start_matches("✓ "),
-                        Style::new().fg(ACCENT).bold(),
-                    ),
-                    Span::raw(" "),
-                ]))
-                .alignment(Alignment::Right),
-                area,
-            );
-            return;
-        }
-        let mut spans = Vec::new();
-        for (index, (label, active)) in trail.into_iter().enumerate() {
-            if index > 0 {
-                spans.push(Span::styled(" › ", Style::new().dim()));
-            }
-            spans.push(Span::styled(
-                label,
-                if active {
-                    Style::new().fg(ACCENT).bold()
-                } else {
-                    Style::new().dim()
-                },
-            ));
-        }
-        spans.push(Span::raw(" "));
-        frame.render_widget(
-            Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
-            area,
-        );
+        let crumbs: Vec<Crumb> = labels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| Crumb {
+                label: (*label).to_owned(),
+                done: index < current,
+            })
+            .collect();
+        chrome::header(frame, area, "wiki", Vec::new(), &crumbs, current);
     }
 
     fn draw_footer(&self, frame: &mut Frame, area: Rect) {
@@ -389,32 +337,12 @@ impl WikiWizard {
             Page::Actions => ("Back", "Run"),
             Page::ConfirmUnregister => ("Keep", "Remove"),
         };
-        let [hint_area, controls_area] = Layout::horizontal([
-            Constraint::Min(1),
-            Constraint::Length(if back.is_empty() { 13 } else { 25 }),
-        ])
-        .areas(area);
-        frame.render_widget(
-            Paragraph::new(Span::styled(hint, Style::new().dim())),
-            hint_area,
-        );
-        let mut controls = Vec::new();
-        if !back.is_empty() {
-            controls.push(Span::styled(
-                format!("[ ◂ {back} ]  "),
-                Style::new().fg(ACCENT),
-            ));
-        }
-        controls.push(Span::styled(
-            format!("[ {next:^7} ▸ ]"),
-            Style::new()
-                .fg(ACCENT)
-                .add_modifier(Modifier::REVERSED)
-                .bold(),
-        ));
-        frame.render_widget(
-            Paragraph::new(Line::from(controls)).alignment(Alignment::Right),
-            controls_area,
+        chrome::footer(
+            frame,
+            area,
+            hint,
+            (!back.is_empty()).then_some((back, true)),
+            (next, true),
         );
     }
 
@@ -445,7 +373,7 @@ impl WikiWizard {
                 Line::from(""),
                 Line::from("Enter inspects tools configured for this Wiki. Browsing does not install or repair anything."),
                 Line::from("Shared machine tools are reported separately from Vault configuration."),
-            ]).wrap(Wrap { trim: true }).block(panel(" This Wiki ", false).padding(Padding::horizontal(1))), details);
+            ]).wrap(Wrap { trim: true }).block(panel(" This Wiki ", false)), details);
             return;
         }
         let choices = self.home_items();
@@ -471,7 +399,7 @@ impl WikiWizard {
                 Line::from(copy),
             ])
             .wrap(Wrap { trim: true })
-            .block(panel(" Details ", false).padding(Padding::horizontal(1))),
+            .block(panel(" Details ", false)),
             details,
         );
     }
@@ -519,7 +447,7 @@ impl WikiWizard {
             Paragraph::new(lines)
                 .wrap(Wrap { trim: true })
                 .scroll((self.cursor as u16, 0))
-                .block(panel(" Installed in this Vault ", true).padding(Padding::horizontal(1))),
+                .block(panel(" Installed in this Vault ", true)),
             area,
         );
     }
@@ -552,7 +480,7 @@ impl WikiWizard {
                 Line::from(""),
                 Line::styled("Selections are enabled for this Vault.", Style::new().dim()),
             ])
-            .block(panel(" Capabilities ", true).padding(Padding::uniform(1))),
+            .block(panel(" Capabilities ", true)),
             area,
         );
     }
@@ -592,26 +520,27 @@ impl WikiWizard {
                 ),
             ])
             .wrap(Wrap { trim: true })
-            .block(panel(" Review ", true).padding(Padding::uniform(1))),
+            .block(panel(" Review ", true)),
             area,
         );
     }
 
-    fn draw_unregister(&self, frame: &mut Frame, area: Rect) {
+    fn draw_unregister(&self, frame: &mut Frame) {
         let path = self
             .selected_record()
             .map(|record| record.path.display().to_string())
             .unwrap_or_default();
-        frame.render_widget(
-            Paragraph::new(vec![
+        chrome::confirm_modal(
+            frame,
+            " Unregister Vault ",
+            vec![
                 Line::styled("Unregister this Vault?", Style::new().fg(ERR).bold()),
                 Line::from(path),
                 Line::from(""),
                 Line::from("Its files will remain untouched."),
-            ])
-            .alignment(Alignment::Center)
-            .block(panel(" Confirm ", true)),
-            area,
+            ],
+            ("enter", "unregister"),
+            ("esc", "keep"),
         );
     }
 }
@@ -621,44 +550,15 @@ pub(crate) fn health_lines(health: &crate::wiki::VaultHealth) -> Vec<Line<'stati
         .rows
         .iter()
         .map(|(mark, label, detail)| {
-            let (symbol, color) = match mark {
-                crate::ui::Mark::Ok => ("✓", OK),
-                crate::ui::Mark::Bad => ("!", ERR),
-                crate::ui::Mark::Off => ("○", Color::Yellow),
-            };
             Line::styled(
-                format!("{symbol} {label}: {detail}"),
-                Style::new().fg(color),
+                format!("{} {label}: {detail}", mark.glyph()),
+                Style::new().fg(mark.color()),
             )
         })
         .collect()
 }
 
-fn panel(title: &str, focused: bool) -> Block<'_> {
-    Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(if focused {
-            Style::new().fg(ACCENT)
-        } else {
-            Style::new().dim()
-        })
-        .title_style(if focused {
-            Style::new().fg(ACCENT).bold()
-        } else {
-            Style::new().dim()
-        })
-        .title(title.to_owned())
-}
-
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
-    let [vertical] = Layout::vertical([Constraint::Length(height)])
-        .flex(ratatui::layout::Flex::Center)
-        .areas(area);
-    let [horizontal] = Layout::horizontal([Constraint::Length(width)])
-        .flex(ratatui::layout::Flex::Center)
-        .areas(vertical);
-    horizontal
-}
+use crate::ui::chrome::{centered, panel};
 
 fn picker_command(
     system: &dyn System,
