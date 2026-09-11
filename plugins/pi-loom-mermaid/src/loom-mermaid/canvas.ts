@@ -36,6 +36,7 @@ const PASS_V = 1
 const PASS_H = 2
 const JOINED = 4
 const HOP = '╫'
+const JUNCTION = '●'
 export class Canvas {
   readonly w: number
   readonly h: number
@@ -49,6 +50,9 @@ export class Canvas {
   style: Uint8Array
   occupied: Uint8Array
   pass: Uint8Array
+  /** Direction each edge cell's flow travels in (drawing order), so a
+   * junction can point a head at the arm that feeds it. */
+  flow: Uint8Array
   /** Edge labels queued by the layout, written after every line. */
   labels: { label: string; row: number; x: number }[] = []
   curStyle: number = STY_SOLID
@@ -69,6 +73,7 @@ export class Canvas {
     this.style = new Uint8Array(n)
     this.occupied = new Uint8Array(n)
     this.pass = new Uint8Array(n)
+    this.flow = new Uint8Array(n)
   }
 
   idx(x: number, y: number): number {
@@ -150,6 +155,7 @@ export class Canvas {
       if (y > a) bits |= U
       if (y < b) bits |= D
       this.addBits(x, y, bits)
+      if (y > a && y < b) this.flow[this.idx(x, y)] |= y1 > y0 ? D : U
     }
   }
 
@@ -161,19 +167,64 @@ export class Canvas {
       if (x > a) bits |= L
       if (x < b) bits |= R
       this.addBits(x, y, bits)
+      if (x > a && x < b) this.flow[this.idx(x, y)] |= x1 > x0 ? R : L
     }
   }
 
-  /** Resolve accumulated direction bits into glyphs, honouring line style. */
-  finalizeMask(): void {
+  /**
+   * Resolve accumulated direction bits into glyphs, honouring line style.
+   *
+   * `flowAxis` is the layout's main direction, when the diagram has one:
+   * arms along it flow the way the diagram reads, so only arms across it
+   * get a head where they feed a junction (`feedHeads`).
+   */
+  finalizeMask(flowAxis?: 'h' | 'v'): void {
+    if (flowAxis !== undefined) this.feedHeads(flowAxis)
     for (let i = 0; i < this.ch.length; i++) {
       if (this.mask[i] === 0) continue
       if (this.ch[i] === ' ') {
-        const c = this.pass[i] === (PASS_V | PASS_H) ? HOP : maskChar(this.mask[i])
+        const c = this.pass[i] === (PASS_V | PASS_H) ? HOP : this.isJunction(i) ? JUNCTION : maskChar(this.mask[i])
         this.ch[i] =
           this.style[i] === STY_DOT ? dottedChar(c) : this.style[i] === STY_THICK ? thickChar(c) : c
       } else if (this.ch[i] === '═' || this.ch[i] === '║') {
         this.ch[i] = doubleTee(this.ch[i], this.mask[i])
+      }
+    }
+  }
+
+  /** Three or more edge arms meeting off a border: a junction, drawn as a dot. */
+  private isJunction(i: number): boolean {
+    const m = this.mask[i]
+    const ways = (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1)
+    return ways >= 3 && this.role[i] !== 'border' && this.pass[i] !== (PASS_V | PASS_H)
+  }
+
+  /**
+   * A head on each plain arm across the flow axis that feeds a junction,
+   * so the reader tells a join (`▼ ●`) from a fork (`● │`). Arms along the
+   * axis read the diagram's way already. A bus segment carrying flow both
+   * ways gets a head at each end: each dot receives from it.
+   */
+  private feedHeads(axis: 'h' | 'v'): void {
+    const arms: [number, number, number, number, string][] =
+      axis === 'h'
+        ? [
+            [0, -1, D, U | D, '▼'],
+            [0, 1, U, U | D, '▲'],
+          ]
+        : [
+            [-1, 0, R, L | R, '▶'],
+            [1, 0, L, L | R, '◄'],
+          ]
+    for (let y = 0; y < this.h; y++) {
+      for (let x = 0; x < this.w; x++) {
+        if (!this.isJunction(this.idx(x, y))) continue
+        for (const [dx, dy, dir, straight, head] of arms) {
+          const [ax, ay] = [x + dx, y + dy]
+          if (ax < 0 || ay < 0 || ax >= this.w || ay >= this.h) continue
+          const j = this.idx(ax, ay)
+          if (this.mask[j] === straight && this.ch[j] === ' ' && (this.flow[j] & dir) !== 0) this.set(ax, ay, head, 'edge')
+        }
       }
     }
   }

@@ -35,7 +35,7 @@ const LINKS: [number, number, number, number][] = [
   [R, 1, 0, L],
 ];
 const EDGE_GLYPHS = new Set(
-  `─│┌┐└┘├┤┬┴┼╌╎━┃┏┓┗┛┣┫┳┻╋╭╮╰╯═║╪╤╧╫╟╢o×◆◇${Object.keys(HEADS).join("")}`,
+  `─│┌┐└┘├┤┬┴┼╌╎━┃┏┓┗┛┣┫┳┻╋╭╮╰╯═║╪╤╧╫╟╢●o×◆◇${Object.keys(HEADS).join("")}`,
 );
 
 /** The `Canvas` fields the metrics read; structurally typed so any revision fits. */
@@ -52,10 +52,10 @@ export interface Metrics {
   width: number;
   height: number;
   area: number;
-  /** `┼` cells: two edges crossing (or a four-way junction). */
+  /** Two edges passing through one cell, drawn as a hop (`╫`). */
   crossings: number;
-  /** Four-way cells that are two edges passing through: true crossings, drawn as hops. */
-  hops: number;
+  /** Three or more arms meeting: a fork or join, drawn as a dot (`●`). */
+  junctions: number;
   bends: number;
   /** Cells carrying edge bits. */
   routedLength: number;
@@ -99,9 +99,10 @@ function brokenAt(c: CanvasLike, x: number, y: number, mask: number): number {
   return broken;
 }
 
+/** A head must point at a box border or at a junction dot it feeds. */
 function headDangling(c: CanvasLike, x: number, y: number, dir: [number, number]): boolean {
   const j = at(c, x + dir[0], y + dir[1]);
-  return j === null || !c.occupied[j];
+  return j === null || (!c.occupied[j] && c.ch[j] !== "●");
 }
 
 const isBend = (mask: number): boolean =>
@@ -113,10 +114,9 @@ function measureEdgeCell(c: CanvasLike, x: number, y: number, m: Metrics): void 
   const ch = c.ch[i];
   if (mask !== 0) {
     m.routedLength++;
-    if (mask === (U | D | L | R)) {
-      m.crossings++;
-      if (ch === "╫") m.hops++;
-    } else if (isBend(mask)) m.bends++;
+    if (ch === "╫") m.crossings++;
+    else if (ch === "●") m.junctions++;
+    else if (isBend(mask)) m.bends++;
     if (!EDGE_GLYPHS.has(ch) && ch !== "\0") m.edgeOverText++;
     m.brokenLinks += brokenAt(c, x, y, mask);
   }
@@ -133,7 +133,7 @@ export function measure(c: CanvasLike, ms: number): Metrics {
     height: c.h,
     area: c.w * c.h,
     crossings: 0,
-    hops: 0,
+    junctions: 0,
     bends: 0,
     routedLength: 0,
     marginRight: 0,

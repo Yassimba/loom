@@ -1,4 +1,11 @@
 {
+  "biclique-private": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 784
+  },
   "class-inheritance": {
     "brokenLinks": 0,
     "edgeOverText": 0,
@@ -11,13 +18,13 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1518
+    "area": 1792
   },
   "concentrate": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
+    "crossings": 0,
     "area": 336
   },
   "cycles": {
@@ -25,13 +32,13 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1088
+    "area": 1666
   },
   "dense": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
+    "crossings": 0,
     "area": 546
   },
   "er-cardinalities": {
@@ -45,14 +52,21 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
+    "crossings": 0,
     "area": 810
+  },
+  "fork-before-join": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 192
   },
   "lane-order": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
+    "crossings": 0,
     "area": 494
   },
   "lane-shared-port": {
@@ -122,14 +136,14 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 3,
-    "area": 8326
+    "crossings": 2,
+    "area": 8349
   },
   "unicode-wide": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 936
+    "area": 988
   }
 }

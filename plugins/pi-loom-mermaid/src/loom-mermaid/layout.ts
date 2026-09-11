@@ -705,8 +705,15 @@ function assignTracks(spans: TrackSpan[]): { assigned: [number, number][]; count
       if (!overlaps(hypers[i], hypers[j])) continue
       const ij = crossings(hypers[i], hypers[j])
       const ji = crossings(hypers[j], hypers[i])
+      // A run arriving on a row where another run leaves goes outside it:
+      // the fork off that row must come before the join, or the joined
+      // edge reads as forking too (`B ─●─●─▶ Y` with A's join first says
+      // A also reaches Z).
+      const forkFirst = (fork: Hyper, join: Hyper): boolean => fork.up.some((y) => join.down.includes(y))
+      if (forkFirst(hypers[i], hypers[j]) && !forkFirst(hypers[j], hypers[i])) weight[i][j] = 1
+      else if (forkFirst(hypers[j], hypers[i]) && !forkFirst(hypers[i], hypers[j])) weight[j][i] = 1
       // Equal: keep the earlier-starting run nearer, the packing order.
-      if (ij < ji || (ij === ji && hypers[i].start <= hypers[j].start)) weight[i][j] = ji - ij
+      else if (ij < ji || (ij === ji && hypers[i].start <= hypers[j].start)) weight[i][j] = ji - ij
       else weight[j][i] = ij - ji
     }
   }
@@ -767,15 +774,12 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
   )
   const hypers: Hyper[] = []
   for (const span of sorted) {
-    const host = hypers.find((h) =>
-      h.members.some(
-        (m) =>
-          m.line === span.line &&
-          ((span.bundle !== undefined && m.bundle === span.bundle) ||
-            (m.from === span.from && m.up[0] === span.up[0]) ||
-            (m.to === span.to && m.down[0] === span.down[0])),
-      ),
-    )
+    const host = hypers.find((h) => {
+      const sameFrom = h.members.every((m) => m.from === span.from && m.up[0] === span.up[0])
+      const sameTo = h.members.every((m) => m.to === span.to && m.down[0] === span.down[0])
+      const bundled = span.bundle !== undefined && h.members.some((m) => m.bundle === span.bundle)
+      return h.members.every((m) => m.line === span.line) && (bundled || sameFrom || sameTo)
+    })
     if (host === undefined) {
       hypers.push({ members: [span], start: span.start, end: span.end, up: [...span.up], down: [...span.down] })
       continue
@@ -801,6 +805,43 @@ function mergeShared(spans: TrackSpan[]): Hyper[] {
     if ([...a.members, ...b.members].some((m) => m.label !== a.members[0].label || m.line !== a.members[0].line)) return false
     for (const x of S) for (const y of T) if (!have.has(`${x}>${y}`)) return false
     return true
+  }
+  const build = (members: TrackSpan[]): Hyper => ({
+    members,
+    start: Math.min(...members.map((m) => m.start)),
+    end: Math.max(...members.map((m) => m.end)),
+    up: [...new Set(members.flatMap((m) => m.up))],
+    down: [...new Set(members.flatMap((m) => m.down))],
+  })
+  // Partial bicliques: two fans that share two or more targets (or
+  // sources) split off the shared part as one trunk, so `a -> {x,y,z}`
+  // and `b -> {x,y}` draw `{a,b} -> {x,y}` plus a lone `a -> z`. The
+  // lone edge would otherwise cost a crossing the trunk avoids.
+  // ponytail: greedy pairwise; a maximal-biclique search if it ever matters.
+  for (let i = 0; i < hypers.length; i++) {
+    for (let j = hypers.length - 1; j > i; j--) {
+      const a = hypers[i]
+      const b = hypers[j]
+      const [ma, mb] = [a.members[0], b.members[0]]
+      if (ma.line !== mb.line || ma.label !== mb.label || complete(a, b)) continue
+      for (const side of ['to', 'from'] as const) {
+        const other = side === 'to' ? 'from' : 'to'
+        if (srcs(a).size !== 1 && side === 'to') continue
+        const key = (m: TrackSpan): number => m[side]
+        if (new Set(a.members.map((m) => m[other])).size !== 1 || new Set(b.members.map((m) => m[other])).size !== 1) continue
+        const shared = new Set(a.members.map(key).filter((k) => b.members.some((m) => key(m) === k)))
+        if (shared.size < 2) continue
+        const inA = a.members.filter((m) => shared.has(key(m)))
+        const inB = b.members.filter((m) => shared.has(key(m)))
+        const restA = a.members.filter((m) => !shared.has(key(m)))
+        const restB = b.members.filter((m) => !shared.has(key(m)))
+        hypers[i] = build([...inA, ...inB])
+        hypers.splice(j, 1)
+        if (restA.length) hypers.push(build(restA))
+        if (restB.length) hypers.push(build(restB))
+        break
+      }
+    }
   }
   for (let i = 0; i < hypers.length; i++) {
     for (let j = hypers.length - 1; j > i; j--) {
@@ -874,6 +915,53 @@ function greedyAcyclic(weight: number[][]): number[] {
   order.forEach((v, i) => (pos[v] = i))
   for (let u = 0; u < n; u++) for (let v = 0; v < n; v++) if (weight[u][v] >= 0 && pos[u] > pos[v]) weight[u][v] = -1
   return order
+}
+
+/**
+ * Edges in a complete bipartite subgraph between adjacent ranks, keyed by
+ * that biclique, so `{a,b} -> {x,y}` rides one trunk (a confluent bundle:
+ * unambiguous, since every source really does reach every target) and a
+ * lone `a -> z` beside it takes its own track. Greedy over source pairs:
+ * two unlabelled sources of one line style sharing two or more targets
+ * form the seed, further sources join while they reach every target.
+ */
+function bicliqueKeys(graph: Graph, ranks: number[]): Map<number, string> {
+  const out = new Map<number, string>()
+  const plain = (e: Edge): boolean => e.label === null && e.from !== e.to
+  const fan = new Map<number, Map<number, number>>()
+  graph.edges.forEach((e, i) => {
+    if (!plain(e) || ranks[e.to] !== ranks[e.from] + 1) return
+    if (!fan.has(e.from)) fan.set(e.from, new Map())
+    fan.get(e.from)?.set(e.to, i)
+  })
+  const sources = [...fan.keys()]
+  const taken = new Set<number>()
+  for (const a of sources) {
+    for (const b of sources) {
+      if (b <= a) continue
+      const fa = fan.get(a) as Map<number, number>
+      const fb = fan.get(b) as Map<number, number>
+      const line = graph.edges[[...fa.values()][0]].line
+      const targets = [...fa.keys()].filter(
+        (t) => fb.has(t) && !taken.has(fa.get(t) as number) && !taken.has(fb.get(t) as number) &&
+          graph.edges[fa.get(t) as number].line === line && graph.edges[fb.get(t) as number].line === line,
+      )
+      if (targets.length < 2) continue
+      const members = [a, b]
+      for (const c of sources) {
+        const fc = fan.get(c) as Map<number, number>
+        if (members.includes(c) || !targets.every((t) => fc.has(t) && !taken.has(fc.get(t) as number) && graph.edges[fc.get(t) as number].line === line)) continue
+        members.push(c)
+      }
+      const key = `${members.join(',')}>${targets.join(',')}`
+      for (const m of members) for (const t of targets) {
+        const i = fan.get(m)?.get(t) as number
+        out.set(i, key)
+        taken.add(i)
+      }
+    }
+  }
+  return out
 }
 
 /** Forward edges crossing the band between rank `r` and `r + 1` that must
@@ -1435,7 +1523,16 @@ function placeTd(
       edgeText(graph.edges[i]) === edgeText(graph.edges[k])
     const joins = entries.filter((i) => isSkip(graph.edges[i]) && host.length > 0 && host.some((k) => alike(i, k)))
     const merged = [...host, ...joins]
-    let items: Item[] = entries.filter((i) => !merged.includes(i)).map((i) => item([i], arrives(i)))
+    // Skips whose chains concentrated into one trunk arrive on one column
+    // and read alike: one head, not one per edge forking a cell above.
+    const loose = entries.filter((i) => !merged.includes(i))
+    const byArrival: number[][] = []
+    for (const i of loose) {
+      const g = byArrival.find((group) => isSkip(graph.edges[i]) && isSkip(graph.edges[group[0]]) && arrives(group[0]) === arrives(i) && alike(i, group[0]))
+      if (g === undefined) byArrival.push([i])
+      else g.push(i)
+    }
+    let items: Item[] = byArrival.map((group) => item(group, arrives(group[0])))
     // One head per way of reading the merged arrivals: alike ones share
     // it, so no label is ever folded under another.
     const groups: number[][] = []
@@ -1754,13 +1851,39 @@ function placeLr(
     if (e.from === e.to || ranks[e.to] >= ranks[e.from]) continue
     stubRows.add(boxTop(e.to) - 1)
   }
+  // A tall box (a two-line label) has a row per text line on its left
+  // side; arrivals that read differently (a dotted beside a solid, or
+  // differently labelled) each take one, so neither lands on the other's
+  // head and loses its style. Same-reading arrivals still share the centre.
+  const rowOffsets = (pick: (e: Edge, v: number) => boolean): Map<number, number> => {
+    const out = new Map<number, number>()
+    graph.nodes.forEach((_, v) => {
+      const rows = sizes.boxH[v] - 2
+      if (rows < 2) return
+      const kinds: string[] = []
+      const edges = graph.edges.flatMap((e, i) => (e.from !== e.to && pick(e, v) ? [i] : []))
+      // Plain solid edges keep the centre row; the odd one out moves.
+      const read = (i: number): string => `${graph.edges[i].line}|${edgeText(graph.edges[i]) ?? ''}`
+      for (const i of edges) if (!kinds.includes(read(i))) kinds.push(read(i))
+      kinds.sort((a, b) => Number(a !== 'solid|') - Number(b !== 'solid|'))
+      if (kinds.length < 2) return
+      // Centre first, then the row above, then below.
+      const slots = [0, -1, 1].filter((d) => d + half(sizes.boxH[v]) >= 1 && d + half(sizes.boxH[v]) <= rows)
+      for (const i of edges) {
+        const slot = kinds.indexOf(read(i))
+        if (slot < slots.length) out.set(i, slots[slot])
+      }
+    })
+    return out
+  }
+  const entryOffset = rowOffsets((e, v) => e.to === v && ranks[e.from] < ranks[v])
   const exitRow = (i: number): number => {
     const p = ends[i][0]
     return p === null ? centers[graph.edges[i].from] : boxTop(graph.edges[i].from) + p.box.cy
   }
   const entryRow = (i: number): number => {
     const p = ends[i][1]
-    return p === null ? centers[graph.edges[i].to] : boxTop(graph.edges[i].to) + p.box.cy
+    return p === null ? centers[graph.edges[i].to] + (entryOffset.get(i) ?? 0) : boxTop(graph.edges[i].to) + p.box.cy
   }
   // A skip whose target row crosses no box on any intermediate rank runs
   // straight through the diagram into the target's left side; otherwise
@@ -1788,8 +1911,9 @@ function placeLr(
   })
   // Every edge between two frames rides one bus: a trunk that fans out at
   // each end to the ports, instead of a column per edge.
+  const biclique = bicliqueKeys(graph, ranks)
   const bundleOf = (i: number): string | undefined =>
-    ends[i][0] !== null && ends[i][1] !== null ? `${graph.edges[i].from}>${graph.edges[i].to}` : undefined
+    ends[i][0] !== null && ends[i][1] !== null ? `${graph.edges[i].from}>${graph.edges[i].to}` : biclique.get(i)
   const entryY = graph.edges.map((_, i) => (edgeStraight[i] ? entryRow(i) : -1))
   const jogs = chainJogs(graph, ranks, layered, centers, (e, i) =>
     entryY[i] === -1 ? null : { exit: exitRow(i), entry: entryY[i] },
@@ -1800,13 +1924,9 @@ function placeLr(
   // each gap sizes to the widest label *leaving through it* — one long label
   // widens its own band, not the whole diagram. Straight skips label there
   // too; a self-loop's label hangs beside its own box (selfLabelW).
+  // (`bandLabel` is filled once the bus tracks are known: a label sits
+  // right of its own bus, so it needs its track's offset as well.)
   const bandLabel = new Array<number>(maxRank + 1).fill(0)
-  graph.edges.forEach((e, i) => {
-    if (e.from === e.to) return
-    if (ranks[e.to] !== ranks[e.from] + 1 && !edgeStraight[i]) return
-    const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel)
-    bandLabel[ranks[e.from]] = Math.max(bandLabel[ranks[e.from]], verb)
-  })
 
   const edgeBus = new Array<number>(graph.edges.length).fill(0)
   const busTracks = new Array<number>(maxRank + 1).fill(0)
@@ -1818,8 +1938,15 @@ function placeLr(
     const { assigned, count } = assignTracks(spans)
     for (const [idx, slot] of assigned) edgeBus[idx] = slot
     for (const j of bandJogs) jogTrack.set(j, edgeBus[j.edge])
-    busTracks[r] = count
+    // Tracks two columns apart, so parallel runs read as separate lines.
+    busTracks[r] = count * 2 - 1
   }
+  graph.edges.forEach((e, i) => {
+    if (e.from === e.to) return
+    if (ranks[e.to] !== ranks[e.from] + 1 && !edgeStraight[i]) return
+    const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel) + 2 * edgeBus[i]
+    bandLabel[ranks[e.from]] = Math.max(bandLabel[ranks[e.from]], verb)
+  })
 
   const rankX = new Array<number>(maxRank + 1).fill(0)
   for (let r = 1; r <= maxRank; r++) {
@@ -1903,7 +2030,7 @@ function placeLr(
       edge.fromSide !== undefined && edge.toSide !== undefined
         ? portRoute(from, to, edge.fromSide, edge.toSide)
         : to.rank === from.rank + 1
-          ? forwardRouteLr(from, to, edge, bandEnd[from.rank] + 1 + edgeBus[i], max, bundleOf(i) !== undefined)
+          ? forwardRouteLr(from, to, edge, bandEnd[from.rank] + 1 + 2 * edgeBus[i], max, bundleOf(i) !== undefined, to.cy + (entryOffset.get(i) ?? 0))
           : to.rank > from.rank && edgeStraight[i]
             ? skipRouteLr(from, to, edge, skipRoute[i], max)
             : laneRoute(from, to, edge, onTop(i) ? edgeLane[i] : laneBase + edgeLane[i], max, onTop(i), laneEntry(i, from, to))
@@ -2317,10 +2444,10 @@ function portRoute(from: Placed, to: Placed, fromSide: PortSide, toSide: PortSid
  * column. The verb keeps its usual spot above the line; cardinalities hug
  * their own ends on the rows above the departure and arrival cells.
  */
-function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: number, bundled = false): Route {
+function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: number, bundled = false, entry = to.cy): Route {
   const rx = from.x + from.w - 1
   const ry = from.cy
-  const ly = to.cy
+  const ly = entry
   const headCol = to.x - 1
   const points: [number, number][] =
     ry === ly && !bundled

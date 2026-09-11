@@ -66,7 +66,7 @@ export function paint(graph: Graph, extras: NodeExtra[], lay: Layout): Canvas {
   flushLabels(canvas)
   placeLaneLabels(canvas, routes.flatMap((r) => (r?.laneLabel === undefined ? [] : [r.laneLabel])))
 
-  canvas.finalizeMask()
+  canvas.finalizeMask(graph.dir === 'left' || graph.dir === 'right' ? 'h' : 'v')
   return canvas
 }
 

@@ -55,7 +55,7 @@ export function brandesKoepf(
       for (const row of view.layers) row.forEach((v, i) => (vpos[v] = i))
       // Mirrored runs see the pair the other way round.
       const gap = fromRight ? (l: number, r: number) => sep(r, l) : sep
-      const alignment = alignVertically(view, vpos, conflicts)
+      const alignment = alignVertically(view, vpos, conflicts, realCount)
       const x = compact(view, vpos, size, gap, alignment)
       runs.push(fromRight ? x.map((c) => -c) : x)
       roots.push(alignment.root)
@@ -88,6 +88,31 @@ export function brandesKoepf(
       }
     }
     if (!moved) break
+  }
+  // A block a cell or two off a neighbour it was not aligned with (its
+  // median was taken) nudges onto it when the separations allow, so the
+  // edge runs straight instead of jogging one row.
+  const fits = (block: number[], d: number): boolean =>
+    block.every((v) => {
+      const row = g.layers[layerOf[v]]
+      const i = pos[v]
+      const at = (u: number): number => centers[u] + (block.includes(u) ? d : 0)
+      const ok = (l: number, r: number): boolean => at(l) + size[l] / 2 + sep(l, r) + size[r] / 2 <= at(r)
+      return (i === 0 || ok(row[i - 1], v)) && (i === row.length - 1 || ok(v, row[i + 1]))
+    })
+  for (const row of g.layers) {
+    for (const v of row) {
+      if (v >= realCount) continue
+      const block = members.get(root[v]) ?? [v]
+      if (block.length > 1) continue
+      const near = [...g.up[v], ...g.down[v]]
+        .filter((u) => u < realCount)
+        .map((u) => centers[u] - centers[v])
+        .filter((d) => d !== 0 && Math.abs(d) <= 2)
+        .sort((a, b) => Math.abs(a) - Math.abs(b))
+      const d = near.find((d) => fits(block, d))
+      if (d !== undefined) for (const m of block) centers[m] += d
+    }
   }
   let min = Number.POSITIVE_INFINITY
   for (const row of g.layers) for (const v of row) min = Math.min(min, centers[v] - size[v] / 2)
@@ -139,14 +164,20 @@ interface Alignment {
 }
 
 /** Align each node with a median upper neighbour, left to right, no crossings. */
-function alignVertically(g: LayeredGraph, pos: number[], conflicts: Set<number>): Alignment {
+function alignVertically(g: LayeredGraph, pos: number[], conflicts: Set<number>, realCount: number): Alignment {
   const n = g.up.length
   const root = Array.from({ length: n }, (_, v) => v)
   const align = [...root]
   for (let i = 1; i < g.layers.length; i++) {
     let r = -1
     for (const v of g.layers[i]) {
-      const ups = [...g.up[v]].sort((a, b) => pos[a] - pos[b])
+      const all = [...g.up[v]].sort((a, b) => pos[a] - pos[b])
+      // A real node lines up with a real neighbour before a long edge's
+      // chain: a path of boxes read straight matters more than a straight
+      // skip (Ware et al. 2002, continuity). Chains still align with each
+      // other, so a long edge stays straight between its bends.
+      const real = v < realCount ? all.filter((u) => u < realCount) : []
+      const ups = real.length > 0 ? real : all
       const d = ups.length
       if (d === 0) continue
       const medians = d % 2 === 1 ? [ups[(d - 1) / 2]] : [ups[d / 2 - 1], ups[d / 2]]

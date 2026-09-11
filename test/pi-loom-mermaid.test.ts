@@ -308,8 +308,13 @@ test("two edges passing through one cell cross as a hop, junctions stay junction
   assert.ok(dense);
   assert.match(
     dense.plain.join("\n"),
-    /┼/,
+    /●/,
     "an edge continuing through its own bus row stays a junction",
+  );
+  assert.doesNotMatch(
+    dense.plain.join("\n"),
+    /┼/,
+    "junctions draw as dots, never as a four-way cross",
   );
   const grouped = render(
     readFileSync(new URL("./fixtures/mermaid/subgraphs-lr.mmd", import.meta.url), "utf8"),
@@ -420,4 +425,31 @@ test("explicit fill, stroke and text colors are preserved without tinting", () =
   assert.ok(output.includes("48;2;236;253;245"), "literal author fill");
   assert.ok(output.includes("38;2;79;133;96"), "literal author stroke");
   assert.ok(output.includes("38;2;0;0;0"), "literal author text");
+});
+
+test("a fan-out forks before another edge joins its row, with heads on the arms that feed each dot", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/fork-before-join.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  // B's fork to Z (first dot) comes before A's join (second dot), so the
+  // joined edge never reads as forking too; A's drop carries a head.
+  assert.match(text, /│ B ├─●─●─▶│ Y │/);
+  assert.match(text, /▼ {2}┌───┐\n│ B/);
+});
+
+test("two sources sharing two targets ride one trunk, a private dotted edge takes its own track and head", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/biclique-private.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  assert.match(text, /│ RDF Extension ├──●─●──────▶│/, "dotted fork, then the trunk join");
+  assert.match(
+    text,
+    /└╌╫╌╌╌╌╌╌▶│ {2}Schema Inspector/,
+    "the dotted edge keeps its own head and hops the trunk",
+  );
+  assert.match(text, /╎optional/, "the label fits beside its own track");
 });
