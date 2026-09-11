@@ -63,7 +63,67 @@ fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) ->
         .collect()
 }
 
-pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
+/// How `loom update` should treat Herdr on this machine.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HerdrGate {
+    /// Herdr is not installed.
+    None,
+    /// This process is a Herdr pane; replacing Herdr here breaks the session.
+    Inside,
+    /// A Herdr server is running outside this process; closing it first is safe.
+    StopServer,
+    /// No running Herdr to protect.
+    Ready,
+}
+
+pub fn herdr_gate(present: bool, inside: bool, server_running: bool) -> HerdrGate {
+    if !present {
+        HerdrGate::None
+    } else if inside {
+        HerdrGate::Inside
+    } else if server_running {
+        HerdrGate::StopServer
+    } else {
+        HerdrGate::Ready
+    }
+}
+
+/// `herdr status --json` or `herdr status server --json`.
+pub fn herdr_server_running(status_json: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(status_json) else {
+        return false;
+    };
+    value
+        .pointer("/server/running")
+        .or_else(|| value.get("running"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+pub fn probe_herdr_server_running(system: &dyn System) -> bool {
+    let Ok(result) = system.run_probe(&CommandSpec::new("herdr", ["status", "--json"])) else {
+        return false;
+    };
+    result.success && herdr_server_running(&result.stdout)
+}
+
+pub const HERDR_SKIP_INSIDE: &str =
+    "skipped · run `loom update` from a regular terminal";
+pub const HERDR_SKIP_SERVER: &str =
+    "skipped · close the server with `herdr server stop`, then rerun";
+
+/// Plugin lane: run it, or skip with a report line.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HerdrLane {
+    Run,
+    Skip(&'static str),
+}
+
+pub fn run_updates(
+    system: &(dyn System + Sync),
+    catalog: &Catalog,
+    herdr: HerdrLane,
+) -> bool {
     let out = Out::detect();
     out.title("update", concat!("v", env!("CARGO_PKG_VERSION")));
 
@@ -116,13 +176,18 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
             });
         }
     }
-    if system.command_exists("herdr") {
-        tasks.push(CommandLane {
-            label: "Herdr",
-            detail: "plugins".into(),
-            commands: vec![CommandSpec::new("herdr", ["plugin", "update", "--all"])],
-        });
-    }
+    let skipped_herdr = match herdr {
+        HerdrLane::Run if system.command_exists("herdr") => {
+            tasks.push(CommandLane {
+                label: "Herdr",
+                detail: "plugins".into(),
+                commands: vec![CommandSpec::new("herdr", ["plugin", "update", "--all"])],
+            });
+            None
+        }
+        HerdrLane::Skip(reason) => Some(reason),
+        HerdrLane::Run => None,
+    };
     // The manifest lane owns tool updates, including this CLI's own pin.
     // Loom is only ever installed through mise, so a missing mise means the
     // bootstrap was undone; point back at it instead of self-updating.
@@ -230,6 +295,9 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog) -> bool {
         }
     });
     out.progress_done();
+    if let Some(reason) = skipped_herdr {
+        lanes.push((labels.len() + 4, Lane::ok("Herdr", reason)));
+    }
     if !pi_compat_targets.is_empty() {
         lanes.push((
             labels.len(),
@@ -487,6 +555,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn herdr_gate_skips_inside_and_offers_stop_when_the_server_is_up() {
+        assert_eq!(herdr_gate(false, true, true), HerdrGate::None);
+        assert_eq!(herdr_gate(true, true, true), HerdrGate::Inside);
+        assert_eq!(herdr_gate(true, false, true), HerdrGate::StopServer);
+        assert_eq!(herdr_gate(true, false, false), HerdrGate::Ready);
+    }
+
+    #[test]
+    fn herdr_server_running_reads_status_json() {
+        assert!(herdr_server_running(
+            r#"{"server":{"status":"running","running":true}}"#
+        ));
+        assert!(herdr_server_running(r#"{"running":true}"#));
+        assert!(!herdr_server_running(
+            r#"{"server":{"status":"stopped","running":false}}"#
+        ));
+        assert!(!herdr_server_running("not json"));
+    }
+
+    #[test]
     fn package_verification_requires_the_exact_identity_and_destination() {
         let listed = "User packages:\n npm:pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:pi-subagents@0.66.0\n npm:@example/foo@1";
         assert!(!crate::install::pi_package_installed(
@@ -514,6 +602,25 @@ mod tests {
             "pi-subagents",
             false
         ));
+        let root = std::env::temp_dir().join(format!(
+            "loom-path-pkg-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let package = root
+            .join("github-agrici-daniel-claude-obsidian")
+            .join("2.1.1");
+        std::fs::create_dir_all(&package).unwrap();
+        let listed = format!("Project packages:\n  {}\n", package.display());
+        assert!(crate::install::pi_package_installed(
+            &listed,
+            "github:AgriciDaniel/claude-obsidian",
+            true
+        ));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
