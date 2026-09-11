@@ -97,8 +97,17 @@ fn unregister_rejects_a_path_that_is_not_registered() {
     .unwrap_err()
     .to_string();
     assert!(err.contains("not registered"), "{err}");
-    let registry = fs::read_to_string(home.join(".config/loom/wiki-vaults.json")).unwrap();
-    assert!(registry.contains(&vault.display().to_string()));
+    let registry: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(home.join(".config/loom/wiki-vaults.json")).unwrap(),
+    )
+    .unwrap();
+    let paths: Vec<PathBuf> = registry["vaults"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| PathBuf::from(entry["path"].as_str().unwrap()))
+        .collect();
+    assert!(paths.contains(&vault));
     fs::remove_dir_all(home).unwrap();
 }
 
