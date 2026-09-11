@@ -1,0 +1,3 @@
+# MarkItDown is fetched on demand; Loom installs no global markitdown command.
+tools:
+  - uv

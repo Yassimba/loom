@@ -56,7 +56,7 @@
     {
       "title": "Wiki",
       "description": "Bring external knowledge into local Markdown and search it without losing source boundaries.",
-      "skills": ["confluence-export", "qmd"]
+      "skills": ["confluence-export", "markitdown", "qmd"]
     },
     {
       "title": "General",
@@ -68,6 +68,7 @@
         "handoff",
         "herdr",
         "i-have-adhd",
+        "glab",
         "jira",
         "research",
         "skill-doctor",
