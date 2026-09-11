@@ -85,6 +85,26 @@ function codeSpan(line: string): string {
   return `${fence}${padding}${content}${padding}${fence}`;
 }
 
+function renderListMermaid(markdown: string, availableWidth: number): string {
+  return markdown.replace(
+    /^([ \t]+)(`{3,}|~{3,})[ \t]*mermaid[^\n]*\n([\s\S]*?)^\1\2[ \t]*(?=\n|$)/gim,
+    (raw, indent: string, _fence: string, body: string) => {
+      const source = body
+        .split("\n")
+        .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
+        .join("\n");
+      const rendered = renderBlock(source, availableWidth);
+      return rendered === null
+        ? raw
+        : rendered
+            .trimEnd()
+            .split("\n")
+            .map((line) => indent + line)
+            .join("\n");
+    },
+  );
+}
+
 export function transformMermaidForDocument(markdown: string, availableWidth = 100): string {
   return markdownParser
     .lexer(markdown)
@@ -115,7 +135,11 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
   return markdownParser
     .lexer(markdown)
     .map((token) => {
-      if (!isMermaid(token)) return token.raw;
+      if (!isMermaid(token)) {
+        return token.type === "list"
+          ? renderListMermaid(token.raw, context.availableWidth)
+          : token.raw;
+      }
       if (context.isStreaming === true && !isClosedFence(token.raw)) {
         if (diagramKind(token.text) === null) return token.raw;
         // Marked removes the last newline from unclosed code tokens.

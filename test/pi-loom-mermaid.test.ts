@@ -49,6 +49,25 @@ test("node fills stay inside the outline, never behind border glyphs", () => {
   }
 });
 
+test("renders Mermaid fences nested inside list items", () => {
+  const markdown = `2. CLI help loads less code
+
+    \`\`\`mermaid
+    flowchart LR
+      M[Extension manifests] --> H[Root help]:::orange
+    \`\`\`
+`;
+
+  const output = transformMermaidMarkdown(markdown, {
+    messageType: "assistant",
+    availableWidth: 120,
+  });
+
+  assert.match(output, /Extension manifests/);
+  assert.match(output, /Root help/);
+  assert.doesNotMatch(output, /```mermaid/);
+});
+
 test("renders diff classes as dim colored borders without colored backgrounds", () => {
   const markdown = `\`\`\`mermaid
 flowchart LR
