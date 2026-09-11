@@ -1,5 +1,5 @@
 //! Vault-scoped picks inside the setup chooser. Selecting a folder never writes to it.
-use super::render::{bordered, ACCENT, ERR};
+use super::render::{bordered, ACCENT, ERR, TITLE};
 use super::state::{Action, Group, Pane, Row, Stage, Wizard};
 use crate::wiki::{VaultHealth, VaultRecord, WikiOperation, WikiRegistry};
 use ratatui::crossterm::event::KeyCode;
@@ -421,10 +421,7 @@ impl WikiBrowser {
             .collect::<Vec<_>>()
             .join(", ");
         let lines = vec![
-            Line::styled(
-                super::render::tidy(&record.path, home),
-                Style::new().fg(ACCENT).bold(),
-            ),
+            Line::styled(super::render::tidy(&record.path, home), TITLE),
             Line::from(self.message.clone().unwrap_or_else(|| {
                 "Space / enter toggles · u unregisters · n reviews picks".into()
             })),

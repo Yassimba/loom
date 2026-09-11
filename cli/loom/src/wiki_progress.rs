@@ -12,8 +12,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::ui::chrome::{self, Crumb};
+use crate::ui::theme::SPINNER;
 use crate::ui::theme::{ACCENT, OK, WARN};
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 struct ProgressSystem<'a> {
     system: &'a (dyn System + Sync),

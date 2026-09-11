@@ -97,7 +97,7 @@ pub(crate) enum Row {
 }
 
 impl Row {
-    fn item(&self) -> Item {
+    pub(crate) fn item(&self) -> Item {
         match self {
             Self::Resource(index) => Item::Resource(*index),
             Self::Setting(index) => Item::Setting(*index),
@@ -221,6 +221,47 @@ fn uninstall_requires(
     })
 }
 
+/// Copy through whichever clipboard tool the platform has; false when none.
+fn copy_to_clipboard(text: &str) -> bool {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let candidates: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
+        &[("pbcopy", &[])]
+    } else if cfg!(windows) {
+        &[("clip", &[])]
+    } else {
+        &[("wl-copy", &[]), ("xclip", &["-selection", "clipboard"])]
+    };
+    candidates.iter().any(|(program, args)| {
+        let Ok(mut child) = Command::new(program)
+            .args(*args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            return false;
+        };
+        let written = child
+            .stdin
+            .take()
+            .is_some_and(|mut stdin| stdin.write_all(text.as_bytes()).is_ok());
+        written && child.wait().is_ok_and(|status| status.success())
+    })
+}
+
+/// Vertical movement for a scrolled view; the renderer clamps the bottom.
+fn scroll_key(scroll: &mut u16, code: KeyCode) {
+    *scroll = match code {
+        KeyCode::Up | KeyCode::Char('k') => scroll.saturating_sub(1),
+        KeyCode::Down | KeyCode::Char('j') => scroll.saturating_add(1),
+        KeyCode::PageUp => scroll.saturating_sub(10),
+        KeyCode::PageDown => scroll.saturating_add(10),
+        KeyCode::Home => 0,
+        _ => *scroll,
+    };
+}
+
 fn clamp_step(cursor: usize, delta: isize, len: usize) -> usize {
     if len == 0 {
         return 0;
@@ -261,6 +302,8 @@ pub(crate) struct InstallStage {
     pub started: Option<std::time::Instant>,
     pub elapsed: std::time::Duration,
     pub show_details: bool,
+    /// The command last copied to the clipboard, shown as confirmation.
+    pub copied: Option<String>,
 }
 
 pub(crate) enum Stage {
@@ -340,6 +383,10 @@ pub struct Wizard {
     pub(crate) show_help: bool,
     /// True while the installed-state probe still runs in the background.
     pub(crate) probing: bool,
+    /// Installed marks the probe found for each scope; project scope also
+    /// honours global installs, global scope only its own.
+    installed_global: Vec<bool>,
+    installed_project: Vec<bool>,
     /// Quit confirmation pending (a non-empty selection would be discarded).
     pub(crate) confirm_quit: bool,
     /// First Ctrl-C during install arms cancellation; a second confirms it.
@@ -371,6 +418,7 @@ impl Wizard {
                 started: None,
                 elapsed: std::time::Duration::ZERO,
                 show_details: false,
+                copied: None,
             }),
         ];
         let agent_on = SkillAgent::ALL
@@ -389,6 +437,7 @@ impl Wizard {
                 selected[index] = true;
             }
         }
+        let installed_marks = model.installed.clone();
         let mut wizard = Self {
             wiki: None,
             selected,
@@ -407,6 +456,8 @@ impl Wizard {
             search_cursor: 0,
             show_help: false,
             probing: false,
+            installed_global: installed_marks.clone(),
+            installed_project: installed_marks,
             confirm_quit: false,
             confirm_cancel: false,
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -455,7 +506,7 @@ impl Wizard {
 
     /// The selection with skill dependencies pulled in.
     pub(crate) fn expanded_selection(&self) -> Vec<Resource> {
-        if self.model.purpose == WizardPurpose::Uninstall {
+        if self.uninstalling() {
             self.selection()
         } else {
             crate::expand_skill_dependencies(
@@ -507,7 +558,7 @@ impl Wizard {
 
     pub(super) fn included_note(&self, index: usize) -> Option<String> {
         let skill = &self.model.resources[index];
-        if self.model.purpose != WizardPurpose::Install || skill.kind != ResourceKind::Skill {
+        if self.uninstalling() || skill.kind != ResourceKind::Skill {
             return None;
         }
         let destination = self.skill_destination();
@@ -530,7 +581,7 @@ impl Wizard {
     }
 
     pub(crate) fn resource_installed(&self, index: usize) -> bool {
-        if self.model.purpose == WizardPurpose::Uninstall {
+        if self.uninstalling() {
             return false;
         }
         let resource = &self.model.resources[index];
@@ -538,27 +589,55 @@ impl Wizard {
         if resource.group == "Wiki" {
             return false;
         }
-        // Keep MCP selectable across scope changes; configuration is not live health.
         if resource.kind == ResourceKind::McpServer {
-            return false;
+            return self.installed_global[index]
+                || (self.skill_scope == SkillScope::Project && self.installed_project[index]);
         }
         if resource.kind == ResourceKind::Skill {
             let destination = self.skill_destination();
             let unchanged_destination = destination.scope == self.model.skill_destination.scope
                 && destination.agents == self.model.skill_destination.agents;
-            let trees = destination.trees();
             return (unchanged_destination && self.model.installed[index])
-                || (!trees.is_empty()
-                    && trees.iter().all(|tree| {
-                        crate::skills::skill_present_in(tree, &resource.install_target)
-                            || crate::bundled_skills::provided_in_tree(
-                                &destination.home,
-                                tree,
-                                &resource.install_target,
-                            )
-                    }));
+                || self.skill_in_every_tree(index, &destination)
+                || self.skill_installed_globally(index);
         }
         self.model.installed[index]
+    }
+
+    /// The skill is in every selected agent's global tree. A global install
+    /// serves every project, so it counts in project scope too.
+    fn skill_installed_globally(&self, index: usize) -> bool {
+        let mut destination = self.skill_destination();
+        destination.scope = SkillScope::Global;
+        self.skill_in_every_tree(index, &destination)
+    }
+
+    fn skill_in_every_tree(&self, index: usize, destination: &SkillDestination) -> bool {
+        let target = &self.model.resources[index].install_target;
+        let trees = destination.trees();
+        !trees.is_empty()
+            && trees.iter().all(|tree| {
+                crate::skills::skill_present_in(tree, target)
+                    || crate::bundled_skills::provided_in_tree(&destination.home, tree, target)
+            })
+    }
+
+    /// In project scope: installed, but only because of a global install.
+    pub(crate) fn installed_globally_only(&self, index: usize) -> bool {
+        if self.skill_scope != SkillScope::Project {
+            return false;
+        }
+        let resource = &self.model.resources[index];
+        match resource.kind {
+            ResourceKind::McpServer => {
+                self.installed_global[index] && !self.installed_project[index]
+            }
+            ResourceKind::Skill => {
+                self.skill_installed_globally(index)
+                    && !self.skill_in_every_tree(index, &self.skill_destination())
+            }
+            _ => false,
+        }
     }
 
     pub(crate) fn setting_applied(&self, index: usize) -> bool {
@@ -577,6 +656,45 @@ impl Wizard {
                 resource.id == *related
                     && (self.selected[resource_index] || self.resource_installed(resource_index))
             })
+    }
+
+    /// What the user picked themselves: the selection without the setup
+    /// requirements Loom adds on its own (Pi adapter, Loom package).
+    pub(crate) fn user_picked(&self) -> usize {
+        let picked = self
+            .selection()
+            .iter()
+            .filter(|picked| {
+                self.model
+                    .resources
+                    .iter()
+                    .position(|resource| resource.id == picked.id)
+                    .is_none_or(|index| !self.setup_requirement(index))
+            })
+            .count();
+        picked
+            + self.selected_settings().len()
+            + self.wiki.as_ref().map_or(0, |browser| browser.count())
+    }
+
+    /// The Pi responses answer, for the Review screens; `None` when the
+    /// question was never asked.
+    pub(crate) fn responses_summary(&self) -> Option<&'static str> {
+        self.stage_visible(RESPONSES)
+            .then_some(if self.adhd_enabled {
+                "Pi responses: always enable ADHD-friendly responses"
+            } else {
+                "Pi responses: leave settings unchanged"
+            })
+    }
+
+    pub(crate) fn uninstalling(&self) -> bool {
+        self.model.purpose == WizardPurpose::Uninstall
+    }
+
+    /// Goal-based setup: the Choose screen shows Goals | Types | Capabilities.
+    pub(crate) fn profile_mode(&self) -> bool {
+        self.model.purpose == WizardPurpose::Install && !self.model.profiles.is_empty()
     }
 
     pub(crate) fn nothing_chosen(&self) -> bool {
@@ -604,12 +722,6 @@ impl Wizard {
             + self.wiki.as_ref().map_or(0, |browser| browser.count())
     }
 
-    /// The items a group stands for: its rows, or every resource for the
-    /// "Everything" group.
-    pub(crate) fn group_items(&self, group: &Group) -> Vec<Item> {
-        group.bulk_items()
-    }
-
     pub(crate) fn item_state(&self, item: Item) -> ItemState {
         match item {
             Item::Resource(index)
@@ -635,7 +747,7 @@ impl Wizard {
                         }
                     },
                     |reason| {
-                        if self.model.purpose == WizardPurpose::Uninstall {
+                        if self.uninstalling() {
                             ItemState::RequiredKeep(reason)
                         } else {
                             ItemState::Required(reason)
@@ -728,15 +840,25 @@ impl Wizard {
         self.precheck_settings();
     }
 
+    /// Back to a blank slate: no goals, no individual picks, no settings.
+    fn clear_picks(&mut self) {
+        self.picked_goals.clear();
+        self.custom_picks.clear();
+        for index in 0..self.selected.len() {
+            if !self.setup_requirement(index) {
+                self.selected[index] = false;
+            }
+        }
+        self.setting_on.fill(false);
+        self.precheck_settings();
+    }
+
     fn toggle_goal(&mut self, group_index: usize) {
         let Stage::Choose(stage) = &self.stages[CHOOSE] else {
             return;
         };
         let group = &stage.groups[group_index];
-        if group.everything
-            || self.model.profiles.is_empty()
-            || self.model.purpose == WizardPurpose::Uninstall
-        {
+        if group.everything || self.model.profiles.is_empty() || self.uninstalling() {
             let items = group.bulk_items();
             self.toggle_group(&items);
             return;
@@ -775,6 +897,9 @@ impl Wizard {
         if let Some(parent) = self.required_note(index) {
             return format!("Needed by {parent}");
         }
+        if self.installed_globally_only(index) {
+            return "Already installed globally".into();
+        }
         if self.resource_installed(index) {
             return "Already installed".into();
         }
@@ -809,6 +934,19 @@ impl Wizard {
 
     /// The background probe finished: adopt the real installed marks and
     /// drop any picks the probe proved redundant.
+    /// Probe results for both scopes; the model keeps the one it started in.
+    pub fn set_installed_scoped(&mut self, global: Vec<bool>, project: Vec<bool>) {
+        let current = match self.model.skill_destination.scope {
+            SkillScope::Global => global.clone(),
+            SkillScope::Project => project.clone(),
+        };
+        if global.len() == self.model.installed.len() && project.len() == global.len() {
+            self.installed_global = global;
+            self.installed_project = project;
+        }
+        self.set_installed(current);
+    }
+
     pub fn set_installed(&mut self, installed: Vec<bool>) {
         if self.reviewed_job.is_some() {
             self.probing = false;
@@ -836,7 +974,7 @@ impl Wizard {
     /// when `index` is neither installed nor directly selected. Locked rows:
     /// shown as selected, not deselectable while the parent stays picked.
     pub(crate) fn required_note(&self, index: usize) -> Option<String> {
-        if self.model.purpose == WizardPurpose::Uninstall {
+        if self.uninstalling() {
             if !self.selected[index] {
                 return None;
             }
@@ -956,7 +1094,7 @@ impl Wizard {
         if self.nothing_chosen() {
             return Some(Action::Exit(WizardOutcome::NothingSelected));
         }
-        if self.model.purpose == WizardPurpose::Uninstall {
+        if self.uninstalling() {
             return Some(Action::Exit(WizardOutcome::UninstallSelection(
                 self.selection()
                     .into_iter()
@@ -1190,12 +1328,10 @@ impl Wizard {
             return None;
         }
         if self.confirm_quit && !is_ctrl_c {
-            // Enter/y/q confirm the discard; anything else stays.
+            // y/q confirm the discard; anything else (a reflex enter or esc)
+            // stays, so a double-tap cannot throw picks away.
             self.confirm_quit = false;
-            if matches!(
-                key.code,
-                KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('q')
-            ) {
+            if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('q')) {
                 return Some(Action::Exit(WizardOutcome::Cancelled));
             }
             return None;
@@ -1280,14 +1416,17 @@ impl Wizard {
             self.show_help = true;
             return None;
         }
+        if key.code == KeyCode::Char('c') && self.stage_index == CHOOSE && !self.browsing_wiki() {
+            self.clear_picks();
+            return None;
+        }
         if key.code == KeyCode::Char('/') && self.stage_index == CHOOSE {
             self.search = Some(String::new());
             self.search_cursor = 0;
             return None;
         }
 
-        let profile_lanes =
-            self.model.purpose == WizardPurpose::Install && !self.model.profiles.is_empty();
+        let profile_lanes = self.profile_mode();
         match &mut self.stages[self.stage_index] {
             Stage::Choose(stage) => match key.code {
                 KeyCode::Up | KeyCode::Char('k') => stage.step(-1),
@@ -1380,20 +1519,19 @@ impl Wizard {
                 | KeyCode::Right => *cursor = 1 - *cursor,
                 _ => {}
             },
-            Stage::Review { scroll } => match key.code {
-                KeyCode::Up | KeyCode::Char('k') => *scroll = scroll.saturating_sub(1),
-                KeyCode::Down | KeyCode::Char('j') => *scroll = scroll.saturating_add(1),
-                KeyCode::PageUp => *scroll = scroll.saturating_sub(10),
-                KeyCode::PageDown => *scroll = scroll.saturating_add(10),
-                _ => {}
-            },
+            Stage::Review { scroll } => scroll_key(scroll, key.code),
             Stage::Install(stage) => match key.code {
                 KeyCode::Char('d') => stage.show_details = !stage.show_details,
-                KeyCode::Up | KeyCode::Char('k') => stage.scroll = stage.scroll.saturating_sub(1),
-                KeyCode::Down | KeyCode::Char('j') => stage.scroll = stage.scroll.saturating_add(1),
-                KeyCode::PageUp => stage.scroll = stage.scroll.saturating_sub(10),
-                KeyCode::PageDown => stage.scroll = stage.scroll.saturating_add(10),
-                _ => {}
+                KeyCode::Char('c') if !stage.running => {
+                    if let Some(command) = self.next_command() {
+                        if copy_to_clipboard(&command) {
+                            if let Stage::Install(stage) = &mut self.stages[INSTALL] {
+                                stage.copied = Some(command);
+                            }
+                        }
+                    }
+                }
+                code => scroll_key(&mut stage.scroll, code),
             },
         }
         None
@@ -1419,7 +1557,7 @@ impl Wizard {
         if self.stage_index == INSTALL {
             return Some(Action::Exit(self.exit_outcome()));
         }
-        if self.total_selected() > 0 {
+        if self.user_picked() > 0 {
             self.confirm_quit = true;
             return None;
         }
@@ -1494,6 +1632,30 @@ impl Wizard {
     #[cfg(test)]
     pub(crate) fn next_actions(&self, report: &crate::InstallReport) -> Vec<String> {
         crate::app::next_actions(&self.expanded_selection(), report)
+    }
+
+    /// The first `backticked` command in the next actions, for copying.
+    pub(crate) fn next_command(&self) -> Option<String> {
+        let Stage::Install(stage) = &self.stages[INSTALL] else {
+            return None;
+        };
+        let report = stage.report.as_ref()?;
+        if !report.failures.is_empty() {
+            return None;
+        }
+        let mut actions = self
+            .goal_next_actions(report)
+            .into_iter()
+            .map(|(_, action)| action)
+            .collect::<Vec<_>>();
+        actions.push(crate::app::install_next_action(
+            self.model.mode,
+            &self.expanded_selection(),
+            report,
+        ));
+        actions
+            .iter()
+            .find_map(|action| action.split('`').nth(1).map(str::to_owned))
     }
 
     pub(crate) fn goal_next_actions(&self, report: &InstallReport) -> Vec<(String, String)> {

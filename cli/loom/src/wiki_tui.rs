@@ -13,7 +13,7 @@ use std::time::Duration;
 use unicode_width::UnicodeWidthStr;
 
 use crate::ui::chrome::{self, Crumb};
-use crate::ui::theme::{ACCENT, ERR, OK};
+use crate::ui::theme::{ACCENT, ERR, OK, TITLE};
 
 pub(crate) enum WikiChoice {
     Request(WikiRequest),
@@ -45,10 +45,13 @@ struct WikiWizard {
     obsidian_installed: bool,
     error: Option<String>,
     health: Option<crate::wiki::VaultHealth>,
+    /// Folded to `~` in every path shown on screen.
+    home: PathBuf,
 }
 
 impl WikiWizard {
     fn new(
+        home: PathBuf,
         current: PathBuf,
         vaults: Vec<VaultRecord>,
         feynman_default: bool,
@@ -66,14 +69,19 @@ impl WikiWizard {
             obsidian_installed,
             error: None,
             health: None,
+            home,
         }
+    }
+
+    fn shown(&self, path: &std::path::Path) -> String {
+        crate::ui::tidy_path(path, &self.home)
     }
 
     fn home_items(&self) -> Vec<String> {
         let mut items = self
             .vaults
             .iter()
-            .map(|record| record.path.display().to_string())
+            .map(|record| self.shown(&record.path))
             .collect::<Vec<_>>();
         if !cfg!(windows) {
             items.extend([
@@ -368,12 +376,16 @@ impl WikiWizard {
             return;
         }
         if let Some(record) = self.vaults.get(self.cursor) {
-            frame.render_widget(Paragraph::new(vec![
-                Line::styled(record.path.display().to_string(), Style::new().fg(ACCENT).bold()),
-                Line::from(""),
-                Line::from("Enter inspects tools configured for this Wiki. Browsing does not install or repair anything."),
-                Line::from("Shared machine tools are reported separately from Vault configuration."),
-            ]).wrap(Wrap { trim: true }).block(panel(" This Wiki ", false)), details);
+            frame.render_widget(
+                Paragraph::new(vec![
+                    Line::styled(self.shown(&record.path), TITLE),
+                    Line::from(""),
+                    Line::styled("enter · status and actions", Style::new().dim()),
+                ])
+                .wrap(Wrap { trim: true })
+                .block(panel(" This Wiki ", false)),
+                details,
+            );
             return;
         }
         let choices = self.home_items();
@@ -394,7 +406,7 @@ impl WikiWizard {
         };
         frame.render_widget(
             Paragraph::new(vec![
-                Line::styled(title, Style::new().fg(ACCENT).bold()),
+                Line::styled(title, TITLE),
                 Line::from(""),
                 Line::from(copy),
             ])
@@ -432,9 +444,9 @@ impl WikiWizard {
         let mut lines = vec![
             Line::styled(
                 self.selected_record()
-                    .map(|record| record.path.display().to_string())
+                    .map(|record| self.shown(&record.path))
                     .unwrap_or_default(),
-                Style::new().fg(ACCENT).bold(),
+                TITLE,
             ),
             Line::from(""),
         ];
@@ -456,20 +468,16 @@ impl WikiWizard {
         let option = |selected: bool, label: &'static str, active: bool| {
             Line::from(vec![
                 Span::styled(if selected { "[x] " } else { "[ ] " }, Style::new().fg(OK)),
-                Span::styled(
-                    label,
-                    if active {
-                        Style::new().fg(ACCENT).bold()
-                    } else {
-                        Style::new()
-                    },
-                ),
+                Span::styled(label, if active { TITLE } else { Style::new() }),
             ])
         };
         frame.render_widget(
             Paragraph::new(vec![
                 Line::styled("Optional capabilities", Style::new().bold()),
-                Line::from(format!("Vault: {}", self.path.trim())),
+                Line::from(format!(
+                    "Vault: {}",
+                    self.shown(std::path::Path::new(self.path.trim()))
+                )),
                 Line::from(""),
                 option(self.feynman, "Feynman research tools", self.cursor == 0),
                 option(
@@ -493,8 +501,11 @@ impl WikiWizard {
         };
         frame.render_widget(
             Paragraph::new(vec![
-                Line::styled(operation, Style::new().fg(ACCENT).bold()),
-                Line::from(format!("  {}", self.path.trim())),
+                Line::styled(operation, TITLE),
+                Line::from(format!(
+                    "  {}",
+                    self.shown(std::path::Path::new(self.path.trim()))
+                )),
                 Line::from(""),
                 Line::from(format!(
                     "Feynman    {}",
@@ -528,7 +539,7 @@ impl WikiWizard {
     fn draw_unregister(&self, frame: &mut Frame) {
         let path = self
             .selected_record()
-            .map(|record| record.path.display().to_string())
+            .map(|record| self.shown(&record.path))
             .unwrap_or_default();
         chrome::confirm_modal(
             frame,
@@ -656,7 +667,13 @@ pub(crate) fn run(
     let home = system.home_dir().context("home directory is unavailable")?;
     let current = system.current_dir().unwrap_or_else(|| PathBuf::from("."));
     let vaults = WikiRegistry::load(&home)?.vaults;
-    let mut wizard = WikiWizard::new(current.clone(), vaults, feynman_default, obsidian_installed);
+    let mut wizard = WikiWizard::new(
+        home,
+        current.clone(),
+        vaults,
+        feynman_default,
+        obsidian_installed,
+    );
     run_session(system, &mut wizard, &current)
 }
 
@@ -733,11 +750,7 @@ fn draw_confirmation(
             Line::from(vec![
                 Span::styled(
                     if yes { "  No  " } else { "[ No ]" },
-                    if yes {
-                        Style::new().dim()
-                    } else {
-                        Style::new().fg(ACCENT).bold()
-                    },
+                    if yes { Style::new().dim() } else { TITLE },
                 ),
                 Span::raw("    "),
                 Span::styled(
@@ -908,7 +921,13 @@ mod tests {
     #[test]
     #[cfg(not(windows))]
     fn home_matches_the_main_wizard_chrome() {
-        let wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
+        let wizard = WikiWizard::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            Vec::new(),
+            false,
+            true,
+        );
         let mut terminal = Terminal::new(TestBackend::new(90, 18)).unwrap();
         terminal.draw(|frame| wizard.draw(frame)).unwrap();
         let screen = terminal
@@ -927,7 +946,13 @@ mod tests {
     #[test]
     #[cfg(not(windows))]
     fn narrow_home_uses_compact_step_chrome() {
-        let wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
+        let wizard = WikiWizard::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            Vec::new(),
+            false,
+            true,
+        );
         let mut terminal = Terminal::new(TestBackend::new(50, 14)).unwrap();
         terminal.draw(|frame| wizard.draw(frame)).unwrap();
         let screen = terminal
@@ -945,7 +970,13 @@ mod tests {
     #[test]
     #[cfg(not(windows))]
     fn picker_error_consumes_the_dismissal_key() {
-        let mut wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
+        let mut wizard = WikiWizard::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            Vec::new(),
+            false,
+            true,
+        );
         wizard.error = Some("picker failed".into());
 
         assert!(wizard.handle_key(key(KeyCode::Enter)).is_none());
@@ -961,7 +992,7 @@ mod tests {
     fn create_flow_uses_the_picked_path_and_collects_capabilities() {
         let root = std::env::temp_dir().join(format!("loom-wiki-tui-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
-        let mut wizard = WikiWizard::new(root.clone(), Vec::new(), true, false);
+        let mut wizard = WikiWizard::new(root.clone(), root.clone(), Vec::new(), true, false);
 
         assert!(matches!(
             wizard.handle_key(key(KeyCode::Enter)),
@@ -983,7 +1014,13 @@ mod tests {
 
     #[test]
     fn ctrl_c_cancels_from_the_wizard() {
-        let mut wizard = WikiWizard::new(std::env::temp_dir(), Vec::new(), false, true);
+        let mut wizard = WikiWizard::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            Vec::new(),
+            false,
+            true,
+        );
 
         assert!(matches!(
             wizard.handle_key(ctrl(KeyCode::Char('c'))),
@@ -1067,7 +1104,13 @@ mod tests {
             feynman: false,
             confluence: false,
         };
-        let mut wizard = WikiWizard::new(PathBuf::from("/tmp"), vec![record], false, true);
+        let mut wizard = WikiWizard::new(
+            PathBuf::from("/tmp"),
+            PathBuf::from("/tmp"),
+            vec![record],
+            false,
+            true,
+        );
         assert!(matches!(
             wizard.handle_key(key(KeyCode::Enter)),
             Some(WikiChoice::InspectVault)
@@ -1082,5 +1125,57 @@ mod tests {
         };
         assert_eq!(request.operation, WikiOperation::Unregister);
         assert_eq!(request.vault, PathBuf::from("/tmp/Vault"));
+    }
+}
+
+#[cfg(test)]
+mod gallery {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::crossterm::event::KeyModifiers;
+    use ratatui::Terminal;
+
+    /// Prints every Wiki screen; run with `--nocapture` to eyeball the layout.
+    #[test]
+    #[cfg(not(windows))]
+    fn render_gallery() {
+        let root = std::env::temp_dir().join(format!("loom-wiki-gallery-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("Notes")).unwrap();
+        let record = VaultRecord {
+            path: root.join("Notes"),
+            feynman: true,
+            confluence: false,
+        };
+        let mut wizard = WikiWizard::new(root.clone(), root.clone(), vec![record], true, false);
+        let mut terminal = Terminal::new(TestBackend::new(104, 26)).unwrap();
+        let show = |wizard: &WikiWizard, terminal: &mut Terminal<TestBackend>| {
+            terminal.draw(|frame| wizard.draw(frame)).unwrap();
+            let buffer = terminal.backend().buffer().clone();
+            let mut out = String::new();
+            for y in 0..buffer.area.height {
+                for x in 0..buffer.area.width {
+                    out.push_str(buffer[(x, y)].symbol());
+                }
+                out.push('\n');
+            }
+            println!("{out}");
+        };
+        let press = |wizard: &mut WikiWizard, code: KeyCode| {
+            wizard.handle_key(KeyEvent::new(code, KeyModifiers::NONE))
+        };
+        show(&wizard, &mut terminal);
+        press(&mut wizard, KeyCode::Enter);
+        show(&wizard, &mut terminal);
+        press(&mut wizard, KeyCode::Enter);
+        show(&wizard, &mut terminal);
+        press(&mut wizard, KeyCode::Esc);
+        press(&mut wizard, KeyCode::Esc);
+        press(&mut wizard, KeyCode::Down);
+        press(&mut wizard, KeyCode::Enter);
+        wizard.set_picked_path(WikiOperation::Create, root.join("New"));
+        show(&wizard, &mut terminal);
+        press(&mut wizard, KeyCode::Enter);
+        show(&wizard, &mut terminal);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

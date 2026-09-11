@@ -2,6 +2,7 @@
 //! selects resources, runtimes, and settings, then runs the install live in
 //! the terminal.
 
+mod install_view;
 mod render;
 mod review;
 mod state;
@@ -14,7 +15,10 @@ use state::{Action, ExecStatus, InstallEvent, InstallJob, Wizard};
 pub use state::{Model, WizardOutcome, WizardPurpose};
 
 use crate::settings::apply_setting;
-use crate::{execute_install_plan_with_control, InstallFailure, StepStatus, System};
+use crate::{
+    execute_install_plan_with_control, InstallFailure, SkillDestination, SkillScope, StepStatus,
+    System,
+};
 use anyhow::Result;
 use ratatui::crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind,
@@ -75,12 +79,14 @@ fn run_loop(
             let destination = wizard.skill_destination();
             let probe_sender = probe_sender.clone();
             scope.spawn(move || {
-                let _ = probe_sender.send(crate::app::detect_installed(
-                    &resources,
-                    status,
-                    system,
-                    &destination,
-                ));
+                let probe = |scope| {
+                    let destination = SkillDestination {
+                        scope,
+                        ..destination.clone()
+                    };
+                    crate::app::detect_installed(&resources, status, system, &destination)
+                };
+                let _ = probe_sender.send((probe(SkillScope::Global), probe(SkillScope::Project)));
             });
         }
         loop {
@@ -93,8 +99,8 @@ fn run_loop(
                     wizard.handle_install_event(install_event);
                 }
             }
-            while let Ok(installed) = probe_receiver.try_recv() {
-                wizard.set_installed(installed);
+            while let Ok((global, project)) = probe_receiver.try_recv() {
+                wizard.set_installed_scoped(global, project);
             }
             while let Ok((path, health)) = wiki_receiver.try_recv() {
                 if let Some(browser) = &mut wizard.wiki {

@@ -225,7 +225,7 @@ pub fn install_selected(
             message,
         });
     }
-    print_report(&out, catalog, &report, true);
+    print_report(&out, catalog, &report, true, true);
     out.next(install_next_action(mode, &resources, &report));
     Ok(report.failures.is_empty())
 }
@@ -432,7 +432,8 @@ fn run_interactive(
             let out = Out::detect();
             out.blank();
             let continue_to_wiki = has_wiki && report.failures.is_empty();
-            print_report(&out, catalog, &report, !continue_to_wiki);
+            // The wizard already showed every task; repeat only failures.
+            print_report(&out, catalog, &report, false, !continue_to_wiki);
             if continue_to_wiki {
                 out.section("Wiki setup");
                 let wiki = crate::wiki::run_interactive_outcome(system, wiki_feynman);
@@ -926,7 +927,13 @@ pub(crate) fn install_next_action(
     }
 }
 
-fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport, finish: bool) {
+fn print_report(
+    out: &Out,
+    catalog: &Catalog,
+    report: &InstallReport,
+    list_installed: bool,
+    finish: bool,
+) {
     let settings = curated_settings();
     let label = |target: &str| {
         catalog
@@ -942,7 +949,7 @@ fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport, finish: bo
             })
             .unwrap_or_else(|| target.to_owned())
     };
-    for target in &report.installed {
+    for target in report.installed.iter().filter(|_| list_installed) {
         out.row(
             Mark::Ok,
             &label(target),

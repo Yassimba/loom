@@ -1,17 +1,17 @@
 //! Read-only setup review: selected capabilities, prerequisites, and repair/next steps.
-use super::render::{bordered, tidy, ACCENT};
-use super::state::{Stage, Wizard};
-use crate::{InstallPlan, Resource, ResourceKind, SkillScope};
+use super::render::{bordered, plural, tidy, ACCENT, TITLE};
+use super::state::Wizard;
+use crate::{InstallPlan, Resource, ResourceKind};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 
 const TITLES: [&str; 3] = [
     " Selected capabilities ",
     " Required to work ",
-    " Repairs & next steps ",
+    " Writes & notes ",
 ];
 
 impl Wizard {
@@ -19,20 +19,33 @@ impl Wizard {
         let plan = self.plan();
         let expanded = self.expanded_selection();
         let wiki = expanded.iter().any(|r| r.group == "Wiki");
+        // The footer already says enter/esc; only a blocked plan or a
+        // different-than-usual enter needs a line of its own.
         let message = match &plan {
-            Err(_) => "Cannot install. See Repairs & next steps; Esc goes back.",
-            Ok(_) if self.model.dry_run => "Dry run: enter prints this plan and exits.",
+            Err(_) => Some("Cannot install. See Writes & notes; esc goes back."),
+            Ok(_) if self.model.dry_run => Some("Dry run: enter prints this plan and exits."),
             Ok(_) if wiki && expanded.iter().all(|r| r.group == "Wiki") => {
-                "Enter opens Vault setup. Esc goes back."
+                Some("Enter opens Vault setup.")
             }
-            Ok(_) if wiki => "Enter installs general items, then opens Vault setup. Esc goes back.",
-            Ok(_) => "Enter installs these items. Esc goes back to change your picks.",
+            Ok(_) if wiki => Some("Enter installs general items, then opens Vault setup."),
+            Ok(_) => None,
         };
-        let [body, confirmation] = Layout::vertical([
+        let [headline, body, confirmation] = Layout::vertical([
+            Constraint::Length(2),
             Constraint::Min(1),
-            Constraint::Length(if plan.is_err() { 4 } else { 2 }),
+            Constraint::Length(match (&plan, message) {
+                (Err(_), _) => 3,
+                (_, Some(_)) => 1,
+                (_, None) => 0,
+            }),
         ])
         .areas(area);
+        frame.render_widget(
+            Paragraph::new(self.review_headline(&expanded, plan.as_ref().ok()))
+                .wrap(Wrap { trim: true })
+                .style(Style::new().fg(ACCENT)),
+            headline,
+        );
         let mut columns = self.review_columns(&expanded, plan.as_ref().ok());
         if let Err(error) = &plan {
             columns[2].insert(
@@ -80,8 +93,12 @@ impl Wizard {
             };
             let lines = sections
                 .into_iter()
-                .flat_map(|(lines, title)| {
-                    [Line::styled(title.trim(), Style::new().fg(ACCENT).bold())]
+                .filter(|(lines, _)| !lines.is_empty())
+                .flat_map(|(mut lines, title)| {
+                    while lines.last().is_some_and(|line| line.width() == 0) {
+                        lines.pop();
+                    }
+                    [Line::styled(title.trim(), TITLE)]
                         .into_iter()
                         .chain(lines)
                         .chain([Line::from("")])
@@ -98,16 +115,64 @@ impl Wizard {
                 body,
             );
         }
-        frame.render_widget(
-            Paragraph::new(message)
-                .wrap(Wrap { trim: true })
-                .style(Style::new().fg(if plan.is_ok() {
-                    Color::Green
-                } else {
-                    Color::Red
-                })),
-            confirmation,
-        );
+        if let Some(message) = message {
+            frame.render_widget(
+                Paragraph::new(message)
+                    .wrap(Wrap { trim: true })
+                    .style(Style::new().fg(if plan.is_ok() {
+                        Color::Green
+                    } else {
+                        Color::Red
+                    })),
+                confirmation,
+            );
+        }
+    }
+
+    /// One line that sizes the whole job: counts by kind and a rough time.
+    fn review_headline(&self, resources: &[Resource], plan: Option<&InstallPlan>) -> String {
+        let count = |kind: ResourceKind| resources.iter().filter(|r| r.kind == kind).count();
+        let mut parts = Vec::new();
+        let skills = count(ResourceKind::Skill);
+        if skills > 0 {
+            let folders = self.skill_destination().trees().len();
+            parts.push(format!(
+                "{} → {}",
+                plural(skills, "skill"),
+                plural(folders, "agent folder")
+            ));
+        }
+        for (kind, noun) in [
+            (ResourceKind::Tool, "tool"),
+            (ResourceKind::PiPackage, "Pi package"),
+            (ResourceKind::HerdrPlugin, "Herdr plugin"),
+            (ResourceKind::McpServer, "MCP server"),
+        ] {
+            let n = count(kind);
+            if n > 0 {
+                parts.push(plural(n, noun));
+            }
+        }
+        let settings = self.selected_settings().len();
+        if settings > 0 {
+            parts.push(plural(settings, "setting"));
+        }
+        if parts.is_empty() {
+            return String::new();
+        }
+        // ponytail: flat per-step guess; measure real durations if it misleads.
+        let steps = plan.map_or(0, |plan| plan.prerequisites.len() + plan.resources.len());
+        let seconds = 20 * steps.max(1)
+            + if plan.is_some_and(|plan| !plan.prerequisites.is_empty()) {
+                60
+            } else {
+                0
+            };
+        let time = match seconds {
+            s if s < 60 => "under a minute".to_owned(),
+            s => format!("about {} min", s.div_ceil(60)),
+        };
+        format!("{} · {time}", parts.join(" · "))
     }
 
     fn review_columns(
@@ -115,35 +180,18 @@ impl Wizard {
         resources: &[Resource],
         plan: Option<&InstallPlan>,
     ) -> [Vec<Line<'static>>; 3] {
-        let mut selected = vec![
-            Line::from("Included by your goals or picked individually."),
-            Line::from(""),
-        ];
-        let mut required = vec![
-            Line::from("Needed by the capabilities you chose."),
-            Line::from(""),
-        ];
-        let mut notes = vec![
-            Line::from("Only reviewed, safe changes run automatically."),
-            Line::from(""),
-        ];
-        if self
-            .visible_stages()
-            .iter()
-            .any(|index| matches!(self.stages[*index], Stage::Responses { .. }))
-        {
-            notes.push(Line::from(if self.adhd_enabled {
-                "Pi responses: always enable ADHD-friendly responses"
-            } else {
-                "Pi responses: leave settings unchanged"
-            }));
+        let mut selected = Vec::new();
+        let mut required = Vec::new();
+        let mut notes = Vec::new();
+        if let Some(summary) = self.responses_summary() {
+            notes.push(Line::from(summary));
             if self.adhd_enabled {
                 notes.push(Line::from("Always-on flag: .i-have-adhd-always"));
             }
             notes.push(Line::from(""));
         }
         for wiki in self.wiki_jobs().unwrap_or_default() {
-            selected.push(Line::styled(wiki.label(), Style::new().fg(ACCENT).bold()));
+            selected.push(Line::styled(wiki.label(), TITLE));
             selected.push(Line::from(wiki.record.path.display().to_string()));
             selected.extend(
                 wiki.labels
@@ -182,6 +230,7 @@ impl Wizard {
             required.push(Line::from(""));
         }
         let direct = self.selection();
+        let label_width = resources.iter().map(|r| r.label.len()).max().unwrap_or(0);
         for resource in resources {
             let index = self
                 .model
@@ -195,22 +244,22 @@ impl Wizard {
             } else {
                 &mut required
             };
-            lines.push(Line::styled(
-                format!("+ {}", resource.label),
-                Style::new().fg(ACCENT).bold(),
-            ));
-            lines.push(Line::from(self.selection_reason(index)));
-            lines.push(Line::from(self.review_destination(resource)));
-            lines.push(Line::from(""));
+            lines.push(Line::from(vec![
+                Span::styled(format!("+ {:<label_width$}", resource.label), TITLE),
+                Span::styled(
+                    format!("  {}", self.selection_reason(index)),
+                    Style::new().dim(),
+                ),
+            ]));
         }
         if let Some(plan) = plan {
             for step in &plan.prerequisites {
+                required.push(Line::from(""));
                 required.push(Line::styled(
                     format!("Install first: {}", step.target),
                     Style::new().bold(),
                 ));
                 required.push(Line::from(step.action.display()));
-                required.push(Line::from(""));
             }
             let destination = self.skill_destination();
             let upgrade_adapter = plan
@@ -222,79 +271,66 @@ impl Wizard {
                     .join(".pi/agent/npm/node_modules/pi-mcp-adapter/package.json")
                     .is_file()
                 && crate::mcp::adapter_needed(&destination).is_ok_and(|needed| needed);
-            notes.push(Line::styled(
-                if upgrade_adapter {
+            if upgrade_adapter {
+                notes.push(Line::styled(
                     format!(
                         "Repair: upgrade the official MCP adapter to {}",
                         crate::mcp::ADAPTER_SPEC
-                    )
-                } else {
-                    "No automatic repairs planned.".into()
-                },
-                Style::new().fg(Color::Green),
-            ));
+                    ),
+                    Style::new().fg(Color::Green),
+                ));
+                notes.push(Line::from(""));
+            }
         }
-        for spec in self.selected_settings() {
-            selected.push(Line::styled(
-                format!("Setting: {}", spec.label),
-                Style::new().bold(),
-            ));
-            selected.push(Line::from(
-                spec.target_path(&self.model.settings_paths)
-                    .display()
-                    .to_string(),
-            ));
+        let settings = self.selected_settings();
+        if !settings.is_empty() {
             selected.push(Line::from(""));
+            for spec in settings {
+                selected.push(Line::from(vec![
+                    Span::styled(format!("+ {}", spec.label), Style::new().bold()),
+                    Span::styled(
+                        format!(
+                            "  {}",
+                            tidy(
+                                spec.target_path(&self.model.settings_paths),
+                                &self.model.skill_destination.home
+                            )
+                        ),
+                        Style::new().dim(),
+                    ),
+                ]));
+            }
+        }
+        if required.is_empty() {
+            required.push(Line::styled("Nothing extra needed.", Style::new().dim()));
         }
         let destination = self.skill_destination();
         if self.has_skills() {
-            notes.push(Line::from(""));
-            notes.push(Line::styled("Agent skill folders", Style::new().bold()));
+            notes.push(Line::styled("Skills go to", Style::new().bold()));
             for tree in destination.trees() {
                 notes.push(Line::from(tidy(&tree, &destination.home)));
             }
+            notes.push(Line::from(""));
         }
         if self.has_mcp() {
-            notes.push(Line::from(""));
-            notes.push(Line::from(
-                crate::mcp::config_path(&destination).display().to_string(),
-            ));
+            notes.push(Line::styled("MCP config", Style::new().bold()));
+            notes.push(Line::from(tidy(
+                &crate::mcp::config_path(&destination),
+                &destination.home,
+            )));
             notes.push(Line::from(crate::mcp::EXPOSURE_NOTE));
+            notes.push(Line::from(""));
         }
         if resources.iter().any(|r| r.group == "Wiki") {
-            notes.push(Line::from(""));
             notes.push(Line::styled("Vault setup follows", Style::new().bold()));
-            notes.push(Line::from("→ choose Create or Connect after this review"));
             notes.push(Line::from(
-                "Vault files get their own preview before anything changes.",
+                "Choose Create or Connect after this review; Vault files get their own preview.",
             ));
+            notes.push(Line::from(""));
         }
-        notes.push(Line::from(""));
-        notes.push(Line::styled("After installation", Style::new().bold()));
-        notes.push(Line::from(
-            "Accounts and live connections are not checked here. No automatic sign-in.",
-        ));
-        notes.push(Line::from(""));
-        notes.push(Line::from("Custom sources and edited files stay protected. Failed steps can retry without discarding completed work."));
+        while notes.last().is_some_and(|line| line.width() == 0) {
+            notes.pop();
+        }
         [selected, required, notes]
-    }
-
-    fn review_destination(&self, resource: &Resource) -> String {
-        if resource.group == "Wiki" {
-            return "Vault-local · choose a Vault next".into();
-        }
-        match resource.kind {
-            ResourceKind::Skill | ResourceKind::McpServer
-                if self.skill_scope == SkillScope::Project =>
-            {
-                format!(
-                    "This project · {}",
-                    self.model.skill_destination.project_root.display()
-                )
-            }
-            ResourceKind::Skill => "All projects · selected agents".into(),
-            ResourceKind::McpServer => "Global · Pi configuration".into(),
-            _ => "Global · this machine".into(),
-        }
     }
 }

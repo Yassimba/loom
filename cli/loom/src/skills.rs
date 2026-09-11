@@ -85,7 +85,7 @@ impl SkillAgent {
     pub fn label(self) -> &'static str {
         match self {
             Self::Claude => "Claude",
-            Self::AgentsStandard => "Agent Skills standard",
+            Self::AgentsStandard => "Shared (.agents)",
             Self::Codex => "Codex",
             Self::Pi => "Pi",
             Self::OpenCode => "OpenCode",

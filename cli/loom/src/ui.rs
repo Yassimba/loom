@@ -118,8 +118,11 @@ pub(crate) fn failure_text(message: &str) -> String {
 
 /// One palette for every TUI screen (wizard, Wiki, progress).
 pub(crate) mod theme {
-    use ratatui::style::Color;
+    use ratatui::style::{Color, Modifier, Style};
     pub const ACCENT: Color = Color::Cyan;
+    /// Headings and the focused item: accent, bold.
+    pub const TITLE: Style = Style::new().fg(ACCENT).add_modifier(Modifier::BOLD);
+    pub const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     pub const OK: Color = Color::Green;
     pub const WARN: Color = Color::Yellow;
     pub const ERR: Color = Color::Red;
@@ -129,12 +132,13 @@ pub(crate) mod theme {
 /// centered modals. Every full-screen Loom view draws through here so the
 /// wizard, `loom wiki`, and progress screens look like one program.
 pub(crate) mod chrome {
-    use super::theme::{ACCENT, ERR};
+    use super::theme::{ACCENT, ERR, TITLE};
     use ratatui::layout::{Alignment, Constraint, Layout, Rect};
     use ratatui::style::{Modifier, Style};
     use ratatui::text::{Line, Span};
     use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph, Wrap};
     use ratatui::Frame;
+    use unicode_width::UnicodeWidthStr;
 
     pub const MIN_WIDTH: u16 = 40;
     pub const MIN_HEIGHT: u16 = 10;
@@ -187,7 +191,7 @@ pub(crate) mod chrome {
     ) {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(format!(" loom {command}"), Style::new().fg(ACCENT).bold()),
+                Span::styled(format!(" loom {command}"), TITLE),
                 Span::styled(
                     concat!("  v", env!("CARGO_PKG_VERSION")),
                     Style::new().dim(),
@@ -202,10 +206,7 @@ pub(crate) mod chrome {
                 Style::new().dim(),
             ));
             if let Some(crumb) = crumbs.get(current) {
-                spans.push(Span::styled(
-                    crumb.label.clone(),
-                    Style::new().fg(ACCENT).bold(),
-                ));
+                spans.push(Span::styled(crumb.label.clone(), TITLE));
             }
         } else {
             for (index, crumb) in crumbs.iter().enumerate() {
@@ -213,7 +214,7 @@ pub(crate) mod chrome {
                     spans.push(Span::styled(" › ", Style::new().dim()));
                 }
                 spans.push(if index == current {
-                    Span::styled(crumb.label.clone(), Style::new().fg(ACCENT).bold())
+                    Span::styled(crumb.label.clone(), TITLE)
                 } else if crumb.done {
                     Span::styled(format!("✓ {}", crumb.label), Style::new().dim())
                 } else {
@@ -241,11 +242,13 @@ pub(crate) mod chrome {
         back: Option<(&str, bool)>,
         next: (&str, bool),
     ) -> (Rect, Rect) {
+        let back_label = back.map_or(String::new(), |(label, _)| format!("[ ◂ {label:<4} ]"));
+        let next_label = format!("[ {:^7} ▸ ]", next.0);
         let [hint_area, back_area, _, next_area, _] = Layout::horizontal([
             Constraint::Min(0),
-            Constraint::Length(if back.is_some() { BACK_WIDTH } else { 0 }),
+            Constraint::Length(back_label.width() as u16),
             Constraint::Length(if back.is_some() { 1 } else { 0 }),
-            Constraint::Length(NEXT_WIDTH),
+            Constraint::Length(next_label.width() as u16),
             Constraint::Length(1),
         ])
         .areas(area);
@@ -254,21 +257,21 @@ pub(crate) mod chrome {
             hint_area,
         );
         let mut back_hit = Rect::default();
-        if let Some((label, enabled)) = back {
+        if let Some((_, enabled)) = back {
             let style = if enabled {
                 Style::new().fg(ACCENT)
             } else {
                 Style::new().dim()
             };
             frame.render_widget(
-                Paragraph::new(Line::from(Span::styled(format!("[ ◂ {label:<4} ]"), style))),
+                Paragraph::new(Line::from(Span::styled(back_label, style))),
                 back_area,
             );
             if enabled {
                 back_hit = back_area;
             }
         }
-        let (label, enabled) = next;
+        let (_, enabled) = next;
         let style = if enabled {
             Style::new()
                 .fg(ACCENT)
@@ -278,11 +281,15 @@ pub(crate) mod chrome {
             Style::new().dim()
         };
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(format!("[ {label:^7} ▸ ]"), style))),
+            Paragraph::new(Line::from(Span::styled(next_label, style))),
             next_area,
         );
         (back_hit, if enabled { next_area } else { Rect::default() })
     }
+
+    /// Columns a `panel` takes from its area: two borders plus padding.
+    /// Subtract this from the panel width to get the content width.
+    pub const PANEL_FRAME: u16 = 4;
 
     /// A rounded, titled panel; accent when focused, dim otherwise. Content
     /// always gets one column of horizontal padding.
@@ -330,7 +337,7 @@ pub(crate) mod chrome {
         lines.push(Line::from(vec![
             Span::styled(danger.0.to_owned(), Style::new().fg(ERR).bold()),
             Span::raw(format!(" {}   ", danger.1)),
-            Span::styled(safe.0.to_owned(), Style::new().fg(ACCENT).bold()),
+            Span::styled(safe.0.to_owned(), TITLE),
             Span::raw(format!(" {}", safe.1)),
         ]));
         let area = centered(
@@ -349,7 +356,7 @@ pub(crate) mod chrome {
 }
 
 const LABEL_WIDTH: usize = 20;
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+use theme::SPINNER;
 const ASCII_SPINNER: [&str; 4] = ["-", "\\", "|", "/"];
 
 pub struct Out {

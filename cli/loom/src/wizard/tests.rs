@@ -183,7 +183,7 @@ fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
         press(&mut wizard, &[KeyCode::Enter]);
         assert!(matches!(wizard.stages[wizard.stage_index], Stage::Where(_)));
         let rendered = screen(&mut wizard, 120, 40);
-        assert!(rendered.contains("auto-selected Pi gateway"), "{rendered}");
+        assert!(rendered.contains("MCP goes to Pi only"), "{rendered}");
         assert!(rendered.contains("MCP not yet verified"), "{rendered}");
         press(
             &mut wizard,
@@ -421,11 +421,16 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
         &[KeyCode::Char(' '), KeyCode::Left, KeyCode::Left],
     );
 
+    // On a goal, the third column previews the goal instead of one type.
     let profile_output = screen(&mut wizard, 160, 28);
     assert!(profile_output.contains("Goals"));
     assert!(profile_output.contains("Types"));
-    assert!(profile_output.contains("Capabilities"));
-    assert!(!profile_output.contains("Overview"));
+    assert!(!profile_output.contains("Capabilities"));
+    assert!(profile_output.contains("Overview"));
+    assert!(
+        profile_output.contains("space picks all"),
+        "{profile_output}"
+    );
     assert!(profile_output.contains("Skills"));
     assert!(profile_output.contains("Tools"));
     assert!(profile_output.contains("Pi packages"));
@@ -444,6 +449,7 @@ fn choose_renders_profiles_mixed_kinds_and_required_tools() {
     press(&mut wizard, &[KeyCode::Left]);
     let restored = screen(&mut wizard, 160, 28);
     assert!(restored.contains("Goals"));
+    assert!(restored.contains("Capabilities"));
     assert!(!restored.contains("Overview"));
 }
 
@@ -554,11 +560,11 @@ fn review_separates_picks_dependencies_and_safe_changes_at_both_widths() {
     for text in [
         "Selected capabilities",
         "Required to work",
-        "Repairs & next steps",
+        "Writes & notes",
         "Included by Engineer",
         "Picked individually",
         "Needed by tdd",
-        "No automatic repairs planned.",
+        "Skills go to",
     ] {
         assert!(wide.contains(text), "missing {text}:\n{wide}");
     }
@@ -570,7 +576,7 @@ fn review_separates_picks_dependencies_and_safe_changes_at_both_widths() {
     for text in [
         "Selected capabilities",
         "Required to work",
-        "Repairs & next steps",
+        "Writes & notes",
         "themes",
         "mermaid",
         "Engineer",
@@ -633,7 +639,6 @@ fn ready_uses_successful_goal_actions_and_freezes_completed_step_time() {
         "Ready to try",
         "Run /tdd in Pi",
         "Run /mermaid-skill in Pi",
-        "not verified",
         "3s",
     ] {
         assert!(output.contains(text), "missing {text}:\n{output}");
@@ -1105,11 +1110,28 @@ fn quitting_with_picks_asks_first_and_esc_on_choose_quits() {
     assert!(wizard.confirm_quit);
     assert!(press(&mut wizard, &[KeyCode::Char('n')]).is_none());
     assert!(!wizard.confirm_quit);
+    // A reflex enter stays; only y/q throw the picks away.
+    press(&mut wizard, &[KeyCode::Char('q')]);
+    assert!(press(&mut wizard, &[KeyCode::Enter]).is_none());
+    assert!(!wizard.confirm_quit);
     press(&mut wizard, &[KeyCode::Char('q')]);
     assert!(matches!(
-        press(&mut wizard, &[KeyCode::Enter]),
+        press(&mut wizard, &[KeyCode::Char('y')]),
         Some(Action::Exit(WizardOutcome::Cancelled))
     ));
+}
+
+#[test]
+fn c_clears_every_pick_but_keeps_setup_requirements() {
+    let mut wizard = wizard();
+    go_to_group(&mut wizard, "Engineer");
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    go_to(&mut wizard, Row::Resource(3));
+    press(&mut wizard, &[KeyCode::Char(' ')]);
+    assert!(wizard.user_picked() > 0);
+    press(&mut wizard, &[KeyCode::Char('c')]);
+    assert_eq!(wizard.user_picked(), 0);
+    assert!(wizard.picked_goals.is_empty());
 }
 
 #[test]
@@ -1260,6 +1282,45 @@ fn render_gallery() {
     wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
     wizard.handle_install_event(InstallEvent::Status(1, ExecStatus::Running));
     show(&mut wizard, &mut terminal);
+    wizard.handle_install_event(InstallEvent::Status(
+        1,
+        ExecStatus::Failed(
+            "herdr plugin install reviewr --yes\nexit status 1: no such plugin".into(),
+        ),
+    ));
+    wizard.handle_install_event(InstallEvent::Done(crate::InstallReport {
+        installed: vec!["skills".into()],
+        failures: vec![crate::InstallFailure {
+            target: "Herdr plugins:reviewr".into(),
+            message: "exit status 1: no such plugin".into(),
+        }],
+    }));
+    show(&mut wizard, &mut terminal);
+    press(&mut wizard, &[KeyCode::Char('d')]);
+    show(&mut wizard, &mut terminal);
+
+    // Overlays and the narrow single-column layout.
+    let mut fresh = self::wizard();
+    press(&mut fresh, &[KeyCode::Char('?')]);
+    show(&mut fresh, &mut terminal);
+    press(
+        &mut fresh,
+        &[KeyCode::Esc, KeyCode::Char('/'), KeyCode::Char('t')],
+    );
+    show(&mut fresh, &mut terminal);
+    press(&mut fresh, &[KeyCode::Esc]);
+    go_to(&mut fresh, Row::Resource(3));
+    press(&mut fresh, &[KeyCode::Char(' '), KeyCode::Esc]);
+    show(&mut fresh, &mut terminal);
+    press(&mut fresh, &[KeyCode::Esc]);
+    let mut narrow = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    show(&mut fresh, &mut narrow);
+    press(&mut fresh, &[KeyCode::Right]);
+    show(&mut fresh, &mut narrow);
+    press(&mut fresh, &[KeyCode::Right]);
+    show(&mut fresh, &mut narrow);
+    press(&mut fresh, &[KeyCode::Enter]);
+    show(&mut fresh, &mut narrow);
 }
 
 #[test]
@@ -1512,8 +1573,8 @@ fn wiki_group_routes_to_the_vault_workflow_with_optional_feynman() {
     assert_eq!(title(&wizard), "Review");
     let review = screen(&mut wizard, 104, 26);
     assert!(review.contains("Vault setup"));
-    assert!(review.contains("choose Create or Connect after this review"));
-    assert!(review.contains("Vault files get their own preview before anything changes"));
+    assert!(review.contains("Choose Create or Connect after this review"));
+    assert!(review.contains("Vault files get their own preview"));
     assert!(review.contains("Enter opens Vault setup"));
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
@@ -1581,9 +1642,8 @@ fn mixed_skill_and_wiki_selection_explains_the_two_destinations() {
     press(&mut wizard, &[KeyCode::Enter]);
     assert_eq!(title(&wizard), "Where");
     let scope = screen(&mut wizard, 104, 26);
-    assert!(scope.contains("This screen affects agent skills only"));
     assert!(scope.contains("Wiki setup is separate"));
-    assert!(scope.contains("After Review"));
+    assert!(scope.contains("after Review"));
 }
 
 #[test]
@@ -1609,6 +1669,7 @@ fn wiki_dry_run_never_enters_the_mutating_handoff() {
 fn modal_overlays_consume_mouse_and_scroll_input() {
     let mut wizard = wizard();
     let mut terminal = Terminal::new(TestBackend::new(110, 30)).unwrap();
+    go_to(&mut wizard, Row::Resource(3));
     terminal.draw(|frame| wizard.draw(frame)).unwrap();
     let before = wizard.selected.clone();
     wizard.show_help = true;
@@ -1773,8 +1834,8 @@ fn profile_choose_plain_terminal_child() {
     let output = screen(&mut wizard, 104, 24);
     assert!(output.contains("Goals"));
     assert!(output.contains("Types"));
-    assert!(output.contains("Capabilities"));
-    assert!(!output.contains("Overview"));
+    assert!(output.contains("Overview"));
+    assert!(!output.contains("Capabilities"));
 }
 
 #[test]
@@ -1841,8 +1902,8 @@ fn uninstall_review_renders_on_a_narrow_terminal() {
         .map(|cell| cell.symbol())
         .collect::<String>();
 
-    assert!(text.contains("Remove"));
-    assert!(text.contains("review"));
+    assert!(text.contains("Remove (2)"));
+    assert!(text.contains("- subagents"));
 }
 
 #[test]
@@ -2164,4 +2225,79 @@ fn adhd_install_job_writes_only_after_success_and_preserves_existing_flag() {
         }
         std::fs::remove_dir_all(flag.parent().unwrap().parent().unwrap()).unwrap();
     }
+}
+
+#[test]
+fn success_offers_the_next_command_to_copy() {
+    let mut wizard = wizard();
+    wizard.model.resources[6].next_action = "Run `gh auth login` once.".into();
+    go_to(&mut wizard, Row::Resource(6));
+    press(
+        &mut wizard,
+        &[KeyCode::Char(' '), KeyCode::Enter, KeyCode::Enter],
+    );
+    wizard.begin_install().unwrap();
+    wizard.handle_install_event(InstallEvent::Done(crate::InstallReport {
+        installed: vec!["Tools:gh".into()],
+        failures: vec![],
+    }));
+    assert_eq!(wizard.next_command().as_deref(), Some("gh auth login"));
+    let output = screen(&mut wizard, 104, 26);
+    assert!(output.contains("c copies `gh auth login`"), "{output}");
+}
+
+#[test]
+fn render_gallery_extra() {
+    let show = |wizard: &mut Wizard, w: u16, h: u16| println!("{}", screen(wizard, w, h));
+    // Uninstall
+    let mut model = model(ready());
+    model.purpose = WizardPurpose::Uninstall;
+    model.installed = vec![true; model.resources.len()];
+    let mut un = Wizard::new(model);
+    show(&mut un, 104, 24);
+    press(
+        &mut un,
+        &[KeyCode::Right, KeyCode::Char(' '), KeyCode::Enter],
+    );
+    show(&mut un, 104, 24);
+    // Responses stage
+    let mut m = self::model(ready());
+    m.mode = crate::app::SelectionMode::Setup;
+    let mut setup = Wizard::new(m);
+    go_to(&mut setup, Row::Resource(0));
+    press(&mut setup, &[KeyCode::Char(' '), KeyCode::Enter]);
+    show(&mut setup, 104, 24);
+    // Nothing chosen review
+    let mut empty = self::wizard();
+    press(&mut empty, &[KeyCode::Enter]);
+    show(&mut empty, 104, 24);
+}
+
+#[test]
+fn project_scope_honours_global_installs_but_global_scope_ignores_project_ones() {
+    let mut model = model(ready());
+    model
+        .resources
+        .push(resource(ResourceKind::McpServer, "MCP servers", "sem"));
+    model.installed.push(false);
+    let sem = model.resources.len() - 1;
+    let mut wizard = Wizard::new(model);
+    // sem configured only for this project.
+    let mut project = vec![false; sem + 1];
+    project[sem] = true;
+    wizard.set_installed_scoped(vec![false; sem + 1], project);
+    assert!(!wizard.resource_installed(sem));
+    wizard.skill_scope = SkillScope::Project;
+    assert!(wizard.resource_installed(sem));
+    assert!(!wizard.installed_globally_only(sem));
+    // sem configured globally: counts everywhere, and says so in project scope.
+    let mut global = vec![false; sem + 1];
+    global[sem] = true;
+    wizard.set_installed_scoped(global, vec![false; sem + 1]);
+    assert!(wizard.resource_installed(sem));
+    assert!(wizard.installed_globally_only(sem));
+    assert_eq!(wizard.selection_reason(sem), "Already installed globally");
+    wizard.skill_scope = SkillScope::Global;
+    assert!(wizard.resource_installed(sem));
+    assert!(!wizard.installed_globally_only(sem));
 }
