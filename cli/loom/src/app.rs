@@ -481,15 +481,30 @@ fn pi_packages_from_settings(
     let agent_dir = agent_dir
         .strip_prefix("~")
         .map_or_else(|_| agent_dir.clone(), |relative| home.join(relative));
-    let content = match std::fs::read_to_string(agent_dir.join("settings.json")) {
+    pi_packages_listing(
+        &agent_dir.join("settings.json"),
+        project_root,
+        "User packages:",
+    )
+}
+
+/// A `pi list`-shaped listing read straight from a Pi settings file, so the
+/// installed-state probe never has to boot the Node CLI. `None` when the file
+/// cannot be read safely; a missing file lists nothing.
+pub(crate) fn pi_packages_listing(
+    settings_path: &std::path::Path,
+    project_root: &std::path::Path,
+    heading: &str,
+) -> Option<String> {
+    let content = match std::fs::read_to_string(settings_path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Some("User packages:\n".into());
+            return Some(format!("{heading}\n"));
         }
         Err(_) => return None,
     };
     let settings: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let mut listed = String::from("User packages:\n");
+    let mut listed = format!("{heading}\n");
     let Some(packages) = settings.get("packages") else {
         return Some(listed);
     };
@@ -503,7 +518,8 @@ fn pi_packages_from_settings(
             let resolved = path
                 .is_relative()
                 .then(|| project_root.join(path))
-                .filter(|path| path.join("package.json").is_file());
+                .filter(|path| path.join("package.json").is_file())
+                .map(|path| path.canonicalize().unwrap_or(path));
             listed.push_str("  ");
             listed.push_str(
                 resolved

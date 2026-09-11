@@ -413,7 +413,11 @@ fn project_package_lines(listed: &str) -> impl Iterator<Item = &str> {
 
 fn has_project_packages(listed: &str, product: &Path, feynman: bool) -> bool {
     let lines = project_package_lines(listed).collect::<Vec<_>>();
-    let core = product.display().to_string();
+    let core = product
+        .canonicalize()
+        .unwrap_or_else(|_| product.to_path_buf())
+        .display()
+        .to_string();
     lines.iter().any(|line| *line == core)
         && (!feynman
             || lines
@@ -1048,12 +1052,21 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
     let doctor = product
         .as_ref()
         .is_some_and(|root| doctor_ok(system, root, &record.path));
-    let packages = system
-        .run_probe(&CommandSpec::new("pi", ["list", "--approve"]).in_dir(&record.path))
-        .ok()
-        .filter(|result| result.success)
-        .map(|result| result.stdout)
-        .unwrap_or_default();
+    // Read the Vault's own Pi settings first; `pi list` boots Node and was
+    // the slow part of every health check.
+    let packages = crate::app::pi_packages_listing(
+        &record.path.join(".pi/settings.json"),
+        &record.path,
+        "Project packages:",
+    )
+    .or_else(|| {
+        system
+            .run_probe(&CommandSpec::new("pi", ["list", "--approve"]).in_dir(&record.path))
+            .ok()
+            .filter(|result| result.success)
+            .map(|result| result.stdout)
+    })
+    .unwrap_or_default();
     let core = product
         .as_ref()
         .is_some_and(|path| has_project_packages(&packages, path, false));

@@ -96,12 +96,12 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
             fs::write(skill, "installed").unwrap();
         }
     }
+    // Vault health reads the Vault's own Pi settings, never `pi list`.
+    fs::create_dir_all(home.join("product")).unwrap();
+    fs::write(home.join("product/package.json"), "{}").unwrap();
     fs::write(
-        ready.join(".pi/packages.txt"),
-        format!(
-            "Project packages:\n  {}/product\n  npm:@companion-ai/feynman@0.3.47\n",
-            home.display()
-        ),
+        ready.join(".pi/settings.json"),
+        r#"{"packages": ["../product", "npm:@companion-ai/feynman@0.3.47"]}"#,
     )
     .unwrap();
     let mut registry = WikiRegistry::default();
@@ -191,14 +191,10 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
     );
     assert!(wiki.contains("Some checks need attention"), "{text}");
     assert!(text.contains("loom wiki"), "{text}");
-    let probes = fs::read_to_string(home.join("pi-probes")).unwrap();
-    assert_eq!(
-        probes.lines().collect::<Vec<_>>(),
-        [
-            home.to_str().unwrap(),
-            ready.to_str().unwrap(),
-            global_only.to_str().unwrap()
-        ]
+    let probes = fs::read_to_string(home.join("pi-probes")).unwrap_or_default();
+    assert!(
+        !probes.contains(ready.to_str().unwrap()),
+        "Vault health must not boot `pi list`: {probes}"
     );
 
     // A healthy registered Vault contributes to the overall success verdict.
@@ -216,8 +212,8 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
     registry.vaults[0].confluence = false;
     registry.save(&home).unwrap();
     fs::write(
-        ready.join(".pi/packages.txt"),
-        format!("Project packages:\n  {}/product\n", home.display()),
+        ready.join(".pi/settings.json"),
+        r#"{"packages": ["../product"]}"#,
     )
     .unwrap();
     fs::remove_file(ready.join(".agents/skills/confluence-export/SKILL.md")).unwrap();

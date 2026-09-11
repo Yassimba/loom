@@ -345,7 +345,7 @@ impl System for RealSystem {
                 if let Some(status) = child.try_wait()? {
                     break Ok::<_, anyhow::Error>(status);
                 }
-                std::thread::sleep(Duration::from_millis(50));
+                std::thread::sleep(Duration::from_millis(10));
             })();
             // Also close pipes held by descendants after the wrapper exits.
             terminate_process_tree(&mut child);
