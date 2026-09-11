@@ -140,7 +140,7 @@ grep -Fq 'Everything selected is already set up; no changes made' "$evidence_dir
 grep -Fq 'next run `loom status` to verify the setup' "$evidence_dir/bootstrap-stdout.txt"
 grep -Fq 'Selected resources, runtimes, and Wiki Vaults checked' "$evidence_dir/loom-status.txt"
 grep -Fq 'Done' "$evidence_dir/loom-init.txt"
-grep -Eq 'Up to date|refreshed' "$evidence_dir/loom-update.txt"
+grep -Fq 'Update complete' "$evidence_dir/loom-update.txt"
 
 find "${HOME}/.agents/skills/implement" \
   "${HOME}/.claude/skills/implement" \
