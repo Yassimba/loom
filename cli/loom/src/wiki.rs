@@ -29,6 +29,7 @@ pub struct WikiRequest {
     pub vault: PathBuf,
     pub feynman: bool,
     pub confluence: bool,
+    pub qmd: bool,
     pub yes: bool,
 }
 
@@ -39,6 +40,8 @@ pub struct VaultRecord {
     pub feynman: bool,
     #[serde(default)]
     pub confluence: bool,
+    #[serde(default)]
+    pub qmd: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -112,15 +115,17 @@ impl WikiRegistry {
         self.vaults.len() != before
     }
 
-    fn register(&mut self, path: PathBuf, feynman: bool, confluence: bool) {
+    fn register(&mut self, path: PathBuf, feynman: bool, confluence: bool, qmd: bool) {
         if let Some(record) = self.vaults.iter_mut().find(|record| record.path == path) {
             record.feynman = feynman;
             record.confluence = confluence;
+            record.qmd = qmd;
         } else {
             self.vaults.push(VaultRecord {
                 path,
                 feynman,
                 confluence,
+                qmd,
             });
         }
     }
@@ -529,13 +534,15 @@ fn install_packages(
     Ok(())
 }
 
-fn wiki_tool_keys(confluence: bool) -> Vec<String> {
+fn wiki_tool_keys(qmd: bool, confluence: bool) -> Vec<String> {
     let mut tools = vec![
         PYTHON_KEY.into(),
         crate::manifest::PI_TOOL_KEY.into(),
         PRODUCT_KEY.into(),
-        QMD_KEY.into(),
     ];
+    if qmd {
+        tools.push(QMD_KEY.into());
+    }
     if confluence {
         tools.push(CONFLUENCE_KEY.into());
     }
@@ -830,7 +837,10 @@ pub(crate) fn setup_with_confirmation(
         WikiOperation::Unregister => {
             let mut registry = WikiRegistry::load(&home)?;
             let path = registry_match_path(system, &registry, &request.vault);
-            registry.unregister(&path);
+            anyhow::ensure!(
+                registry.unregister(&path),
+                "Vault is not registered; use Create or Adopt before managing it"
+            );
             registry.save(&home)?;
             println!(
                 "Unregistered {}; Vault files were not changed.",
@@ -873,11 +883,12 @@ pub(crate) fn setup_with_confirmation(
         return Ok(WikiOutcome::Finished(true));
     }
 
-    let (vault_target, feynman, confluence) = if let Some(record) = registered {
+    let (vault_target, feynman, confluence, qmd) = if let Some(record) = registered {
         (
             record.path,
             record.feynman || request.feynman,
             record.confluence || request.confluence,
+            record.qmd || request.qmd,
         )
     } else {
         (
@@ -888,6 +899,7 @@ pub(crate) fn setup_with_confirmation(
             )?,
             request.feynman,
             request.confluence,
+            request.qmd,
         )
     };
     let repository = crate::skills::Repository::default();
@@ -899,7 +911,7 @@ pub(crate) fn setup_with_confirmation(
             let cancelled = if inline { cancelled } else { local_cancelled };
             manifest::sync_selected_from(
                 system,
-                &wiki_tool_keys(confluence),
+                &wiki_tool_keys(qmd, confluence),
                 cancelled,
                 &repository,
             )
@@ -942,15 +954,19 @@ pub(crate) fn setup_with_confirmation(
                 cancelled,
             )
             .map_err(anyhow::Error::msg)?;
-            setup_qmd(system, &vault)
+            if qmd {
+                setup_qmd(system, &vault)
+            } else {
+                Ok(String::new())
+            }
         },
     )?;
-    if !inline {
+    if !inline && !search_note.is_empty() {
         println!("{search_note}");
     }
     notes.push(search_note);
     let mut registry = WikiRegistry::load(&home)?;
-    registry.register(vault.clone(), feynman, confluence);
+    registry.register(vault.clone(), feynman, confluence, qmd);
     registry.save(&home)?;
     if confluence && interactive {
         crate::wiki_confluence::configure(system)?;
@@ -968,10 +984,12 @@ pub(crate) fn setup_with_confirmation(
     }
     if !inline {
         println!("Wiki ready. Run: cd {} && pi", vault.display());
-        println!(
-            "Search: qmd --index {} query \"your question\"",
-            qmd_index(&vault)
-        );
+        if qmd {
+            println!(
+                "Search: qmd --index {} query \"your question\"",
+                qmd_index(&vault)
+            );
+        }
     }
     if confluence && request.yes && !inline {
         println!("Confluence: run `cme config edit auth.confluence` to configure authentication.");
@@ -1008,6 +1026,7 @@ pub fn status_registered(system: &(dyn System + Sync)) -> bool {
         return true;
     }
     let mut healthy = true;
+    let mut shared = Vec::new();
     for record in registry.vaults {
         let health = inspect_vault(system, &record);
         style.row(
@@ -1016,12 +1035,23 @@ pub fn status_registered(system: &(dyn System + Sync)) -> bool {
             "",
         );
         for (mark, label, detail) in health.rows {
+            if SHARED_WIKI_ROWS.contains(&label) {
+                if !shared.iter().any(|(_, name, _)| *name == label) {
+                    shared.push((mark, label, detail));
+                }
+                continue;
+            }
             style.row(mark, label, detail);
         }
         healthy &= health.healthy;
     }
+    for (mark, label, detail) in shared {
+        style.row(mark, label, detail);
+    }
     healthy
 }
+
+const SHARED_WIKI_ROWS: [&str; 3] = ["QMD (shared)", "Confluence (shared)", "Obsidian"];
 
 pub(crate) struct VaultHealth {
     pub healthy: bool,
@@ -1056,7 +1086,6 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
     // the slow part of every health check.
     let packages = crate::app::pi_packages_listing(
         &record.path.join(".pi/settings.json"),
-        &record.path,
         "Project packages:",
     )
     .or_else(|| {
@@ -1085,23 +1114,28 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
             .join("SKILL.md")
             .is_file();
     let core_ready = marker && doctor && pins_ready && core;
-    let ok =
-        core_ready && qmd && (!record.feynman || feynman) && (!record.confluence || confluence);
+    let ok = core_ready
+        && (!record.qmd || qmd)
+        && (!record.feynman || feynman)
+        && (!record.confluence || confluence);
     rows.push((
         if core_ready { Mark::Ok } else { Mark::Bad },
         "claude-obsidian",
-        format!(
-            "{} — Vault package {}; marker {}; prerequisites {}; doctor {}",
-            if core_ready { "ready" } else { "repair needed" },
-            if core { "installed" } else { "missing" },
-            if marker { "present" } else { "missing" },
-            if pins_ready { "ready" } else { "missing" },
-            if doctor { "ok" } else { "failed" },
-        ),
+        if core_ready {
+            "ready".into()
+        } else {
+            format!(
+                "repair needed — Vault package {}; marker {}; prerequisites {}; doctor {}",
+                if core { "installed" } else { "missing" },
+                if marker { "present" } else { "missing" },
+                if pins_ready { "ready" } else { "missing" },
+                if doctor { "ok" } else { "failed" },
+            )
+        },
     ));
     for (label, installed, required, detail) in [
         ("Feynman", feynman, record.feynman, "Vault Pi package"),
-        ("qmd", qmd, true, "tool + Vault skill"),
+        ("qmd", qmd, record.qmd, "tool + Vault skill"),
         (
             "Confluence",
             confluence,
@@ -1110,7 +1144,7 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
         ),
     ] {
         rows.push((
-            if installed {
+            if required && installed {
                 Mark::Ok
             } else if required {
                 Mark::Bad
@@ -1118,8 +1152,8 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
                 Mark::Off
             },
             label,
-            if installed {
-                format!("ready — {detail}")
+            if required && installed {
+                "ready".into()
             } else if required {
                 format!("missing — {detail}; run `loom wiki` to repair")
             } else {
@@ -1178,7 +1212,7 @@ pub fn update_registered(system: &(dyn System + Sync), interactive: bool, out: &
         }
     };
     let mut missing_tools = Vec::new();
-    if !registry.vaults.is_empty() && !system.command_exists("qmd") {
+    if registry.vaults.iter().any(|vault| vault.qmd) && !system.command_exists("qmd") {
         missing_tools.push(QMD_KEY.into());
     }
     if registry.vaults.iter().any(|vault| vault.confluence) && !system.command_exists("cme") {
@@ -1211,7 +1245,11 @@ pub fn update_registered(system: &(dyn System + Sync), interactive: bool, out: &
         let activity = format!("Vault {}/{} · {vault_name}", index + 1, vault_count);
         let refreshed = crate::wiki_progress::run(system, interactive, &activity, |system, _| {
             install_packages(system, &product, &record.path, record.feynman)?;
-            setup_qmd(system, &record.path)
+            if record.qmd {
+                setup_qmd(system, &record.path)
+            } else {
+                Ok(String::new())
+            }
         });
         match refreshed {
             Ok(note) => {
@@ -1380,11 +1418,12 @@ mod tests {
                 path: root.clone(),
                 feynman: true,
                 confluence: false,
+                qmd: false,
             },
         );
         assert!(!health.healthy);
         for (label, expected) in [
-            ("qmd", crate::ui::Mark::Bad),
+            ("qmd", crate::ui::Mark::Off),
             ("Feynman", crate::ui::Mark::Bad),
             ("QMD (shared)", crate::ui::Mark::Ok),
         ] {
@@ -1403,6 +1442,65 @@ mod tests {
     }
 
     #[test]
+    fn inspect_requires_qmd_only_when_the_vault_selected_it() {
+        struct SharedOnly {
+            root: PathBuf,
+        }
+        impl System for SharedOnly {
+            fn command_exists(&self, name: &str) -> bool {
+                matches!(name, "pi" | "qmd")
+            }
+            fn refresh_path(&self) {}
+            fn home_dir(&self) -> Option<PathBuf> {
+                Some(self.root.clone())
+            }
+            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
+                Ok(CommandResult {
+                    success: command.program == "pi",
+                    stdout: "User packages:\nProject packages:\n".into(),
+                    stderr: String::new(),
+                })
+            }
+        }
+        let root = temp("optional-qmd");
+        let skill = root.join(".agents/skills/qmd");
+        fs::create_dir_all(&skill).unwrap();
+        fs::write(skill.join("SKILL.md"), "leftover").unwrap();
+        let selection = crate::manifest::conf_d_target(&root);
+        fs::create_dir_all(selection.parent().unwrap()).unwrap();
+        fs::write(&selection, "[tools]\n\"npm:@tobilu/qmd\" = \"1\"\n").unwrap();
+        let system = SharedOnly { root: root.clone() };
+        let leftover = inspect_vault(
+            &system,
+            &VaultRecord {
+                path: root.clone(),
+                feynman: false,
+                confluence: false,
+                qmd: false,
+            },
+        );
+        fs::remove_file(skill.join("SKILL.md")).unwrap();
+        let selected = inspect_vault(
+            &system,
+            &VaultRecord {
+                path: root.clone(),
+                feynman: false,
+                confluence: false,
+                qmd: true,
+            },
+        );
+        assert!(leftover
+            .rows
+            .iter()
+            .any(|(mark, name, _)| *name == "qmd" && matches!(mark, crate::ui::Mark::Off)));
+        assert!(selected
+            .rows
+            .iter()
+            .any(|(mark, name, _)| *name == "qmd" && matches!(mark, crate::ui::Mark::Bad)));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn registry_is_sorted_idempotent_and_unregister_never_deletes_vault() {
         let home = temp("registry");
         let a = home.join("a");
@@ -1411,9 +1509,9 @@ mod tests {
         fs::create_dir_all(&b).unwrap();
         fs::write(a.join("note.md"), "knowledge").unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(b.clone(), false, false);
-        registry.register(a.clone(), false, false);
-        registry.register(a.clone(), true, false);
+        registry.register(b.clone(), false, false, false);
+        registry.register(a.clone(), false, false, false);
+        registry.register(a.clone(), true, false, false);
         registry.save(&home).unwrap();
         let loaded = WikiRegistry::load(&home).unwrap();
         assert_eq!(
@@ -1422,12 +1520,14 @@ mod tests {
                 VaultRecord {
                     path: a.clone(),
                     feynman: true,
-                    confluence: false
+                    confluence: false,
+                    qmd: false
                 },
                 VaultRecord {
                     path: b.clone(),
                     feynman: false,
-                    confluence: false
+                    confluence: false,
+                    qmd: false
                 }
             ]
         );
@@ -1441,6 +1541,7 @@ mod tests {
                 vault: PathBuf::from("a"),
                 feynman: false,
                 confluence: false,
+                qmd: false,
                 yes: true,
             },
             &system,
@@ -1491,10 +1592,13 @@ mod tests {
 
     #[test]
     fn confluence_is_only_installed_when_selected_for_the_vault() {
-        assert!(!wiki_tool_keys(false)
+        assert!(!wiki_tool_keys(false, false)
+            .iter()
+            .any(|key| key == CONFLUENCE_KEY || key == QMD_KEY));
+        assert!(wiki_tool_keys(false, true)
             .iter()
             .any(|key| key == CONFLUENCE_KEY));
-        assert!(wiki_tool_keys(true).iter().any(|key| key == CONFLUENCE_KEY));
+        assert!(wiki_tool_keys(true, false).iter().any(|key| key == QMD_KEY));
         assert!(wiki_skill_names(false).is_empty());
         assert_eq!(wiki_skill_names(true), [CONFLUENCE_SKILL]);
     }
@@ -1728,7 +1832,7 @@ mod tests {
         )
         .unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(vault.clone(), true, false);
+        registry.register(vault.clone(), true, false, false);
         registry.save(&home).unwrap();
         let system = FakeSystem {
             home: home.clone(),
@@ -1763,8 +1867,8 @@ mod tests {
         let missing = home.join("missing");
         fs::create_dir_all(&present).unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(missing.clone(), false, false);
-        registry.register(present.clone(), false, false);
+        registry.register(missing.clone(), false, false, false);
+        registry.register(present.clone(), false, false, false);
         registry.save(&home).unwrap();
         let system = FakeSystem {
             home: home.clone(),
@@ -2025,6 +2129,7 @@ mod tests {
                 vault,
                 feynman: false,
                 confluence: false,
+                qmd: false,
                 yes: true,
             },
             &system,

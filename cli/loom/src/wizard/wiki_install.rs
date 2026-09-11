@@ -33,12 +33,14 @@ impl WikiBrowser {
                     .unwrap_or(WikiOperation::Repair);
                 let feynman = record.feynman || selected.contains(&Capability::Feynman);
                 let confluence = record.confluence || selected.contains(&Capability::Confluence);
+                let qmd = record.qmd || selected.contains(&Capability::Qmd);
                 let needs_wiki = selected.iter().any(|c| !matches!(c, Capability::Skill(_)));
                 let request = needs_wiki.then(|| WikiRequest {
                     operation,
                     vault: record.path.clone(),
                     feynman,
                     confluence,
+                    qmd,
                     yes: false,
                 });
                 let direct = selected
@@ -83,6 +85,7 @@ impl WikiBrowser {
                         path: record.path.clone(),
                         feynman,
                         confluence,
+                        qmd,
                     },
                     request,
                     labels: selected.iter().map(|c| c.label().to_owned()).collect(),
@@ -126,6 +129,7 @@ impl WikiInstall {
                 record.path == self.record.path
                     && (!self.record.feynman || record.feynman)
                     && (!self.record.confluence || record.confluence)
+                    && (!self.record.qmd || record.qmd)
             })
         }) && (self.request.is_none() || crate::wiki::inspect_vault(system, &self.record).healthy)
             && self
@@ -169,6 +173,7 @@ impl WikiInstall {
             if let Some(record) = registry.vaults.iter().find(|record| record.path == *path) {
                 request.feynman |= record.feynman;
                 request.confluence |= record.confluence;
+                request.qmd |= record.qmd;
             }
             crate::wiki_progress::in_setup(
                 system,

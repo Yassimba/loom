@@ -40,6 +40,7 @@ struct WikiWizard {
     path: String,
     feynman: bool,
     confluence: bool,
+    qmd: bool,
     vaults: Vec<VaultRecord>,
     selected_vault: usize,
     obsidian_installed: bool,
@@ -64,6 +65,7 @@ impl WikiWizard {
             path: format!("{}/", current.display()),
             feynman: feynman_default,
             confluence: false,
+            qmd: false,
             vaults,
             selected_vault: 0,
             obsidian_installed,
@@ -130,6 +132,7 @@ impl WikiWizard {
                 .unwrap_or_else(|| PathBuf::from(self.path.trim())),
             feynman: record.map_or(self.feynman, |record| record.feynman),
             confluence: record.map_or(self.confluence, |record| record.confluence),
+            qmd: record.map_or(self.qmd, |record| record.qmd),
             yes: false,
         }
     }
@@ -227,15 +230,13 @@ impl WikiWizard {
         }
         match self.page {
             Page::Capabilities => match key.code {
-                KeyCode::Up | KeyCode::Char('k') => self.step(-1, 2),
-                KeyCode::Down | KeyCode::Char('j') => self.step(1, 2),
-                KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right => {
-                    if self.cursor == 0 {
-                        self.feynman = !self.feynman;
-                    } else {
-                        self.confluence = !self.confluence;
-                    }
-                }
+                KeyCode::Up | KeyCode::Char('k') => self.step(-1, 3),
+                KeyCode::Down | KeyCode::Char('j') => self.step(1, 3),
+                KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right => match self.cursor {
+                    0 => self.feynman = !self.feynman,
+                    1 => self.confluence = !self.confluence,
+                    _ => self.qmd = !self.qmd,
+                },
                 KeyCode::Enter => return self.enter(),
                 _ => {}
             },
@@ -485,6 +486,7 @@ impl WikiWizard {
                     "Confluence Markdown exporter",
                     self.cursor == 1,
                 ),
+                option(self.qmd, "QMD local search", self.cursor == 2),
                 Line::from(""),
                 Line::styled("Selections are enabled for this Vault.", Style::new().dim()),
             ])
@@ -523,8 +525,16 @@ impl WikiWizard {
                         "not selected"
                     }
                 )),
+                Line::from(format!(
+                    "QMD        {}",
+                    if self.qmd { "included" } else { "not selected" }
+                )),
                 Line::from(""),
-                Line::from("First search setup can download about 2 GB of models."),
+                Line::from(if self.qmd {
+                    "First QMD search setup can download about 2 GB of models."
+                } else {
+                    "QMD search is optional; pick it only if this Vault should index locally."
+                }),
                 Line::styled(
                     "Loom will preview the exact Vault files before applying them.",
                     Style::new().dim(),
@@ -1103,6 +1113,7 @@ mod tests {
             path: PathBuf::from("/tmp/Vault"),
             feynman: false,
             confluence: false,
+            qmd: false,
         };
         let mut wizard = WikiWizard::new(
             PathBuf::from("/tmp"),
@@ -1145,6 +1156,7 @@ mod gallery {
             path: root.join("Notes"),
             feynman: true,
             confluence: false,
+            qmd: false,
         };
         let mut wizard = WikiWizard::new(root.clone(), root.clone(), vec![record], true, false);
         let mut terminal = Terminal::new(TestBackend::new(104, 26)).unwrap();

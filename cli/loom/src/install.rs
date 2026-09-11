@@ -804,6 +804,19 @@ fn execute_action(
     }
 }
 
+fn path_package_matches(path: &std::path::Path, target: &str, unscoped: &str) -> bool {
+    if let Some(name) = std::fs::read(path.join("package.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|package| package["name"].as_str().map(str::to_owned))
+    {
+        return name == target;
+    }
+    path.to_string_lossy()
+        .to_ascii_lowercase()
+        .contains(&unscoped.to_ascii_lowercase())
+}
+
 /// Pi may list both scopes; only the reviewed destination is evidence.
 pub(crate) fn pi_package_installed(listed: &str, target: &str, project: bool) -> bool {
     let target = target.strip_prefix("npm:").unwrap_or(target);
@@ -850,11 +863,7 @@ pub(crate) fn pi_package_installed(listed: &str, target: &str, project: bool) ->
             });
         }
         let path = std::path::Path::new(line);
-        path.is_absolute()
-            && std::fs::read(path.join("package.json"))
-                .ok()
-                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-                .is_some_and(|package| package["name"].as_str() == Some(target))
+        path.is_absolute() && path.is_dir() && path_package_matches(path, target, unscoped)
     })
 }
 

@@ -5,9 +5,14 @@ use loom::app::{install_selected, SelectionMode, Selectors};
 use loom::init::{run_init, sync_projects, DomainLayout, Editor, InitOptions, Tracker};
 use loom::status::run_status;
 use loom::ui::{Mark, Out};
-use loom::update::run_updates;
+use loom::update::{
+    herdr_gate, probe_herdr_server_running, run_updates, HerdrGate, HerdrLane, HERDR_SKIP_INSIDE,
+    HERDR_SKIP_SERVER,
+};
 use loom::wiki::{WikiOperation, WikiRequest};
-use loom::{Catalog, RealSystem, ResourceKind, SkillAgent, SkillScope, UninstallOptions};
+use loom::{
+    Catalog, CommandSpec, RealSystem, ResourceKind, SkillAgent, SkillScope, UninstallOptions,
+};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -109,6 +114,8 @@ enum WikiCommand {
         #[arg(long)]
         confluence: bool,
         #[arg(long)]
+        qmd: bool,
+        #[arg(long)]
         yes: bool,
     },
     /// Adopt an existing Obsidian Vault
@@ -118,6 +125,8 @@ enum WikiCommand {
         feynman: bool,
         #[arg(long)]
         confluence: bool,
+        #[arg(long)]
+        qmd: bool,
         #[arg(long)]
         yes: bool,
     },
@@ -320,24 +329,28 @@ fn main() -> Result<()> {
                         path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     } => WikiRequest {
                         operation: WikiOperation::Create,
                         vault: path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     },
                     WikiCommand::Adopt {
                         path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     } => WikiRequest {
                         operation: WikiOperation::Adopt,
                         vault: path,
                         feynman,
                         confluence,
+                        qmd,
                         yes,
                     },
                     WikiCommand::Status => WikiRequest {
@@ -345,6 +358,7 @@ fn main() -> Result<()> {
                         vault: PathBuf::new(),
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Repair { path } => WikiRequest {
@@ -352,6 +366,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Unregister { path } => WikiRequest {
@@ -359,6 +374,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Open { path } => WikiRequest {
@@ -366,6 +382,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                     WikiCommand::Launch { path } => WikiRequest {
@@ -373,6 +390,7 @@ fn main() -> Result<()> {
                         vault: path,
                         feynman: false,
                         confluence: false,
+                        qmd: false,
                         yes: true,
                     },
                 };
@@ -482,7 +500,45 @@ fn main() -> Result<()> {
                 true
             } else {
                 let out = Out::detect();
-                let updated = run_updates(&system, &Catalog::embedded()?);
+                let inside = std::env::var("HERDR_ENV").ok().as_deref() == Some("1");
+                let herdr_present = loom::System::command_exists(&system, "herdr");
+                let server_running = herdr_present && probe_herdr_server_running(&system);
+                let herdr = match herdr_gate(herdr_present, inside, server_running) {
+                    HerdrGate::None => HerdrLane::Run,
+                    HerdrGate::Ready => HerdrLane::Run,
+                    HerdrGate::Inside => {
+                        if yes
+                            || Confirm::new(
+                                "You're inside Herdr. Please run `loom update` from a regular terminal. Continue without updating Herdr?",
+                            )
+                            .with_default(true)
+                            .prompt()?
+                        {
+                            HerdrLane::Skip(HERDR_SKIP_INSIDE)
+                        } else {
+                            Out::detect().verdict(true, "Cancelled; no changes made");
+                            return Ok(());
+                        }
+                    }
+                    HerdrGate::StopServer if yes => HerdrLane::Run,
+                    HerdrGate::StopServer => {
+                        if Confirm::new("Herdr's server is running. Close it so Herdr can update?")
+                            .with_default(true)
+                            .prompt()?
+                        {
+                            match loom::System::run(
+                                &system,
+                                &CommandSpec::new("herdr", ["server", "stop"]),
+                            ) {
+                                Ok(result) if result.success => HerdrLane::Run,
+                                _ => HerdrLane::Skip(HERDR_SKIP_SERVER),
+                            }
+                        } else {
+                            HerdrLane::Skip(HERDR_SKIP_SERVER)
+                        }
+                    }
+                };
+                let updated = run_updates(&system, &Catalog::embedded()?, herdr);
                 let wikis_updated = loom::wiki::update_registered(&system, !yes, &out);
                 let success = updated && wikis_updated;
                 out.verdict(
@@ -495,6 +551,10 @@ fn main() -> Result<()> {
                 );
                 out.next(if !wikis_updated {
                     "run `loom wiki` to repair the flagged Vault"
+                } else if herdr == HerdrLane::Skip(HERDR_SKIP_INSIDE) {
+                    "run `loom update` from a regular terminal to update Herdr"
+                } else if herdr == HerdrLane::Skip(HERDR_SKIP_SERVER) {
+                    "run `herdr server stop`, then `loom update` to update Herdr"
                 } else if !updated {
                     "resolve the reported cause, then run `loom update --yes` again"
                 } else {

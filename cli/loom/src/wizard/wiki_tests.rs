@@ -47,6 +47,7 @@ fn registered_wiki_can_be_unregistered_from_setup() {
         path: vault.clone(),
         feynman: false,
         confluence: false,
+        qmd: false,
     });
     registry.save(&home).unwrap();
     let mut wizard = chooser(&home);
@@ -78,7 +79,7 @@ fn folder_picks_stay_inline_and_checkmarks_are_vault_local() {
     let b = home.join("B");
     let browser = wizard.wiki.as_mut().unwrap();
     browser.picked_path(WikiOperation::Create, a.clone());
-    browser.item_cursor = 3;
+    browser.item_cursor = 4;
     browser.toggle();
     assert_eq!(browser.count(), 2);
     assert!(!browser.installed(browser.record().unwrap(), Capability::Skill("research")));
@@ -87,7 +88,7 @@ fn folder_picks_stay_inline_and_checkmarks_are_vault_local() {
         .selected(browser.record().unwrap())
         .contains(&Capability::Skill("research")));
     browser.cursor = 0;
-    browser.item_cursor = 3;
+    browser.item_cursor = 4;
     assert!(!a.exists() && !b.exists());
     assert!(WikiRegistry::load(&home).unwrap().vaults.is_empty());
     assert!(wizard.selected.iter().all(|selected| !selected));
@@ -103,7 +104,7 @@ fn folder_picks_stay_inline_and_checkmarks_are_vault_local() {
     screen(&mut wizard, 160, 28);
     let (area, offset) = wizard.hits.list.unwrap();
     assert_eq!(offset, 0);
-    assert!(wizard.handle_click(area.x + 4, area.y + 4).is_none());
+    assert!(wizard.handle_click(area.x + 4, area.y + 5).is_none());
     assert!(!wizard
         .wiki
         .as_ref()
@@ -132,7 +133,7 @@ fn wiki_review_and_dry_run_include_only_curated_skills_and_their_dependencies() 
     let mut wizard = chooser(&home);
     let browser = wizard.wiki.as_mut().unwrap();
     browser.picked_path(WikiOperation::Create, vault.clone());
-    for cursor in 3..CAPABILITIES.len() {
+    for cursor in 4..CAPABILITIES.len() {
         browser.item_cursor = cursor;
         browser.toggle();
     }
@@ -371,7 +372,7 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
     let mut wizard = chooser(&home);
     let browser = wizard.wiki.as_mut().unwrap();
     browser.picked_path(WikiOperation::Create, vault.clone());
-    for cursor in [1, 3, 7] {
+    for cursor in [1, 4, 8] {
         browser.item_cursor = cursor;
         browser.toggle();
     }
@@ -398,8 +399,8 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
     let report = stage.report.as_ref().unwrap();
     assert!(report.failures.is_empty(), "{report:?}");
     assert!(
-        matches!(&stage.items[0].status, ExecStatus::Ok(note) if note.contains("Search check skipped")),
-        "search readiness notes must survive the inline handoff"
+        matches!(&stage.items[0].status, ExecStatus::Ok(_)),
+        "inline Wiki install must finish without QMD unless it was selected"
     );
     assert!(report
         .installed
@@ -433,7 +434,8 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
         [VaultRecord {
             path: vault.clone(),
             feynman: true,
-            confluence: false
+            confluence: false,
+            qmd: false
         }]
     );
     let ownership = crate::ownership::InstallState::load(&home).unwrap();
@@ -482,6 +484,7 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
         path: vault.clone(),
         feynman: false,
         confluence: false,
+        qmd: false,
     });
     registry.save(&home).unwrap();
     let mut wizard = chooser(&home);
@@ -496,7 +499,7 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
             ],
         },
     );
-    browser.item_cursor = 3;
+    browser.item_cursor = 4;
     browser.toggle();
     let jobs = wizard.wiki_jobs().unwrap();
     assert!(jobs[0].request.is_none());
