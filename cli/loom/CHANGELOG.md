@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.10.0](https://github.com/Yassimba/loom/compare/loom-v1.9.0...loom-v1.10.0) (2026-09-11)
+
+
+### Features
+
+* **update:** skip herdr updates inside a herdr pane ([7fc1e88](https://github.com/Yassimba/loom/commit/7fc1e881a22f69655a5ae39040cd742baa8000e2))
+
+
+### Bug Fixes
+
+* **cli:** compare pi package listing paths after canonicalize ([dc2b638](https://github.com/Yassimba/loom/commit/dc2b638da7f6449d1d08078a269bbbb5f8bedd26))
+* **cli:** parse wiki registry JSON in the unregister test ([acdc02f](https://github.com/Yassimba/loom/commit/acdc02f627d4103464743f9097b32f6501322d5a))
+* **wiki:** optional qmd and safer herdr updates ([eee654d](https://github.com/Yassimba/loom/commit/eee654de9124d805d6d0374d82fda0a46d3c375d))
+* **wiki:** treat qmd as a per-vault option ([507bc83](https://github.com/Yassimba/loom/commit/507bc83babb8c2c41c0e54385ee53dbc2e414c03))
+
 ## [1.9.0](https://github.com/Yassimba/loom/compare/loom-v1.8.0...loom-v1.9.0) (2026-09-11)
 
 
