@@ -281,6 +281,8 @@ test("external Pi packages accept an exact Git commit source", async () => {
           source,
           label: "example",
           description: "Example package",
+          group: "Wiki",
+          dependencies: ["github:AgriciDaniel/claude-obsidian"],
           windowsSupport: "wsl",
         },
       ],
@@ -293,6 +295,8 @@ test("external Pi packages accept an exact Git commit source", async () => {
 
   assert.equal(example.source, source);
   assert.equal(example.version, undefined);
+  assert.equal(example.group, "Wiki");
+  assert.deepEqual(example.dependencies, ["github:AgriciDaniel/claude-obsidian"]);
   assert.equal(example.windowsWsl, true);
 });
 
