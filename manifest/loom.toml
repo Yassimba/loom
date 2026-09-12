@@ -99,7 +99,7 @@ rust = { version = "1.98.1", os = ["macos"] }
 
 # issue tracking for agents (beads: br is the tracker, bv the TUI viewer)
 "github:Dicklesworthstone/beads_rust" = "v0.5.12"
-"github:Dicklesworthstone/beads_viewer" = "v0.23.0"
+"github:Dicklesworthstone/beads_viewer" = "v0.24.0"
 
 # python toolchain
 uv = "0.12.10"
