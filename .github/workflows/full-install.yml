@@ -104,7 +104,30 @@ jobs:
           $code = $LASTEXITCODE
           Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-install EXIT $code"
           if ($code -ne 0) { exit $code }
+      - name: Inspect Ubuntu WSL version
+        id: wsl-version
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-version"
+          wsl --version 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-version.txt"
+          $code = $LASTEXITCODE
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-version EXIT $code"
+          if ($code -ne 0) { exit $code }
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-list-before-conversion"
+          $listing = @(wsl --list --verbose 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-list-before-conversion.txt")
+          $code = $LASTEXITCODE
+          $listing | ForEach-Object { Write-Host $_ }
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-list-before-conversion EXIT $code"
+          if ($code -ne 0) { exit $code }
+          $ubuntu = @($listing -replace "`0", "" | Where-Object { $_ -match '^\s*\*?\s*Ubuntu\s+' })
+          if ($ubuntu.Count -ne 1 -or $ubuntu[0] -notmatch '^\s*\*?\s*Ubuntu\s+\S.*?\s+([12])\s*$') {
+            throw "Expected exactly one Ubuntu distribution with WSL version 1 or 2"
+          }
+          "version=$($Matches[1])" >> $env:GITHUB_OUTPUT
       - name: Convert Ubuntu to WSL2
+        if: steps.wsl-version.outputs.version == '1'
         timeout-minutes: 5
         shell: pwsh
         run: |
@@ -118,10 +141,15 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-list-verbose"
-          wsl --list --verbose 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/loom-windows-e2e/wsl-list.txt"
+          $listing = @(wsl --list --verbose 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/loom-windows-e2e/wsl-list.txt")
           $code = $LASTEXITCODE
+          $listing | ForEach-Object { Write-Host $_ }
           Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-list-verbose EXIT $code"
           if ($code -ne 0) { exit $code }
+          $ubuntu = @($listing -replace "`0", "" | Where-Object { $_ -match '^\s*\*?\s*Ubuntu\s+' })
+          if ($ubuntu.Count -ne 1 -or $ubuntu[0] -notmatch '^\s*\*?\s*Ubuntu\s+\S.*?\s+2\s*$') {
+            throw "Expected exactly one Ubuntu distribution running WSL version 2"
+          }
       - name: Prepare the WSL candidate and fake Pi
         timeout-minutes: 1
         shell: pwsh
