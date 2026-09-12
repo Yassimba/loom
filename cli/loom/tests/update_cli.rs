@@ -2,7 +2,35 @@ mod common;
 
 use loom::{digest_path, InstallState, OwnedPathKind, OwnedResource, OwnershipScope, Receipt};
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::process::{Command, Stdio};
+
+/// Manager discovery is confined to this fixture, including Windows PATH refresh.
+fn loom(home: &Path, project: &Path) -> Command {
+    let bin = home.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    if cfg!(windows) {
+        // A real PowerShell would reintroduce the user's registry PATH.
+        for name in ["powershell", "npm"] {
+            std::fs::write(bin.join(format!("{name}.cmd")), "@exit /b 0\r\n").unwrap();
+        }
+    }
+    let mut command = Command::new(env!("CARGO_BIN_EXE_loom"));
+    if cfg!(windows) {
+        command.env("PATHEXT", ".CMD");
+    }
+    command
+        .args(["update", "--yes"])
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env("MISE_CONFIG_DIR", home.join(".config/mise"))
+        .env("PATH", bin)
+        .env("LOOM_REPO_DIR", common::repo_root())
+        .current_dir(project)
+        .stdin(Stdio::null());
+    command
+}
 
 #[test]
 fn update_preserves_a_catalog_named_skill_without_an_ownership_receipt() {
@@ -12,18 +40,8 @@ fn update_preserves_a_catalog_named_skill_without_an_ownership_receipt() {
     std::fs::create_dir_all(&project).unwrap();
     std::fs::create_dir_all(&skill).unwrap();
     std::fs::write(skill.join("SKILL.md"), "# custom unowned tdd\n").unwrap();
-    let repo = common::repo_root();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_loom"))
-        .args(["update", "--yes"])
-        .env("HOME", &home)
-        .env("USERPROFILE", &home)
-        .env("XDG_CONFIG_HOME", home.join(".config"))
-        .env("LOOM_REPO_DIR", repo)
-        .current_dir(&project)
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
+    let output = loom(&home, &project).output().unwrap();
 
     assert_eq!(
         std::fs::read_to_string(skill.join("SKILL.md")).unwrap(),
@@ -61,16 +79,7 @@ fn update_recovers_an_owned_skill_interrupted_between_renames() {
     });
     state.save(&home).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_loom"))
-        .args(["update", "--yes"])
-        .env("HOME", &home)
-        .env("USERPROFILE", &home)
-        .env("XDG_CONFIG_HOME", home.join(".config"))
-        .env("LOOM_REPO_DIR", common::repo_root())
-        .current_dir(&project)
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
+    let output = loom(&home, &project).output().unwrap();
 
     assert!(target.join("SKILL.md").is_file());
     assert!(!backup.exists());

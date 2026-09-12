@@ -128,7 +128,7 @@ pub(crate) mod theme {
     pub const ERR: Color = Color::Red;
 }
 
-/// The shared TUI frame: one-line header, body, one-line footer, panels, and
+/// The shared TUI frame: one-line header, body, responsive footer, panels, and
 /// centered modals. Every full-screen Loom view draws through here so the
 /// wizard, `loom wiki`, and progress screens look like one program.
 pub(crate) mod chrome {
@@ -166,7 +166,7 @@ pub(crate) mod chrome {
             Layout::vertical([
                 Constraint::Length(1),
                 Constraint::Min(1),
-                Constraint::Length(1),
+                Constraint::Length(if area.width < 70 { 2 } else { 1 }),
             ])
             .areas(area),
         )
@@ -178,7 +178,7 @@ pub(crate) mod chrome {
         pub done: bool,
     }
 
-    /// ` loom <command>  vX.Y.Z` on the left; on the right either the full
+    /// ` loom <command>` on the left; on the right either the full
     /// `✓ Done › Current › Next` trail or, when narrow, `step 2/4 · Current`.
     /// `status` (for example `3 picked`) sits before the trail.
     pub fn header(
@@ -189,61 +189,70 @@ pub(crate) mod chrome {
         crumbs: &[Crumb],
         current: usize,
     ) {
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(format!(" loom {command}"), TITLE),
-                Span::styled(
-                    concat!("  v", env!("CARGO_PKG_VERSION")),
-                    Style::new().dim(),
-                ),
-            ])),
-            area,
-        );
-        let mut spans = status;
-        if area.width < 80 {
-            spans.push(Span::styled(
-                format!("step {}/{} · ", current + 1, crumbs.len()),
-                Style::new().dim(),
-            ));
-            if let Some(crumb) = crumbs.get(current) {
-                spans.push(Span::styled(crumb.label.clone(), TITLE));
+        let brand = Line::from(Span::styled(format!(" loom {command}"), TITLE));
+        let available = usize::from(area.width).saturating_sub(brand.width() + 2);
+        let mut trail = Vec::new();
+        for (index, crumb) in crumbs.iter().enumerate() {
+            if index > 0 {
+                trail.push(Span::styled(" › ", Style::new().dim()));
             }
-        } else {
-            for (index, crumb) in crumbs.iter().enumerate() {
-                if index > 0 {
-                    spans.push(Span::styled(" › ", Style::new().dim()));
+            trail.push(if index == current {
+                Span::styled(crumb.label.clone(), TITLE)
+            } else if crumb.done {
+                Span::styled(format!("✓ {}", crumb.label), Style::new().dim())
+            } else {
+                Span::styled(crumb.label.clone(), Style::new().dim())
+            });
+        }
+        let mut trail = Line::from(trail);
+        if area.width < 80 || trail.width() > available {
+            trail = Line::default();
+            if let Some(crumb) = crumbs.get(current) {
+                let step = format!("step {}/{} · ", current + 1, crumbs.len());
+                if crumbs.len() > 1 && step.width() + crumb.label.width() <= available {
+                    trail.push_span(Span::styled(step, Style::new().dim()));
                 }
-                spans.push(if index == current {
-                    Span::styled(crumb.label.clone(), TITLE)
-                } else if crumb.done {
-                    Span::styled(format!("✓ {}", crumb.label), Style::new().dim())
-                } else {
-                    Span::styled(crumb.label.clone(), Style::new().dim())
-                });
+                trail.push_span(Span::styled(crumb.label.clone(), TITLE));
             }
         }
-        spans.push(Span::raw(" "));
+        let status = Line::from(status);
+        if status.width() + trail.width() <= available {
+            trail.spans.splice(0..0, status.spans);
+        }
+        trail.push_span(" ");
+        let [brand_area, _, trail_area] = Layout::horizontal([
+            Constraint::Length(brand.width() as u16),
+            Constraint::Min(1),
+            Constraint::Length(trail.width().min(available + 1) as u16),
+        ])
+        .areas(area);
+        frame.render_widget(Paragraph::new(brand), brand_area);
         frame.render_widget(
-            Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
-            area,
+            Paragraph::new(trail).alignment(Alignment::Right),
+            trail_area,
         );
     }
 
     pub const BACK_WIDTH: u16 = 11;
     pub const NEXT_WIDTH: u16 = 13;
 
-    /// Dim key hint on the left, `[ ◂ Back ]  [ Next ▸ ]` on the right.
-    /// Returns the back and next button rects for mouse hit testing; a
-    /// disabled button is drawn dim and returns an empty rect.
+    /// Key hints beside the buttons, or above them in a narrow terminal.
+    /// Returns hit rectangles. Missing Back and disabled Next have no hit target;
+    /// disabled Next remains visible but dim.
     pub fn footer(
         frame: &mut Frame,
         area: Rect,
         hint: &str,
-        back: Option<(&str, bool)>,
+        back: Option<&str>,
         next: (&str, bool),
     ) -> (Rect, Rect) {
-        let back_label = back.map_or(String::new(), |(label, _)| format!("[ ◂ {label:<4} ]"));
+        let back_label = back.map_or(String::new(), |label| format!("[ ◂ {label:<4} ]"));
         let next_label = format!("[ {:^7} ▸ ]", next.0);
+        let [hint_row, button_row] = if area.height > 1 {
+            Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(area)
+        } else {
+            [area, area]
+        };
         let [hint_area, back_area, _, next_area, _] = Layout::horizontal([
             Constraint::Min(0),
             Constraint::Length(back_label.width() as u16),
@@ -251,26 +260,20 @@ pub(crate) mod chrome {
             Constraint::Length(next_label.width() as u16),
             Constraint::Length(1),
         ])
-        .areas(area);
+        .areas(button_row);
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(hint, Style::new().dim()))),
-            hint_area,
+            Paragraph::new(Span::styled(hint, Style::new().dim())),
+            if area.height > 1 { hint_row } else { hint_area },
         );
-        let mut back_hit = Rect::default();
-        if let Some((_, enabled)) = back {
-            let style = if enabled {
-                Style::new().fg(ACCENT)
-            } else {
-                Style::new().dim()
-            };
+        let back_hit = if back.is_some() {
             frame.render_widget(
-                Paragraph::new(Line::from(Span::styled(back_label, style))),
+                Paragraph::new(Span::styled(back_label, Style::new().fg(ACCENT))),
                 back_area,
             );
-            if enabled {
-                back_hit = back_area;
-            }
-        }
+            back_area
+        } else {
+            Rect::default()
+        };
         let (_, enabled) = next;
         let style = if enabled {
             Style::new()
@@ -280,10 +283,7 @@ pub(crate) mod chrome {
         } else {
             Style::new().dim()
         };
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(next_label, style))),
-            next_area,
-        );
+        frame.render_widget(Paragraph::new(Span::styled(next_label, style)), next_area);
         (back_hit, if enabled { next_area } else { Rect::default() })
     }
 
@@ -307,15 +307,6 @@ pub(crate) mod chrome {
             .padding(Padding::horizontal(1))
     }
 
-    pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
-        Rect {
-            x: area.x + area.width.saturating_sub(width) / 2,
-            y: area.y + area.height.saturating_sub(height) / 2,
-            width: width.min(area.width),
-            height: height.min(area.height),
-        }
-    }
-
     /// A centered question over the current screen. `danger` is the key that
     /// commits (drawn red), `safe` the key that backs out (drawn accent).
     pub fn confirm_modal(
@@ -325,33 +316,47 @@ pub(crate) mod chrome {
         danger: (&str, &str),
         safe: (&str, &str),
     ) {
-        let width = body
-            .iter()
-            .map(|line| line.width() as u16)
-            .max()
-            .unwrap_or(0)
-            .max(40)
-            + 4;
-        let mut lines = body;
-        lines.push(Line::from(""));
-        lines.push(Line::from(vec![
+        let width = (body.iter().map(Line::width).max().unwrap_or(0).max(40) + PANEL_FRAME as usize)
+            .min(frame.area().width.saturating_sub(4) as usize) as u16;
+        let content_width = width.saturating_sub(PANEL_FRAME).max(1);
+        let mut danger = Line::from(vec![
             Span::styled(danger.0.to_owned(), Style::new().fg(ERR).bold()),
-            Span::raw(format!(" {}   ", danger.1)),
+            Span::raw(format!(" {}", danger.1)),
+        ]);
+        let safe = Line::from(vec![
             Span::styled(safe.0.to_owned(), TITLE),
             Span::raw(format!(" {}", safe.1)),
-        ]));
-        let area = centered(
-            frame.area(),
-            width.min(frame.area().width.saturating_sub(4)),
-            lines.len() as u16 + 2,
-        );
+        ]);
+        let actions = if danger.width() + safe.width() + 3 <= usize::from(content_width) {
+            danger.push_span("   ");
+            danger.spans.extend(safe.spans);
+            vec![danger]
+        } else {
+            vec![danger, safe]
+        };
+        let actions = Paragraph::new(actions)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+        let body = Paragraph::new(body)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+        let action_height = actions.line_count(content_width) as u16;
+        let height = (body.line_count(content_width) as u16 + action_height + 3)
+            .min(frame.area().height.saturating_sub(2));
+        let area = frame
+            .area()
+            .centered(Constraint::Length(width), Constraint::Length(height));
+        let block = panel(title, true);
+        let [body_area, _, actions_area] = Layout::vertical([
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(action_height),
+        ])
+        .areas(block.inner(area));
         frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .alignment(Alignment::Center)
-                .block(panel(title, true)),
-            area,
-        );
+        frame.render_widget(block, area);
+        frame.render_widget(body, body_area);
+        frame.render_widget(actions, actions_area);
     }
 }
 
@@ -540,8 +545,8 @@ pub fn tidy_path(path: &Path, home: &Path) -> String {
 
 pub fn print_plan(out: &Out, plan: &InstallPlan) {
     out.section("Plan");
-    for step in plan.prerequisites.iter().chain(&plan.resources) {
-        out.row(Mark::Off, step.target.as_str(), step.action.display());
+    for step in &plan.steps {
+        out.row(Mark::Off, step.target.as_str(), step.operation.display());
     }
 }
 
@@ -555,6 +560,79 @@ pub fn confirm_plan() -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn header_keeps_command_and_current_step_separate_while_scanning() {
+        use ratatui::{backend::TestBackend, text::Span, Terminal};
+        let crumbs =
+            ["Choose", "Where", "Responses", "Review", "Install"].map(|label| chrome::Crumb {
+                label: label.into(),
+                done: false,
+            });
+        for width in [40, 50, 70, 80, 100, 120] {
+            let mut terminal = Terminal::new(TestBackend::new(width, 10)).unwrap();
+            terminal
+                .draw(|frame| {
+                    let [header, _, _] = chrome::frame_areas(frame, "").unwrap();
+                    chrome::header(
+                        frame,
+                        header,
+                        "uninstall",
+                        vec![
+                            Span::raw("scanning installed…   "),
+                            Span::raw("123 picked   "),
+                        ],
+                        &crumbs,
+                        2,
+                    );
+                })
+                .unwrap();
+            let header = terminal.backend().buffer().content[..width as usize]
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>();
+            assert!(header.starts_with(" loom uninstall "), "{width}: {header}");
+            assert!(header.contains("Responses"), "{width}: {header}");
+            assert!(
+                !header.contains(env!("CARGO_PKG_VERSION")),
+                "{width}: {header}"
+            );
+        }
+    }
+
+    #[test]
+    fn narrow_confirmation_wraps_the_warning_and_keeps_both_actions() {
+        use ratatui::{backend::TestBackend, text::Line, Terminal};
+        let mut terminal = Terminal::new(TestBackend::new(40, 10)).unwrap();
+        terminal
+            .draw(|frame| {
+                chrome::confirm_modal(
+                    frame,
+                    " Cancel install? ",
+                    vec![Line::from(
+                        "Cancel the running install? Completed changes stay in place.",
+                    )],
+                    ("ctrl-c", "cancel"),
+                    ("wait", "continue installing"),
+                )
+            })
+            .unwrap();
+        let output = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        for text in [
+            "Cancel the running install?",
+            "Completed changes stay in place.",
+            "ctrl-c",
+            "continue installing",
+        ] {
+            assert!(output.contains(text), "missing {text}: {output}");
+        }
+    }
 
     #[test]
     fn command_failures_keep_causes_but_never_echo_private_output() {

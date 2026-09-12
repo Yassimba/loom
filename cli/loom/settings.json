@@ -1,0 +1,97 @@
+{
+  "curated": [
+    {
+      "id": "herdr:annotate-keybindings",
+      "group": "Herdr",
+      "label": "Annotate keybindings",
+      "description": "Bind terminal annotations, document review, and agent-reply review.",
+      "relatedResource": "herdr-plugin:annotate",
+      "change": {
+        "type": "herdrKeyCommands",
+        "commands": [
+          {
+            "key": "prefix+a",
+            "kind": "plugin_action",
+            "command": "annotate.capture",
+            "description": "Annotate selected terminal text"
+          },
+          {
+            "key": "prefix+shift+a",
+            "kind": "plugin_action",
+            "command": "annotate.copy-context",
+            "description": "Copy annotations as context"
+          },
+          {
+            "key": "prefix+m",
+            "kind": "plugin_action",
+            "command": "annotate.manage",
+            "description": "Manage annotations"
+          },
+          {
+            "key": "prefix+o",
+            "kind": "plugin_action",
+            "command": "annotate.open",
+            "description": "Review documents in this folder"
+          },
+          {
+            "key": "prefix+shift+o",
+            "kind": "plugin_action",
+            "command": "annotate.last",
+            "description": "Review the agent's last reply"
+          }
+        ]
+      }
+    },
+    {
+      "id": "zed:zoomed-padding",
+      "group": "Zed",
+      "label": "Zoomed panes edge-to-edge",
+      "description": "Remove the gap Zed keeps around a zoomed pane, like a full-screen terminal.",
+      "change": {
+        "type": "zedValue",
+        "key": "zoomed_padding",
+        "value": false
+      }
+    },
+    {
+      "id": "zed:zen-padding",
+      "group": "Zed",
+      "label": "Zen mode edge-to-edge",
+      "description": "Let zen mode use the full editor width instead of a padded center column.",
+      "change": {
+        "type": "zedValue",
+        "key": "centered_layout",
+        "value": {
+          "left_padding": 0,
+          "right_padding": 0
+        }
+      }
+    },
+    {
+      "id": "pi:fff-override",
+      "group": "Pi",
+      "label": "FFF native-tool override",
+      "description": "Replace Pi's native find and grep tools with FFF and use its frecency-ranked @ autocomplete. Existing FFF settings are never replaced.",
+      "relatedResource": "pi-package:@ff-labs/pi-fff",
+      "change": {
+        "type": "piFffDefaults",
+        "value": {
+          "$schema": "https://raw.githubusercontent.com/dmtrKovalenko/fff/main/packages/pi-fff/pi-fff.schema.json",
+          "mode": "override"
+        }
+      }
+    }
+  ],
+  "responses": {
+    "piAdhd": {
+      "id": "pi:adhd-always-on",
+      "group": "Pi",
+      "label": "Always use ADHD-friendly responses in Pi",
+      "description": "Enable the i-have-adhd plugin for future Pi sessions. Existing session choices still win.",
+      "relatedResource": "pi-package:i-have-adhd",
+      "change": {
+        "type": "piAdhdAlwaysOn"
+      }
+    }
+  }
+}

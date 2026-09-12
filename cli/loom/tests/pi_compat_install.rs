@@ -1,6 +1,6 @@
-use loom::{
-    execute_install_plan, CommandResult, CommandSpec, InstallPlan, InstallStep, StepAction, System,
-};
+mod common;
+use common::install;
+use loom::{CommandResult, CommandSpec, InstallPlan, InstallStep, Operation, System};
 use std::fs;
 use std::path::PathBuf;
 
@@ -18,7 +18,7 @@ impl System for FakeSystem {
     fn run(&self, _command: &CommandSpec) -> anyhow::Result<CommandResult> {
         Ok(CommandResult {
             success: true,
-            stdout: String::new(),
+            stdout: "User packages:\n  npm:pi-autoresearch\n  npm:@companion-ai/feynman\n".into(),
             stderr: String::new(),
         })
     }
@@ -35,9 +35,11 @@ impl System for FakeSystem {
 fn package(target: &str) -> InstallStep {
     InstallStep {
         target: target.into(),
-        manager: "pi".into(),
-        action: StepAction::Command(CommandSpec::new("pi", ["install", target])),
-        verification: None,
+        operation: Operation::PiPackage {
+            spec: target.into(),
+            name: target.trim_start_matches("pi-package:").into(),
+            project: false,
+        },
     }
 }
 
@@ -63,14 +65,13 @@ fn package_install_applies_pi_compatibility_fixes() {
     )
     .unwrap();
     let plan = InstallPlan {
-        prerequisites: Vec::new(),
-        resources: vec![
+        steps: vec![
             package("pi-package:pi-autoresearch"),
             package("pi-package:@companion-ai/feynman"),
         ],
     };
 
-    let report = execute_install_plan(&plan, &FakeSystem { home: home.clone() });
+    let report = install(&plan, &FakeSystem { home: home.clone() });
 
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert!(

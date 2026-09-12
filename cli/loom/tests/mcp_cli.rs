@@ -137,7 +137,7 @@ fn mcp_with_shared_agent_selection_does_not_require_pending_skill_copies() {
         let claude = d.home.join(".claude.json");
         write_json(&claude, json!({"mcpServers":{"keep":{"command":"custom"}}}));
         let before = fs::read(&claude).unwrap();
-        let report = loom::execute_install_plan(&plan(&d), &stub);
+        let report = common::install(&plan(&d), &stub);
         assert!(report.failures.is_empty(), "{report:?}");
         assert!(mcp::config_path(&d).is_file());
         assert_eq!(
@@ -294,7 +294,7 @@ fn sem_mcp_conflicts_and_malformed_files_fail_before_any_commands() {
         write_json(&target, value);
         let before = fs::read(&target).unwrap();
         let stub = Stub::new(&d.home);
-        let report = loom::execute_install_plan(&initial_plan, &stub);
+        let report = common::install(&initial_plan, &stub);
         assert!(!report.failures.is_empty());
         assert!(!format!("{report:?}").contains("TOKEN"));
         assert!(stub.commands.lock().unwrap().is_empty());
@@ -311,7 +311,7 @@ fn sem_mcp_upgrades_an_older_official_adapter() {
     adapter(&d.home, "2.31.0");
     let stub = Stub::new(&d.home);
 
-    let report = loom::execute_install_plan(&plan(&d), &stub);
+    let report = common::install(&plan(&d), &stub);
 
     assert!(report.failures.is_empty(), "{report:?}");
     assert!(stub
@@ -414,21 +414,21 @@ fn sem_mcp_prerequisite_order_and_failures_prevent_premature_config() {
         let d = destination("mcp-order", SkillScope::Project);
         let plan = plan(&d);
         assert!(matches!(
-            plan.prerequisites[0].action,
-            loom::StepAction::SyncTools { .. }
+            plan.steps[0].operation,
+            loom::Operation::Tools { .. }
         ));
         assert!(matches!(
-            plan.resources[0].action,
-            loom::StepAction::Command(_)
+            plan.resources().next().unwrap().operation,
+            loom::Operation::PiPackage { .. }
         ));
         assert!(matches!(
-            plan.resources[1].action,
-            loom::StepAction::ConfigureMcp { .. }
+            plan.resources().nth(1).unwrap().operation,
+            loom::Operation::Mcp { .. }
         ));
         let mut stub = Stub::new(&d.home);
         stub.fail_mise = fail_mise;
         stub.fail_adapter = fail_adapter;
-        let report = loom::execute_install_plan(&plan, &stub);
+        let report = common::install(&plan, &stub);
         assert_eq!(
             report.failures.is_empty(),
             !fail_mise && !fail_adapter,
@@ -714,35 +714,30 @@ fn sem_mcp_and_skills_serialize_shared_ownership_transactions() {
             self.stub.current_dir()
         }
         fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
-            match command.program.as_str() {
-                "hold-pi-lane" => {
-                    // Give an incorrectly independent skills lane a coordinated
-                    // opportunity to start before MCP commits its receipt.
-                    let _ = self
-                        .gate
-                        .wait_timeout_while(
-                            self.skills_started.lock().unwrap(),
-                            Duration::from_millis(100),
-                            |started| !*started,
-                        )
-                        .unwrap();
-                }
-                "check-mcp-receipt" => {
-                    *self.skills_started.lock().unwrap() = true;
-                    self.gate.notify_all();
-                    let state = ownership::InstallState::load(&self.stub.home).unwrap();
-                    anyhow::ensure!(
-                        state.resources.contains_key("mcp-server:sem"),
-                        "skills started before the MCP ownership commit"
-                    );
-                }
-                _ => return self.stub.run(command),
+            if command
+                .args
+                .get(1)
+                .is_some_and(|spec| spec == "npm:hold-pi-lane")
+            {
+                let _ = self
+                    .gate
+                    .wait_timeout_while(
+                        self.skills_started.lock().unwrap(),
+                        Duration::from_millis(100),
+                        |started| !*started,
+                    )
+                    .unwrap();
+                return Ok(CommandResult {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                });
             }
-            Ok(CommandResult {
-                success: true,
-                stdout: String::new(),
-                stderr: String::new(),
-            })
+            let mut result = self.stub.run(command)?;
+            if command.program == "pi" && command.args.first().is_some_and(|arg| arg == "list") {
+                result.stdout.push_str("  npm:hold-pi-lane\n");
+            }
+            Ok(result)
         }
     }
     std::env::set_var("LOOM_REPO_DIR", common::repo_root());
@@ -769,31 +764,50 @@ fn sem_mcp_and_skills_serialize_shared_ownership_transactions() {
     )
     .unwrap();
     let mut plan = plan(&d);
-    plan.resources
+    plan.steps
         .retain(|step| step.target != "pi-package:pi-mcp-adapter");
-    for (manager, program) in [("pi", "hold-pi-lane"), ("skills", "check-mcp-receipt")] {
-        plan.prerequisites.push(loom::InstallStep {
-            target: program.into(),
-            manager: manager.into(),
-            action: loom::StepAction::Command(CommandSpec::new(program, Vec::<String>::new())),
-            verification: None,
-        });
-    }
-    plan.resources.push(loom::InstallStep {
+    plan.steps.insert(
+        0,
+        loom::InstallStep {
+            target: "pi-package:hold-pi-lane".into(),
+            operation: loom::Operation::PiPackage {
+                spec: "npm:hold-pi-lane".into(),
+                name: "hold-pi-lane".into(),
+                project: false,
+            },
+        },
+    );
+    plan.steps.push(loom::InstallStep {
         target: "skill:i-have-adhd".into(),
-        manager: "skills".into(),
-        action: loom::StepAction::CopySkills {
+        operation: loom::Operation::Skills {
             skills: vec!["i-have-adhd".into()],
             destination: d.clone(),
         },
-        verification: None,
     });
     let system = OrderedSystem {
         stub: Stub::new(&d.home),
         skills_started: Mutex::new(false),
         gate: Condvar::new(),
     };
-    let report = loom::execute_install_plan(&plan, &system);
+    let report = loom::execute_attempt(
+        &plan,
+        &system,
+        &AtomicBool::new(false),
+        &[],
+        &mut |index, status| {
+            if matches!(plan.steps[index].operation, loom::Operation::Skills { .. })
+                && status == loom::StepStatus::Running
+            {
+                *system.skills_started.lock().unwrap() = true;
+                system.gate.notify_all();
+                let state = ownership::InstallState::load(&d.home).unwrap();
+                assert!(
+                    state.resources.contains_key("mcp-server:sem"),
+                    "skills started before the MCP ownership commit"
+                );
+            }
+        },
+    );
     assert!(report.failures.is_empty(), "{report:?}");
     let state = ownership::InstallState::load(&d.home).unwrap();
     assert!(state.resources.contains_key("mcp-server:sem"));
@@ -954,17 +968,23 @@ fn context7_plan_installs_only_the_adapter_then_configures_and_uninstalls_each_s
         let d = destination("context7-install", scope);
         let plan = plan_servers(&d, &["context7"]);
         assert!(
-            plan.prerequisites.is_empty(),
+            plan.prerequisite_count() == 0,
             "no local Context7 or Sem binary needed"
         );
-        assert_eq!(plan.resources.len(), 2);
-        assert_eq!(plan.resources[0].target, "pi-package:pi-mcp-adapter");
-        assert_eq!(plan.resources[1].target, "mcp-server:context7");
+        assert_eq!(plan.resources().count(), 2);
+        assert_eq!(
+            plan.resources().next().unwrap().target,
+            "pi-package:pi-mcp-adapter"
+        );
+        assert_eq!(
+            plan.resources().nth(1).unwrap().target,
+            "mcp-server:context7"
+        );
         let path = mcp::config_path(&d);
         write_json(&path, json!({"mcp-servers":{"other":{"command":"keep"}}}));
         let mut stub = Stub::new(&d.home);
         stub.missing_sem = true;
-        let report = loom::execute_install_plan(&plan, &stub);
+        let report = common::install(&plan, &stub);
         assert!(report.failures.is_empty(), "{report:?}");
         assert!(report.installed.contains(&"mcp-server:context7".into()));
         let after = fs::read(&path).unwrap();
@@ -1035,7 +1055,7 @@ fn context7_conflicts_stop_all_lanes_and_preserve_secrets_and_other_scopes() {
         write_json(&path, json!({"mcpServers":{"context7":value}}));
         let before = fs::read(&path).unwrap();
         let stub = Stub::new(&d.home);
-        let report = loom::execute_install_plan(&plan, &stub);
+        let report = common::install(&plan, &stub);
         assert_eq!(report.failures.len(), 1);
         assert_eq!(report.failures[0].target, "mcp-server:context7");
         assert!(!format!("{report:?}").contains("TOKEN"));
@@ -1100,14 +1120,13 @@ fn both_mcp_servers_share_one_adapter_and_keep_independent_receipts() {
     let d = destination("both-mcp", SkillScope::Project);
     let plan = plan_servers(&d, &["context7", "sem"]);
     assert_eq!(
-        plan.resources
-            .iter()
+        plan.resources()
             .filter(|s| s.target == "pi-package:pi-mcp-adapter")
             .count(),
         1
     );
     let stub = Stub::new(&d.home);
-    let report = loom::execute_install_plan(&plan, &stub);
+    let report = common::install(&plan, &stub);
     assert!(report.failures.is_empty(), "{report:?}");
     let state = ownership::InstallState::load(&d.home).unwrap();
     assert_eq!(state.resources.len(), 2);

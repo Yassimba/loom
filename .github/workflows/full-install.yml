@@ -78,18 +78,84 @@ jobs:
         with:
           name: loom-linux-x64
           path: loom-linux
-      - name: Run the checked-out Loom build inside WSL2
+      # Temporary WSL timeout diagnostics for PR #234; native step bounds leave upload time.
+      - name: Discover WSL distributions
+        id: wsl-discovery
+        timeout-minutes: 1
         shell: pwsh
         run: |
           $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
           New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
-          $distros = @(wsl --list --quiet) -replace "`0", "" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-          if ($distros -notcontains "Ubuntu") {
-            wsl --install -d Ubuntu --no-launch
-            if ($LASTEXITCODE -ne 0) { throw "Ubuntu WSL installation failed" }
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-list-quiet"
+          $listing = @(wsl --list --quiet 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-list-quiet.txt")
+          $code = $LASTEXITCODE
+          $listing | ForEach-Object { Write-Host $_ }
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-list-quiet EXIT $code"
+          if ($code -ne 0) { exit $code }
+          $distros = $listing -replace "`0", "" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+          "install_ubuntu=$($distros -notcontains 'Ubuntu')" >> $env:GITHUB_OUTPUT
+      - name: Install Ubuntu in WSL if absent
+        if: steps.wsl-discovery.outputs.install_ubuntu == 'True'
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-install"
+          wsl --install -d Ubuntu --no-launch 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/loom-windows-e2e/wsl-install.txt"
+          $code = $LASTEXITCODE
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-install EXIT $code"
+          if ($code -ne 0) { exit $code }
+      - name: Inspect Ubuntu WSL version
+        id: wsl-version
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-version"
+          wsl --version 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-version.txt"
+          $code = $LASTEXITCODE
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-version EXIT $code"
+          if ($code -ne 0) { exit $code }
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-list-before-conversion"
+          $listing = @(wsl --list --verbose 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-list-before-conversion.txt")
+          $code = $LASTEXITCODE
+          $listing | ForEach-Object { Write-Host $_ }
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-list-before-conversion EXIT $code"
+          if ($code -ne 0) { exit $code }
+          $ubuntu = @($listing -replace "`0", "" | Where-Object { $_ -match '^\s*\*?\s*Ubuntu\s+' })
+          if ($ubuntu.Count -ne 1 -or $ubuntu[0] -notmatch '^\s*\*?\s*Ubuntu\s+\S.*?\s+([12])\s*$') {
+            throw "Expected exactly one Ubuntu distribution with WSL version 1 or 2"
           }
-          wsl --set-version Ubuntu 2
-          wsl --list --verbose *> "$evidenceDir/wsl-list.txt"
+          "version=$($Matches[1])" >> $env:GITHUB_OUTPUT
+      - name: Convert Ubuntu to WSL2
+        if: steps.wsl-version.outputs.version == '1'
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-set-version"
+          wsl --set-version Ubuntu 2 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/loom-windows-e2e/wsl-set-version.txt"
+          $code = $LASTEXITCODE
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-set-version EXIT $code"
+          if ($code -ne 0) { exit $code }
+      - name: Record WSL distribution status
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-list-verbose"
+          $listing = @(wsl --list --verbose 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/loom-windows-e2e/wsl-list.txt")
+          $code = $LASTEXITCODE
+          $listing | ForEach-Object { Write-Host $_ }
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-list-verbose EXIT $code"
+          if ($code -ne 0) { exit $code }
+          $ubuntu = @($listing -replace "`0", "" | Where-Object { $_ -match '^\s*\*?\s*Ubuntu\s+' })
+          if ($ubuntu.Count -ne 1 -or $ubuntu[0] -notmatch '^\s*\*?\s*Ubuntu\s+\S.*?\s+2\s*$') {
+            throw "Expected exactly one Ubuntu distribution running WSL version 2"
+          }
+      - name: Prepare the WSL candidate and fake Pi
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-file-preparation"
+          $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
           function Convert-ToWslPath($path) {
             $drive = $path.Substring(0, 1).ToLower()
             "/mnt/$drive$($path.Substring(2).Replace('\', '/'))"
@@ -100,9 +166,32 @@ jobs:
           New-Item -ItemType Directory -Path $fakeDir -Force | Out-Null
           "#!/bin/sh`nexit 0`n" | Set-Content -Path (Join-Path $fakeDir "pi") -NoNewline
           $fakeLinuxPath = Convert-ToWslPath $fakeDir
-          $command = "chmod +x '$linuxPath' '$fakeLinuxPath/pi'; PATH='${fakeLinuxPath}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' '$linuxPath' add --pi-package feynman --dry-run --yes"
-          wsl -d Ubuntu -- bash -lc $command *> "$evidenceDir/wsl-feynman-plan.txt"
-          if ($LASTEXITCODE -ne 0) { throw "WSL feynman dry-run failed" }
+          $command = @"
+          printf '[DEBUG-wsl234] %s START ubuntu-shell\n' `$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          printf '[DEBUG-wsl234] %s START chmod\n' `$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          chmod +x '$linuxPath' '$fakeLinuxPath/pi'
+          code=`$?
+          printf '[DEBUG-wsl234] %s END chmod EXIT %s\n' `$(date -u +%Y-%m-%dT%H:%M:%SZ) `$code
+          printf '[DEBUG-wsl234] %s START loom\n' `$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          PATH='${fakeLinuxPath}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' '$linuxPath' add --pi-package feynman --dry-run --yes
+          code=`$?
+          printf '[DEBUG-wsl234] %s END loom EXIT %s\n' `$(date -u +%Y-%m-%dT%H:%M:%SZ) `$code
+          printf '[DEBUG-wsl234] %s END ubuntu-shell EXIT %s\n' `$(date -u +%Y-%m-%dT%H:%M:%SZ) `$code
+          exit `$code
+          "@
+          $command.Replace("`r`n", "`n") | Set-Content -Path "$evidenceDir/wsl-command.sh" -NoNewline
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-file-preparation EXIT 0"
+      - name: Run the checked-out Loom build inside the Ubuntu shell
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
+          $command = Get-Content -Raw "$evidenceDir/wsl-command.sh"
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) START wsl-ubuntu-shell"
+          wsl -d Ubuntu -- bash -lc $command 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-feynman-plan.txt"
+          $code = $LASTEXITCODE
+          Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-ubuntu-shell EXIT $code"
+          if ($code -ne 0) { exit $code }
           if (-not (Select-String -Quiet -Path "$evidenceDir/wsl-feynman-plan.txt" -SimpleMatch "would enter the Vault-scoped setup")) {
             throw "WSL plan omitted the vault-scoped setup handoff"
           }

@@ -15,19 +15,14 @@ const TITLES: [&str; 3] = [
 ];
 
 impl Wizard {
-    pub(super) fn render_setup_review(&self, frame: &mut Frame, area: Rect, scroll: u16) {
-        let plan = self.plan();
+    pub(super) fn render_setup_review(&self, frame: &mut Frame, area: Rect, scroll: u16) -> bool {
         let expanded = self.expanded_selection();
-        let wiki = expanded.iter().any(|r| r.group == "Wiki");
+        let plan = self.plan();
         // The footer already says enter/esc; only a blocked plan or a
         // different-than-usual enter needs a line of its own.
         let message = match &plan {
             Err(_) => Some("Cannot install. See Writes & notes; esc goes back."),
             Ok(_) if self.model.dry_run => Some("Dry run: enter prints this plan and exits."),
-            Ok(_) if wiki && expanded.iter().all(|r| r.group == "Wiki") => {
-                Some("Enter opens Vault setup.")
-            }
-            Ok(_) if wiki => Some("Enter installs general items, then opens Vault setup."),
             Ok(_) => None,
         };
         let [headline, body, confirmation] = Layout::vertical([
@@ -56,7 +51,7 @@ impl Wizard {
                 ),
             );
         }
-        if body.width >= 120 {
+        let panels = if body.width >= 120 {
             let areas = Layout::horizontal([
                 Constraint::Percentage(34),
                 Constraint::Percentage(33),
@@ -64,35 +59,15 @@ impl Wizard {
             ])
             .spacing(1)
             .split(body);
-            for ((lines, title), area) in columns.into_iter().zip(TITLES).zip(areas.iter()) {
-                let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
-                let max_scroll = paragraph
-                    .line_count(area.width.saturating_sub(4))
-                    .saturating_sub(area.height.saturating_sub(2) as usize);
-                frame.render_widget(
-                    paragraph
-                        .block(bordered(title, true))
-                        .scroll((scroll.min(max_scroll.min(u16::MAX as usize) as u16), 0)),
-                    *area,
-                );
-            }
-        } else {
-            let [selected, required, notes] = columns;
-            let sections = if wiki && expanded.iter().all(|r| r.group == "Wiki") {
-                [
-                    (notes, TITLES[2]),
-                    (selected, TITLES[0]),
-                    (required, TITLES[1]),
-                ]
-            } else {
-                [
-                    (selected, TITLES[0]),
-                    (required, TITLES[1]),
-                    (notes, TITLES[2]),
-                ]
-            };
-            let lines = sections
+            columns
                 .into_iter()
+                .zip(TITLES)
+                .zip(areas.iter().copied())
+                .collect::<Vec<_>>()
+        } else {
+            let lines = columns
+                .into_iter()
+                .zip(TITLES)
                 .filter(|(lines, _)| !lines.is_empty())
                 .flat_map(|(mut lines, title)| {
                     while lines.last().is_some_and(|line| line.width() == 0) {
@@ -104,15 +79,20 @@ impl Wizard {
                         .chain([Line::from("")])
                 })
                 .collect::<Vec<_>>();
+            vec![((lines, " Review "), body)]
+        };
+        for ((lines, title), area) in panels {
+            let block = bordered(title, true);
+            let inner = block.inner(area);
             let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
             let max_scroll = paragraph
-                .line_count(body.width.saturating_sub(4))
-                .saturating_sub(body.height.saturating_sub(2) as usize);
+                .line_count(inner.width)
+                .saturating_sub(inner.height as usize);
             frame.render_widget(
                 paragraph
-                    .block(bordered(" Review · scroll to inspect ", true))
-                    .scroll((scroll.min(max_scroll.min(u16::MAX as usize) as u16), 0)),
-                body,
+                    .block(block)
+                    .scroll((usize::from(scroll).min(max_scroll) as u16, 0)),
+                area,
             );
         }
         if let Some(message) = message {
@@ -127,6 +107,7 @@ impl Wizard {
                 confirmation,
             );
         }
+        plan.is_ok()
     }
 
     /// One line that sizes the whole job: counts by kind and a rough time.
@@ -161,9 +142,9 @@ impl Wizard {
             return String::new();
         }
         // ponytail: flat per-step guess; measure real durations if it misleads.
-        let steps = plan.map_or(0, |plan| plan.prerequisites.len() + plan.resources.len());
+        let steps = plan.map_or(0, |plan| plan.steps.len());
         let seconds = 20 * steps.max(1)
-            + if plan.is_some_and(|plan| !plan.prerequisites.is_empty()) {
+            + if plan.is_some_and(|plan| plan.prerequisite_count() > 0) {
                 60
             } else {
                 0
@@ -202,7 +183,7 @@ impl Wizard {
                 "Skills → this Wiki’s .agents/skills; packages → this Wiki’s .pi",
             ));
             selected.push(Line::from(""));
-            if wiki.request.is_some() {
+            if wiki.operation.is_some() {
                 required.push(Line::styled("Wiki essentials", Style::new().bold()));
                 required.push(Line::from("Vault-local claude-obsidian. Shared pinned runtimes: Python, Pi, claude-obsidian."));
                 if wiki.record.qmd {
@@ -217,10 +198,10 @@ impl Wizard {
                 }
                 notes.push(Line::from(format!("{}: exact file changes require approval during Install. No separate setup wizard, sign-in or launch.", wiki.record.path.display())));
             }
-            for step in &wiki.plan.prerequisites {
+            for step in wiki.plan.prerequisites() {
                 required.push(Line::from(format!(
                     "Shared requirement: {}",
-                    step.action.display()
+                    step.operation.display()
                 )));
             }
             for resource in &wiki.resources {
@@ -234,7 +215,6 @@ impl Wizard {
             }
             required.push(Line::from(""));
         }
-        let direct = self.selection();
         let label_width = resources.iter().map(|r| r.label.len()).max().unwrap_or(0);
         for resource in resources {
             let index = self
@@ -244,32 +224,33 @@ impl Wizard {
                 .position(|r| r.id == resource.id)
                 .unwrap();
             let automatic = self.setup_requirement(index);
-            let lines = if !automatic && direct.iter().any(|r| r.id == resource.id) {
+            let lines = if !automatic && self.in_selection(index) {
                 &mut selected
             } else {
                 &mut required
             };
-            lines.push(Line::from(vec![
-                Span::styled(format!("+ {:<label_width$}", resource.label), TITLE),
-                Span::styled(
-                    format!("  {}", self.selection_reason(index)),
-                    Style::new().dim(),
-                ),
-            ]));
+            let mut line = Line::from(Span::styled(
+                format!("+ {:<label_width$}", resource.label),
+                TITLE,
+            ));
+            let reason = self.selection_reason(index);
+            if !reason.is_empty() {
+                line.push_span(Span::styled(format!("  {reason}"), Style::new().dim()));
+            }
+            lines.push(line);
         }
         if let Some(plan) = plan {
-            for step in &plan.prerequisites {
+            for step in plan.prerequisites() {
                 required.push(Line::from(""));
                 required.push(Line::styled(
                     format!("Install first: {}", step.target),
                     Style::new().bold(),
                 ));
-                required.push(Line::from(step.action.display()));
+                required.push(Line::from(step.operation.display()));
             }
             let destination = self.skill_destination();
             let upgrade_adapter = plan
-                .resources
-                .iter()
+                .resources()
                 .any(|step| step.target == "pi-package:pi-mcp-adapter")
                 && destination
                     .home
@@ -324,13 +305,6 @@ impl Wizard {
                 &destination.home,
             )));
             notes.push(Line::from(crate::mcp::EXPOSURE_NOTE));
-            notes.push(Line::from(""));
-        }
-        if resources.iter().any(|r| r.group == "Wiki") {
-            notes.push(Line::styled("Vault setup follows", Style::new().bold()));
-            notes.push(Line::from(
-                "Choose Create or Connect after this review; Vault files get their own preview.",
-            ));
             notes.push(Line::from(""));
         }
         while notes.last().is_some_and(|line| line.width() == 0) {

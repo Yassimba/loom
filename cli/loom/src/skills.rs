@@ -359,7 +359,7 @@ pub enum CopyOutcome {
 }
 
 /// Per-tree summary of an install run.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TreeReport {
     pub tree: PathBuf,
     pub installed: usize,
@@ -407,10 +407,7 @@ pub(crate) fn install_skills(
             // Every skill came with a package: no repo download needed.
             TreeReport {
                 tree,
-                installed: 0,
-                unchanged: 0,
-                skipped_existing: 0,
-                skipped_symlinks: 0,
+                ..Default::default()
             }
         } else {
             let repo_root = repository.get(system, cancelled)?;
@@ -555,10 +552,8 @@ pub(crate) fn refresh_installed_skills(
             .into_iter()
             .map(|(tree, _, preserved)| TreeReport {
                 tree,
-                installed: 0,
-                unchanged: 0,
                 skipped_existing: preserved,
-                skipped_symlinks: 0,
+                ..Default::default()
             })
             .collect());
     }
@@ -571,10 +566,8 @@ pub(crate) fn refresh_installed_skills(
             for (tree, names, preserved) in &copies {
                 let mut report = TreeReport {
                     tree: tree.clone(),
-                    installed: 0,
-                    unchanged: 0,
                     skipped_existing: *preserved,
-                    skipped_symlinks: 0,
+                    ..Default::default()
                 };
                 for name in names {
                     let path = tree.join(name);
@@ -687,10 +680,7 @@ fn copy_into_tree(
     let mut failures = Vec::new();
     let mut report = TreeReport {
         tree,
-        installed: 0,
-        unchanged: 0,
-        skipped_existing: 0,
-        skipped_symlinks: 0,
+        ..Default::default()
     };
     let tree = &report.tree;
     for name in skills {

@@ -216,7 +216,18 @@ async function readExternalPiPackages(repoRoot) {
   }
   const meta = JSON.parse(raw);
   return meta.packages.map(
-    ({ name, version, source, label, description, nextAction, windowsSupport, bundledSkills }) => {
+    ({
+      name,
+      version,
+      source,
+      label,
+      description,
+      nextAction,
+      windowsSupport,
+      bundledSkills,
+      group,
+      dependencies,
+    }) => {
       if (!name || !label || !description) {
         throw new Error(`pi-packages.json entries need name, label, and description`);
       }
@@ -230,16 +241,14 @@ async function readExternalPiPackages(repoRoot) {
       return {
         id: `pi-package:${name}`,
         kind: "pi-package",
-        group: name === "@companion-ai/feynman" ? "Wiki" : "Pi packages",
+        group: group ?? "Pi packages",
         label,
         description,
         installTarget: name,
         ...(source ? { source } : { version }),
         ...bundledSkillMetadata(bundledSkills),
         nextAction: nextAction ?? "Start Pi and use the installed package.",
-        ...(name === "@companion-ai/feynman"
-          ? { dependencies: ["github:AgriciDaniel/claude-obsidian"] }
-          : {}),
+        ...(dependencies ? { dependencies } : {}),
         ...(windowsSupport === "wsl" ? { windowsWsl: true } : {}),
       };
     },
@@ -466,8 +475,36 @@ async function readProfileCatalog(repoRoot, resources) {
   });
 }
 
+async function assertWikiSkills(repoRoot, resources) {
+  let raw;
+  try {
+    raw = await readFile(join(repoRoot, "cli", "loom", "wiki-skills.json"), "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  const names = JSON.parse(raw);
+  if (!Array.isArray(names) || names.some((name) => typeof name !== "string" || !name)) {
+    throw new Error("wiki-skills.json must be a JSON array of skill names");
+  }
+  const duplicates = duplicateValues(names);
+  if (duplicates.length > 0) {
+    throw new Error(`wiki-skills.json duplicate skills: ${duplicates.join(", ")}`);
+  }
+  const skills = new Set(
+    resources
+      .filter((resource) => resource.kind === "skill")
+      .map((resource) => resource.installTarget),
+  );
+  const unknown = names.filter((name) => !skills.has(name));
+  if (unknown.length > 0) {
+    throw new Error(`wiki-skills.json unknown skills: ${unknown.join(", ")}`);
+  }
+}
+
 export async function buildSetupCatalogDocument(repoRoot) {
   const resources = await buildSetupCatalog(repoRoot);
   const profiles = await readProfileCatalog(repoRoot, resources);
+  await assertWikiSkills(repoRoot, resources);
   return { schemaVersion: 1, profiles, resources };
 }
