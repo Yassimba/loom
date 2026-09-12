@@ -957,8 +957,29 @@ mod tests {
 
     #[test]
     fn installed_herdr_plugins_are_read_directly_from_the_registry() {
-        let root = temp_root("direct-herdr-registry");
+        const MARKER: &str = "LOOM_TEST_HERDR_REGISTRY";
+        let Some(root) = std::env::var_os(MARKER) else {
+            let root = temp_root("direct-herdr-registry");
+            std::fs::create_dir_all(&root).unwrap();
+            // Isolate XDG in the child; never mutate the parallel test harness's environment.
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "app::tests::installed_herdr_plugins_are_read_directly_from_the_registry",
+                ])
+                .env(MARKER, &root)
+                .env("HOME", &root)
+                .env("USERPROFILE", &root)
+                .env("XDG_CONFIG_HOME", root.join(".config"))
+                .status()
+                .unwrap();
+            std::fs::remove_dir_all(root).unwrap();
+            assert!(status.success());
+            return;
+        };
+        let root = std::path::PathBuf::from(root);
         let registry = crate::settings::herdr_dir(&root);
+        assert!(registry.starts_with(&root), "registry escaped fixture home");
         std::fs::create_dir_all(&registry).unwrap();
         std::fs::write(
             registry.join("plugins.json"),
@@ -1004,7 +1025,6 @@ mod tests {
             ),
             [true, false]
         );
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     struct GlobalFeynmanSystem;
