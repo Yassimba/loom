@@ -71,7 +71,7 @@ herdr = { version = "0.9.0", os = ["macos", "linux"] }
 gh = "2.100.0"
 "github:ankitpokhrel/jira-cli[exe=jira]" = "v1.7.0"
 glab = "1.112.0"
-"github:rcieri/glab-tui" = "v0.9.0"
+"github:rcieri/glab-tui" = "v0.9.1"
 
 # hygiene & navigation
 gitleaks = "8.30.1"
