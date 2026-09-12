@@ -2,6 +2,7 @@
 use crate::{CommandResult, CommandSpec, System};
 use anyhow::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use ratatui::layout::Constraint;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
@@ -214,7 +215,7 @@ fn draw_progress(
 
     let width = 64.min(body.width.saturating_sub(4));
     let height = (10 + completed.len().min(3) as u16).min(body.height);
-    let panel_area = chrome::centered(body, width, height);
+    let panel_area = body.centered(Constraint::Length(width), Constraint::Length(height));
     let spinner = if std::env::var("TERM").is_ok_and(|term| term == "dumb") {
         "."
     } else {
@@ -297,47 +298,46 @@ pub(crate) fn run<T: Send>(
     }
     let cancelled = AtomicBool::new(false);
     let progress = ProgressSystem::new(system, &cancelled, None);
-    let mut terminal = ratatui::init();
-    let result = std::thread::scope(|scope| {
-        let worker = scope.spawn(|| work(&progress, &cancelled));
-        let started = Instant::now();
-        let ui = (|| -> Result<()> {
-            let mut confirm_cancel = false;
-            while !worker.is_finished() {
-                terminal.draw(|frame| {
-                    let state = progress.progress.lock().unwrap().clone();
-                    draw_progress(
-                        frame,
-                        activity,
-                        state.current,
-                        &state.completed,
-                        started.elapsed(),
-                        state.last_output.elapsed().as_secs(),
-                        confirm_cancel,
-                    );
-                })?;
-                if event::poll(Duration::from_millis(120))? {
-                    if let Event::Key(key) = event::read()? {
-                        if handle_cancel_key(&mut confirm_cancel, key) {
-                            cancelled.store(true, Ordering::Relaxed);
+    ratatui::run(|terminal| {
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(|| work(&progress, &cancelled));
+            let started = Instant::now();
+            let ui = (|| -> Result<()> {
+                let mut confirm_cancel = false;
+                while !worker.is_finished() {
+                    terminal.draw(|frame| {
+                        let state = progress.progress.lock().unwrap().clone();
+                        draw_progress(
+                            frame,
+                            activity,
+                            state.current,
+                            &state.completed,
+                            started.elapsed(),
+                            state.last_output.elapsed().as_secs(),
+                            confirm_cancel,
+                        );
+                    })?;
+                    if event::poll(Duration::from_millis(120))? {
+                        if let Event::Key(key) = event::read()? {
+                            if handle_cancel_key(&mut confirm_cancel, key) {
+                                cancelled.store(true, Ordering::Relaxed);
+                            }
                         }
                     }
                 }
+                Ok(())
+            })();
+            if ui.is_err() {
+                cancelled.store(true, Ordering::Relaxed);
             }
-            Ok(())
-        })();
-        if ui.is_err() {
-            cancelled.store(true, Ordering::Relaxed);
-        }
-        let result = worker
-            .join()
-            .map_err(|_| anyhow::anyhow!("Wiki setup worker failed"));
-        ui?;
-        anyhow::ensure!(!cancelled.load(Ordering::Relaxed), "Wiki setup cancelled");
-        result?
-    });
-    ratatui::restore();
-    result
+            let result = worker
+                .join()
+                .map_err(|_| anyhow::anyhow!("Wiki setup worker failed"));
+            ui?;
+            anyhow::ensure!(!cancelled.load(Ordering::Relaxed), "Wiki setup cancelled");
+            result?
+        })
+    })
 }
 
 #[cfg(test)]
@@ -462,5 +462,39 @@ mod tests {
             .unwrap(),
             42
         );
+    }
+
+    #[test]
+    fn render_progress_gallery() {
+        if !crate::snapshot_tests::isolated("wiki_progress::tests::render_progress_gallery") {
+            return;
+        }
+        let mut frames = Vec::new();
+        for (width, height, confirm) in [
+            (40, 10, false),
+            (70, 20, false),
+            (72, 20, true),
+            (120, 30, false),
+        ] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal
+                .draw(|frame| {
+                    draw_progress(
+                        frame,
+                        "Vault 1/3 · second-brain",
+                        "Building search embeddings",
+                        &[
+                            ("Vault Markdown indexed", Duration::from_secs(4)),
+                            ("Search models ready", Duration::from_secs(2)),
+                        ],
+                        Duration::from_secs(12),
+                        5,
+                        confirm,
+                    )
+                })
+                .unwrap();
+            frames.push(format!("{:?}", terminal.backend().buffer()));
+        }
+        crate::snapshot_tests::assert_snapshot("wiki-progress", &frames.join("\n"));
     }
 }

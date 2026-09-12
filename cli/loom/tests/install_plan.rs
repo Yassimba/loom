@@ -1,7 +1,6 @@
 use loom::{
-    build_install_plan as build_plan, expand_skill_dependencies, CommandSpec, InstallPlan,
-    Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
-    StepAction, VerificationSpec,
+    build_install_plan as build_plan, expand_skill_dependencies, InstallPlan, Operation, Platform,
+    PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
 };
 use pretty_assertions::assert_eq;
 
@@ -91,49 +90,25 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert!(plan.prerequisites.is_empty());
+    assert!(plan.prerequisite_count() == 0);
     assert_eq!(
-        plan.resources
-            .iter()
-            .map(|step| step.action.clone())
+        plan.resources()
+            .map(|step| step.operation.clone())
             .collect::<Vec<_>>(),
         vec![
-            StepAction::CopySkills {
+            Operation::Skills {
                 skills: vec!["tdd".into()],
                 destination: skill_destination(),
             },
-            StepAction::Command(CommandSpec::new(
-                "pi",
-                ["install", "npm:@yassimba/pi-fast@latest"],
-            )),
-            StepAction::Command(CommandSpec::new(
-                "herdr",
-                [
-                    "plugin",
-                    "install",
-                    "Yassimba/loom/plugins/herdr-jumplist",
-                    "--yes",
-                ],
-            )),
-        ]
-    );
-    assert_eq!(
-        plan.resources
-            .iter()
-            .map(|step| step.verification.clone())
-            .collect::<Vec<_>>(),
-        vec![
-            // Skills are verified inside the copy: each tree must end up
-            // with <skill>/SKILL.md.
-            None,
-            Some(VerificationSpec {
-                command: CommandSpec::new("pi", ["list"]),
-                needle: Some("@yassimba/pi-fast".into()),
-            }),
-            Some(VerificationSpec {
-                command: CommandSpec::new("herdr", ["plugin", "list"]),
-                needle: Some("yassin.jumplist".into()),
-            }),
+            Operation::PiPackage {
+                spec: "npm:@yassimba/pi-fast@latest".into(),
+                name: "@yassimba/pi-fast".into(),
+                project: false
+            },
+            Operation::HerdrPlugin {
+                source: "Yassimba/loom/plugins/herdr-jumplist".into(),
+                name: "yassin.jumplist".into()
+            },
         ]
     );
 }
@@ -156,14 +131,13 @@ fn git_pi_package_uses_its_exact_source() {
     let plan = build_install_plan(&[example], status, Platform::Unix).unwrap();
 
     assert_eq!(
-        plan.resources[0].action,
-        StepAction::Command(CommandSpec::new(
-            "pi",
-            [
-                "install",
-                "git:github.com/example/pi-example@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            ],
-        ))
+        plan.resources().next().unwrap().operation,
+        Operation::PiPackage {
+            spec: "git:github.com/example/pi-example@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .into(),
+            name: "pi-example".into(),
+            project: false
+        }
     );
 }
 
@@ -189,8 +163,8 @@ fn skill_selection_expands_to_its_dependency_closure() {
     .unwrap();
 
     assert_eq!(
-        plan.resources[0].action,
-        StepAction::CopySkills {
+        plan.resources().next().unwrap().operation,
+        Operation::Skills {
             skills: vec!["release".into(), "commit".into(), "write-simply".into(),],
             destination: skill_destination(),
         }
@@ -216,9 +190,8 @@ fn missing_foundations_are_installed_before_selected_resources() {
     let plan = build_install_plan(&resources, status, Platform::Windows).unwrap();
 
     assert_eq!(
-        plan.prerequisites
-            .iter()
-            .map(|step| step.action.display())
+        plan.prerequisites()
+            .map(|step| step.operation.display())
             .collect::<Vec<_>>(),
         vec![
             "powershell -NoProfile -ExecutionPolicy Bypass -Command winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements",
@@ -243,9 +216,8 @@ fn selecting_a_pi_package_without_pi_uses_the_pinned_mise_runtime() {
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
     assert_eq!(
-        plan.prerequisites
-            .iter()
-            .map(|step| step.action.display())
+        plan.prerequisites()
+            .map(|step| step.operation.display())
             .collect::<Vec<_>>(),
         vec![
             "sh -c curl -fsSL https://mise.run | sh",
@@ -269,7 +241,7 @@ fn an_installed_pi_needs_no_runtime_install() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert_eq!(plan.resources.len(), 1);
+    assert_eq!(plan.resources().count(), 1);
 }
 
 #[test]
@@ -292,12 +264,12 @@ fn selected_tools_sync_through_mise_before_resources() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert_eq!(plan.prerequisites.len(), 1);
-    let step = &plan.prerequisites[0];
-    assert_eq!(step.manager, "mise");
+    assert_eq!(plan.prerequisite_count(), 1);
+    let step = &plan.steps[0];
+    assert_eq!(step.manager(), "mise");
     assert_eq!(
-        step.action,
-        StepAction::SyncTools {
+        step.operation,
+        Operation::Tools {
             tools: vec![
                 "gh".to_string(),
                 "npm:@earendil-works/pi-coding-agent".to_string(),
@@ -305,8 +277,8 @@ fn selected_tools_sync_through_mise_before_resources() {
         }
     );
     // The tool resource itself produces no separate resource step.
-    assert_eq!(plan.resources.len(), 1);
-    assert_eq!(plan.resources[0].manager, "pi");
+    assert_eq!(plan.resources().count(), 1);
+    assert_eq!(plan.resources().next().unwrap().manager(), "pi");
 }
 
 #[test]
@@ -320,16 +292,13 @@ fn tools_without_mise_get_a_mise_prerequisite() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert_eq!(plan.prerequisites.len(), 2);
-    assert_eq!(plan.prerequisites[0].manager, "mise");
+    assert_eq!(plan.prerequisite_count(), 2);
+    assert_eq!(plan.steps[0].manager(), "mise");
     assert!(matches!(
-        plan.prerequisites[0].action,
-        StepAction::Command(_)
+        plan.steps[0].operation,
+        Operation::BootstrapMise(_)
     ));
-    assert!(matches!(
-        plan.prerequisites[1].action,
-        StepAction::SyncTools { .. }
-    ));
+    assert!(matches!(plan.steps[1].operation, Operation::Tools { .. }));
 }
 
 #[test]
@@ -345,8 +314,8 @@ fn tool_companions_join_the_mise_sync() {
     let plan = build_install_plan(&[envx], status, Platform::Unix).unwrap();
 
     assert_eq!(
-        plan.prerequisites[0].action,
-        StepAction::SyncTools {
+        plan.steps[0].operation,
+        Operation::Tools {
             tools: vec![
                 "github:mikeleppane/envx".to_string(),
                 "cargo:envex".to_string(),

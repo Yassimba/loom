@@ -1,17 +1,18 @@
-//! Curated tool-settings toggles offered by the setup wizard: Herdr plugin
-//! keybindings and Zed screen-real-estate tweaks. Edits are format
-//! preserving — `toml_edit` for Herdr's config.toml, a span-splicing JSONC
-//! editor for Zed's commented settings.json.
+//! Curated tool-settings toggles offered by the setup wizard. Specs live in
+//! `settings.json`; this module applies them with format-preserving edits —
+//! `toml_edit` for Herdr, JSONC splicing for Zed.
 
 use crate::jsonc;
 use anyhow::{Context, Result};
-use serde_json::{json, Value as Json};
-use std::fs::{self, OpenOptions};
+use serde::Deserialize;
+use serde_json::Value as Json;
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct KeyCommand {
     pub key: String,
     pub kind: String,
@@ -19,17 +20,18 @@ pub struct KeyCommand {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ZedKeybinding {
     pub key: String,
     pub action: Json,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum SettingChange {
     /// Append `[[keys.command]]` bindings to Herdr's config unless a binding
     /// for the same command already exists.
-    HerdrKeyCommands(Vec<KeyCommand>),
+    HerdrKeyCommands { commands: Vec<KeyCommand> },
     /// Set (or subset-merge into) a top-level key in Zed's settings.json.
     ZedValue { key: String, value: Json },
     /// Bind keys in one `context` block of Zed's keymap.json by appending a
@@ -41,20 +43,35 @@ pub enum SettingChange {
     },
     /// Create a JSON config with curated defaults, but never replace an
     /// existing file.
-    PiFffDefaults(Json),
+    PiFffDefaults { value: Json },
     /// Create the upstream Pi ADHD plugin's always-on flag without replacing it.
     PiAdhdAlwaysOn,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SettingSpec {
     pub id: String,
     pub group: String,
     pub label: String,
     pub description: String,
     /// Catalog resource whose selection should pre-check this setting.
+    #[serde(default)]
     pub related_resource: Option<String>,
     pub change: SettingChange,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SettingsDocument {
+    curated: Vec<SettingSpec>,
+    responses: SettingResponses,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SettingResponses {
+    pi_adhd: SettingSpec,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,16 +91,8 @@ pub struct SettingsPaths {
 
 impl SettingsPaths {
     pub fn detect() -> Result<Self> {
-        let xdg = std::env::var_os("XDG_CONFIG_HOME")
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from);
-        // Herdr checks XDG_CONFIG_HOME before its platform default on every
-        // platform, Windows and macOS included; follow it or the wizard
-        // edits a config.toml Herdr never reads.
-        let herdr_base = match &xdg {
-            Some(base) => base.clone(),
-            None => native_config_dir()?,
-        };
+        let xdg = xdg_config_home();
+        let home = dirs::home_dir().context("home directory is unavailable")?;
         // Zed honors XDG_CONFIG_HOME only on Linux; Windows is always
         // %APPDATA%\Zed and macOS is always ~/.config/zed.
         let zed_dir = if cfg!(windows) {
@@ -96,23 +105,50 @@ impl SettingsPaths {
                 None => home_config_dir()?.join("zed"),
             }
         };
-        let home = dirs::home_dir().context("home directory is unavailable")?;
-        let pi_agent_dir = std::env::var_os("PI_CODING_AGENT_DIR")
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".pi/agent"));
-        // Pi expands a leading ~ even when the shell leaves it quoted.
-        let pi_agent_dir = match pi_agent_dir.strip_prefix("~") {
-            Ok(relative) => home.join(relative),
-            Err(_) => pi_agent_dir,
-        };
+        let pi_agent_dir = pi_agent_dir(&home);
         Ok(Self {
-            herdr_config: herdr_base.join("herdr").join("config.toml"),
+            herdr_config: herdr_dir(&home).join("config.toml"),
             zed_settings: zed_dir.join("settings.json"),
             zed_keymap: zed_dir.join("keymap.json"),
             pi_fff_config: pi_agent_dir.join("pi-fff.json"),
             pi_adhd_flag: pi_agent_dir.join(".i-have-adhd-always"),
         })
+    }
+}
+
+fn xdg_config_home() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Directory Herdr actually reads: `$XDG_CONFIG_HOME/herdr` on every OS, else
+/// `%APPDATA%\herdr` on Windows and `~/.config/herdr` on Unix. `home` is the
+/// profile root so tests never touch the real AppData tree.
+pub(crate) fn herdr_dir(home: &Path) -> PathBuf {
+    let base = match xdg_config_home() {
+        Some(base) => base,
+        None if cfg!(windows) => {
+            if dirs::home_dir().as_deref() == Some(home) {
+                native_config_dir().unwrap_or_else(|_| home.join("AppData").join("Roaming"))
+            } else {
+                home.join("AppData").join("Roaming")
+            }
+        }
+        None => home.join(".config"),
+    };
+    base.join("herdr")
+}
+
+pub(crate) fn pi_agent_dir(home: &Path) -> PathBuf {
+    let directory = std::env::var_os("PI_CODING_AGENT_DIR")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".pi/agent"));
+    // Pi expands a leading ~ even when the shell leaves it quoted.
+    match directory.strip_prefix("~") {
+        Ok(relative) => home.join(relative),
+        Err(_) => directory,
     }
 }
 
@@ -136,104 +172,30 @@ fn home_config_dir() -> Result<PathBuf> {
         .join(".config"))
 }
 
+fn settings_document() -> &'static SettingsDocument {
+    static DOCUMENT: OnceLock<SettingsDocument> = OnceLock::new();
+    DOCUMENT.get_or_init(|| {
+        serde_json::from_str(include_str!("../settings.json"))
+            .expect("embedded settings.json is invalid")
+    })
+}
+
 /// Offered only through the setup question, never through bulk setting selection.
 pub fn pi_adhd_setting() -> SettingSpec {
-    SettingSpec {
-        id: "pi:adhd-always-on".into(),
-        group: "Pi".into(),
-        label: "Always use ADHD-friendly responses in Pi".into(),
-        description: "Enable the i-have-adhd plugin for future Pi sessions. Existing session choices still win.".into(),
-        related_resource: Some("pi-package:i-have-adhd".into()),
-        change: SettingChange::PiAdhdAlwaysOn,
-    }
+    settings_document().responses.pi_adhd.clone()
 }
 
 pub fn curated_settings() -> Vec<SettingSpec> {
-    vec![
-        SettingSpec {
-            id: "herdr:annotate-keybindings".into(),
-            group: "Herdr".into(),
-            label: "Annotate keybindings".into(),
-            description: "Bind terminal annotations, document review, and agent-reply review.".into(),
-            related_resource: Some("herdr-plugin:annotate".into()),
-            change: SettingChange::HerdrKeyCommands(vec![
-                KeyCommand {
-                    key: "prefix+a".into(),
-                    kind: "plugin_action".into(),
-                    command: "annotate.capture".into(),
-                    description: Some("Annotate selected terminal text".into()),
-                },
-                KeyCommand {
-                    key: "prefix+shift+a".into(),
-                    kind: "plugin_action".into(),
-                    command: "annotate.copy-context".into(),
-                    description: Some("Copy annotations as context".into()),
-                },
-                KeyCommand {
-                    key: "prefix+m".into(),
-                    kind: "plugin_action".into(),
-                    command: "annotate.manage".into(),
-                    description: Some("Manage annotations".into()),
-                },
-                KeyCommand {
-                    key: "prefix+o".into(),
-                    kind: "plugin_action".into(),
-                    command: "annotate.open".into(),
-                    description: Some("Review documents in this folder".into()),
-                },
-                KeyCommand {
-                    key: "prefix+shift+o".into(),
-                    kind: "plugin_action".into(),
-                    command: "annotate.last".into(),
-                    description: Some("Review the agent's last reply".into()),
-                },
-            ]),
-        },
-        SettingSpec {
-            id: "zed:zoomed-padding".into(),
-            group: "Zed".into(),
-            label: "Zoomed panes edge-to-edge".into(),
-            description:
-                "Remove the gap Zed keeps around a zoomed pane, like a full-screen terminal.".into(),
-            related_resource: None,
-            change: SettingChange::ZedValue {
-                key: "zoomed_padding".into(),
-                value: json!(false),
-            },
-        },
-        SettingSpec {
-            id: "zed:zen-padding".into(),
-            group: "Zed".into(),
-            label: "Zen mode edge-to-edge".into(),
-            description:
-                "Let zen mode use the full editor width instead of a padded center column.".into(),
-            related_resource: None,
-            change: SettingChange::ZedValue {
-                key: "centered_layout".into(),
-                value: json!({"left_padding": 0, "right_padding": 0}),
-            },
-        },
-        SettingSpec {
-            id: "pi:fff-override".into(),
-            group: "Pi".into(),
-            label: "FFF native-tool override".into(),
-            description: "Replace Pi's native find and grep tools with FFF and use its frecency-ranked @ autocomplete. Existing FFF settings are never replaced.".into(),
-            related_resource: Some("pi-package:@ff-labs/pi-fff".into()),
-            change: SettingChange::PiFffDefaults(json!({
-                "$schema": "https://raw.githubusercontent.com/dmtrKovalenko/fff/main/packages/pi-fff/pi-fff.schema.json",
-                "mode": "override"
-            })),
-        },
-    ]
+    settings_document().curated.clone()
 }
 
 impl SettingSpec {
     pub fn target_path<'a>(&self, paths: &'a SettingsPaths) -> &'a Path {
         match self.change {
-            SettingChange::HerdrKeyCommands(_) => &paths.herdr_config,
+            SettingChange::HerdrKeyCommands { .. } => &paths.herdr_config,
             SettingChange::ZedValue { .. } => &paths.zed_settings,
             SettingChange::ZedKeymap { .. } => &paths.zed_keymap,
-            SettingChange::PiFffDefaults(_) => &paths.pi_fff_config,
+            SettingChange::PiFffDefaults { .. } => &paths.pi_fff_config,
             SettingChange::PiAdhdAlwaysOn => &paths.pi_adhd_flag,
         }
     }
@@ -251,7 +213,7 @@ impl SettingSpec {
     pub fn change_summary(&self) -> Vec<String> {
         match &self.change {
             SettingChange::PiAdhdAlwaysOn => vec!["Enable ADHD-friendly responses for future Pi sessions; leave existing settings unchanged".into()],
-            SettingChange::HerdrKeyCommands(commands) => commands
+            SettingChange::HerdrKeyCommands { commands } => commands
                 .iter()
                 .map(|command| format!("[[keys.command]] {} → {}", command.key, command.command))
                 .collect(),
@@ -260,7 +222,7 @@ impl SettingSpec {
                 .iter()
                 .map(|binding| format!("{context}: \"{}\" → {}", binding.key, binding.action))
                 .collect(),
-            SettingChange::PiFffDefaults(_) => {
+            SettingChange::PiFffDefaults { .. } => {
                 vec!["create override config if missing".into()]
             }
         }
@@ -280,17 +242,12 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
         Err(_) => return SettingState::NotApplied,
     };
     let applied = match &spec.change {
-        SettingChange::HerdrKeyCommands(commands) => content
-            .parse::<DocumentMut>()
-            .map(|document| {
-                commands
-                    .iter()
-                    .all(|command| herdr_has_binding(&document, &command.command))
-            })
-            .unwrap_or(false),
-        SettingChange::ZedValue { key, value } => jsonc::get(&content, key)
-            .map(|current| json_subset(value, &current))
-            .unwrap_or(false),
+        SettingChange::HerdrKeyCommands { commands } => {
+            apply_herdr_bindings(&content, commands).is_ok_and(|change| change.is_none())
+        }
+        SettingChange::ZedValue { key, value } => {
+            apply_zed_value(&content, key, value).is_ok_and(|change| change.is_none())
+        }
         SettingChange::ZedKeymap { context, bindings } => jsonc::parse_document(&content)
             .map(|document| {
                 bindings
@@ -298,7 +255,7 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
                     .all(|binding| zed_keymap_binds(&document, context, &binding.key))
             })
             .unwrap_or(false),
-        SettingChange::PiFffDefaults(_) => true,
+        SettingChange::PiFffDefaults { .. } => true,
         SettingChange::PiAdhdAlwaysOn => unreachable!(),
     };
     if applied {
@@ -311,61 +268,53 @@ pub fn setting_state(spec: &SettingSpec, paths: &SettingsPaths) -> SettingState 
 /// Apply the setting; returns false when the file already had it.
 pub fn apply_setting(spec: &SettingSpec, paths: &SettingsPaths) -> Result<bool> {
     let path = spec.target_path(paths);
-    if matches!(spec.change, SettingChange::PiAdhdAlwaysOn) {
+    if matches!(
+        spec.change,
+        SettingChange::PiAdhdAlwaysOn | SettingChange::PiFffDefaults { .. }
+    ) {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("could not create {}", parent.display()))?;
         }
-        return match OpenOptions::new().write(true).create_new(true).open(path) {
-            Ok(_) => Ok(true),
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && path.exists() => {
-                Ok(false)
-            }
-            Err(error) => {
-                Err(error).with_context(|| format!("could not create {}", path.display()))
-            }
-        };
-    }
-    let defaults = match &spec.change {
-        SettingChange::PiFffDefaults(defaults) => Some(defaults),
-        _ => None,
-    };
-    if let Some(defaults) = defaults {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("could not create {}", parent.display()))?;
-        }
-        let mut file = match OpenOptions::new().write(true).create_new(true).open(path) {
+        let mut file = match fs::File::options().write(true).create_new(true).open(path) {
             Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::AlreadyExists
+                    && (matches!(spec.change, SettingChange::PiFffDefaults { .. })
+                        || path.exists()) =>
+            {
+                return Ok(false)
+            }
             Err(error) => {
                 return Err(error).with_context(|| format!("could not create {}", path.display()))
             }
         };
-        let content = format!("{}\n", serde_json::to_string_pretty(defaults)?);
-        file.write_all(content.as_bytes())
-            .with_context(|| format!("could not write {}", path.display()))?;
+        if let SettingChange::PiFffDefaults { value: defaults } = &spec.change {
+            let content = format!("{}\n", serde_json::to_string_pretty(defaults)?);
+            file.write_all(content.as_bytes())
+                .with_context(|| format!("could not write {}", path.display()))?;
+        }
         return Ok(true);
     }
     let existing = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => match &spec.change {
-            SettingChange::HerdrKeyCommands(_) => String::new(),
+            SettingChange::HerdrKeyCommands { .. } => String::new(),
             SettingChange::ZedValue { .. } => "{}\n".into(),
             SettingChange::ZedKeymap { .. } => "[]\n".into(),
-            SettingChange::PiFffDefaults(_) | SettingChange::PiAdhdAlwaysOn => unreachable!(),
+            SettingChange::PiFffDefaults { .. } | SettingChange::PiAdhdAlwaysOn => unreachable!(),
         },
         Err(error) => {
             return Err(error).with_context(|| format!("could not read {}", path.display()))
         }
     };
     let updated = match &spec.change {
-        SettingChange::HerdrKeyCommands(commands) => apply_herdr_bindings(&existing, commands)?,
+        SettingChange::HerdrKeyCommands { commands } => apply_herdr_bindings(&existing, commands)?,
         SettingChange::ZedValue { key, value } => apply_zed_value(&existing, key, value)?,
         SettingChange::ZedKeymap { context, bindings } => {
             apply_zed_keymap(&existing, context, bindings)?
         }
-        SettingChange::PiFffDefaults(_) | SettingChange::PiAdhdAlwaysOn => unreachable!(),
+        SettingChange::PiFffDefaults { .. } | SettingChange::PiAdhdAlwaysOn => unreachable!(),
     };
     let Some(updated) = updated else {
         return Ok(false);
@@ -490,9 +439,7 @@ pub fn apply_zed_value(content: &str, key: &str, value: &Json) -> Result<Option<
     let merged = match (value, &current) {
         (Json::Object(wanted), Some(Json::Object(existing))) => {
             let mut merged = existing.clone();
-            for (name, item) in wanted {
-                merged.insert(name.clone(), item.clone());
-            }
+            merged.extend(wanted.clone());
             Json::Object(merged)
         }
         _ => value.clone(),
@@ -524,6 +471,7 @@ fn numbers_equal(expected: &Json, actual: &Json) -> bool {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use serde_json::json;
 
     fn reviewr_binding() -> Vec<KeyCommand> {
         vec![KeyCommand {
@@ -535,12 +483,38 @@ mod tests {
     }
 
     #[test]
+    fn settings_json_keeps_question_only_adhd_out_of_bulk_selection() {
+        let curated = curated_settings();
+        let adhd = pi_adhd_setting();
+        assert!(curated.iter().all(|setting| setting.id != adhd.id));
+        let mut ids: Vec<_> = curated.iter().map(|setting| setting.id.as_str()).collect();
+        ids.push(adhd.id.as_str());
+        let unique = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), unique);
+        let catalog = crate::Catalog::embedded().unwrap();
+        for setting in curated.iter().chain(std::iter::once(&adhd)) {
+            if let Some(related) = &setting.related_resource {
+                assert!(
+                    catalog
+                        .resources
+                        .iter()
+                        .any(|resource| resource.id == *related),
+                    "unknown related resource {related}"
+                );
+            }
+        }
+        assert!(matches!(adhd.change, SettingChange::PiAdhdAlwaysOn));
+    }
+
+    #[test]
     fn annotate_setting_includes_full_plugin_bindings() {
         let setting = curated_settings()
             .into_iter()
             .find(|setting| setting.id == "herdr:annotate-keybindings")
             .unwrap();
-        let SettingChange::HerdrKeyCommands(commands) = setting.change else {
+        let SettingChange::HerdrKeyCommands { commands } = setting.change else {
             panic!("annotate setting must add Herdr key commands");
         };
         assert_eq!(commands.len(), 5);
@@ -765,6 +739,25 @@ mod tests {
             fs::read_to_string(&paths.pi_fff_config).unwrap(),
             "custom FFF config\n"
         );
+        let adhd = pi_adhd_setting();
+        assert!(apply_setting(&adhd, &paths).unwrap());
+        fs::write(&paths.pi_adhd_flag, "custom flag\n").unwrap();
+        assert!(!apply_setting(&adhd, &paths).unwrap());
+        assert_eq!(
+            fs::read_to_string(&paths.pi_adhd_flag).unwrap(),
+            "custom flag\n"
+        );
+        #[cfg(unix)]
+        {
+            // Existing defaults and an active flag have distinct dangling-link contracts.
+            for path in [&paths.pi_fff_config, &paths.pi_adhd_flag] {
+                fs::remove_file(path).unwrap();
+                std::os::unix::fs::symlink(root.join("absent"), path).unwrap();
+            }
+            assert!(!apply_setting(&fff, &paths).unwrap());
+            assert!(apply_setting(&adhd, &paths).is_err());
+            assert!(!root.join("absent").exists());
+        }
         fs::remove_dir_all(root).unwrap();
     }
 }

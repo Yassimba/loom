@@ -1,14 +1,14 @@
 //! All drawing for the wizard: a one-line header with the step breadcrumb,
-//! the active stage's panel, and a one-line footer with key hints and
+//! the active stage's panel, and a responsive footer with key hints and
 //! clickable Back/Next buttons.
 
-use super::state::{ChooseStage, Group, HitMap, ItemState, Pane, Row, Stage, WhereStage, Wizard};
+use super::state::{ChooseStage, Group, HitMap, Item, ItemState, Pane, Screen, Wizard};
 use crate::settings::SettingSpec;
 use crate::{ResourceKind, SkillAgent};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Cell, Clear, List, ListState, Paragraph, Row, Table, TableState, Wrap};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -18,7 +18,7 @@ const ON: &str = "[x]";
 const OFF: &str = "[ ]";
 const PART: &str = "[-]";
 
-type ListHit = Option<(Rect, usize)>;
+pub(super) type ListHit = Option<(Rect, usize)>;
 
 #[derive(Default)]
 struct ItemCounts {
@@ -59,21 +59,21 @@ impl Wizard {
             return;
         };
         self.render_header(frame, header);
-        let list = match &self.stages[self.stage_index] {
-            Stage::Choose(stage) => {
-                let (groups, kinds, items) = self.render_choose(frame, body, stage);
+        let list = match self.screen {
+            Screen::Choose => {
+                let (groups, kinds, items) = self.render_choose(frame, body, &self.choose);
                 self.hits.groups = groups;
                 self.hits.kinds = kinds;
                 items
             }
-            Stage::Where(stage) => self.render_where(frame, body, stage),
-            Stage::Responses { cursor } => self.render_responses(frame, body, *cursor),
-            Stage::Review { scroll } => {
-                self.render_review(frame, body, *scroll);
+            Screen::Where => self.render_where(frame, body, self.where_cursor),
+            Screen::Responses => self.render_responses(frame, body, self.responses_cursor),
+            Screen::Review => {
+                self.review_next_enabled = self.render_review(frame, body, self.review_scroll);
                 None
             }
-            Stage::Install(stage) => {
-                self.render_install(frame, body, stage);
+            Screen::Install => {
+                self.render_install(frame, body, &self.install);
                 None
             }
         };
@@ -137,79 +137,88 @@ impl Wizard {
         let visible = self.visible_stages();
         let current = visible
             .iter()
-            .position(|&index| index == self.stage_index)
+            .position(|&index| index == self.screen)
             .unwrap_or(0);
         let crumbs: Vec<Crumb> = visible
             .iter()
             .map(|&index| Crumb {
-                label: self.stages[index].title().to_owned(),
-                done: index < self.stage_index,
+                label: index.title().to_owned(),
+                done: index < self.screen,
             })
             .collect();
         chrome::header(frame, area, command, status, &crumbs, current);
     }
 
     fn render_footer(&mut self, frame: &mut Frame, area: Rect) {
-        let searching = self.search.is_some()
-            || (self.browsing_wiki()
-                && self
-                    .wiki
-                    .as_ref()
-                    .is_some_and(|browser| browser.search.is_some()));
+        let searching =
+            self.search.is_some() || (self.browsing_wiki() && self.wiki.search.is_some());
         let hint = if searching {
             " type to filter · ↑↓ move · space pick · enter jump to it · esc cancel"
         } else if self.browsing_wiki() {
-            " ↑↓ browse · ←→ column · space/enter pick · / search · n review · esc back"
+            " ↑↓ browse · ←→ column · space/enter pick · / search · u unregisters · n review · esc back"
         } else {
-            match &self.stages[self.stage_index] {
-                Stage::Choose(_) => {
+            match self.screen {
+                Screen::Choose => {
                     " ↑↓ move · ←→ column · space pick · / search · c clear · enter continue · ? keys"
                 }
-                Stage::Where(_) => " ↑↓ move · space toggle · enter continue · esc back",
-                Stage::Responses { .. } => " ↑↓ choose · enter continue · esc back",
-                Stage::Review { .. } if self.nothing_chosen() => " enter leave · esc back",
-                Stage::Review { .. } => {
+                Screen::Where => " ↑↓ move · space toggle · enter continue · esc back",
+                Screen::Responses => " ↑↓ choose · enter continue · esc back",
+                Screen::Review if self.nothing_chosen() => " enter leave · esc back",
+                Screen::Review => {
                     if self.uninstalling() {
                         " ↑↓ scroll · enter review removal · esc back"
                     } else {
                         " ↑↓ scroll · enter install · esc back"
                     }
                 }
-                Stage::Install(stage) if stage.running && self.confirm_cancel => {
+                Screen::Install if self.install.running && self.confirm_cancel => {
                     " press ctrl-c again to cancel · install may be partial"
                 }
-                Stage::Install(stage) if stage.running => " installing… · ctrl-c cancel",
-                Stage::Install(_) if self.can_retry() => {
+                Screen::Install if self.install.running => " installing… · ctrl-c cancel",
+                Screen::Install if self.can_retry() => {
                     " ↑↓ inspect · d details · enter/r retry failed · esc finish"
                 }
-                Stage::Install(_) if self.next_command().is_some() => {
+                Screen::Install if self.next_command().is_some() => {
                     " enter finish · c copy the next command · d details"
                 }
-                Stage::Install(_) => " ↑↓ inspect · d details · enter finish",
+                Screen::Install => " ↑↓ inspect · d details · enter finish",
             }
         };
-        let short = match &self.stages[self.stage_index] {
-            Stage::Choose(_) if searching => " type · space pick · esc",
-            Stage::Choose(_) if self.browsing_wiki() => " ↑↓ ←→ enter n",
-            Stage::Choose(_) => " ↑↓ ←→ space / enter ?",
-            Stage::Where(_) => " ↑↓ space enter esc",
-            Stage::Responses { .. } => " ↑↓ enter esc",
-            Stage::Review { .. } => " enter ↑↓ esc",
-            Stage::Install(_) => " enter",
+        let short = match self.screen {
+            Screen::Choose if searching => " type to filter · enter jump · esc cancel",
+            Screen::Choose if self.browsing_wiki() => " space pick · n review · ? keys",
+            Screen::Choose => " space pick · enter next · ? keys",
+            Screen::Where => " space toggle · enter next · esc back",
+            Screen::Responses => " ↑↓ choose · enter next · esc back",
+            Screen::Review if self.nothing_chosen() => " enter leave · esc back",
+            Screen::Review if self.uninstalling() => " ↑↓ scroll · enter remove · esc back",
+            Screen::Review => " ↑↓ scroll · enter install · esc back",
+            Screen::Install if self.install.running => " ctrl-c cancel · completed work stays",
+            Screen::Install if self.can_retry() => " enter retry · d details · esc finish",
+            Screen::Install => " enter finish · d details",
         };
-        let hint = if area.width
-            < hint.chars().count() as u16 + chrome::BACK_WIDTH + chrome::NEXT_WIDTH + 3
-        {
+        let (back_enabled, next_label, next_enabled) = self.button_states();
+        let hint_width = area.width.saturating_sub(if area.height > 1 {
+            0
+        } else {
+            chrome::NEXT_WIDTH
+                + 1
+                + if back_enabled {
+                    chrome::BACK_WIDTH + 1
+                } else {
+                    0
+                }
+        });
+        let hint = if hint.width() > usize::from(hint_width) {
             short
         } else {
             hint
         };
-        let (back_enabled, next_label, next_enabled) = self.button_states();
         let (back, next) = chrome::footer(
             frame,
             area,
             hint,
-            Some(("Back", back_enabled)),
+            back_enabled.then_some("Back"),
             (next_label, next_enabled),
         );
         self.hits.back_button = back;
@@ -217,13 +226,13 @@ impl Wizard {
     }
 
     fn button_states(&self) -> (bool, &'static str, bool) {
-        match &self.stages[self.stage_index] {
-            Stage::Choose(stage) if self.browsing_wiki() => {
-                (stage.focus != Pane::Groups, "Next", true)
+        match self.screen {
+            Screen::Choose if self.browsing_wiki() => {
+                (self.choose.focus != Pane::Groups, "Next", true)
             }
-            Stage::Choose(_) => (false, "Next", true),
-            Stage::Where(_) | Stage::Responses { .. } => (true, "Next", true),
-            Stage::Review { .. } => (
+            Screen::Choose => (false, "Next", true),
+            Screen::Where | Screen::Responses => (true, "Next", true),
+            Screen::Review => (
                 true,
                 if self.nothing_chosen() {
                     "Leave"
@@ -232,12 +241,12 @@ impl Wizard {
                 } else {
                     "Install"
                 },
-                self.uninstalling() || self.nothing_chosen() || self.plan().is_ok(),
+                self.review_next_enabled,
             ),
-            Stage::Install(stage) => (
+            Screen::Install => (
                 false,
                 if self.can_retry() { "Retry" } else { "Finish" },
-                stage.report.is_some(),
+                self.install.report.is_some(),
             ),
         }
     }
@@ -294,10 +303,26 @@ impl Wizard {
                 ]),
             );
         }
+        if frame.area().width < 80 || frame.area().height < 22 {
+            lines = vec![
+                Line::from(vec![key("↑↓ / j k "), Span::raw("move · ←→ / tab column")]),
+                Line::from(vec![key("space  "), Span::raw("pick · c clear · / search")]),
+                Line::from(vec![key("enter   "), Span::raw("next · esc back · q quit")]),
+                Line::from(vec![key("home/end "), Span::raw("first / last")]),
+                Line::from(format!("space on a {set}: pick all")),
+                Line::styled("any key closes this", Style::new().dim()),
+            ];
+        }
         let widest = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
         let width = (widest + chrome::PANEL_FRAME).min(frame.area().width.saturating_sub(4));
         let height = (lines.len() as u16 + 2).min(frame.area().height.saturating_sub(2));
-        let area = centered_rect(frame.area(), width, height);
+        let area = if frame.area().height < 12 || frame.area().width < 50 {
+            frame.area()
+        } else {
+            frame
+                .area()
+                .centered(Constraint::Length(width), Constraint::Length(height))
+        };
         frame.render_widget(Clear, area);
         frame.render_widget(Paragraph::new(lines).block(bordered(" Keys ", true)), area);
     }
@@ -374,6 +399,29 @@ impl Wizard {
                 (false, Pane::Kinds) => [empty, only, empty, empty],
                 (false, Pane::Groups) => [only, empty, empty, empty],
             }
+        } else if area.width < 100 {
+            // Two readable columns beat three clipped ones. Keep the focused
+            // lane and its next lane or overview; keyboard navigation is unchanged.
+            let [left, right] =
+                Layout::horizontal([Constraint::Percentage(50), Constraint::Min(1)])
+                    .spacing(1)
+                    .areas(area);
+            let empty = Rect::default();
+            if wiki_mode {
+                if stage.focus == Pane::Groups {
+                    [left, right, empty, empty]
+                } else {
+                    [empty, left, right, empty]
+                }
+            } else if searching || stage.focus == Pane::Items {
+                [empty, empty, left, right]
+            } else if goal_card {
+                [left, empty, empty, right]
+            } else if stage.focus == Pane::Kinds {
+                [empty, left, right, empty]
+            } else {
+                [left, empty, right, empty]
+            }
         } else if deep {
             let [kinds, items, details] = Layout::horizontal([
                 Constraint::Length(kinds_width),
@@ -413,41 +461,43 @@ impl Wizard {
         };
 
         // Column one: every group with its state.
-        let group_width = groups_area.width.saturating_sub(chrome::PANEL_FRAME) as usize;
-        let groups = stage
+        let (groups, counts): (Vec<_>, Vec<_>) = stage
             .groups
             .iter()
             .enumerate()
-            .map(|(index, group)| self.group_item(index, group, group_width))
-            .collect::<Vec<_>>();
-        let group_offset = list_offset(
-            stage.groups.len(),
-            groups_area.height.saturating_sub(2),
-            stage.group_cursor,
-        );
+            .map(|(index, group)| self.group_item(index, group))
+            .unzip();
+        let group_count_width = counts.into_iter().max().unwrap_or(0) + 1;
+        let mut group_state = TableState::default().with_selected(Some(stage.group_cursor));
         let groups_focused = stage.focus == Pane::Groups && !searching;
         if groups_area.width > 0 {
-            let title = match (narrow, profile_mode) {
+            let title = match (area.width < 100, profile_mode) {
                 (true, true) if wiki_mode => " Goals · → Wikis ",
-                (true, true) => " Goals · combine · → types ",
-                (false, true) => " Goals · combine ",
+                (true, true) => " Goals · → types ",
+                (false, true) => " Goals ",
                 (true, false) => " Groups · → items ",
                 (false, false) => " Groups ",
             };
             frame.render_stateful_widget(
-                List::new(groups)
-                    .block(bordered(title, groups_focused))
-                    .highlight_style(highlight(groups_focused)),
+                Table::new(
+                    groups,
+                    [
+                        Constraint::Length(5),
+                        Constraint::Fill(1),
+                        Constraint::Length(group_count_width),
+                    ],
+                )
+                .column_spacing(0)
+                .block(bordered(title, groups_focused))
+                .row_highlight_style(highlight(groups_focused)),
                 groups_area,
-                &mut ListState::default()
-                    .with_selected(Some(stage.group_cursor))
-                    .with_offset(group_offset),
+                &mut group_state,
             );
         }
 
         if wiki_mode {
-            let browser = self.wiki.as_ref().unwrap();
-            browser.draw(
+            let browser = &self.wiki;
+            let (vaults, capabilities) = browser.draw(
                 frame,
                 kinds_area,
                 items_area,
@@ -455,55 +505,50 @@ impl Wizard {
                 &self.model.skill_destination.home,
             );
             return (
-                (groups_area.width > 0).then_some((groups_area, group_offset)),
-                (kinds_area.width > 0).then_some((kinds_area, browser.offset(kinds_area))),
-                (items_area.width > 0 && browser.record().is_some()).then_some((
-                    super::wiki::WikiBrowser::item_area(items_area),
-                    browser.item_offset(items_area),
-                )),
+                (groups_area.width > 0).then_some((groups_area, group_state.offset())),
+                vaults,
+                capabilities,
             );
         }
         // Column two: capability types within the focused profile.
-        let kinds = stage
+        let (kinds, counts): (Vec<_>, Vec<_>) = stage
             .group()
             .kinds
             .iter()
-            .map(|kind| {
-                self.kind_item(
-                    kind,
-                    kinds_area.width.saturating_sub(chrome::PANEL_FRAME) as usize,
-                )
-            })
-            .collect::<Vec<_>>();
-        let kind_offset = list_offset(
-            kinds.len(),
-            kinds_area.height.saturating_sub(2),
-            stage.kind_cursor,
-        );
+            .map(|kind| self.kind_item(kind, stage.group()))
+            .unzip();
+        let kind_count_width = counts.into_iter().max().unwrap_or(0) + 1;
+        let mut kind_state = TableState::default().with_selected(Some(stage.kind_cursor));
         let kinds_focused = stage.focus == Pane::Kinds && !searching;
         if kinds_area.width > 0 {
-            let title = if narrow {
-                " Types · ← goals · → capabilities "
+            let title = if area.width < 100 {
+                " Types · ← goals · → items "
             } else {
                 " Types "
             };
             frame.render_stateful_widget(
-                List::new(kinds)
-                    .block(bordered(title, kinds_focused))
-                    .highlight_style(highlight(kinds_focused)),
+                Table::new(
+                    kinds,
+                    [
+                        Constraint::Length(5),
+                        Constraint::Fill(1),
+                        Constraint::Length(kind_count_width),
+                    ],
+                )
+                .column_spacing(0)
+                .block(bordered(title, kinds_focused))
+                .row_highlight_style(highlight(kinds_focused)),
                 kinds_area,
-                &mut ListState::default()
-                    .with_selected(Some(stage.kind_cursor))
-                    .with_offset(kind_offset),
+                &mut kind_state,
             );
         }
 
         // Column three: the focused type's capabilities, or search hits.
-        let (rows, cursor, title): (Vec<Row>, usize, String) = match &self.search {
+        let (rows, cursor, title): (Vec<Item>, usize, String) = match &self.search {
             Some(query) => {
                 let matches = self.search_matches();
                 let cursor = self.search_cursor.min(matches.len().saturating_sub(1));
-                let rows = matches.iter().map(|&hit| self.search_row(hit)).collect();
+                let rows = matches.iter().map(|&hit| hit.1).collect();
                 (
                     rows,
                     cursor,
@@ -512,16 +557,30 @@ impl Wizard {
             }
             None => {
                 let kind = stage.kind();
-                let counts = self.item_counts(&kind.items());
+                let counts = self.item_counts(&kind.rows);
                 let prefix = if profile_mode {
-                    format!("Capabilities · {} · ", kind.title)
+                    format!("{} · ", kind.title)
                 } else {
                     String::new()
                 };
                 let title = if counts.actionable() == 0 {
+                    let summary = [
+                        (counts.installed, "installed"),
+                        (counts.required, "required"),
+                        (counts.unavailable, "unavailable"),
+                    ]
+                    .into_iter()
+                    .filter(|(count, _)| *count > 0)
+                    .map(|(count, label)| format!("{count} {label}"))
+                    .collect::<Vec<_>>()
+                    .join(" · ");
                     format!(
-                        " {prefix}{} installed · {} required · {} unavailable ",
-                        counts.installed, counts.required, counts.unavailable
+                        " {prefix}{} ",
+                        if summary.is_empty() {
+                            "No items"
+                        } else {
+                            &summary
+                        }
                     )
                 } else {
                     format!(" {prefix}{}/{} picked ", counts.picked, counts.actionable())
@@ -529,10 +588,7 @@ impl Wizard {
                 (kind.rows.clone(), stage.item_cursor, title)
             }
         };
-        // Label column from the widest label on screen; the description
-        // takes what is left and is cut with an ellipsis.
-        let show_kind = searching;
-        let kind_width = if show_kind { 13 } else { 0 };
+        let kind_width = if searching { 13 } else { 0 };
         let label_width = rows
             .iter()
             .map(|row| self.row_label(row).width())
@@ -543,38 +599,55 @@ impl Wizard {
                 (items_area.width as usize)
                     .saturating_sub(chrome::PANEL_FRAME as usize + 5 + kind_width + 1),
             );
-        let description_width = (items_area.width as usize)
-            .saturating_sub(chrome::PANEL_FRAME as usize + 5 + kind_width + label_width + 1);
+        // Descriptions already live in Overview. Do not leave a one-letter
+        // fragment beside each label when a column is too narrow to read it.
+        let note_width = usize::from(items_area.width)
+            .saturating_sub(usize::from(chrome::PANEL_FRAME) + 5 + kind_width + label_width + 1);
         let items = rows
             .iter()
-            .map(|row| self.choose_row_item(row, label_width, description_width, show_kind))
+            .map(|row| self.choose_row_item(row))
             .collect::<Vec<_>>();
-        let offset = list_offset(rows.len(), items_area.height.saturating_sub(2), cursor);
+        let mut item_state =
+            TableState::default().with_selected((!rows.is_empty()).then_some(cursor));
         let items_focused = stage.focus == Pane::Items || searching;
-        let title = if narrow && !searching {
-            let left = if profile_mode { "types" } else { "groups" };
-            format!("{title}· ← {left} ")
-        } else {
-            title
-        };
-        if items_area.width > 0 {
-            frame.render_stateful_widget(
-                List::new(items)
-                    .block(bordered(&title, items_focused))
-                    .highlight_style(highlight(items_focused)),
+        if items_area.width > 0 && searching && rows.is_empty() {
+            frame.render_widget(
+                Paragraph::new(vec![
+                    Line::styled("No matches", Style::new().bold()),
+                    Line::from(""),
+                    Line::from("Backspace widens the search."),
+                    Line::from("esc returns to browsing."),
+                ])
+                .wrap(Wrap { trim: true })
+                .block(bordered(&title, true)),
                 items_area,
-                &mut ListState::default()
-                    .with_selected((!rows.is_empty()).then_some(cursor))
-                    .with_offset(offset),
+            );
+        } else if items_area.width > 0 {
+            frame.render_stateful_widget(
+                Table::new(
+                    items,
+                    [
+                        Constraint::Length(5),
+                        Constraint::Length(kind_width as u16),
+                        Constraint::Length(label_width as u16 + 1),
+                        if note_width >= 16 {
+                            Constraint::Fill(1)
+                        } else {
+                            Constraint::Length(0)
+                        },
+                    ],
+                )
+                .column_spacing(0)
+                .block(bordered(&title, items_focused))
+                .row_highlight_style(highlight(items_focused)),
+                items_area,
+                &mut item_state,
             );
         }
 
         // Column three: what the cursor is on.
         let details = match (stage.focus, rows.get(cursor)) {
-            (_, None) if searching => vec![Line::styled(
-                "No matches. Backspace widens, esc cancels.",
-                Style::new().dim(),
-            )],
+            (_, None) if searching => Vec::new(),
             (_, _) if !searching && stage.focus == Pane::Groups => {
                 self.group_details(stage.group())
             }
@@ -598,9 +671,9 @@ impl Wizard {
             );
         }
         (
-            (groups_area.width > 0).then_some((groups_area, group_offset)),
-            (kinds_area.width > 0).then_some((kinds_area, kind_offset)),
-            (items_area.width > 0).then_some((items_area, offset)),
+            (groups_area.width > 0).then_some((groups_area, group_state.offset())),
+            (kinds_area.width > 0).then_some((kinds_area, kind_state.offset())),
+            (items_area.width > 0).then_some((items_area, item_state.offset())),
         )
     }
 
@@ -618,9 +691,9 @@ impl Wizard {
         counts
     }
 
-    fn group_item(&self, index: usize, group: &Group, width: usize) -> ListItem<'_> {
+    fn group_item(&self, index: usize, group: &Group) -> (Row<'static>, u16) {
         if self.is_wiki_group(group) {
-            let browser = self.wiki.as_ref().unwrap();
+            let browser = &self.wiki;
             let ready = !browser.vaults.is_empty()
                 && browser.vaults.iter().all(|record| {
                     browser
@@ -636,32 +709,35 @@ impl Wizard {
                 (" › ", Style::new().fg(ACCENT))
             };
             let count = browser.vaults.len().to_string();
-            let room = width.saturating_sub(5 + count.width() + 1);
-            let title = cut(&group.title, room);
-            let fill = room.saturating_sub(title.width()) + 1;
-            return ListItem::new(Line::from(vec![
-                Span::styled(format!(" {mark} "), style),
-                Span::raw(title),
-                Span::raw(" ".repeat(fill)),
-                Span::styled(count, Style::new().dim()),
-            ]));
+            let width = count.width() as u16;
+            return (
+                Row::new([
+                    Cell::from(Span::styled(format!(" {mark} "), style)),
+                    Cell::from(group.title.clone()),
+                    Cell::from(Line::from(count).right_aligned()).style(Style::new().dim()),
+                ]),
+                width,
+            );
         }
         let goal_selected =
             (!group.everything && self.profile_mode()).then(|| self.picked_goals.contains(&index));
-        self.selection_group_item(&group.title, &group.bulk_items(), width, goal_selected)
+        self.selection_group_item(&group.title, &group.bulk_rows, goal_selected)
     }
 
-    fn kind_item(&self, kind: &super::state::KindGroup, width: usize) -> ListItem<'_> {
-        self.selection_group_item(&kind.title, &kind.bulk_items(), width, None)
+    fn kind_item(&self, kind: &super::state::KindGroup, group: &Group) -> (Row<'static>, u16) {
+        self.selection_group_item(
+            &kind.title,
+            &kind.bulk_items(group).collect::<Vec<_>>(),
+            None,
+        )
     }
 
     fn selection_group_item(
         &self,
         title: &str,
         items: &[super::state::Item],
-        width: usize,
         goal_selected: Option<bool>,
-    ) -> ListItem<'_> {
+    ) -> (Row<'static>, u16) {
         let (mark, mark_style, count) = if items.is_empty() {
             ("   ", Style::new(), String::new())
         } else {
@@ -693,61 +769,46 @@ impl Wizard {
             };
             (mark, style, count)
         };
-        let title_style = if count == "✓" {
-            Style::new().dim()
-        } else {
-            Style::new()
-        };
-        // Title, then at least one space, then the count flush right;
-        // a title that cannot fit is cut with an ellipsis.
-        let room = width.saturating_sub(5 + count.width() + 1);
-        let title = cut(title, room);
-        let fill = room.saturating_sub(title.width()) + 1;
-        ListItem::new(Line::from(vec![
-            Span::styled(format!(" {mark} "), mark_style),
-            Span::styled(title, title_style),
-            Span::raw(" ".repeat(fill)),
-            Span::styled(
-                count,
-                if mark == ON || mark == PART {
-                    Style::new().fg(OK)
-                } else {
-                    Style::new().dim()
-                },
-            ),
-        ]))
+        let width = count.width() as u16;
+        (
+            Row::new([
+                Cell::from(Span::styled(format!(" {mark} "), mark_style)),
+                Cell::from(title.to_owned()),
+                Cell::from(Line::from(count).right_aligned()).style(
+                    if mark == ON || mark == PART {
+                        Style::new().fg(OK)
+                    } else {
+                        Style::new().dim()
+                    },
+                ),
+            ]),
+            width,
+        )
     }
 
-    fn row_label(&self, row: &Row) -> &str {
+    fn row_label(&self, row: &Item) -> &str {
         match row {
-            Row::Resource(index) => &self.model.resources[*index].label,
-            Row::Setting(index) => &self.model.settings[*index].label,
+            Item::Resource(index) => &self.model.resources[*index].label,
+            Item::Setting(index) => &self.model.settings[*index].label,
         }
     }
 
-    fn row_kind(&self, row: &Row) -> &'static str {
+    fn row_kind(&self, row: &Item) -> &'static str {
         match row {
-            Row::Resource(index) => match self.model.resources[*index].kind {
+            Item::Resource(index) => match self.model.resources[*index].kind {
                 ResourceKind::Skill => "Skill",
                 ResourceKind::Tool => "Tool",
                 ResourceKind::PiPackage => "Pi package",
                 ResourceKind::HerdrPlugin => "Herdr plugin",
                 ResourceKind::McpServer => "MCP server",
             },
-            Row::Setting(_) => "Setting",
+            Item::Setting(_) => "Setting",
         }
     }
 
-    fn choose_row_item(
-        &self,
-        row: &Row,
-        label_width: usize,
-        room: usize,
-        show_kind: bool,
-    ) -> ListItem<'_> {
-        let label = pad(&cut(self.row_label(row), label_width), label_width);
+    fn choose_row_item(&self, row: &Item) -> Row<'_> {
         let (mark, mark_style, dim_label, note) = match row {
-            Row::Resource(index) => {
+            Item::Resource(index) => {
                 let resource = &self.model.resources[*index];
                 if let Some(note) = self.included_note(*index) {
                     let actionable = !self
@@ -789,19 +850,20 @@ impl Wizard {
                     }
                 } else {
                     let (mark, style) = mark_for(self.selected[*index]);
+                    let reason = self.selection_reason(*index);
                     (
                         mark,
                         style,
                         false,
-                        if self.selected[*index] {
-                            self.selection_reason(*index)
+                        if self.selected[*index] && !reason.is_empty() {
+                            reason
                         } else {
                             resource.description.clone()
                         },
                     )
                 }
             }
-            Row::Setting(index) => {
+            Item::Setting(index) => {
                 let spec = &self.model.settings[*index];
                 match self.item_state(super::state::Item::Setting(*index)) {
                     ItemState::Installed => {
@@ -820,8 +882,8 @@ impl Wizard {
         };
         // Scope is only worth a word when it is not the default.
         let scope = match row {
-            Row::Resource(index) if self.model.resources[*index].group == "Wiki" => "Vault · ",
-            Row::Resource(index)
+            Item::Resource(index) if self.model.resources[*index].group == "Wiki" => "Vault · ",
+            Item::Resource(index)
                 if matches!(
                     self.model.resources[*index].kind,
                     ResourceKind::Skill | ResourceKind::McpServer
@@ -831,30 +893,23 @@ impl Wizard {
             }
             _ => "",
         };
-        let note = format!("{scope}{note}");
-        let kind = show_kind
-            .then(|| Span::styled(format!("{:<12} ", self.row_kind(row)), Style::new().dim()));
-        let mut spans = vec![Span::styled(format!(" {mark} "), mark_style)];
-        spans.extend(kind);
-        spans.extend([
-            Span::styled(
-                format!("{label} "),
-                if dim_label {
-                    Style::new().dim()
-                } else {
-                    Style::new()
-                },
-            ),
-            Span::styled(cut(&note, room), Style::new().dim()),
-        ]);
-        ListItem::new(Line::from(spans))
+        Row::new([
+            Cell::from(Span::styled(format!(" {mark} "), mark_style)),
+            Cell::from(self.row_kind(row)).style(Style::new().dim()),
+            Cell::from(self.row_label(row)).style(if dim_label {
+                Style::new().dim()
+            } else {
+                Style::new()
+            }),
+            Cell::from(format!("{scope}{note}")).style(Style::new().dim()),
+        ])
     }
 
     fn kind_details(&self, kind: &super::state::KindGroup) -> Vec<Line<'_>> {
         vec![
             Line::styled(kind.title.clone(), TITLE),
             Line::from(""),
-            Line::from(self.item_counts(&kind.items()).summary()),
+            Line::from(self.item_counts(&kind.rows).summary()),
             Line::from(""),
             Line::styled(
                 "space picks or clears this capability type.",
@@ -864,7 +919,7 @@ impl Wizard {
     }
 
     fn group_details(&self, group: &Group) -> Vec<Line<'_>> {
-        let counts = self.item_counts(&group.bulk_items());
+        let counts = self.item_counts(&group.bulk_rows);
         let mut lines = vec![Line::styled(group.title.clone(), TITLE)];
         if group.description != group.title {
             lines.push(Line::from(""));
@@ -882,20 +937,19 @@ impl Wizard {
         } else {
             let actionable = counts.actionable();
             for kind in &group.kinds {
-                if kind.bulk_rows.is_empty() {
-                    continue;
-                }
                 let labels = kind
-                    .bulk_rows
-                    .iter()
+                    .bulk_items(group)
                     .map(|row| {
-                        let label = self.row_label(row);
-                        match self.item_state(row.item()) {
+                        let label = self.row_label(&row);
+                        match self.item_state(row) {
                             ItemState::Installed => format!("{label} ✓"),
                             _ => label.to_owned(),
                         }
                     })
                     .collect::<Vec<_>>();
+                if labels.is_empty() {
+                    continue;
+                }
                 lines.push(Line::from(vec![
                     Span::styled(kind.title.clone(), Style::new().bold()),
                     Span::styled(format!("  {}", labels.len()), Style::new().dim()),
@@ -920,10 +974,10 @@ impl Wizard {
         lines
     }
 
-    fn row_details(&self, row: &Row) -> Vec<Line<'_>> {
+    fn row_details(&self, row: &Item) -> Vec<Line<'_>> {
         match row {
-            Row::Resource(index) => self.resource_details(*index),
-            Row::Setting(index) => self.setting_details(&self.model.settings[*index], *index),
+            Item::Resource(index) => self.resource_details(*index),
+            Item::Setting(index) => self.setting_details(&self.model.settings[*index], *index),
         }
     }
 
@@ -940,7 +994,9 @@ impl Wizard {
             Line::from(""),
         ];
         let reason = self.selection_reason(index);
-        if reason != "Optional addition" {
+        let needs_installed_note =
+            self.resource_installed(index) && !reason.starts_with("Already installed");
+        if !reason.is_empty() {
             lines.push(field("why", reason, ACCENT));
         }
         if resource.group == "Wiki" {
@@ -1009,7 +1065,7 @@ impl Wizard {
             lines.push(Line::from(""));
             lines.push(field("then", resource.next_action.clone(), ACCENT));
         }
-        if self.resource_installed(index) {
+        if needs_installed_note {
             lines.push(Line::from(""));
             lines.push(Line::styled("Already installed.", Style::new().fg(OK)));
         } else if let Some(parent) = self.required_note(index) {
@@ -1086,16 +1142,11 @@ impl Wizard {
         Some((choices, 0))
     }
 
-    fn render_where(&self, frame: &mut Frame, area: Rect, stage: &WhereStage) -> ListHit {
+    fn render_where(&self, frame: &mut Frame, area: Rect, cursor: usize) -> ListHit {
         // The agent rows already show every path, so the only extra text is
         // a note that changes what the rows mean.
         let destination = self.skill_destination();
-        let expanded = self.expanded_selection();
-        let wiki = expanded.iter().any(|resource| resource.group == "Wiki");
-        let skills = expanded
-            .iter()
-            .filter(|resource| resource.kind == ResourceKind::Skill)
-            .count();
+        let skills = self.skill_count();
         let has_mcp = self.has_mcp();
         let note = if destination.agents.is_empty() {
             Some(Line::styled(
@@ -1105,11 +1156,6 @@ impl Wizard {
         } else if has_mcp {
             Some(Line::styled(
                 " Scope applies to skills and MCP config. MCP goes to Pi only; other agents receive skills.",
-                Style::new().dim(),
-            ))
-        } else if wiki {
-            Some(Line::styled(
-                " Wiki setup is separate: after Review it stays inside the Vault you create or connect.",
                 Style::new().dim(),
             ))
         } else {
@@ -1124,12 +1170,13 @@ impl Wizard {
             crate::SkillScope::Global => ("(•)", "( )"),
             crate::SkillScope::Project => ("( )", "(•)"),
         };
-        let mut items = vec![ListItem::new(Line::from(vec![
+        let mut items = vec![Row::new([Cell::from(Line::from(vec![
             Span::styled(format!(" {global} "), Style::new().fg(OK)),
             Span::raw("All projects    "),
             Span::styled(format!("{project} "), Style::new().fg(OK)),
             Span::raw("This project"),
-        ]))];
+        ]))
+        .column_span(3)])];
         let agent_width = SkillAgent::ALL
             .iter()
             .map(|agent| agent.label().width())
@@ -1153,25 +1200,18 @@ impl Wizard {
                 .take_while(|other| *other != agent)
                 .find(|other| tree_of(other) == tree)
                 .map(|other| format!("= {}", other.label()));
-            let tree_room = (list_area.width as usize)
-                .saturating_sub(chrome::PANEL_FRAME as usize + 5 + agent_width + 1);
-            items.push(ListItem::new(Line::from(vec![
-                Span::styled(format!(" {mark} "), style),
-                Span::raw(format!("{} ", pad(agent.label(), agent_width))),
-                Span::styled(
-                    cut(
-                        &if unsupported {
-                            "MCP not yet verified".into()
-                        } else if has_mcp && *agent == SkillAgent::Pi {
-                            tidy(&crate::mcp::config_path(&destination), &destination.home)
-                        } else {
-                            same_as.unwrap_or_else(|| tidy(&tree, &destination.home))
-                        },
-                        tree_room,
-                    ),
-                    Style::new().dim(),
-                ),
-            ])));
+            let detail = if unsupported {
+                "MCP not yet verified".into()
+            } else if has_mcp && *agent == SkillAgent::Pi {
+                tidy(&crate::mcp::config_path(&destination), &destination.home)
+            } else {
+                same_as.unwrap_or_else(|| tidy(&tree, &destination.home))
+            };
+            items.push(Row::new([
+                Cell::from(Span::styled(format!(" {mark} "), style)),
+                Cell::from(agent.label()),
+                Cell::from(detail).style(Style::new().dim()),
+            ]));
         }
         let title = format!(
             " Where · {} · {}/{} agents ",
@@ -1179,20 +1219,28 @@ impl Wizard {
             self.selected_agents().len(),
             SkillAgent::ALL.len()
         );
-        let list = List::new(items)
-            .block(bordered(&title, true))
-            .highlight_style(highlight(true));
-        let mut state = ListState::default().with_selected(Some(stage.cursor));
+        let list = Table::new(
+            items,
+            [
+                Constraint::Length(5),
+                Constraint::Length(agent_width as u16 + 1),
+                Constraint::Fill(1),
+            ],
+        )
+        .column_spacing(0)
+        .block(bordered(&title, true))
+        .row_highlight_style(highlight(true));
+        let mut state = TableState::default().with_selected(Some(cursor));
         frame.render_stateful_widget(list, list_area, &mut state);
         if let Some(note) = note {
             frame.render_widget(Paragraph::new(note).wrap(Wrap { trim: true }), note_area);
         }
-        Some((list_area, 0))
+        Some((list_area, state.offset()))
     }
 
     // ---- review ------------------------------------------------------------
 
-    fn render_review(&self, frame: &mut Frame, area: Rect, scroll: u16) {
+    fn render_review(&self, frame: &mut Frame, area: Rect, scroll: u16) -> bool {
         let mut lines = Vec::new();
         if let Some(summary) = self.responses_summary() {
             lines.push(Line::from(summary));
@@ -1231,13 +1279,13 @@ impl Wizard {
                 }
             }
         } else {
-            self.render_setup_review(frame, area, scroll);
-            return;
+            return self.render_setup_review(frame, area, scroll);
         }
         let paragraph = Paragraph::new(lines)
             .block(bordered(" Review ", true))
             .scroll((scroll, 0));
         frame.render_widget(paragraph, area);
+        true
     }
 }
 
@@ -1247,28 +1295,6 @@ pub(super) fn plural(count: usize, noun: &str) -> String {
     } else {
         format!("{count} {noun}s")
     }
-}
-
-/// Pad to a display width (wide glyphs count double).
-pub(super) fn pad(text: &str, width: usize) -> String {
-    let fill = width.saturating_sub(text.width());
-    format!("{text}{}", " ".repeat(fill))
-}
-
-/// Cut to a display width with an ellipsis.
-fn cut(text: &str, width: usize) -> String {
-    if text.width() <= width {
-        return text.to_owned();
-    }
-    let mut out = String::new();
-    for ch in text.chars() {
-        let next = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        if out.width() + next + 1 > width {
-            break;
-        }
-        out.push(ch);
-    }
-    format!("{}…", out.trim_end())
 }
 
 /// A path with the home directory folded to `~`.
@@ -1302,21 +1328,12 @@ fn mark_for(on: bool) -> (&'static str, Style) {
     }
 }
 
-pub(super) use crate::ui::chrome::{centered as centered_rect, panel as bordered};
+pub(super) use crate::ui::chrome::panel as bordered;
 
 pub(super) fn highlight(focused: bool) -> Style {
     if focused {
         Style::new().fg(ACCENT).add_modifier(Modifier::REVERSED)
     } else {
-        Style::new().add_modifier(Modifier::REVERSED | Modifier::DIM)
-    }
-}
-
-pub(super) fn list_offset(len: usize, visible: u16, cursor: usize) -> usize {
-    let visible = visible.max(1) as usize;
-    if cursor < visible || len <= visible {
-        0
-    } else {
-        (cursor + 1 - visible).min(len - visible)
+        Style::new().bold()
     }
 }

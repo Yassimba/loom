@@ -204,7 +204,7 @@ fn registry_path_entries(system: &dyn System) -> Vec<PathBuf> {
         .collect()
 }
 
-fn prefer_mise_shims(home: &Path, paths: Vec<PathBuf>) -> Vec<PathBuf> {
+fn prefer_mise_shims(home: &Path, mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
     let mut shims = vec![home.join(".local").join("share").join("mise").join("shims")];
     if cfg!(windows) {
         shims.push(
@@ -214,17 +214,8 @@ fn prefer_mise_shims(home: &Path, paths: Vec<PathBuf>) -> Vec<PathBuf> {
                 .join("shims"),
         );
     }
-    let mut preferred = Vec::new();
-    let mut rest = Vec::new();
-    for path in paths {
-        if shims.iter().any(|shim| shim == &path) {
-            preferred.push(path);
-        } else {
-            rest.push(path);
-        }
-    }
-    preferred.extend(rest);
-    preferred
+    paths.sort_by_key(|path| !shims.contains(path));
+    paths
 }
 
 impl System for RealSystem {

@@ -596,7 +596,7 @@ pub fn execute_uninstall_plan(
                 continue 'steps;
             }
             if current_status != ReceiptStatus::Missing {
-                if let Err(message) = remove_receipt_and_selection(receipt, system, cancelled) {
+                if let Err(message) = remove_receipt(receipt, system, cancelled) {
                     report.failures.push(UninstallFailure {
                         target: step.resource_id.clone(),
                         message,
@@ -701,23 +701,20 @@ fn schedule_final_cleanup(home: &Path, system: &dyn System) -> Result<(), String
     }
 }
 
-fn remove_receipt_and_selection(
-    receipt: &Receipt,
-    system: &dyn System,
-    cancelled: &std::sync::atomic::AtomicBool,
-) -> Result<(), String> {
-    remove_receipt(receipt, system, cancelled)?;
-    if let Receipt::MiseTool { key } = receipt {
-        crate::manifest::remove_selected(system, std::slice::from_ref(key), cancelled)?;
-    }
-    Ok(())
-}
-
 fn remove_receipt(
     receipt: &Receipt,
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
+    let run = |command: CommandSpec| match system.run_controlled(
+        &command,
+        crate::system::MANAGER_COMMAND_TIMEOUT,
+        cancelled,
+    ) {
+        Ok(result) if result.success => Ok(()),
+        Ok(result) => Err(crate::install::command_failure_message(&result)),
+        Err(error) => Err(error.to_string()),
+    };
     match receipt {
         Receipt::McpEntry { path, name, digest } => {
             crate::mcp::remove_entry(path, name, digest).map_err(|e| e.to_string())?
@@ -740,30 +737,14 @@ fn remove_receipt(
             } else {
                 vec!["uninstall".into(), target.clone()]
             };
-            let result = system
-                .run_controlled(
-                    &CommandSpec::new(manager, args),
-                    crate::system::MANAGER_COMMAND_TIMEOUT,
-                    cancelled,
-                )
-                .map_err(|error| error.to_string())?;
-            if !result.success {
-                return Err(crate::install::command_failure_message(&result));
-            }
+            run(CommandSpec::new(manager, args))?;
         }
         Receipt::Command { program, args } => {
-            let result = system
-                .run_controlled(
-                    &CommandSpec::new(program, args.clone()),
-                    crate::system::MANAGER_COMMAND_TIMEOUT,
-                    cancelled,
-                )
-                .map_err(|error| error.to_string())?;
-            if !result.success {
-                return Err(crate::install::command_failure_message(&result));
-            }
+            run(CommandSpec::new(program, args.clone()))?;
         }
-        Receipt::MiseTool { .. } => {}
+        Receipt::MiseTool { key } => {
+            crate::manifest::remove_selected(system, std::slice::from_ref(key), cancelled)?;
+        }
         Receipt::Path {
             path,
             path_kind,

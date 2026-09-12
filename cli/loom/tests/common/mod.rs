@@ -1,3 +1,5 @@
+#![allow(dead_code)] // Each integration target uses only its relevant fixtures.
+
 use std::path::PathBuf;
 
 pub fn temp_home(label: &str) -> PathBuf {
@@ -19,4 +21,18 @@ pub fn repo_root() -> PathBuf {
         .and_then(std::path::Path::parent)
         .unwrap()
         .to_path_buf()
+}
+
+/// Execute a fresh installation with no cancellation or progress consumer.
+pub fn install(
+    plan: &loom::InstallPlan,
+    system: &(dyn loom::System + Sync),
+) -> loom::InstallReport {
+    loom::execute_attempt(
+        plan,
+        system,
+        &std::sync::atomic::AtomicBool::new(false),
+        &[],
+        &mut |_, _| {},
+    )
 }
