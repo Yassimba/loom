@@ -179,7 +179,7 @@ jobs:
           printf '[DEBUG-wsl234] %s END ubuntu-shell EXIT %s\n' `$(date -u +%Y-%m-%dT%H:%M:%SZ) `$code
           exit `$code
           "@
-          $command | Set-Content -Path "$evidenceDir/wsl-command.sh" -NoNewline
+          $command.Replace("`r`n", "`n") | Set-Content -Path "$evidenceDir/wsl-command.sh" -NoNewline
           Write-Host "[DEBUG-wsl234] $([DateTime]::UtcNow.ToString('o')) END wsl-file-preparation EXIT 0"
       - name: Run the checked-out Loom build inside the Ubuntu shell
         timeout-minutes: 2
