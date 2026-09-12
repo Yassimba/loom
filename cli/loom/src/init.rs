@@ -267,140 +267,104 @@ fn choose_features(
     options: &InitOptions,
     mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
 ) -> Result<InitFeatures> {
-    if has_project_selection(options) || options.gortex == Some(true) {
-        if options.tracker == Some(Tracker::Beads) && !beads_tools_installed {
-            anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
-        }
-        if options.gortex == Some(true) && !gortex_installed {
-            anyhow::bail!("Gortex is not installed; run `loom add --tool gortex`");
-        }
-        return Ok(InitFeatures {
-            project_instructions: has_project_selection(options),
-            python: options.python.unwrap_or(false),
-            rust: options.rust.unwrap_or(false),
-            adhd: options.adhd.unwrap_or(false),
-            tracker: options.tracker,
-            domain: options.domain,
-            editor: options.editor,
-            coding_standards: options.coding_standards.unwrap_or(false),
-            gortex: options.gortex.unwrap_or(false),
-        });
-    }
-
-    let (python_default, rust_default) = detect(project);
-    let project_instructions = ask(
-        "Set up project agent instructions?",
-        "Creates or updates AGENTS.md and CLAUDE.md for this project.",
-        true,
-    )?;
-    let (python, rust, adhd, tracker, domain, editor, coding_standards) = if project_instructions {
-        (
-            match options.python {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Add Python instructions?",
-                    "Adds typing, uv, and Python quality commands to AGENTS.md.",
-                    python_default,
-                )?,
-            },
-            match options.rust {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Add Rust instructions?",
-                    "Adds Rust conventions, Clippy, and test commands to AGENTS.md.",
-                    rust_default,
-                )?,
-            },
-            match options.adhd {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Use ADHD-friendly agent output?",
-                    "Requests short, scannable progress updates for this project.",
-                    false,
-                )?,
-            },
-            Some(match options.tracker {
-                Some(explicit) => explicit,
-                None => select_choice(
-                    "Choose the issue tracker",
-                    "Beads provides a dependency graph; local Markdown stores issues under ai-docs/plans/.",
-                    vec![Tracker::Beads, Tracker::Local],
-                    if beads_tools_installed || project.join(".beads").is_dir() {
-                        Tracker::Beads
-                    } else {
-                        Tracker::Local
-                    },
-                    options.yes,
-                )?,
-            }),
-            Some(match options.domain {
-                Some(explicit) => explicit,
-                None => select_choice(
-                    "Choose the domain-doc layout",
-                    "Most repositories have one context; monorepos may map several contexts.",
-                    vec![DomainLayout::Single, DomainLayout::Multi],
-                    if project.join("CONTEXT-MAP.md").exists() {
-                        DomainLayout::Multi
-                    } else {
-                        DomainLayout::Single
-                    },
-                    options.yes,
-                )?,
-            }),
-            Some(match options.editor {
-                Some(explicit) => explicit,
-                None => select_choice(
-                    "Choose the editor for source links",
-                    "Agents use this URL scheme for clickable file and line links.",
-                    vec![
-                        Editor::Vscode,
-                        Editor::Zed,
-                        Editor::Cursor,
-                        Editor::Jetbrains,
-                        Editor::None,
-                    ],
-                    default_editor,
-                    options.yes,
-                )?,
-            }),
-            match options.coding_standards {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Add coding standards?",
-                    "Creates CODING_STANDARDS.md with type, design, and simplicity checks.",
-                    true,
-                )?,
-            },
-        )
-    } else {
-        (false, false, false, None, None, None, false)
+    let explicit = has_project_selection(options) || options.gortex == Some(true);
+    let mut features = InitFeatures {
+        project_instructions: has_project_selection(options),
+        python: options.python.unwrap_or(false),
+        rust: options.rust.unwrap_or(false),
+        adhd: options.adhd.unwrap_or(false),
+        tracker: options.tracker,
+        domain: options.domain,
+        editor: options.editor,
+        coding_standards: options.coding_standards.unwrap_or(false),
+        gortex: options.gortex.unwrap_or(false),
     };
-    if tracker == Some(Tracker::Beads) && !beads_tools_installed {
+    if !explicit {
+        let (python_default, rust_default) = detect(project);
+        features.project_instructions = ask(
+            "Set up project agent instructions?",
+            "Creates or updates AGENTS.md and CLAUDE.md for this project.",
+            true,
+        )?;
+        if features.project_instructions {
+            let mut choose_bool = |explicit: Option<bool>, prompt, help, default| {
+                explicit.map_or_else(|| ask(prompt, help, default), Ok)
+            };
+            features.python = choose_bool(
+                options.python,
+                "Add Python instructions?",
+                "Adds typing, uv, and Python quality commands to AGENTS.md.",
+                python_default,
+            )?;
+            features.rust = choose_bool(
+                options.rust,
+                "Add Rust instructions?",
+                "Adds Rust conventions, Clippy, and test commands to AGENTS.md.",
+                rust_default,
+            )?;
+            features.adhd = choose_bool(
+                options.adhd,
+                "Use ADHD-friendly agent output?",
+                "Requests short, scannable progress updates for this project.",
+                false,
+            )?;
+            features.tracker = Some(select_choice(
+                "Choose the issue tracker",
+                "Beads provides a dependency graph; local Markdown stores issues under ai-docs/plans/.",
+                vec![Tracker::Beads, Tracker::Local],
+                if beads_tools_installed || project.join(".beads").is_dir() {
+                    Tracker::Beads
+                } else {
+                    Tracker::Local
+                },
+                options.yes,
+            )?);
+            features.domain = Some(select_choice(
+                "Choose the domain-doc layout",
+                "Most repositories have one context; monorepos may map several contexts.",
+                vec![DomainLayout::Single, DomainLayout::Multi],
+                if project.join("CONTEXT-MAP.md").exists() {
+                    DomainLayout::Multi
+                } else {
+                    DomainLayout::Single
+                },
+                options.yes,
+            )?);
+            features.editor = Some(select_choice(
+                "Choose the editor for source links",
+                "Agents use this URL scheme for clickable file and line links.",
+                vec![
+                    Editor::Vscode,
+                    Editor::Zed,
+                    Editor::Cursor,
+                    Editor::Jetbrains,
+                    Editor::None,
+                ],
+                default_editor,
+                options.yes,
+            )?);
+            features.coding_standards = choose_bool(
+                options.coding_standards,
+                "Add coding standards?",
+                "Creates CODING_STANDARDS.md with type, design, and simplicity checks.",
+                true,
+            )?;
+        }
+    }
+    if features.tracker == Some(Tracker::Beads) && !beads_tools_installed {
         anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
     }
-    let gortex = match options.gortex {
-        Some(true) if !gortex_installed => {
-            anyhow::bail!("Gortex is not installed; run `loom add --tool gortex`");
-        }
-        Some(explicit) => explicit,
-        None if gortex_installed => ask(
+    if !explicit && options.gortex.is_none() && gortex_installed {
+        features.gortex = ask(
             "Set up Gortex?",
             "Wires Pi and Zed without hooks, starts Gortex, and tracks this repository.",
             true,
-        )?,
-        None => false,
-    };
-    Ok(InitFeatures {
-        project_instructions,
-        python,
-        rust,
-        adhd,
-        tracker,
-        domain,
-        editor,
-        coding_standards,
-        gortex,
-    })
+        )?;
+    }
+    if features.gortex && !gortex_installed {
+        anyhow::bail!("Gortex is not installed; run `loom add --tool gortex`");
+    }
+    Ok(features)
 }
 
 // gortex v0.64.0 injects mandatory tool guidance even with --no-hooks; remove this
