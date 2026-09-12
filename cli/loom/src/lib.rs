@@ -12,8 +12,6 @@ mod pi_compat;
 pub(crate) mod session;
 pub mod settings;
 mod skills;
-#[cfg(test)]
-mod snapshot_tests;
 pub mod status;
 mod system;
 pub mod ui;

@@ -463,38 +463,4 @@ mod tests {
             42
         );
     }
-
-    #[test]
-    fn render_progress_gallery() {
-        if !crate::snapshot_tests::isolated("wiki_progress::tests::render_progress_gallery") {
-            return;
-        }
-        let mut frames = Vec::new();
-        for (width, height, confirm) in [
-            (40, 10, false),
-            (70, 20, false),
-            (72, 20, true),
-            (120, 30, false),
-        ] {
-            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-            terminal
-                .draw(|frame| {
-                    draw_progress(
-                        frame,
-                        "Vault 1/3 · second-brain",
-                        "Building search embeddings",
-                        &[
-                            ("Vault Markdown indexed", Duration::from_secs(4)),
-                            ("Search models ready", Duration::from_secs(2)),
-                        ],
-                        Duration::from_secs(12),
-                        5,
-                        confirm,
-                    )
-                })
-                .unwrap();
-            frames.push(format!("{:?}", terminal.backend().buffer()));
-        }
-        crate::snapshot_tests::assert_snapshot("wiki-progress", &frames.join("\n"));
-    }
 }

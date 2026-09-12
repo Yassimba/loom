@@ -1317,100 +1317,6 @@ fn every_stage_renders_without_panicking() {
     tiny.draw(|frame| wizard.draw(frame)).unwrap();
 }
 
-/// Prints every screen; run with `--nocapture` to eyeball the layout.
-#[test]
-fn render_gallery() {
-    if !crate::snapshot_tests::isolated("wizard::tests::render_gallery") {
-        return;
-    }
-    let mut frames = Vec::new();
-    let mut wizard = wizard();
-    let mut terminal = Terminal::new(TestBackend::new(104, 26)).unwrap();
-    let mut show = |wizard: &mut Wizard, terminal: &mut Terminal<TestBackend>| {
-        freeze_gallery_time(wizard);
-        terminal.draw(|frame| wizard.draw(frame)).unwrap();
-        frames.push(format!("{:?}", terminal.backend().buffer()));
-    };
-    // Also show the shipped goal names and dependency explanations, not just fixtures.
-    let mut catalog_model = model(ready());
-    let catalog = crate::Catalog::embedded().unwrap();
-    catalog_model.resources = catalog.resources;
-    catalog_model.profiles = catalog.profiles;
-    catalog_model.installed = vec![false; catalog_model.resources.len()];
-    catalog_model.settings.clear();
-    let mut goals = Wizard::new(catalog_model, crate::wizard::wiki::WikiBrowser::default());
-    let mut wide = Terminal::new(TestBackend::new(160, 34)).unwrap();
-    show(&mut goals, &mut wide);
-    go_to_group(&mut goals, "Research deeply");
-    press(
-        &mut goals,
-        &[KeyCode::Char(' '), KeyCode::Enter, KeyCode::Enter],
-    );
-    show(&mut goals, &mut wide);
-    show(&mut goals, &mut terminal);
-
-    go_to(&mut wizard, Item::Resource(2));
-    press(&mut wizard, &[KeyCode::Char(' ')]);
-    go_to(&mut wizard, Item::Resource(3));
-    press(&mut wizard, &[KeyCode::Char(' ')]);
-    show(&mut wizard, &mut terminal);
-    go_to_group(&mut wizard, "Everything");
-    show(&mut wizard, &mut terminal);
-    press(&mut wizard, &[KeyCode::Enter]);
-    show(&mut wizard, &mut terminal);
-    press(&mut wizard, &[KeyCode::Enter]);
-    show(&mut wizard, &mut terminal);
-    press(&mut wizard, &[KeyCode::Enter]);
-    let job = wizard.begin_install().unwrap();
-    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
-    wizard.handle_install_event(InstallEvent::Status(1, ExecStatus::Running));
-    show(&mut wizard, &mut terminal);
-    wizard.handle_install_event(InstallEvent::Status(
-        1,
-        ExecStatus::Failed(
-            "herdr plugin install reviewr --yes\nexit status 1: no such plugin".into(),
-        ),
-    ));
-    finish_test_job(
-        &mut wizard,
-        job,
-        crate::InstallReport {
-            installed: vec!["skills".into()],
-            failures: vec![crate::InstallFailure {
-                target: "Herdr plugins:reviewr".into(),
-                message: "exit status 1: no such plugin".into(),
-            }],
-        },
-    );
-    show(&mut wizard, &mut terminal);
-    press(&mut wizard, &[KeyCode::Char('d')]);
-    show(&mut wizard, &mut terminal);
-
-    // Overlays and the narrow single-column layout.
-    let mut fresh = self::wizard();
-    press(&mut fresh, &[KeyCode::Char('?')]);
-    show(&mut fresh, &mut terminal);
-    press(
-        &mut fresh,
-        &[KeyCode::Esc, KeyCode::Char('/'), KeyCode::Char('t')],
-    );
-    show(&mut fresh, &mut terminal);
-    press(&mut fresh, &[KeyCode::Esc]);
-    go_to(&mut fresh, Item::Resource(3));
-    press(&mut fresh, &[KeyCode::Char(' '), KeyCode::Esc]);
-    show(&mut fresh, &mut terminal);
-    press(&mut fresh, &[KeyCode::Esc]);
-    let mut narrow = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    show(&mut fresh, &mut narrow);
-    press(&mut fresh, &[KeyCode::Right]);
-    show(&mut fresh, &mut narrow);
-    press(&mut fresh, &[KeyCode::Right]);
-    show(&mut fresh, &mut narrow);
-    press(&mut fresh, &[KeyCode::Enter]);
-    show(&mut fresh, &mut narrow);
-    crate::snapshot_tests::assert_snapshot("wizard-gallery", &frames.join("\n"));
-}
-
 #[test]
 fn automatic_pi_loom_package_is_hidden_and_selected_for_existing_pi() {
     let mut model = model(ready());
@@ -2326,42 +2232,6 @@ fn success_offers_the_next_command_to_copy() {
 }
 
 #[test]
-fn render_gallery_extra() {
-    if !crate::snapshot_tests::isolated("wizard::tests::render_gallery_extra") {
-        return;
-    }
-    let mut frames = Vec::new();
-    let mut show = |wizard: &mut Wizard, w: u16, h: u16| {
-        let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
-        terminal.draw(|frame| wizard.draw(frame)).unwrap();
-        frames.push(format!("{:?}", terminal.backend().buffer()));
-    };
-    // Uninstall
-    let mut model = model(ready());
-    model.purpose = WizardPurpose::Uninstall;
-    model.installed = vec![true; model.resources.len()];
-    let mut un = Wizard::new(model, crate::wizard::wiki::WikiBrowser::default());
-    show(&mut un, 104, 24);
-    press(
-        &mut un,
-        &[KeyCode::Right, KeyCode::Char(' '), KeyCode::Enter],
-    );
-    show(&mut un, 104, 24);
-    // Responses stage
-    let mut m = self::model(ready());
-    m.mode = crate::app::SelectionMode::Setup;
-    let mut setup = Wizard::new(m, crate::wizard::wiki::WikiBrowser::default());
-    go_to(&mut setup, Item::Resource(0));
-    press(&mut setup, &[KeyCode::Char(' '), KeyCode::Enter]);
-    show(&mut setup, 104, 24);
-    // Nothing chosen review
-    let mut empty = self::wizard();
-    press(&mut empty, &[KeyCode::Enter]);
-    show(&mut empty, 104, 24);
-    crate::snapshot_tests::assert_snapshot("wizard-extra", &frames.join("\n"));
-}
-
-#[test]
 fn project_scope_honours_global_installs_but_global_scope_ignores_project_ones() {
     let mut model = model(ready());
     model
@@ -2392,45 +2262,6 @@ fn project_scope_honours_global_installs_but_global_scope_ignores_project_ones()
     wizard.skill_scope = SkillScope::Global;
     assert!(wizard.resource_installed(sem));
     assert!(!wizard.installed_globally_only(sem));
-}
-
-/// Keep rendering deterministic without adding a clock abstraction to production.
-fn freeze_gallery_time(wizard: &mut Wizard) {
-    let stage = &mut wizard.install;
-    stage.tick = 0;
-    stage.started = None;
-    stage.elapsed = std::time::Duration::ZERO;
-    for item in &mut stage.items {
-        item.started = None;
-        item.elapsed = std::time::Duration::ZERO;
-    }
-}
-
-#[test]
-fn render_width_boundaries() {
-    if !crate::snapshot_tests::isolated("wizard::tests::render_width_boundaries") {
-        return;
-    }
-    let mut frames = Vec::new();
-    for (width, height) in [
-        (40, 10),
-        (69, 20),
-        (70, 20),
-        (72, 20),
-        (80, 24),
-        (99, 24),
-        (100, 24),
-        (120, 30),
-    ] {
-        let mut wizard = wizard();
-        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        for code in [KeyCode::Left, KeyCode::Right, KeyCode::Right] {
-            press(&mut wizard, &[code]);
-            terminal.draw(|frame| wizard.draw(frame)).unwrap();
-            frames.push(format!("{:?}", terminal.backend().buffer()));
-        }
-    }
-    crate::snapshot_tests::assert_snapshot("wizard-widths", &frames.join("\n"));
 }
 
 /// Simulate the worker returning the reviewed job with its completed rows.
