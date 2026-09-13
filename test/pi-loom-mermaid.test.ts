@@ -632,7 +632,11 @@ test("labels out of one source sit on their own arms, not stacked at the fork", 
   const drawn = render("flowchart LR\n  A -->|alpha| B\n  A -->|beta| C\n  A -->|gamma| D\n");
   assert.ok(drawn);
   const text = drawn.plain.join("\n");
-  for (const [label, box] of [["alpha", "B"], ["beta", "C"], ["gamma", "D"]]) {
+  for (const [label, box] of [
+    ["alpha", "B"],
+    ["beta", "C"],
+    ["gamma", "D"],
+  ]) {
     const row = drawn.plain.findIndex((l) => l.includes(`│ ${box} │`));
     assert.ok(drawn.plain[row - 1].includes(label), `${label} labels the arm into ${box}`);
   }
