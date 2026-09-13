@@ -7,7 +7,7 @@
 import { Canvas } from './canvas.ts'
 import type { Anchor, Edge, Node } from './graph.ts'
 import { Graph } from './graph.ts'
-import type { Limits } from './labels.ts'
+import { type Limits, wrapLabel } from './labels.ts'
 import { layout, type NodeExtra } from './layout.ts'
 import { frameOrigin, orient, paint } from './paint.ts'
 
@@ -21,11 +21,18 @@ export function layoutFlowchart(graph: Graph, limits: Limits): CanvasResult {
   return canvas && orient(canvas, graph)
 }
 
-/** Class and ER diagrams: boxes divided into title / attribute / method rows. */
+/**
+ * Class and ER diagrams: boxes divided into title / attribute / method
+ * rows. A member longer than twice the label wrap (a signature with many
+ * parameters) wraps at word boundaries, so one wide member stops
+ * widening its whole rank's column.
+ */
 export function layoutClass(graph: Graph, limits: Limits): CanvasResult {
   const extras: NodeExtra[] = graph.nodes.map((node) => ({
     kind: 'compartments',
-    sections: node.sections ?? [[node.label]],
+    sections: (node.sections ?? [[node.label]]).map((rows) =>
+      rows.flatMap((row) => wrapLabel(row, 2 * limits.wrap, 3)),
+    ),
   }))
   const canvas = layoutCanvas(graph, extras, limits)
   return canvas && orient(canvas, graph)
@@ -255,8 +262,6 @@ function buildScope(
       headTo: e.headTo,
       headFrom: e.headFrom,
       line: e.line,
-      fromSide: e.fromSide,
-      toSide: e.toSide,
       fromAnchor: anchorOf(f, e.from),
       toAnchor: anchorOf(t, e.to),
     }

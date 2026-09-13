@@ -66,7 +66,7 @@ export function paint(graph: Graph, extras: NodeExtra[], lay: Layout): Canvas {
   flushLabels(canvas)
   placeLaneLabels(canvas, routes.flatMap((r) => (r?.laneLabel === undefined ? [] : [r.laneLabel])))
 
-  canvas.finalizeMask(graph.dir === 'left' || graph.dir === 'right' ? 'h' : 'v')
+  canvas.finalizeMask()
   return canvas
 }
 
@@ -330,24 +330,35 @@ function placeLabel(canvas: Canvas, label: string, row: number, x: number): void
 }
 
 function flushLabels(canvas: Canvas): void {
-  for (const { label, row, x } of canvas.labels.splice(0)) writeLabel(canvas, label, row, x)
+  for (const { label, row, x } of canvas.labels.splice(0)) {
+    // Two labels routed onto one row (adjacent buses into one rank) would
+    // truncate each other; the later one moves a row up, then down, if a
+    // row there is free for the whole text.
+    const glyphs = [...measured(label)]
+    const run = (r: number): number => (r >= 0 && r < canvas.h ? labelRun(canvas, glyphs, r, x) : 0)
+    const at = [row, row - 1, row + 1].find((r) => run(r) === glyphs.length) ?? row
+    let cx = x
+    for (const [c, cw] of glyphs.slice(0, run(at))) {
+      if (cw === 0) continue
+      for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(cx + k, at)] = 0
+      canvas.set(cx, at, c, 'edgeLabel')
+      for (let k = 1; k < cw; k++) canvas.set(cx + k, at, CONT, 'edgeLabel')
+      cx += cw
+    }
+  }
 }
 
-function writeLabel(canvas: Canvas, label: string, row: number, startX: number): void {
-  if (row >= canvas.h) return
+/** How many of `glyphs` fit from `(x, row)` before a non-blank cell. */
+function labelRun(canvas: Canvas, glyphs: [string, number][], row: number, startX: number): number {
   let x = startX
-  for (const [c, cw] of measured(label)) {
-    if (cw === 0) continue
-    if (x + cw > canvas.w) break
-    let blocked = false
+  for (let n = 0; n < glyphs.length; n++) {
+    const cw = glyphs[n][1]
+    if (x + cw > canvas.w) return n
     for (let k = 0; k < cw; k++) {
       const i = canvas.idx(x + k, row)
-      if (canvas.ch[i] !== ' ' || canvas.occupied[i]) blocked = true
+      if (canvas.ch[i] !== ' ' || canvas.occupied[i]) return n
     }
-    if (blocked) break
-    for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(x + k, row)] = 0
-    canvas.set(x, row, c, 'edgeLabel')
-    for (let k = 1; k < cw; k++) canvas.set(x + k, row, CONT, 'edgeLabel')
     x += cw
   }
+  return glyphs.length
 }
