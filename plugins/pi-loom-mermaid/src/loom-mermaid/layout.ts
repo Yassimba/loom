@@ -1042,7 +1042,8 @@ function placeLr(
     // A label past the bus needs one column more, to end clear of the box.
     // Only a straight edge keeps its label before the bus.
     const past = exitRow(i) !== entryRow(i) || bundleOf(i) !== undefined
-    const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel) + 2 * edgeBus[i] + (past ? 1 : 0)
+    const clearance = past ? busTracks[ranks[e.from]] : 2 * edgeBus[i]
+    const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel) + clearance
     bandLabel[ranks[e.from]] = Math.max(bandLabel[ranks[e.from]], verb)
   })
 
@@ -1208,6 +1209,7 @@ function placeLr(
             bundleOf(i) !== undefined,
             to.cy + (entryOffset.get(i) ?? 0),
             labelAtArrival(i),
+            [bandEnd[from.rank] + 1, bandEnd[from.rank] + 1 + Math.max(0, busTracks[from.rank] - 1)],
           )
         : to.rank > from.rank && edgeStraight[i]
           ? skipRouteLr(from, to, edge, skipRoute[i], max)
@@ -1565,6 +1567,7 @@ function forwardRouteLr(
   bundled = false,
   entry = to.cy,
   atArrival = false,
+  band: [number, number] = [bus, bus],
 ): Route {
   const rx = from.x + from.w - 1
   const ry = from.cy
@@ -1593,9 +1596,11 @@ function forwardRouteLr(
   // lands on the edge's own trunk.
   if (edge.label !== null) {
     // A straight edge has no bus to clear: the whole run is its own.
+    // Otherwise the label clears every track in the band, not just this
+    // edge's: the neighbouring trunks run through the same rows.
     const straight = ry === ly && !bundled
-    const fits = straight || rx + 2 + labelCols(edge.label, max) < bus
-    const x = !straight && (atArrival || !fits) ? bus + 2 : rx + 2
+    const fits = straight || rx + 2 + labelCols(edge.label, max) < band[0]
+    const x = !straight && (atArrival || !fits) ? band[1] + 2 : rx + 2
     labels.push({ text: edge.label, row: sat(atArrival ? ly : ry, 1), x })
   }
   const route: Route = { points, labels: fitted(labels, max) }

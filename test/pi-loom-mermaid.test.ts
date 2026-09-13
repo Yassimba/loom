@@ -644,7 +644,9 @@ test("labels out of one source sit on their own arms, not stacked at the fork", 
 });
 
 test("a label never lands on its own trunk when the source sits against the bus", () => {
-  const drawn = render("flowchart LR\n  A -->|alpha| B\n  A -->|beta| C\n  B -->|gamma| D\n  C -->|delta| D\n");
+  const drawn = render(
+    "flowchart LR\n  A -->|alpha| B\n  A -->|beta| C\n  B -->|gamma| D\n  C -->|delta| D\n",
+  );
   assert.ok(drawn);
   const rows = drawn.plain;
   const trunk = rows.findIndex((l) => l.includes("delta"));
@@ -652,4 +654,18 @@ test("a label never lands on its own trunk when the source sits against the bus"
   // The vertical the label sits beside is still drawn on the row it shares.
   assert.ok(rows[trunk].slice(0, col).includes("│"), "the trunk survives left of the label");
   assert.doesNotMatch(rows[trunk], /│delta|delta│/, "the label keeps a column clear of the line");
+});
+
+test("a label clears every trunk in its band, not only its own", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/biclique-private.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const rows = drawn.plain;
+  const row = rows.findIndex((l) => l.includes("optional"));
+  const at = rows[row].indexOf("optional");
+  // Both the dotted track and the solid trunk stay drawn left of the label.
+  const left = rows[row].slice(0, at);
+  assert.match(left, /│/, "the neighbouring trunk survives the label row");
+  assert.doesNotMatch(rows[row], /optional│/, "and the label ends clear of the box");
 });
