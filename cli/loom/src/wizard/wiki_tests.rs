@@ -1,6 +1,6 @@
 use super::*;
 use crate::wiki::{VaultHealth, VaultRecord, WikiOperation, WikiRegistry};
-use crate::wizard::wiki::{Capability, CAPABILITIES};
+use crate::wizard::wiki::{wiki_capabilities, Capability};
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,11 +22,11 @@ fn chooser(home: &Path) -> Wizard {
     model.setting_states.clear();
     model.skill_destination.home = home.to_path_buf();
     model.skill_destination.project_root = home.to_path_buf();
-    let mut wizard = Wizard::new(model);
+    let mut wizard = Wizard::new(model, crate::wizard::wiki::WikiBrowser::default());
     wizard.selected.fill(false);
     let mut browser = crate::wizard::wiki::WikiBrowser::default();
     browser.load(home);
-    wizard.wiki = Some(browser);
+    wizard.wiki = browser;
     go_to_group(&mut wizard, "Knowledgebase");
     wizard
 }
@@ -59,7 +59,7 @@ fn registered_wiki_can_be_unregistered_from_setup() {
     assert!(output.contains("Unregister this Wiki?"), "{output}");
     assert!(output.contains("files will remain untouched"), "{output}");
     press(&mut wizard, &[KeyCode::Esc]);
-    assert!(wizard.wiki.as_ref().unwrap().confirm_unregister.is_none());
+    assert!(wizard.wiki.confirm_unregister.is_none());
     press(&mut wizard, &[KeyCode::Char('u')]);
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
@@ -77,7 +77,7 @@ fn folder_picks_stay_inline_and_checkmarks_are_vault_local() {
     let mut wizard = chooser(&home);
     let a = home.join("A");
     let b = home.join("B");
-    let browser = wizard.wiki.as_mut().unwrap();
+    let browser = &mut wizard.wiki;
     browser.picked_path(WikiOperation::Create, a.clone());
     browser.item_cursor = 4;
     browser.toggle();
@@ -107,13 +107,11 @@ fn folder_picks_stay_inline_and_checkmarks_are_vault_local() {
     assert!(wizard.handle_click(area.x + 4, area.y + 5).is_none());
     assert!(!wizard
         .wiki
-        .as_ref()
-        .unwrap()
-        .selected(&wizard.wiki.as_ref().unwrap().vaults[0])
+        .selected(&wizard.wiki.vaults[0])
         .contains(&Capability::Skill("research")));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     local_skill(&a, "research", "local copy");
-    let browser = wizard.wiki.as_ref().unwrap();
+    let browser = &wizard.wiki;
     assert!(browser.installed(&browser.vaults[0], Capability::Skill("research")));
     assert!(!browser.installed(&browser.vaults[1], Capability::Skill("research")));
     let output = screen(&mut wizard, 160, 28);
@@ -131,9 +129,9 @@ fn wiki_review_and_dry_run_include_only_curated_skills_and_their_dependencies() 
     let home = root("review");
     let vault = home.join("New Wiki");
     let mut wizard = chooser(&home);
-    let browser = wizard.wiki.as_mut().unwrap();
+    let browser = &mut wizard.wiki;
     browser.picked_path(WikiOperation::Create, vault.clone());
-    for cursor in 4..CAPABILITIES.len() {
+    for cursor in 4..wiki_capabilities().len() {
         browser.item_cursor = cursor;
         browser.toggle();
     }
@@ -152,9 +150,9 @@ fn wiki_review_and_dry_run_include_only_curated_skills_and_their_dependencies() 
         .resources
         .iter()
         .all(|r| matches!(r.kind, ResourceKind::Skill | ResourceKind::Tool)));
-    assert!(jobs[0].plan.prerequisites.iter().any(|step| matches!(&step.action, crate::StepAction::SyncTools { tools } if tools.contains(&"npm:@mermaid-js/mermaid-cli".into()) && tools.contains(&"uv".into()))));
-    for step in &jobs[0].plan.resources {
-        if let crate::StepAction::CopySkills { destination, .. } = &step.action {
+    assert!(jobs[0].plan.prerequisites().any(|step| matches!(&step.operation, crate::Operation::Tools { tools } if tools.contains(&"npm:@mermaid-js/mermaid-cli".into()) && tools.contains(&"uv".into()))));
+    for step in jobs[0].plan.resources() {
+        if let crate::Operation::Skills { destination, .. } = &step.operation {
             assert_eq!(destination.scope, SkillScope::Project);
             assert_eq!(destination.project_root, vault);
             assert_eq!(destination.agents, [SkillAgent::AgentsStandard]);
@@ -177,7 +175,7 @@ fn wiki_review_and_dry_run_include_only_curated_skills_and_their_dependencies() 
     else {
         panic!("expected normal dry-run outcome");
     };
-    assert!(plan.resources.is_empty());
+    assert!(plan.resources().next().is_none());
     assert!(summary
         .iter()
         .any(|line| line.contains("New Wiki") && line.contains("research")));
@@ -193,8 +191,6 @@ fn searching_inside_a_wiki_never_selects_global_or_unlisted_skills() {
     let mut wizard = chooser(&home);
     wizard
         .wiki
-        .as_mut()
-        .unwrap()
         .picked_path(WikiOperation::Create, home.join("Search Wiki"));
     press(
         &mut wizard,
@@ -210,8 +206,20 @@ fn searching_inside_a_wiki_never_selects_global_or_unlisted_skills() {
     );
     assert!(wizard.search.is_none(), "global search must remain closed");
     press(&mut wizard, &[KeyCode::Enter, KeyCode::Char(' ')]);
-    assert_eq!(wizard.wiki.as_ref().unwrap().count(), 2);
+    assert_eq!(wizard.wiki.count(), 2);
     assert!(wizard.selected.iter().all(|selected| !selected));
+    press(&mut wizard, &[KeyCode::End]);
+    assert_eq!(wizard.wiki.item_cursor, 9);
+    press(&mut wizard, &[KeyCode::PageUp]);
+    assert_eq!(wizard.wiki.item_cursor, 0);
+    press(&mut wizard, &[KeyCode::PageDown]);
+    assert_eq!(wizard.wiki.item_cursor, 9);
+    press(&mut wizard, &[KeyCode::Esc]);
+    assert_eq!(choose(&wizard).focus, Pane::Kinds);
+    press(&mut wizard, &[KeyCode::Esc]);
+    assert_eq!(choose(&wizard).focus, Pane::Groups);
+    press(&mut wizard, &[KeyCode::BackTab]);
+    assert_eq!(choose(&wizard).focus, Pane::Items);
     press(&mut wizard, &[KeyCode::Char('/')]);
     for c in "tdd".chars() {
         press(&mut wizard, &[KeyCode::Char(c)]);
@@ -223,7 +231,7 @@ fn searching_inside_a_wiki_never_selects_global_or_unlisted_skills() {
         "Choose",
         "n is text while filtering, not Next"
     );
-    assert_eq!(wizard.wiki.as_ref().unwrap().count(), 2);
+    assert_eq!(wizard.wiki.count(), 2);
     press(
         &mut wizard,
         &[KeyCode::Esc, KeyCode::Home, KeyCode::Char(' ')],
@@ -264,7 +272,7 @@ impl crate::System for SetupSystem {
                     repo.join("manifest/loom.toml"),
                     include_str!("../../../../manifest/loom.toml"),
                 )?;
-                for capability in CAPABILITIES {
+                for capability in wiki_capabilities() {
                     if let Capability::Skill(name) = capability {
                         let skill = repo.join("skills").join(name);
                         fs::create_dir_all(&skill)?;
@@ -352,7 +360,7 @@ fn install(wizard: &mut Wizard, system: &SetupSystem, approve: bool) {
                 assert!(lines.iter().any(|line| line == ".claude-obsidian.json"));
                 reply.send(approve).unwrap();
             } else {
-                let done = matches!(event, InstallEvent::Done(_));
+                let done = matches!(event, InstallEvent::Finished(_, _));
                 wizard.handle_install_event(event);
                 if done {
                     break;
@@ -370,7 +378,7 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
     local_skill(&home, "research", "global untouched");
     local_skill(&home.join("Other Wiki"), "research", "other untouched");
     let mut wizard = chooser(&home);
-    let browser = wizard.wiki.as_mut().unwrap();
+    let browser = &mut wizard.wiki;
     browser.picked_path(WikiOperation::Create, vault.clone());
     for cursor in [1, 4, 8] {
         browser.item_cursor = cursor;
@@ -393,9 +401,7 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
     );
     assert!(WikiRegistry::load(&home).unwrap().vaults.is_empty());
     install(&mut wizard, &system, true);
-    let Stage::Install(stage) = &wizard.stages[wizard.stage_index] else {
-        panic!("not Install");
-    };
+    let stage = &wizard.install;
     let report = stage.report.as_ref().unwrap();
     assert!(report.failures.is_empty(), "{report:?}");
     assert!(
@@ -451,11 +457,11 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
         .resources
         .iter()
         .any(|resource| resource.install_target == "research"));
-    assert_eq!(job.completed.len(), 1);
+    assert_eq!(job.session.completed.len(), 1);
     wizard.cancelled.store(true, Ordering::Relaxed);
     let (sender, _) = mpsc::channel();
     assert!(job.wikis[0]
-        .run(&system, &wizard.cancelled, 0, &sender, &job.paths)
+        .run(&system, &wizard.cancelled, 0, &sender, &job.session.paths)
         .is_err());
     assert_eq!(system.commands.lock().unwrap().len(), commands_before);
     fs::write(
@@ -465,7 +471,7 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
     .unwrap();
     wizard.cancelled.store(false, Ordering::Relaxed);
     assert!(job.wikis[0]
-        .run(&system, &wizard.cancelled, 0, &sender, &job.paths)
+        .run(&system, &wizard.cancelled, 0, &sender, &job.session.paths)
         .unwrap_err()
         .to_string()
         .contains("registry"));
@@ -488,7 +494,7 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
     });
     registry.save(&home).unwrap();
     let mut wizard = chooser(&home);
-    let browser = wizard.wiki.as_mut().unwrap();
+    let browser = &mut wizard.wiki;
     browser.health.insert(
         vault.clone(),
         VaultHealth {
@@ -502,7 +508,7 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
     browser.item_cursor = 4;
     browser.toggle();
     let jobs = wizard.wiki_jobs().unwrap();
-    assert!(jobs[0].request.is_none());
+    assert!(jobs[0].operation.is_none());
     assert_eq!(jobs[0].resources.len(), 1);
     press(&mut wizard, &[KeyCode::Char('n'), KeyCode::Enter]);
     let system = SetupSystem {
@@ -519,4 +525,31 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
         .iter()
         .all(|command| matches!(command.program.as_str(), "curl" | "tar")));
     fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn wiki_skills_are_reviewed_catalog_skills() {
+    let catalog = crate::Catalog::embedded().unwrap();
+    let list = wiki_capabilities();
+    assert_eq!(
+        &list[..4],
+        [
+            Capability::Essentials,
+            Capability::Feynman,
+            Capability::Confluence,
+            Capability::Qmd,
+        ]
+    );
+    assert!(list.len() > 4);
+    for capability in &list[4..] {
+        let Capability::Skill(name) = capability else {
+            panic!("wiki skill list mixed in a special capability");
+        };
+        assert!(
+            catalog.resources.iter().any(|resource| {
+                resource.kind == crate::ResourceKind::Skill && resource.install_target == *name
+            }),
+            "{name}"
+        );
+    }
 }

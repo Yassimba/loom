@@ -125,34 +125,51 @@ impl CommandSpec {
     }
 }
 
+/// A reviewed installation operation. Commands and verification follow from its kind.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerificationSpec {
-    pub command: CommandSpec,
-    pub needle: Option<String>,
-}
-
-/// What a plan step does when executed: run a manager command, or copy
-/// skills into an exact agent-and-scope destination natively.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum StepAction {
-    Command(CommandSpec),
-    CopySkills {
-        skills: Vec<String>,
-        destination: crate::skills::SkillDestination,
-    },
-    SyncTools {
+pub enum Operation {
+    BootstrapMise(Platform),
+    Tools {
         tools: Vec<String>,
     },
-    ConfigureMcp {
+    Skills {
+        skills: Vec<String>,
+        destination: crate::SkillDestination,
+    },
+    PiPackage {
+        spec: String,
+        name: String,
+        project: bool,
+    },
+    HerdrPlugin {
+        source: String,
+        name: String,
+    },
+    Mcp {
         server: crate::mcp::Server,
         destination: crate::SkillDestination,
     },
 }
 
-impl StepAction {
+impl Operation {
+    fn command(&self) -> Option<CommandSpec> {
+        Some(match self {
+            Self::BootstrapMise(Platform::Unix) => CommandSpec::new("sh", ["-c", "curl -fsSL https://mise.run | sh"]),
+            Self::BootstrapMise(Platform::Windows) => CommandSpec::new("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements"]),
+            Self::PiPackage { spec, project, .. } => {
+                let mut args = vec!["install"];
+                if *project { args.push("-l"); }
+                args.push(spec);
+                CommandSpec::new("pi", args)
+            }
+            Self::HerdrPlugin { source, .. } => CommandSpec::new("herdr", ["plugin", "install", source, "--yes"]),
+            _ => return None,
+        })
+    }
+
     pub fn display(&self) -> String {
         match self {
-            Self::ConfigureMcp {
+            Self::Mcp {
                 server,
                 destination,
             } => format!(
@@ -161,8 +178,7 @@ impl StepAction {
                 crate::mcp::config_path(destination).display(),
                 crate::mcp::EXPOSURE_NOTE
             ),
-            Self::Command(command) => command.display(),
-            Self::CopySkills {
+            Self::Skills {
                 skills,
                 destination,
             } => format!(
@@ -179,7 +195,7 @@ impl StepAction {
                     String::new()
                 }
             ),
-            Self::SyncTools { tools } => format!(
+            Self::Tools { tools } => format!(
                 "add to the mise selection and install: {}{}",
                 tools.join(", "),
                 if tools.iter().any(|key| key == crate::mcp::SEM_TOOL_KEY) {
@@ -188,6 +204,9 @@ impl StepAction {
                     ""
                 }
             ),
+            Self::BootstrapMise(_) | Self::PiPackage { .. } | Self::HerdrPlugin { .. } => {
+                self.command().expect("command operation").display()
+            }
         }
     }
 }
@@ -195,15 +214,44 @@ impl StepAction {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstallStep {
     pub target: String,
-    pub manager: String,
-    pub action: StepAction,
-    pub verification: Option<VerificationSpec>,
+    pub operation: Operation,
+}
+
+impl InstallStep {
+    pub fn manager(&self) -> &'static str {
+        match self.operation {
+            Operation::BootstrapMise(_) | Operation::Tools { .. } => "mise",
+            Operation::Skills { .. } => "skills",
+            Operation::PiPackage { .. } | Operation::Mcp { .. } => "pi",
+            Operation::HerdrPlugin { .. } => "herdr",
+        }
+    }
+
+    pub fn is_prerequisite(&self) -> bool {
+        matches!(
+            self.operation,
+            Operation::BootstrapMise(_) | Operation::Tools { .. }
+        )
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct InstallPlan {
-    pub prerequisites: Vec<InstallStep>,
-    pub resources: Vec<InstallStep>,
+    pub steps: Vec<InstallStep>,
+}
+
+impl InstallPlan {
+    pub fn prerequisites(&self) -> impl Iterator<Item = &InstallStep> {
+        self.steps.iter().filter(|step| step.is_prerequisite())
+    }
+
+    pub fn resources(&self) -> impl Iterator<Item = &InstallStep> {
+        self.steps.iter().filter(|step| !step.is_prerequisite())
+    }
+
+    pub fn prerequisite_count(&self) -> usize {
+        self.prerequisites().count()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -261,35 +309,24 @@ pub fn build_install_plan(
         tools.push("herdr".into());
     }
 
-    let mut prerequisites = Vec::new();
+    let mut steps = Vec::new();
     if !tools.is_empty() && !status.mise {
-        prerequisites.push(prerequisite_step(
-            "mise",
-            platform,
-            "curl -fsSL https://mise.run | sh",
-            "winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements",
-        ));
-    }
-    if !tools.is_empty() {
-        // Runtime-dependent manager lanes wait for this prerequisite before
-        // installing their packages; unrelated lanes can still run concurrently.
-        prerequisites.push(InstallStep {
-            target: "tools".into(),
-            manager: "mise".into(),
-            action: StepAction::SyncTools {
-                tools: tools.clone(),
-            },
-            // Verified inside the sync itself: `mise install` fails loudly.
-            verification: None,
+        steps.push(InstallStep {
+            target: "mise".into(),
+            operation: Operation::BootstrapMise(platform),
         });
     }
-
+    if !tools.is_empty() {
+        steps.push(InstallStep {
+            target: "tools".into(),
+            operation: Operation::Tools { tools },
+        });
+    }
     let skills = resources
         .iter()
         .filter(|resource| resource.kind == ResourceKind::Skill)
         .map(|skill| skill.install_target.clone())
         .collect::<Vec<_>>();
-    let mut steps = Vec::new();
     if !skills.is_empty() {
         anyhow::ensure!(
             !skill_destination.agents.is_empty(),
@@ -297,66 +334,40 @@ pub fn build_install_plan(
         );
         steps.push(InstallStep {
             target: "skills".into(),
-            manager: "skills".into(),
-            action: StepAction::CopySkills {
+            operation: Operation::Skills {
                 skills,
                 destination: skill_destination.clone(),
             },
-            // Verified inside the copy itself: each tree must end up with
-            // <skill>/SKILL.md.
-            verification: None,
         });
     }
     for resource in resources {
-        let (manager, command, verification) = match resource.kind {
-            ResourceKind::Skill | ResourceKind::Tool | ResourceKind::McpServer => continue,
-            ResourceKind::PiPackage => (
-                "pi",
-                CommandSpec::new("pi", ["install", &resource.pi_install_spec()]),
-                VerificationSpec {
-                    command: CommandSpec::new("pi", ["list"]),
-                    needle: Some(resource.install_target.clone()),
-                },
-            ),
-            ResourceKind::HerdrPlugin => (
-                "herdr",
-                CommandSpec::new(
-                    "herdr",
-                    [
-                        "plugin",
-                        "install",
-                        resource.install_target.as_str(),
-                        "--yes",
-                    ],
-                ),
-                VerificationSpec {
-                    command: CommandSpec::new("herdr", ["plugin", "list"]),
-                    needle: Some(resource.id.trim_start_matches("herdr-plugin:").into()),
-                },
-            ),
+        let operation = match resource.kind {
+            ResourceKind::PiPackage => Operation::PiPackage {
+                spec: resource.pi_install_spec(),
+                name: resource.install_target.clone(),
+                project: false,
+            },
+            ResourceKind::HerdrPlugin => Operation::HerdrPlugin {
+                source: resource.install_target.clone(),
+                name: resource.id.trim_start_matches("herdr-plugin:").into(),
+            },
+            _ => continue,
         };
         steps.push(InstallStep {
             target: resource.id.clone(),
-            manager: manager.into(),
-            action: StepAction::Command(command),
-            verification: Some(verification),
+            operation,
         });
     }
     for server in mcp_servers {
         steps.push(InstallStep {
             target: format!("mcp-server:{}", server.name()),
-            manager: "pi".into(),
-            action: StepAction::ConfigureMcp {
+            operation: Operation::Mcp {
                 server,
                 destination: skill_destination.clone(),
             },
-            verification: None,
         });
     }
-    Ok(InstallPlan {
-        prerequisites,
-        resources: steps,
-    })
+    Ok(InstallPlan { steps })
 }
 
 /// Progress of one plan step, indexed over prerequisites then resources.
@@ -370,141 +381,122 @@ pub enum StepStatus {
     Skipped(String),
 }
 
-pub fn execute_install_plan(plan: &InstallPlan, system: &(dyn System + Sync)) -> InstallReport {
-    execute_install_plan_with(plan, system, &mut |_, _| {})
-}
-
-pub fn execute_install_plan_with(
-    plan: &InstallPlan,
-    system: &(dyn System + Sync),
-    observer: &mut dyn FnMut(usize, StepStatus),
-) -> InstallReport {
-    execute_install_plan_with_control(
-        plan,
-        system,
-        &std::sync::atomic::AtomicBool::new(false),
-        observer,
-    )
-}
-
-pub fn execute_install_plan_with_control(
+/// Verify completed rows in place and execute the pending rows with their reviewed indices.
+pub fn execute_attempt(
     plan: &InstallPlan,
     system: &(dyn System + Sync),
     cancelled: &std::sync::atomic::AtomicBool,
+    completed: &[usize],
     observer: &mut dyn FnMut(usize, StepStatus),
 ) -> InstallReport {
-    // Validate every MCP destination again before any concurrent lane can mutate state.
-    for step in &plan.resources {
-        if let StepAction::ConfigureMcp {
+    let mut report = InstallReport::default();
+    let mut pending = Vec::new();
+    for (index, step) in plan.steps.iter().enumerate() {
+        if completed.contains(&index) {
+            observer(index, StepStatus::Verifying);
+            if step_is_present(step, system, cancelled) {
+                observer(index, StepStatus::Installed);
+                if !step.is_prerequisite() || step.target == "tools" {
+                    report.installed.push(step.target.clone());
+                }
+                continue;
+            }
+        }
+        pending.push(IndexedStep { index, step });
+    }
+    // Every pending MCP destination is validated before any worker can mutate state.
+    for indexed in &pending {
+        if let Operation::Mcp {
             server,
             destination,
-        } = &step.action
+        } = &indexed.step.operation
         {
             if let Err(error) = crate::mcp::preflight(*server, destination) {
-                observer(
-                    plan.prerequisites.len()
-                        + plan.resources.iter().position(|s| s == step).unwrap(),
-                    StepStatus::Failed(error.to_string()),
-                );
-                return InstallReport {
-                    installed: Vec::new(),
-                    failures: vec![InstallFailure {
-                        target: step.target.clone(),
-                        message: error.to_string(),
-                    }],
-                };
+                observer(indexed.index, StepStatus::Failed(error.to_string()));
+                report.failures.push(InstallFailure {
+                    target: indexed.step.target.clone(),
+                    message: error.to_string(),
+                });
+                return report;
             }
         }
     }
     let repository = &crate::skills::Repository::default();
-    let lanes = install_lanes(plan);
-    let mut outcomes = vec![None; plan.prerequisites.len() + plan.resources.len()];
-    let (status_sender, statuses) = std::sync::mpsc::channel::<(usize, StepStatus)>();
-    let (finish_sender, finishes) = std::sync::mpsc::channel::<(String, LaneOutcome)>();
-    let mut handle_status = |index: usize, status: StepStatus| {
-        if !matches!(status, StepStatus::Running | StepStatus::Verifying) {
-            outcomes[index] = Some(status.clone());
+    let lanes = install_lanes(&pending);
+    let mut outcomes = vec![None; plan.steps.len()];
+    let (sender, events) = std::sync::mpsc::channel();
+    let mut status = |index: usize, value: StepStatus| {
+        if !matches!(value, StepStatus::Running | StepStatus::Verifying) {
+            outcomes[index] = Some(value.clone());
         }
-        observer(index, status);
+        observer(index, value);
     };
     std::thread::scope(|scope| {
-        let mut waiting = lanes
-            .iter()
-            .filter(|lane| lane.waits_for.is_some())
-            .collect::<Vec<_>>();
-        let mut running = 0;
-        for lane in lanes.iter().filter(|lane| lane.waits_for.is_none()) {
-            let status_sender = status_sender.clone();
-            let finish_sender = finish_sender.clone();
-            running += 1;
+        let start = |lane| {
+            let sender = sender.clone();
             scope.spawn(move || {
-                let outcome = execute_lane(lane, system, cancelled, repository, &status_sender);
-                let _ = finish_sender.send((lane.manager.to_owned(), outcome));
+                let failed = execute_lane(lane, system, cancelled, repository, &sender);
+                let _ = sender.send(Event::LaneDone(lane.manager, failed));
             });
-        }
-
-        while running > 0 {
-            while let Ok((index, status)) = statuses.try_recv() {
-                handle_status(index, status);
-            }
-            let Ok((manager, outcome)) =
-                finishes.recv_timeout(std::time::Duration::from_millis(10))
-            else {
-                continue;
-            };
-            running -= 1;
-
-            let mut index = 0;
-            while index < waiting.len() {
-                if waiting[index].waits_for != Some(manager.as_str()) {
-                    index += 1;
-                    continue;
-                }
-                let lane = waiting.swap_remove(index);
-                let dependency_failed = outcome.unavailable
-                    || (matches!(lane.manager, "pi" | "herdr")
-                        && !system.command_exists(lane.manager));
-                if dependency_failed {
-                    let message = skipped_message(lane.manager);
-                    for step in &lane.steps {
-                        handle_status(step.index, StepStatus::Skipped(message.clone()));
-                    }
-                    let _ = finish_sender
-                        .send((lane.manager.to_owned(), LaneOutcome { unavailable: true }));
-                    running += 1;
-                    continue;
-                }
-                let status_sender = status_sender.clone();
-                let finish_sender = finish_sender.clone();
+        };
+        let mut waiting = Vec::new();
+        let mut running = 0;
+        for lane in &lanes {
+            if lane.waits_for.is_some() {
+                waiting.push(lane);
+            } else {
+                start(lane);
                 running += 1;
-                scope.spawn(move || {
-                    let outcome = execute_lane(lane, system, cancelled, repository, &status_sender);
-                    let _ = finish_sender.send((lane.manager.to_owned(), outcome));
-                });
             }
         }
-        while let Ok((index, status)) = statuses.try_recv() {
-            handle_status(index, status);
+        while running > 0 {
+            match events
+                .recv()
+                .expect("install workers retain their event sender")
+            {
+                Event::Status(index, value) => status(index, value),
+                Event::LaneDone(manager, failed) => {
+                    running -= 1;
+                    let mut finished = vec![(manager, failed)];
+                    while let Some((manager, failed)) = finished.pop() {
+                        let mut index = 0;
+                        while index < waiting.len() {
+                            if waiting[index].waits_for != Some(manager) {
+                                index += 1;
+                                continue;
+                            }
+                            let lane = waiting.swap_remove(index);
+                            if failed
+                                || (matches!(lane.manager, "pi" | "herdr")
+                                    && !system.command_exists(lane.manager))
+                            {
+                                for step in &lane.steps {
+                                    status(
+                                        step.index,
+                                        StepStatus::Skipped(skipped_message(lane.manager)),
+                                    );
+                                }
+                                finished.push((lane.manager, true));
+                            } else {
+                                start(lane);
+                                running += 1;
+                            }
+                        }
+                    }
+                }
+            }
         }
     });
-
-    // Fold outcomes in plan order so reports stay deterministic regardless
-    // of which manager finished first.
-    let mut report = InstallReport::default();
-    for (index, outcome) in outcomes.into_iter().enumerate() {
-        let step = if index < plan.prerequisites.len() {
-            &plan.prerequisites[index]
-        } else {
-            &plan.resources[index - plan.prerequisites.len()]
-        };
-        match outcome {
+    // Verified rows precede this attempt, then outcomes follow original plan order.
+    for indexed in pending {
+        match outcomes[indexed.index].take() {
             Some(StepStatus::Failed(message) | StepStatus::Skipped(message)) => {
                 report.failures.push(InstallFailure {
-                    target: step.target.clone(),
+                    target: indexed.step.target.clone(),
                     message,
-                });
+                })
             }
-            Some(StepStatus::Installed) => report.installed.push(step.target.clone()),
+            Some(StepStatus::Installed) => report.installed.push(indexed.step.target.clone()),
             _ => {}
         }
     }
@@ -512,77 +504,63 @@ pub fn execute_install_plan_with_control(
 }
 
 #[derive(Clone, Copy)]
-enum StepPhase {
-    Prerequisite,
-    Resource,
-}
-
 struct IndexedStep<'a> {
     index: usize,
     step: &'a InstallStep,
-    phase: StepPhase,
 }
 
 struct InstallLane<'a> {
-    manager: &'a str,
+    manager: &'static str,
     steps: Vec<IndexedStep<'a>>,
-    waits_for: Option<&'a str>,
+    waits_for: Option<&'static str>,
 }
 
-fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
+enum Event {
+    Status(usize, StepStatus),
+    LaneDone(&'static str, bool),
+}
+
+fn install_lanes<'a>(pending: &[IndexedStep<'a>]) -> Vec<InstallLane<'a>> {
     let mut lanes = Vec::<InstallLane<'_>>::new();
-    let steps =
-        plan.prerequisites
-            .iter()
-            .enumerate()
-            .map(|(index, step)| (index, step, StepPhase::Prerequisite))
-            .chain(plan.resources.iter().enumerate().map(|(offset, step)| {
-                (plan.prerequisites.len() + offset, step, StepPhase::Resource)
-            }));
-    for (index, step, phase) in steps {
-        let indexed = IndexedStep { index, step, phase };
-        match lanes.iter_mut().find(|lane| lane.manager == step.manager) {
-            Some(lane) => lane.steps.push(indexed),
+    for indexed in pending {
+        let manager = indexed.step.manager();
+        match lanes.iter_mut().find(|lane| lane.manager == manager) {
+            Some(lane) => lane.steps.push(*indexed),
             None => lanes.push(InstallLane {
-                manager: &step.manager,
-                steps: vec![indexed],
+                manager,
+                steps: vec![*indexed],
                 waits_for: None,
             }),
         }
     }
-    // A skill a selected Pi package bundles must wait for that package, so
-    // the copy step can see whether Pi now provides it.
     let bundled_names = crate::bundled_skills::packages()
         .iter()
-        .filter(|package| plan.resources.iter().any(|step| step.target == package.id))
+        .filter(|package| {
+            pending
+                .iter()
+                .any(|indexed| indexed.step.target == package.id)
+        })
         .flat_map(|package| &package.bundled_skills)
         .collect::<Vec<_>>();
-    let needs_bundled_pi = plan.resources.iter().any(|step| {
-        matches!(&step.action,
-            StepAction::CopySkills { skills, destination }
-                if (destination.agents.contains(&crate::SkillAgent::Pi)
-                    || destination.agents.contains(&crate::SkillAgent::AgentsStandard)
-                    || (destination.scope == crate::SkillScope::Project && destination.agents.contains(&crate::SkillAgent::Codex)))
-                    && skills.iter().any(|name| bundled_names.contains(&name))
-        )
-    });
-    let configures_mcp = plan
-        .resources
+    let needs_bundled_pi = pending.iter().any(|indexed| matches!(&indexed.step.operation,
+        Operation::Skills { skills, destination }
+            if (destination.agents.contains(&crate::SkillAgent::Pi)
+                || destination.agents.contains(&crate::SkillAgent::AgentsStandard)
+                || (destination.scope == crate::SkillScope::Project && destination.agents.contains(&crate::SkillAgent::Codex)))
+                && skills.iter().any(|name| bundled_names.contains(&name))
+    ));
+    let configures_mcp = pending
         .iter()
-        .any(|step| matches!(step.action, StepAction::ConfigureMcp { .. }));
-    // MCP and skill copies both read/modify/save the shared ownership ledger.
-    // Keep those transactions in sequence, including MCP's repeated preflight.
+        .any(|indexed| matches!(indexed.step.operation, Operation::Mcp { .. }));
     if needs_bundled_pi || configures_mcp {
         if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == "skills") {
             lane.waits_for = Some("pi");
         }
     }
     for (manager, tool_key) in [("pi", crate::manifest::PI_TOOL_KEY), ("herdr", "herdr")] {
-        let runtime_via_mise = plan.prerequisites.iter().any(|step| {
-            matches!(
-                &step.action,
-                StepAction::SyncTools { tools }
-                    if tools.iter().any(|tool| tool == tool_key)
+        let runtime_via_mise = pending.iter().any(|indexed| {
+            matches!(&indexed.step.operation,
+                Operation::Tools { tools } if tools.iter().any(|tool| tool == tool_key)
             )
         });
         if runtime_via_mise
@@ -596,10 +574,6 @@ fn install_lanes(plan: &InstallPlan) -> Vec<InstallLane<'_>> {
         }
     }
     lanes
-}
-
-struct LaneOutcome {
-    unavailable: bool,
 }
 
 /// Why the remaining steps of a lane were skipped.
@@ -616,82 +590,66 @@ fn execute_lane(
     system: &(dyn System + Sync),
     cancelled: &std::sync::atomic::AtomicBool,
     repository: &crate::skills::Repository,
-    sender: &std::sync::mpsc::Sender<(usize, StepStatus)>,
-) -> LaneOutcome {
-    let prerequisites = lane
-        .steps
-        .iter()
-        .filter(|step| matches!(step.phase, StepPhase::Prerequisite))
-        .collect::<Vec<_>>();
-    let resources = lane
-        .steps
-        .iter()
-        .filter(|step| matches!(step.phase, StepPhase::Resource))
-        .collect::<Vec<_>>();
-    for (offset, indexed) in prerequisites.iter().enumerate() {
-        if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
-            for skipped in prerequisites.iter().skip(offset).chain(&resources) {
-                let _ = sender.send((skipped.index, StepStatus::Skipped("cancelled".into())));
-            }
-            return LaneOutcome { unavailable: true };
-        }
-        let _ = sender.send((indexed.index, StepStatus::Running));
-        let failure = execute_step(indexed.step, system, cancelled, repository, || {
-            let _ = sender.send((indexed.index, StepStatus::Verifying));
-        })
-        .or_else(|| {
-            system.refresh_path();
-            (!system.command_exists(lane.manager)).then(|| {
-                format!(
-                    "installer completed, but {} is still unavailable on PATH",
-                    lane.manager
-                )
-            })
-        });
-        if let Some(message) = failure {
-            let _ = sender.send((indexed.index, StepStatus::Failed(message)));
-            let message = skipped_message(lane.manager);
-            for skipped in prerequisites.iter().skip(offset + 1).chain(&resources) {
-                let _ = sender.send((skipped.index, StepStatus::Skipped(message.clone())));
-            }
-            return LaneOutcome { unavailable: true };
-        }
-        let _ = sender.send((indexed.index, StepStatus::Prepared));
-    }
-
+    sender: &std::sync::mpsc::Sender<Event>,
+) -> bool {
     let mut failed = false;
-    for indexed in resources {
+    for (offset, indexed) in lane.steps.iter().enumerate() {
         if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
-            failed = true;
-            let _ = sender.send((indexed.index, StepStatus::Skipped("cancelled".into())));
-            continue;
+            for skipped in &lane.steps[offset..] {
+                let _ = sender.send(Event::Status(
+                    skipped.index,
+                    StepStatus::Skipped("cancelled".into()),
+                ));
+            }
+            return true;
         }
-        let _ = sender.send((indexed.index, StepStatus::Running));
+        let prerequisite = indexed.step.is_prerequisite();
+        let _ = sender.send(Event::Status(indexed.index, StepStatus::Running));
         let failure = execute_step(indexed.step, system, cancelled, repository, || {
-            let _ = sender.send((indexed.index, StepStatus::Verifying));
+            let _ = sender.send(Event::Status(indexed.index, StepStatus::Verifying));
         })
         .or_else(|| {
-            cancelled
-                .load(std::sync::atomic::Ordering::Relaxed)
-                .then(|| "cancelled".into())
-        })
-        .or_else(|| {
-            crate::pi_compat::apply_for_package(&indexed.step.target, system)
-                .err()
-                .map(|error| error.to_string())
+            if prerequisite {
+                system.refresh_path();
+                (!system.command_exists(lane.manager)).then(|| {
+                    format!(
+                        "installer completed, but {} is still unavailable on PATH",
+                        lane.manager
+                    )
+                })
+            } else if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                Some("cancelled".into())
+            } else {
+                crate::pi_compat::apply_for_package(&indexed.step.target, system)
+                    .err()
+                    .map(|error| error.to_string())
+            }
         });
-        let status = match failure {
+        match failure {
             Some(message) => {
                 failed = true;
-                StepStatus::Failed(message)
+                let _ = sender.send(Event::Status(indexed.index, StepStatus::Failed(message)));
+                if prerequisite {
+                    for skipped in &lane.steps[offset + 1..] {
+                        let _ = sender.send(Event::Status(
+                            skipped.index,
+                            StepStatus::Skipped(skipped_message(lane.manager)),
+                        ));
+                    }
+                    return true;
+                }
             }
-            None => StepStatus::Installed,
-        };
-        let _ = sender.send((indexed.index, status));
+            None => {
+                let value = if prerequisite {
+                    StepStatus::Prepared
+                } else {
+                    StepStatus::Installed
+                };
+                let _ = sender.send(Event::Status(indexed.index, value));
+            }
+        }
     }
-    LaneOutcome {
-        unavailable: failed,
-    }
+    failed
 }
 
 fn execute_step(
@@ -702,7 +660,10 @@ fn execute_step(
     verifying: impl FnOnce(),
 ) -> Option<String> {
     execute_action(step, system, cancelled, repository).or_else(|| {
-        if step.verification.is_some() {
+        if matches!(
+            step.operation,
+            Operation::PiPackage { .. } | Operation::HerdrPlugin { .. }
+        ) {
             verifying();
         }
         verify_step(step, system, cancelled)
@@ -718,20 +679,18 @@ pub(crate) fn step_is_present(
     if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
         return false;
     }
-    if step.verification.is_some() {
-        return verify_step(step, system, cancelled).is_none();
-    }
-    match &step.action {
-        StepAction::ConfigureMcp {
+    match &step.operation {
+        Operation::Mcp {
             server,
             destination,
         } => crate::mcp::configured(*server, destination, system),
-        StepAction::CopySkills {
+        Operation::Skills {
             skills,
             destination,
         } => {
-            !destination.trees().is_empty()
-                && destination.trees().iter().all(|tree| {
+            let trees = destination.trees();
+            !trees.is_empty()
+                && trees.iter().all(|tree| {
                     skills.iter().all(|name| {
                         crate::skills::skill_present_in(tree, name)
                             || crate::bundled_skills::provided_in_tree(
@@ -742,7 +701,7 @@ pub(crate) fn step_is_present(
                     })
                 })
         }
-        StepAction::SyncTools { tools } => {
+        Operation::Tools { tools } => {
             let Some(home) = system.home_dir() else {
                 return false;
             };
@@ -760,7 +719,10 @@ pub(crate) fn step_is_present(
                         .is_some_and(|bin| system.command_exists(bin))
             })
         }
-        StepAction::Command(_) => false,
+        Operation::BootstrapMise(_) => false,
+        Operation::PiPackage { .. } | Operation::HerdrPlugin { .. } => {
+            verify_step(step, system, cancelled).is_none()
+        }
     }
 }
 
@@ -770,8 +732,8 @@ fn execute_action(
     cancelled: &std::sync::atomic::AtomicBool,
     repository: &crate::skills::Repository,
 ) -> Option<String> {
-    let command = match &step.action {
-        StepAction::ConfigureMcp {
+    let command = match &step.operation {
+        Operation::Mcp {
             server,
             destination,
         } => {
@@ -779,7 +741,7 @@ fn execute_action(
                 .err()
                 .map(|e| e.to_string())
         }
-        StepAction::CopySkills {
+        Operation::Skills {
             skills,
             destination,
         } => {
@@ -792,10 +754,10 @@ fn execute_action(
             )
             .err()
         }
-        StepAction::SyncTools { tools } => {
+        Operation::Tools { tools } => {
             return crate::manifest::sync_selected_from(system, tools, cancelled, repository).err()
         }
-        StepAction::Command(command) => command,
+        _ => &step.operation.command().expect("command operation"),
     };
     match system.run_controlled(command, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
         Ok(result) if result.success => None,
@@ -872,20 +834,27 @@ fn verify_step(
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Option<String> {
-    let verification = step.verification.as_ref()?;
-    let VerificationSpec { command, needle } = verification;
-    match system.run_controlled(command, crate::system::PROBE_COMMAND_TIMEOUT, cancelled) {
+    let (command, needle, project) = match &step.operation {
+        Operation::PiPackage { name, project, .. } => {
+            (CommandSpec::new("pi", ["list"]), name, Some(*project))
+        }
+        Operation::HerdrPlugin { name, .. } => {
+            (CommandSpec::new("herdr", ["plugin", "list"]), name, None)
+        }
+        _ => return None,
+    };
+    match system.run_controlled(&command, crate::system::PROBE_COMMAND_TIMEOUT, cancelled) {
         Ok(result) if !result.success => Some(format!(
             "verification failed: {}",
             command_failure_message(&result)
         )),
         Ok(result) => {
-            needle.as_ref().filter(|needle| {
-                if command.program == "pi" && command.args.first().is_some_and(|arg| arg == "list") {
-                    let project = matches!(&step.action, StepAction::Command(install) if install.args.iter().any(|arg| arg == "-l"));
-                    !pi_package_installed(&result.stdout, needle, project)
-                } else { !result.stdout.contains(needle.as_str()) }
-            }).map(|needle| format!("verification did not find {needle} in the selected destination"))
+            let present = match project {
+                Some(project) => pi_package_installed(&result.stdout, needle, project),
+                None => result.stdout.contains(needle),
+            };
+            (!present)
+                .then(|| format!("verification did not find {needle} in the selected destination"))
         }
         Err(error) => Some(format!("verification failed: {error}")),
     }
@@ -912,32 +881,5 @@ pub fn display_name(manager: &str) -> String {
         "herdr" => "Herdr".into(),
         "pi" => "Pi".into(),
         other => other.into(),
-    }
-}
-
-fn prerequisite_step(
-    manager: &str,
-    platform: Platform,
-    unix_script: &str,
-    windows_script: &str,
-) -> InstallStep {
-    let command = match platform {
-        Platform::Unix => CommandSpec::new("sh", ["-c", unix_script]),
-        Platform::Windows => CommandSpec::new(
-            "powershell",
-            [
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                windows_script,
-            ],
-        ),
-    };
-    InstallStep {
-        target: display_name(manager),
-        manager: manager.into(),
-        action: StepAction::Command(command),
-        verification: None,
     }
 }

@@ -9,6 +9,7 @@ pub mod manifest;
 pub mod mcp;
 pub mod ownership;
 mod pi_compat;
+pub(crate) mod session;
 pub mod settings;
 mod skills;
 pub mod status;
@@ -27,10 +28,8 @@ pub use bundled_skills::{
 };
 pub use catalog::{Catalog, Profile, Resource, ResourceKind};
 pub use install::{
-    build_install_plan, execute_install_plan, execute_install_plan_with,
-    execute_install_plan_with_control, CommandSpec, InstallFailure, InstallPlan, InstallReport,
-    InstallStep, NodeStatus, Platform, PrerequisiteStatus, StepAction, StepStatus,
-    VerificationSpec, PI_MIN_NODE,
+    build_install_plan, execute_attempt, CommandSpec, InstallFailure, InstallPlan, InstallReport,
+    InstallStep, NodeStatus, Operation, Platform, PrerequisiteStatus, StepStatus, PI_MIN_NODE,
 };
 pub use ownership::{
     digest_path, InstallState, OwnedPathKind, OwnedResource, OwnershipScope, Receipt,

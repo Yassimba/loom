@@ -38,6 +38,8 @@
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
+      "group": "Wiki",
+      "dependencies": ["github:AgriciDaniel/claude-obsidian"],
       "windowsSupport": "wsl"
     },
     {

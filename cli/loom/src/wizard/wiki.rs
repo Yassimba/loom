@@ -1,6 +1,6 @@
 //! Vault-scoped picks inside the setup chooser. Selecting a folder never writes to it.
-use super::render::{bordered, ACCENT, ERR, TITLE};
-use super::state::{Action, Group, Pane, Row, Stage, Wizard};
+use super::render::{bordered, ListHit, ACCENT, ERR, TITLE};
+use super::state::{clamp_step, movement, Action, Group, Item, Pane, Screen, Wizard};
 use crate::wiki::{VaultHealth, VaultRecord, WikiOperation, WikiRegistry};
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -10,6 +10,7 @@ use ratatui::widgets::{List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum Capability {
@@ -20,18 +21,24 @@ pub(super) enum Capability {
     Skill(&'static str),
 }
 
-pub(super) const CAPABILITIES: [Capability; 10] = [
-    Capability::Essentials,
-    Capability::Feynman,
-    Capability::Confluence,
-    Capability::Qmd,
-    Capability::Skill("research"),
-    Capability::Skill("write-simply"),
-    Capability::Skill("explain-simply"),
-    Capability::Skill("write-documentation"),
-    Capability::Skill("mermaid-skill"),
-    Capability::Skill("markitdown"),
-];
+pub(super) fn wiki_capabilities() -> &'static [Capability] {
+    static LIST: OnceLock<Vec<Capability>> = OnceLock::new();
+    LIST.get_or_init(|| {
+        let mut list = vec![
+            Capability::Essentials,
+            Capability::Feynman,
+            Capability::Confluence,
+            Capability::Qmd,
+        ];
+        list.extend(
+            serde_json::from_str::<Vec<&'static str>>(include_str!("../../wiki-skills.json"))
+                .expect("embedded wiki-skills.json is invalid")
+                .into_iter()
+                .map(Capability::Skill),
+        );
+        list
+    })
+}
 
 impl Capability {
     pub fn label(self) -> &'static str {
@@ -219,15 +226,14 @@ impl WikiBrowser {
     }
 
     pub fn capabilities(&self) -> Vec<Capability> {
-        CAPABILITIES
-            .into_iter()
+        let query = self.search.as_ref().map(|query| query.to_lowercase());
+        wiki_capabilities()
+            .iter()
+            .copied()
             .filter(|capability| {
-                self.search.as_ref().is_none_or(|query| {
-                    capability
-                        .label()
-                        .to_lowercase()
-                        .contains(&query.to_lowercase())
-                })
+                query
+                    .as_ref()
+                    .is_none_or(|query| capability.label().to_lowercase().contains(query))
             })
             .collect()
     }
@@ -273,23 +279,15 @@ impl WikiBrowser {
         self.message = None;
     }
 
-    pub fn offset(&self, area: Rect) -> usize {
-        self.cursor
-            .saturating_add(1)
-            .saturating_sub(area.height.saturating_sub(2) as usize)
-    }
-
-    pub fn item_area(details: Rect) -> Rect {
-        Layout::vertical([Constraint::Min(3), Constraint::Length(6)]).areas::<2>(details)[0]
-    }
-
-    pub fn item_offset(&self, details: Rect) -> usize {
-        self.item_cursor
-            .saturating_add(1)
-            .saturating_sub(Self::item_area(details).height.saturating_sub(2) as usize)
-    }
-
-    pub fn draw(&self, frame: &mut Frame, list: Rect, details: Rect, focus: Pane, home: &Path) {
+    pub fn draw(
+        &self,
+        frame: &mut Frame,
+        list: Rect,
+        details: Rect,
+        focus: Pane,
+        home: &Path,
+    ) -> (ListHit, ListHit) {
+        let mut state = ListState::default().with_selected((self.len() > 0).then_some(self.cursor));
         if list.width > 0 {
             let mut items = self
                 .vaults
@@ -323,18 +321,19 @@ impl WikiBrowser {
                     .highlight_style(Style::new().fg(ACCENT).add_modifier(Modifier::REVERSED))
                     .highlight_symbol("› "),
                 list,
-                &mut ListState::default()
-                    .with_selected((self.len() > 0).then_some(self.cursor))
-                    .with_offset(self.offset(list)),
+                &mut state,
             );
         }
+        let list_hit = (list.width > 0).then_some((list, state.offset()));
         if details.width == 0 {
-            return;
+            return (list_hit, None);
         }
         if self.registry_error.is_none() {
             if let Some(record) = self.record() {
-                self.draw_capabilities(frame, details, focus, record, home);
-                return;
+                return (
+                    list_hit,
+                    self.draw_capabilities(frame, details, focus, record, home),
+                );
             }
         }
         let mut lines = Vec::new();
@@ -365,6 +364,7 @@ impl WikiBrowser {
                 .block(bordered(" This Wiki · capabilities ", focus == Pane::Items)),
             details,
         );
+        (list_hit, None)
     }
 
     fn draw_capabilities(
@@ -374,12 +374,13 @@ impl WikiBrowser {
         focus: Pane,
         record: &VaultRecord,
         home: &Path,
-    ) {
+    ) -> ListHit {
         let [items_area, info] =
-            Layout::vertical([Constraint::Min(3), Constraint::Length(6)]).areas(details);
+            Layout::vertical([Constraint::Min(3), Constraint::Length(3)]).areas(details);
         let selected = self.selected(record);
-        let items = self
-            .capabilities()
+        let capabilities = self.capabilities();
+        let current = capabilities.get(self.item_cursor).copied();
+        let items = capabilities
             .into_iter()
             .map(|capability| {
                 let (mark, color) = if self.installed(record, capability) {
@@ -405,6 +406,7 @@ impl WikiBrowser {
             || " This Wiki · capabilities ".into(),
             |query| format!(" Find here: {query} "),
         );
+        let mut state = ListState::default().with_selected(Some(self.item_cursor));
         frame.render_stateful_widget(
             List::new(if items.is_empty() {
                 vec![ListItem::new("No matches · esc clears search")]
@@ -415,62 +417,62 @@ impl WikiBrowser {
             .highlight_style(Style::new().fg(ACCENT).add_modifier(Modifier::REVERSED))
             .highlight_symbol("› "),
             items_area,
-            &mut ListState::default()
-                .with_selected(Some(self.item_cursor))
-                .with_offset(self.item_offset(details)),
+            &mut state,
         );
-        let shared = ["QMD (shared)", "Confluence (shared)", "Obsidian"]
-            .into_iter()
-            .filter(|label| self.health_ready(record, label))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let detail = self.message.clone().unwrap_or_else(|| {
+            if !self.health.contains_key(&record.path)
+                && self
+                    .pending
+                    .get(&record.path)
+                    .is_none_or(|picks| picks.operation.is_none())
+            {
+                "Checking this Wiki…".into()
+            } else if current.is_some_and(|capability| selected.contains(&capability)) {
+                "[x] Will be added to this Wiki.".into()
+            } else if current.is_some_and(|capability| self.installed(record, capability)) {
+                "✓ Already installed in this Wiki.".into()
+            } else {
+                match current {
+                    Some(Capability::Qmd) if self.health_ready(record, "QMD (shared)") => {
+                        "QMD is installed on this machine. Select it to enable this Wiki.".into()
+                    }
+                    Some(Capability::Confluence)
+                        if self.health_ready(record, "Confluence (shared)") =>
+                    {
+                        "Confluence is installed on this machine. Select it for this Wiki.".into()
+                    }
+                    _ => "Select to add to this Wiki.".into(),
+                }
+            }
+        });
         let lines = vec![
             Line::styled(super::render::tidy(&record.path, home), TITLE),
-            Line::from(self.message.clone().unwrap_or_else(|| {
-                "Space / enter toggles · u unregisters · n reviews picks".into()
-            })),
-            Line::from("✓ installed here · [x] pending · [-] required by your picks"),
-            Line::from(if self.health.contains_key(&record.path) {
-                format!(
-                    "Shared apps/tools available: {}",
-                    if shared.is_empty() {
-                        "none verified"
-                    } else {
-                        &shared
-                    }
-                )
-            } else if self
-                .pending
-                .get(&record.path)
-                .is_some_and(|p| p.operation.is_some())
-            {
-                "New selection; shared tools will be installed only as required.".into()
-            } else {
-                "Checking this Wiki…".into()
-            }),
-            Line::from("Obsidian is optional (manual install). Authentication is a separate step."),
+            Line::from(detail),
         ];
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), info);
+        Some((items_area, state.offset()))
     }
 }
 
 impl Wizard {
     pub(super) fn is_wiki_group(&self, group: &Group) -> bool {
-        self.model.purpose == super::state::WizardPurpose::Install && self.wiki.is_some() && !group.everything && group.rows.iter().any(|row| {
-            matches!(row, Row::Resource(index) if self.model.resources[*index].group == "Wiki")
+        self.model.purpose == super::state::WizardPurpose::Install && !group.everything && group.items().any(|row| {
+            matches!(row, Item::Resource(index) if self.model.resources[index].group == "Wiki")
         })
     }
 
     pub(super) fn browsing_wiki(&self) -> bool {
         self.search.is_none()
-            && matches!(&self.stages[self.stage_index], Stage::Choose(stage) if self.is_wiki_group(stage.group()))
+            && self.screen == Screen::Choose
+            && self.is_wiki_group(self.choose.group())
     }
 
     pub(super) fn wiki_key(&mut self, code: KeyCode) -> Option<Action> {
-        let Stage::Choose(stage) = &mut self.stages[self.stage_index] else {
+        if self.screen != Screen::Choose {
             return None;
-        };
-        let browser = self.wiki.as_mut()?;
+        }
+        let stage = &mut self.choose;
+        let browser = &mut self.wiki;
         if let Some(path) = browser.confirm_unregister.take() {
             return match code {
                 KeyCode::Enter => Some(Action::UnregisterWiki(path)),
@@ -486,7 +488,7 @@ impl Wizard {
                 KeyCode::Enter | KeyCode::Esc => {
                     let capability = browser.capabilities().get(browser.item_cursor).copied();
                     browser.search = None;
-                    browser.item_cursor = CAPABILITIES
+                    browser.item_cursor = wiki_capabilities()
                         .iter()
                         .position(|c| Some(*c) == capability)
                         .unwrap_or(0);
@@ -514,35 +516,37 @@ impl Wizard {
             stage.focus = Pane::Items;
             return None;
         }
+        let navigation = if code == KeyCode::Esc {
+            KeyCode::Left
+        } else {
+            code
+        };
+        if stage.focus.navigate(navigation, &Pane::ALL) {
+            return None;
+        }
+        if let Some(delta) = movement(code) {
+            let (cursor, len) = match stage.focus {
+                Pane::Kinds => {
+                    browser.item_cursor = 0;
+                    let len = browser.len();
+                    (&mut browser.cursor, len)
+                }
+                Pane::Items => {
+                    let len = browser.capabilities().len();
+                    (&mut browser.item_cursor, len)
+                }
+                Pane::Groups => return None,
+            };
+            let previous = *cursor;
+            *cursor = clamp_step(*cursor, delta, len);
+            if stage.focus == Pane::Kinds && *cursor != previous {
+                browser.message = None;
+            }
+            return None;
+        }
         match code {
             KeyCode::Char('u') => {
                 browser.confirm_unregister = browser.record().map(|record| record.path.clone());
-            }
-            KeyCode::Left | KeyCode::Char('h') | KeyCode::Esc => {
-                stage.focus = match stage.focus {
-                    Pane::Items => Pane::Kinds,
-                    _ => Pane::Groups,
-                }
-            }
-            KeyCode::Right | KeyCode::Char('l') => {
-                stage.focus = match stage.focus {
-                    Pane::Groups => Pane::Kinds,
-                    _ => Pane::Items,
-                }
-            }
-            KeyCode::Tab => {
-                stage.focus = match stage.focus {
-                    Pane::Groups => Pane::Kinds,
-                    Pane::Kinds => Pane::Items,
-                    Pane::Items => Pane::Groups,
-                }
-            }
-            KeyCode::BackTab => {
-                stage.focus = match stage.focus {
-                    Pane::Groups => Pane::Items,
-                    Pane::Kinds => Pane::Groups,
-                    Pane::Items => Pane::Kinds,
-                }
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if stage.focus == Pane::Groups {
@@ -555,52 +559,13 @@ impl Wizard {
                     return browser.entry().map(Action::PickWiki);
                 }
             }
-            KeyCode::Down
-            | KeyCode::Char('j')
-            | KeyCode::PageDown
-            | KeyCode::End
-            | KeyCode::Up
-            | KeyCode::Char('k')
-            | KeyCode::PageUp
-            | KeyCode::Home => {
-                let down = matches!(
-                    code,
-                    KeyCode::Down | KeyCode::Char('j') | KeyCode::PageDown | KeyCode::End
-                );
-                let amount = match code {
-                    KeyCode::PageDown | KeyCode::PageUp => 10,
-                    KeyCode::Home | KeyCode::End => usize::MAX,
-                    _ => 1,
-                };
-                let (cursor, len) = match stage.focus {
-                    Pane::Kinds => {
-                        browser.item_cursor = 0;
-                        let len = browser.len();
-                        (&mut browser.cursor, len)
-                    }
-                    Pane::Items => {
-                        let len = browser.capabilities().len();
-                        (&mut browser.item_cursor, len)
-                    }
-                    Pane::Groups => return None,
-                };
-                *cursor = if down {
-                    cursor.saturating_add(amount).min(len.saturating_sub(1))
-                } else {
-                    cursor.saturating_sub(amount)
-                };
-            }
             _ => {}
         }
         None
     }
 
     pub(super) fn render_wiki_unregister(&self, frame: &mut Frame) {
-        let Some(path) = self
-            .wiki
-            .as_ref()
-            .and_then(|browser| browser.confirm_unregister.as_ref())
-        else {
+        let Some(path) = self.wiki.confirm_unregister.as_ref() else {
             return;
         };
         crate::ui::chrome::confirm_modal(

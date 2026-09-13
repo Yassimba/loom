@@ -107,29 +107,9 @@ enum Command {
 #[derive(Subcommand)]
 enum WikiCommand {
     /// Create a new Vault at an absent path
-    Create {
-        path: PathBuf,
-        #[arg(long)]
-        feynman: bool,
-        #[arg(long)]
-        confluence: bool,
-        #[arg(long)]
-        qmd: bool,
-        #[arg(long)]
-        yes: bool,
-    },
+    Create(WikiSetupArgs),
     /// Adopt an existing Obsidian Vault
-    Adopt {
-        path: PathBuf,
-        #[arg(long)]
-        feynman: bool,
-        #[arg(long)]
-        confluence: bool,
-        #[arg(long)]
-        qmd: bool,
-        #[arg(long)]
-        yes: bool,
-    },
+    Adopt(WikiSetupArgs),
     /// Check every registered Vault
     Status,
     /// Restore project-local Pi wiring without changing knowledge
@@ -140,6 +120,19 @@ enum WikiCommand {
     Open { path: PathBuf },
     /// Launch Pi with the Vault as its working directory
     Launch { path: PathBuf },
+}
+
+#[derive(Args, Default)]
+struct WikiSetupArgs {
+    path: PathBuf,
+    #[arg(long)]
+    feynman: bool,
+    #[arg(long)]
+    confluence: bool,
+    #[arg(long)]
+    qmd: bool,
+    #[arg(long)]
+    yes: bool,
 }
 
 #[derive(Args, Default)]
@@ -286,14 +279,10 @@ fn run_uninstall(args: UninstallArgs, system: &RealSystem) -> Result<bool> {
         tools: args.tools,
         mcp_servers: Vec::new(),
     };
-    let selected = if selectors.is_empty() {
-        Vec::new()
-    } else {
-        loom::app::resolve_selectors(&catalog, &selectors)?
-            .into_iter()
-            .map(|resource| resource.id)
-            .collect()
-    };
+    let selected = loom::app::resolve_selectors(&catalog, &selectors)?
+        .into_iter()
+        .map(|resource| resource.id)
+        .collect();
     loom::uninstall::run_uninstall(
         system,
         &UninstallOptions {
@@ -324,75 +313,27 @@ fn main() -> Result<()> {
         Command::Wiki { command } => match command {
             None => loom::wiki::run_interactive(&system)?,
             Some(command) => {
-                let request = match command {
-                    WikiCommand::Create {
-                        path,
-                        feynman,
-                        confluence,
-                        qmd,
-                        yes,
-                    } => WikiRequest {
-                        operation: WikiOperation::Create,
-                        vault: path,
-                        feynman,
-                        confluence,
-                        qmd,
-                        yes,
-                    },
-                    WikiCommand::Adopt {
-                        path,
-                        feynman,
-                        confluence,
-                        qmd,
-                        yes,
-                    } => WikiRequest {
-                        operation: WikiOperation::Adopt,
-                        vault: path,
-                        feynman,
-                        confluence,
-                        qmd,
-                        yes,
-                    },
-                    WikiCommand::Status => WikiRequest {
-                        operation: WikiOperation::Status,
-                        vault: PathBuf::new(),
-                        feynman: false,
-                        confluence: false,
-                        qmd: false,
-                        yes: true,
-                    },
-                    WikiCommand::Repair { path } => WikiRequest {
-                        operation: WikiOperation::Repair,
-                        vault: path,
-                        feynman: false,
-                        confluence: false,
-                        qmd: false,
-                        yes: true,
-                    },
-                    WikiCommand::Unregister { path } => WikiRequest {
-                        operation: WikiOperation::Unregister,
-                        vault: path,
-                        feynman: false,
-                        confluence: false,
-                        qmd: false,
-                        yes: true,
-                    },
-                    WikiCommand::Open { path } => WikiRequest {
-                        operation: WikiOperation::Open,
-                        vault: path,
-                        feynman: false,
-                        confluence: false,
-                        qmd: false,
-                        yes: true,
-                    },
-                    WikiCommand::Launch { path } => WikiRequest {
-                        operation: WikiOperation::Launch,
-                        vault: path,
-                        feynman: false,
-                        confluence: false,
-                        qmd: false,
-                        yes: true,
-                    },
+                let existing = |path| WikiSetupArgs {
+                    path,
+                    yes: true,
+                    ..Default::default()
+                };
+                let (operation, args) = match command {
+                    WikiCommand::Create(args) => (WikiOperation::Create, args),
+                    WikiCommand::Adopt(args) => (WikiOperation::Adopt, args),
+                    WikiCommand::Status => (WikiOperation::Status, existing(PathBuf::new())),
+                    WikiCommand::Repair { path } => (WikiOperation::Repair, existing(path)),
+                    WikiCommand::Unregister { path } => (WikiOperation::Unregister, existing(path)),
+                    WikiCommand::Open { path } => (WikiOperation::Open, existing(path)),
+                    WikiCommand::Launch { path } => (WikiOperation::Launch, existing(path)),
+                };
+                let request = WikiRequest {
+                    operation,
+                    vault: args.path,
+                    feynman: args.feynman,
+                    confluence: args.confluence,
+                    qmd: args.qmd,
+                    yes: args.yes,
                 };
                 loom::wiki::run_wiki(&request, &system)?
             }
@@ -703,12 +644,12 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(Command::Wiki {
-                command: Some(WikiCommand::Create {
+                command: Some(WikiCommand::Create(WikiSetupArgs {
                     feynman: true,
                     confluence: true,
                     yes: true,
                     ..
-                })
+                }))
             })
         ));
     }
