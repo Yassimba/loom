@@ -1190,8 +1190,30 @@ function placeLr(
   const laned = new Set(lanes.map((s) => s.edge))
   const laneEntry = (i: number, from: Placed, to: Placed): number => {
     const shared = graph.edges.some((o, k) => k !== i && o.from === graph.edges[i].to && laned.has(k) && onTop(k) === onTop(i))
-    if (!shared) return to.cx
-    return Math.max(to.x + 1, Math.min(to.x + to.w - 2, to.cx + (from.cx < to.cx ? -2 : 2)))
+    const want = shared
+      ? Math.max(to.x + 1, Math.min(to.x + to.w - 2, to.cx + (from.cx < to.cx ? -2 : 2)))
+      : to.cx
+    // The leg climbs from the lane to this column, so it must miss every
+    // box stacked between the two: entering on the centre of a box that
+    // sits above another draws the line straight through it.
+    const blocked = (col: number): boolean =>
+      placed.some(
+        (b, k) =>
+          k !== graph.edges[i].to &&
+          k < graph.nodes.length &&
+          // One cell of clearance: a leg hugging a box lands on the
+          // arrowhead of whatever arrives there.
+          col >= b.x - 1 &&
+          col <= b.x + b.w &&
+          (onTop(i) ? b.y + b.h <= to.y : b.y >= to.y + to.h),
+      )
+    if (!blocked(want)) return want
+    for (let d = 1; d < to.w; d++) {
+      for (const col of [want - d, want + d]) {
+        if (col > to.x && col < to.x + to.w - 1 && !blocked(col)) return col
+      }
+    }
+    return want
   }
   const routes = graph.edges.map((edge, i): Route => {
     const max = sizes.maxLabel

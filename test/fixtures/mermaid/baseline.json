@@ -76,6 +76,13 @@
     "crossings": 0,
     "area": 494
   },
+  "lane-past-stack": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 1184
+  },
   "lane-shared-port": {
     "brokenLinks": 0,
     "edgeOverText": 0,

@@ -669,3 +669,17 @@ test("a label clears every trunk in its band, not only its own", () => {
   assert.match(left, /│/, "the neighbouring trunk survives the label row");
   assert.doesNotMatch(rows[row], /optional│/, "and the label ends clear of the box");
 });
+
+test("a lane leg climbs past the boxes stacked under its target, not through them", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/lane-past-stack.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const rows = drawn.plain;
+  // layout.ts -> layout-geom.ts returns along the bottom lane and climbs
+  // to geom, whose column also holds paint.ts.
+  const paint = rows.findIndex((l) => l.includes("│ paint.ts ├"));
+  const box = rows[paint].indexOf("│ paint.ts ├");
+  const leg = rows[paint].slice(0, box);
+  assert.match(leg, /[│╫]/, "the leg is drawn beside the box, not swallowed by it");
+});
