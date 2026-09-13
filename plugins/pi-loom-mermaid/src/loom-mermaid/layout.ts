@@ -1039,9 +1039,10 @@ function placeLr(
   graph.edges.forEach((e, i) => {
     if (e.from === e.to) return
     if (ranks[e.to] !== ranks[e.from] + 1 && !edgeStraight[i]) return
-    // An arrival-side label needs one column more, to end clear of the box.
-    const verb =
-      e.label === null ? 0 : labelCols(e.label, sizes.maxLabel) + 2 * edgeBus[i] + (labelAtArrival(i) ? 1 : 0)
+    // A label past the bus needs one column more, to end clear of the box.
+    // Only a straight edge keeps its label before the bus.
+    const past = exitRow(i) !== entryRow(i) || bundleOf(i) !== undefined
+    const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel) + 2 * edgeBus[i] + (past ? 1 : 0)
     bandLabel[ranks[e.from]] = Math.max(bandLabel[ranks[e.from]], verb)
   })
 
@@ -1586,8 +1587,17 @@ function forwardRouteLr(
   // Edges into one target share the bus column and entry row; edges out of
   // one source share the departure row. Sitting on the shared one stacks
   // this label on the next edge's.
-  if (edge.label !== null)
-    labels.push(atArrival ? { text: edge.label, row: sat(ly, 1), x: bus + 2 } : { text: edge.label, row: sat(ry, 1), x: rx + 2 })
+  //
+  // Either way it clears the bus: the stretch between the source and the
+  // bus is often too narrow to hold a word, and a label written there
+  // lands on the edge's own trunk.
+  if (edge.label !== null) {
+    // A straight edge has no bus to clear: the whole run is its own.
+    const straight = ry === ly && !bundled
+    const fits = straight || rx + 2 + labelCols(edge.label, max) < bus
+    const x = !straight && (atArrival || !fits) ? bus + 2 : rx + 2
+    labels.push({ text: edge.label, row: sat(atArrival ? ly : ry, 1), x })
+  }
   const route: Route = { points, labels: fitted(labels, max) }
   // A bundled edge meets the shared bus where it joins and leaves it.
   if (bundled) route.through = [[bus, ry, 'j'], [bus, ly, 'j']]

@@ -3,8 +3,8 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
-    "area": 784
+    "crossings": 0,
+    "area": 798
   },
   "class-inheritance": {
     "brokenLinks": 0,
@@ -12,6 +12,13 @@
     "danglingHeads": 0,
     "crossings": 0,
     "area": 858
+  },
+  "class-lr-skips": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 5709
   },
   "composite-states": {
     "brokenLinks": 0,
@@ -39,7 +46,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 546
+    "area": 520
   },
   "er-cardinalities": {
     "brokenLinks": 0,
@@ -53,7 +60,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 810
+    "area": 702
   },
   "fork-before-join": {
     "brokenLinks": 0,

@@ -642,3 +642,14 @@ test("labels out of one source sit on their own arms, not stacked at the fork", 
   }
   assert.doesNotMatch(text, /├─(alpha|beta|gamma)/, "no label written over the line");
 });
+
+test("a label never lands on its own trunk when the source sits against the bus", () => {
+  const drawn = render("flowchart LR\n  A -->|alpha| B\n  A -->|beta| C\n  B -->|gamma| D\n  C -->|delta| D\n");
+  assert.ok(drawn);
+  const rows = drawn.plain;
+  const trunk = rows.findIndex((l) => l.includes("delta"));
+  const col = rows[trunk].indexOf("delta");
+  // The vertical the label sits beside is still drawn on the row it shares.
+  assert.ok(rows[trunk].slice(0, col).includes("│"), "the trunk survives left of the label");
+  assert.doesNotMatch(rows[trunk], /│delta|delta│/, "the label keeps a column clear of the line");
+});
