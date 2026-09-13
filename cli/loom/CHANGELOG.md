@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/Yassimba/loom/compare/loom-v1.10.0...loom-v1.10.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* **loom:** preserve reviewed installs and tool ownership ([4e9d30e](https://github.com/Yassimba/loom/commit/4e9d30edc36654209900849d8f3af6eeee357ed0))
+
 ## [1.10.0](https://github.com/Yassimba/loom/compare/loom-v1.9.0...loom-v1.10.0) (2026-09-11)
 
 
