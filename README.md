@@ -56,7 +56,7 @@ Run the macOS or Linux install command inside Ubuntu.
    Use the implement skill to build the CSV export ticket.
    ```
 
-`loom init` can create agent instructions, issue tracking, domain notes, coding standards, and editor links. It can also configure Gortex for Pi and Zed when Gortex is installed. Run `loom init --yes` to accept the detected defaults.
+`loom init` can create agent instructions, issue tracking, domain notes, coding standards, and editor links. When Serena or Codebase Memory is installed, it also registers the repository, adds detected Python and Rust language servers to Serena, creates a fast initial graph index, and adds a short code-intelligence section to `AGENTS.md`. Run `loom init --yes` to accept the detected defaults.
 
 <details>
 <summary>Optional setup</summary>
@@ -74,7 +74,7 @@ Start with the skill that matches the current state of the work.
 | You have | Start with |
 | --- | --- |
 | An early idea | [`brainstorming`](skills/brainstorming/SKILL.md) |
-| Unresolved design decisions | [`grill-with-docs`](skills/grill-with-docs/SKILL.md) |
+| Unresolved design decisions | [`grill-me`](skills/grill-me/SKILL.md) |
 | A codebase that is hard to change | [`improve-codebase-architecture`](skills/improve-codebase-architecture/SKILL.md) |
 | An agreed plan | [`to-spec`](skills/to-spec/SKILL.md) or [`to-tickets`](skills/to-tickets/SKILL.md) |
 | A bug | [`diagnosing-bugs`](skills/diagnosing-bugs/SKILL.md) |
@@ -142,7 +142,7 @@ Install Pi packages through `loom add`, or install one directly:
 
 ```bash
 pi install npm:@yassimba/pi-fast
-pi install npm:@yassimba/pi-add-dir
+pi install npm:@yassimba/pi-guardrails
 pi install npm:@yassimba/pi-skill-autocomplete
 pi install npm:@yassimba/pi-loom-mermaid
 ```
@@ -150,7 +150,7 @@ pi install npm:@yassimba/pi-loom-mermaid
 | Package | What it adds |
 | --- | --- |
 | [`pi-fast`](plugins/pi-fast/) | `/fast` priority requests for OpenAI, Codex, and xAI |
-| [`add-dir`](plugins/pi-add-dir/) | Another directory and its root instructions in the current Pi session |
+| [`pi-guardrails`](plugins/pi-guardrails/) | Safety checks plus `/add-dir` trusted workspace roots |
 | [`skill-autocomplete`](plugins/skill-autocomplete/) | `$` skill completion in the editor |
 | [`pi-loom-mermaid`](plugins/pi-loom-mermaid/) | Colored Mermaid diagrams with cleaner routing |
 
@@ -169,21 +169,21 @@ Loom installs Pi's standalone skills in `.agents/skills`. Start Pi from the proj
 
 ## MCP servers
 
-MCP connects Pi to extra tools. Loom offers two optional servers:
+MCP connects Pi to extra tools. Loom offers three reviewed servers:
 
 | Server | What it adds |
 | --- | --- |
-| [sem](https://github.com/Ataraxy-Labs/sem) | Local code search, code comparisons, and checks for what a change affects |
-| [Context7](https://github.com/upstash/context7) | Current library documentation and code examples from a hosted service |
+| [Serena](https://github.com/oraios/serena) | Local LSP-backed symbol navigation and editing |
+| [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) | Local repository graph and change-impact analysis |
+| [Context7](https://github.com/upstash/context7) | Hosted library documentation and code examples |
 
 ```bash
-loom add --mcp-server context7 --agent pi
-loom add --mcp-server sem --agent pi
+loom add --mcp-server serena --mcp-server codebase-memory-mcp --agent pi
 ```
 
-Loom installs the shared Pi MCP adapter if needed. Add `--scope project` for a project-only server configuration; Pi and the adapter remain machine-wide. Restart Pi and open `/mcp` to check the connection.
+Loom installs the selected local binaries, shared Pi MCP adapter, and a non-blocking routing extension that nudges agents toward the code-intelligence tools after repeated native searches. Add `--scope project` for project-only server configuration; binaries, Pi, and packages remain machine-wide. All tools use gateway-only exposure. Loom keeps Serena’s dashboard available without opening it, disables its overlapping memory surface, and restricts Codebase Memory to its read-only analysis profile. Run `loom init` in each repository, then restart Pi and open `/mcp` to check the connections.
 
-Context7 sends documentation queries to `https://mcp.context7.com/mcp`. Basic use needs no API key or local server. An optional [Context7 API key](https://context7.com/dashboard) gives higher rate limits; configure it through the adapter yourself. Loom does not collect credentials or pin the hosted service’s version. Installing Context7 does not install sem.
+Context7 queries leave the machine. Serena and Codebase Memory run as local stdio servers.
 
 ## Wiki vaults
 

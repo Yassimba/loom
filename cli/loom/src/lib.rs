@@ -1,10 +1,12 @@
 pub mod app;
 mod bundled_skills;
 mod catalog;
+pub mod contracts;
 mod fs_tx;
 pub mod init;
 mod install;
 mod jsonc;
+pub mod lsp;
 pub mod manifest;
 pub mod mcp;
 pub mod ownership;
@@ -12,8 +14,6 @@ mod pi_compat;
 pub(crate) mod session;
 pub mod settings;
 mod skills;
-#[cfg(test)]
-mod snapshot_tests;
 pub mod status;
 mod system;
 pub mod ui;

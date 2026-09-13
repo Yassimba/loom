@@ -18,15 +18,15 @@
         "skill:browser-usage",
         "skill:codebase-design",
         "skill:explain-code-flow",
-        "skill:system-atlas",
         "skill:ponytail",
         "tool:pi",
         "tool:herdr",
         "herdr-plugin:annotate",
         "pi-package:@yassimba/pi-loom-mermaid",
         "tool:bun",
-        "tool:gortex",
-        "mcp-server:sem",
+        "tool:sem",
+        "mcp-server:serena",
+        "mcp-server:codebase-memory-mcp",
         "tool:tuicr",
         "tool:gh",
         "tool:glab",
@@ -38,10 +38,9 @@
         "pi-package:@ff-labs/pi-fff",
         "pi-package:pi-subagents",
         "pi-package:pi-web-access",
-        "pi-package:@yassimba/pi-add-dir",
+        "pi-package:@yassimba/pi-guardrails",
         "pi-package:@yassimba/pi-skill-autocomplete",
-        "pi-package:pi-rewind-hook",
-        "pi-package:pi-permission-modes"
+        "pi-package:pi-rewind-hook"
       ]
     },
     {
@@ -65,7 +64,7 @@
       "resources": [
         "skill:brainstorming",
         "skill:bdd",
-        "skill:grilling",
+        "skill:grill-me",
         "skill:jira",
         "skill:research",
         "skill:to-spec",

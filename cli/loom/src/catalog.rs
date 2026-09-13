@@ -141,9 +141,6 @@ mod tests {
         assert!(catalog.profiles[0]
             .resources
             .contains(&"tool:pi".to_string()));
-        assert!(catalog.profiles[0]
-            .resources
-            .contains(&"skill:system-atlas".to_string()));
         assert_eq!(catalog.profiles[3].id, "knowledge-wiki");
     }
 }

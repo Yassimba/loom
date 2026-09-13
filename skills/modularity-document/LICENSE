@@ -1,0 +1,7 @@
+Copyright (c) 2026 Vlad Khononov
+
+Licensed under CC BY-NC-SA 4.0:
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+Source: https://github.com/vladikk/modularity
+Adaptation: renamed from `document` to `modularity-document`; template path and packaging metadata updated for Loom.
