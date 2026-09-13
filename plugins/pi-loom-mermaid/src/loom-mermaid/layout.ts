@@ -1020,10 +1020,28 @@ function placeLr(
     // Tracks two columns apart, so parallel runs read as separate lines.
     busTracks[r] = count * 2 - 1
   }
+  // A label belongs on the run this edge does not share. Departure is the
+  // default; an edge leaving a source others leave too, into a target
+  // nothing else enters, labels its arrival instead.
+  // Only a label that lands in this band competes for the run: a laned
+  // one is drawn along its lane, far from either end.
+  const labelled = (k: number): boolean => {
+    const o = graph.edges[k]
+    return o.label !== null && o.from !== o.to && (ranks[o.to] === ranks[o.from] + 1 || edgeStraight[k])
+  }
+  const labelAtArrival = (i: number): boolean => {
+    const e = graph.edges[i]
+    if (e.label === null) return false
+    const shares = (pick: (o: Edge) => number, at: number): boolean =>
+      graph.edges.some((o, k) => k !== i && labelled(k) && pick(o) === at)
+    return shares((o) => o.from, e.from) && !shares((o) => o.to, e.to)
+  }
   graph.edges.forEach((e, i) => {
     if (e.from === e.to) return
     if (ranks[e.to] !== ranks[e.from] + 1 && !edgeStraight[i]) return
-    const verb = e.label === null ? 0 : labelCols(e.label, sizes.maxLabel) + 2 * edgeBus[i]
+    // An arrival-side label needs one column more, to end clear of the box.
+    const verb =
+      e.label === null ? 0 : labelCols(e.label, sizes.maxLabel) + 2 * edgeBus[i] + (labelAtArrival(i) ? 1 : 0)
     bandLabel[ranks[e.from]] = Math.max(bandLabel[ranks[e.from]], verb)
   })
 
@@ -1180,7 +1198,16 @@ function placeLr(
     const through = ends[i].flatMap((p, k) => (p === null ? [] : portAt(p, placed[k === 0 ? edge.from : edge.to]).through))
     const route =
       to.rank === from.rank + 1
-        ? forwardRouteLr(from, to, edge, bandEnd[from.rank] + 1 + 2 * edgeBus[i], max, bundleOf(i) !== undefined, to.cy + (entryOffset.get(i) ?? 0))
+        ? forwardRouteLr(
+            from,
+            to,
+            edge,
+            bandEnd[from.rank] + 1 + 2 * edgeBus[i],
+            max,
+            bundleOf(i) !== undefined,
+            to.cy + (entryOffset.get(i) ?? 0),
+            labelAtArrival(i),
+          )
         : to.rank > from.rank && edgeStraight[i]
           ? skipRouteLr(from, to, edge, skipRoute[i], max)
           : laneRoute(from, to, edge, onTop(i) ? edgeLane[i] : laneBase + edgeLane[i], max, onTop(i), laneEntry(i, from, to))
@@ -1528,7 +1555,16 @@ function chainRoute(
  * column. The verb keeps its usual spot above the line; cardinalities hug
  * their own ends on the rows above the departure and arrival cells.
  */
-function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: number, bundled = false, entry = to.cy): Route {
+function forwardRouteLr(
+  from: Placed,
+  to: Placed,
+  edge: Edge,
+  bus: number,
+  max: number,
+  bundled = false,
+  entry = to.cy,
+  atArrival = false,
+): Route {
   const rx = from.x + from.w - 1
   const ry = from.cy
   const ly = entry
@@ -1546,10 +1582,12 @@ function forwardRouteLr(from: Placed, to: Placed, edge: Edge, bus: number, max: 
           [headCol, ly],
         ]
   const labels: Route['labels'] = []
-  // The label sits above the edge's own departure run, before the bus:
-  // every arrival into one target shares the bus column and entry row,
-  // so a label there would collide with the next edge's.
-  if (edge.label !== null) labels.push({ text: edge.label, row: sat(ry, 1), x: rx + 2 })
+  // The label goes on whichever of the edge's two runs it has to itself.
+  // Edges into one target share the bus column and entry row; edges out of
+  // one source share the departure row. Sitting on the shared one stacks
+  // this label on the next edge's.
+  if (edge.label !== null)
+    labels.push(atArrival ? { text: edge.label, row: sat(ly, 1), x: bus + 2 } : { text: edge.label, row: sat(ry, 1), x: rx + 2 })
   const route: Route = { points, labels: fitted(labels, max) }
   // A bundled edge meets the shared bus where it joins and leaves it.
   if (bundled) route.through = [[bus, ry, 'j'], [bus, ly, 'j']]

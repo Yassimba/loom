@@ -613,7 +613,6 @@ test("class diagram: hierarchy ranks first, a sink sits at the edge its own arro
   assert.match(text, /└─{1,4}│ Row │/, "a sink is reached in a short run");
 });
 
-
 test("a lane the drawing already implies runs outside the ones that carry information", () => {
   // A -> D repeats A -> B -> C -> D, so it is the redundant one; E -> D is
   // the only way E reaches D. The redundant lane takes the outer track.
@@ -627,4 +626,15 @@ test("a lane the drawing already implies runs outside the ones that carry inform
     rows.slice(boxes + 1).some((l) => l.includes("└─")),
     "the informative E -> D keeps the near track below",
   );
+});
+
+test("labels out of one source sit on their own arms, not stacked at the fork", () => {
+  const drawn = render("flowchart LR\n  A -->|alpha| B\n  A -->|beta| C\n  A -->|gamma| D\n");
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  for (const [label, box] of [["alpha", "B"], ["beta", "C"], ["gamma", "D"]]) {
+    const row = drawn.plain.findIndex((l) => l.includes(`│ ${box} │`));
+    assert.ok(drawn.plain[row - 1].includes(label), `${label} labels the arm into ${box}`);
+  }
+  assert.doesNotMatch(text, /├─(alpha|beta|gamma)/, "no label written over the line");
 });
