@@ -16,3 +16,9 @@ prototypes
 /research
 /.beads/
 outputs/
+.serena/
+.agents/skills/balanced-coupling/
+.agents/skills/modularity-design/
+.agents/skills/modularity-document/
+.agents/skills/modularity-review/
+.agents/skills/agent-harness-construction/
