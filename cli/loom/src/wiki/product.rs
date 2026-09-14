@@ -197,7 +197,7 @@ pub(super) fn initialize_vault(
 }
 
 pub(super) fn sha256(content: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(content))
+    crate::ownership::hex(&Sha256::digest(content))
 }
 
 pub(super) fn ensure_pi_ignored(

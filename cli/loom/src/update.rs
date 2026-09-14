@@ -789,6 +789,17 @@ mod tests {
     #[test]
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
+        // Read the pin from the catalog: hardcoding it here makes every
+        // dependency bump of pi-subagents fail this test.
+        let subagents = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.install_target == "pi-subagents")
+            .expect("pi-subagents is in the catalog");
+        let pinned = subagents
+            .version
+            .as_deref()
+            .expect("external Pi packages carry an exact version");
         let listed = "User packages:\n  npm:pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
@@ -797,13 +808,13 @@ mod tests {
 
         assert!(commands
             .iter()
-            .any(|command| command == "pi install npm:pi-subagents@0.66.0"));
+            .any(|command| command == &format!("pi install npm:pi-subagents@{pinned}")));
         assert!(commands
             .iter()
             .any(|command| command == "pi install npm:@yassimba/pi-guardrails@latest"));
         assert!(commands
             .iter()
-            .any(|command| command == "pi install -l npm:pi-subagents@0.66.0"));
+            .any(|command| command == &format!("pi install -l npm:pi-subagents@{pinned}")));
         assert!(
             !commands.iter().any(|command| command.contains("feynman")),
             "Wiki packages are updated only in registered Vaults"
