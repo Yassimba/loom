@@ -58,7 +58,7 @@
     },
     {
       "name": "pi-mcp-adapter",
-      "version": "2.32.1",
+      "version": "2.33.0",
       "label": "mcp-adapter",
       "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
