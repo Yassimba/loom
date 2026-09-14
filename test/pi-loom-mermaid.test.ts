@@ -683,3 +683,16 @@ test("a lane leg climbs past the boxes stacked under its target, not through the
   const leg = rows[paint].slice(0, box);
   assert.match(leg, /[│╫]/, "the leg is drawn beside the box, not swallowed by it");
 });
+
+test("a head label riding a long leg reserves no column beside its chain", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/loop-branch.mmd", import.meta.url), "utf8"),
+  );
+  assert.ok(drawn);
+  const rows = drawn.plain;
+  // The return climbs immediately left of the branch boxes: the `yes`
+  // label rides the leg it already has, so no width is reserved beside
+  // the column, and the two sit a plain gap apart.
+  const border = rows.find((l) => l.includes("┌─────────┐")) as string;
+  assert.ok(border.includes("│ ┌─────────┐"), `return hugs the boxes: ${border}`);
+});

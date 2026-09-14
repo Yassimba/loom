@@ -395,6 +395,11 @@ function placeTd(
     if (side === 0 || text === null || chainLabel[i] !== null) return
     const v = layered.chains[i].at(-1) as number
     const w = labelCols(text, maxLabel) + 3
+    // The leg already runs from the chain's column to the box: when that
+    // is longer than the label, the label rides it and the column needs
+    // nothing reserved beside it. Reserving anyway pushes every box in the
+    // rank over by a label's width for a label that was never there.
+    if (Math.abs(first[graph.edges[i].to] - first[v]) >= w) return
     if (side > 0) labelPadLeft[v] = Math.max(labelPadLeft[v], w)
     else labelPad[v] = Math.max(labelPad[v], w)
   })
