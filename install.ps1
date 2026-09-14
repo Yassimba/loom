@@ -177,7 +177,7 @@ $Selection = Join-Path $ConfD "loom.toml"
 Restore-AtomicPath $Selection
 $TmpManifest = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".toml")
 try {
-  Get-Url $ManifestUrl $TmpManifest
+  Get-Url "${ManifestUrl}?$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())" $TmpManifest
   $lines = Get-Content -Encoding UTF8 $TmpManifest
   $begin = -1
   $end = -1

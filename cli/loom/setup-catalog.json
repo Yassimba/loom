@@ -3,8 +3,8 @@
   "profiles": [
     {
       "id": "software-engineer",
-      "label": "Software Engineer",
-      "description": "Build, test, debug, review, release, and inspect software.",
+      "label": "Build software",
+      "description": "Plan, code, test, review, and release software. Choose this goal, then adjust any item.",
       "resources": [
         "skill:implement",
         "skill:blueprint",
@@ -22,8 +22,11 @@
         "skill:ponytail",
         "tool:pi",
         "tool:herdr",
-        "tool:gortex",
-        "mcp-server:sem",
+        "herdr-plugin:annotate",
+        "pi-package:@yassimba/pi-loom-mermaid",
+        "tool:bun",
+        "tool:sem",
+        "mcp-server:codebase-memory-mcp",
         "tool:tuicr",
         "tool:gh",
         "tool:glab",
@@ -35,113 +38,39 @@
         "pi-package:@ff-labs/pi-fff",
         "pi-package:pi-subagents",
         "pi-package:pi-web-access",
-        "pi-package:@yassimba/pi-add-dir",
+        "pi-package:@yassimba/pi-guardrails",
         "pi-package:@yassimba/pi-skill-autocomplete",
         "pi-package:pi-rewind-hook"
       ]
     },
     {
-      "id": "data-engineer",
-      "label": "Data Engineer",
-      "description": "Build data systems with database, infrastructure, diagram, Python, and observability support.",
+      "id": "research",
+      "label": "Research deeply",
+      "description": "Find trusted sources, compare evidence, and save a clear research brief.",
       "resources": [
-        "skill:implement",
-        "skill:blueprint",
-        "skill:tdd",
-        "skill:diagnosing-bugs",
-        "skill:code-review",
-        "skill:commit",
-        "skill:release",
-        "skill:database-pro",
-        "skill:terraform-engineer",
-        "skill:diagram-design",
-        "skill:mermaid-skill",
         "skill:research",
-        "skill:datadog",
-        "tool:pi",
-        "tool:herdr",
-        "tool:gortex",
-        "tool:gh",
-        "tool:glab",
-        "tool:tokei",
-        "tool:uv",
-        "tool:mermaid-cli",
-        "tool:gitleaks",
-        "tool:zoxide",
-        "tool:pup",
-        "tool:plannotator",
-        "pi-package:@ff-labs/pi-fff",
-        "pi-package:pi-subagents",
-        "pi-package:pi-web-access"
-      ]
-    },
-    {
-      "id": "product-owner",
-      "label": "Product Owner",
-      "description": "Discover, specify, prioritize, document, and present product work.",
-      "resources": [
-        "skill:brainstorming",
-        "skill:bdd",
-        "skill:grilling",
-        "skill:jira",
-        "skill:research",
-        "skill:to-spec",
-        "skill:to-tickets",
-        "skill:ticket-overview",
-        "skill:frontend-slides",
-        "skill:write-documentation",
         "skill:explain-simply",
+        "skill:write-simply",
+        "skill:write-documentation",
         "skill:show-me",
         "tool:pi",
-        "tool:loom-teams",
-        "tool:confluence-markdown-exporter",
-        "tool:beads",
-        "tool:beads-viewer",
-        "tool:plannotator",
         "pi-package:pi-web-access"
       ]
     },
     {
-      "id": "architect",
-      "label": "Architect",
-      "description": "Model domains, design systems, explain flows, and review structural change.",
+      "id": "product-work",
+      "label": "Manage product work",
+      "description": "Turn ideas into requirements and tickets, inspect progress, and coordinate delivery.",
       "resources": [
-        "skill:blueprint",
-        "skill:grilling",
-        "skill:codebase-design",
-        "skill:domain-modeling",
-        "skill:explain-code-flow",
-        "skill:improve-codebase-architecture",
-        "skill:system-atlas",
-        "skill:diagram-design",
-        "skill:mermaid-skill",
-        "skill:literate-programming",
-        "skill:research",
-        "skill:show-me",
-        "tool:pi",
-        "tool:gortex",
-        "tool:tokei",
-        "tool:mermaid-cli",
-        "tool:plannotator",
-        "tool:tuicr",
-        "tool:confluence-markdown-exporter",
-        "pi-package:pi-subagents"
-      ]
-    },
-    {
-      "id": "scrum-master",
-      "label": "Scrum Master",
-      "description": "Refine work, inspect task flow, run ceremonies, and coordinate handoffs.",
-      "resources": [
-        "skill:bdd",
         "skill:brainstorming",
-        "skill:grilling",
+        "skill:bdd",
+        "skill:grill-me",
         "skill:jira",
-        "skill:ticket-overview",
+        "skill:research",
         "skill:to-spec",
         "skill:to-tickets",
-        "skill:implement",
-        "skill:frontend-slides",
+        "skill:ticket-overview",
+        "skill:write-documentation",
         "skill:write-simply",
         "skill:explain-simply",
         "skill:handoff",
@@ -149,38 +78,33 @@
         "tool:loom-teams",
         "tool:beads",
         "tool:beads-viewer",
-        "tool:confluence-markdown-exporter"
-      ]
-    },
-    {
-      "id": "management",
-      "label": "Management",
-      "description": "Research, explain, present, document, coordinate, and read delivery status.",
-      "resources": [
-        "skill:brainstorming",
-        "skill:grilling",
-        "skill:research",
-        "skill:frontend-slides",
-        "skill:explain-simply",
-        "skill:write-simply",
-        "skill:write-documentation",
-        "skill:ticket-overview",
-        "skill:handoff",
-        "skill:jira",
-        "tool:pi",
-        "tool:loom-teams",
-        "tool:confluence-markdown-exporter",
-        "tool:beads-viewer",
+        "tool:plannotator",
         "pi-package:pi-web-access"
       ]
     },
     {
       "id": "knowledge-wiki",
-      "label": "Knowledge & Wiki",
-      "description": "Create or adopt an Obsidian Vault and add Feynman Wiki capabilities.",
+      "label": "Knowledgebase",
+      "description": "Create or connect a private Wiki Vault, organize notes, and search them locally.",
       "resources": [
         "pi-package:@companion-ai/feynman",
         "tool:obsidian-guidance"
+      ]
+    },
+    {
+      "id": "present-ideas",
+      "label": "Present ideas",
+      "description": "Explain clearly with diagrams, documentation, and browser-based presentations.",
+      "resources": [
+        "skill:frontend-slides",
+        "skill:diagram-design",
+        "skill:mermaid-skill",
+        "skill:show-me",
+        "skill:explain-simply",
+        "skill:write-simply",
+        "tool:pi",
+        "tool:mermaid-cli",
+        "pi-package:@yassimba/pi-loom-mermaid"
       ]
     }
   ],
@@ -193,15 +117,6 @@
       "description": "Autocomplete Pi skills with $ anywhere in the editor.",
       "installTarget": "@yassimba/pi-skill-autocomplete",
       "nextAction": "In Pi, type $ anywhere in a message."
-    },
-    {
-      "id": "pi-package:@yassimba/pi-add-dir",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "add-dir",
-      "description": "Add another directory to Pi context with a short model-generated project orientation.",
-      "installTarget": "@yassimba/pi-add-dir",
-      "nextAction": "In Pi, run /add-dir with a path."
     },
     {
       "id": "pi-package:@gotgenes/pi-anthropic-auth",
@@ -220,8 +135,17 @@
       "label": "autoresearch",
       "description": "Run autonomous optimization loops: change code, benchmark it, keep improvements, and revert regressions. By davebcn87.",
       "installTarget": "pi-autoresearch",
-      "version": "1.7.0",
+      "version": "1.8.1",
       "nextAction": "Run /autoresearch with an optimization target in Pi."
+    },
+    {
+      "id": "pi-package:@yassimba/pi-code-intelligence",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "Code Intelligence",
+      "description": "Guide Pi toward Codebase Memory for repository architecture without blocking native tools.",
+      "installTarget": "@yassimba/pi-code-intelligence",
+      "nextAction": "Restart Pi; the extension routes code exploration automatically when Codebase Memory is configured."
     },
     {
       "id": "pi-package:@yassimba/pi-loom-mermaid",
@@ -288,16 +212,6 @@
       "nextAction": "Start Pi to see the Loom header and available Loom updates."
     },
     {
-      "id": "pi-package:pi-markdown-preview",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "markdown-preview",
-      "description": "Preview Pi responses and local Markdown, LaTeX, code, and diffs in the terminal, browser, or as PDF. By Oliver Maclaren.",
-      "installTarget": "pi-markdown-preview",
-      "version": "0.16.0",
-      "nextAction": "Install Pandoc and a Chromium-based browser, run /reload in Pi, then use /preview."
-    },
-    {
       "id": "pi-package:pi-mcp-adapter",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -308,13 +222,22 @@
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
     },
     {
+      "id": "pi-package:@yassimba/pi-guardrails",
+      "kind": "pi-package",
+      "group": "Pi packages",
+      "label": "Pi Guardrails",
+      "description": "Protect sensitive paths, add trusted workspace roots, and gate dangerous commands in Pi.",
+      "installTarget": "@yassimba/pi-guardrails",
+      "nextAction": "Start Pi and run /guardrails:onboarding or /add-dir."
+    },
+    {
       "id": "pi-package:@plannotator/pi-extension",
       "kind": "pi-package",
       "group": "Pi packages",
       "label": "plannotator",
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
       "installTarget": "@plannotator/pi-extension",
-      "version": "0.27.12",
+      "version": "0.27.14",
       "bundledSkills": [
         "plannotator"
       ],
@@ -360,7 +283,7 @@
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "installTarget": "pi-web-access",
-      "version": "0.28.0",
+      "version": "0.29.0",
       "nextAction": "Ask Pi to search the web."
     },
     {
@@ -371,6 +294,26 @@
       "description": "REST API design patterns including resource naming, status codes, pagination, filtering, error responses, versioning, and rate limiting for production APIs. Use when designing or reviewing REST endpoints, resource names, status codes, pagination, or versioning.",
       "installTarget": "api-design",
       "nextAction": "Ask your coding agent to use the api-design skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:architecture-review",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "architecture-review",
+      "description": "Review an existing codebase's architecture with parallel subagents, combining Balanced Coupling diagnosis with deep-module improvement candidates. Use for architecture audits, modularity reviews, coupling analysis, deepening opportunities, or when changes are unexpectedly expensive.",
+      "installTarget": "architecture-review",
+      "nextAction": "Ask your coding agent to use the architecture-review skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:balanced-coupling",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "balanced-coupling",
+      "description": "The Balanced Coupling model for software design. Use when: designing modular architectures, evaluating coupling between components, reviewing code modularity, deciding whether to split or merge modules/services, assessing integration patterns, classifying coupling as balanced or unbalanced, applying DDD strategic and tactical patterns, reasoning about cohesion vs coupling trade-offs, identifying distributed monolith risks, or explaining why a system is hard to change. Provides the three-dimensional framework (integration strength, distance, volatility) and the balance rule for making coupling decisions.\n",
+      "installTarget": "balanced-coupling",
+      "nextAction": "Ask your coding agent to use the balanced-coupling skill.",
       "dependencies": []
     },
     {
@@ -390,15 +333,11 @@
       "kind": "skill",
       "group": "Coding",
       "label": "blueprint",
-      "description": "Plan substantial code changes using atlas context and projected views in SVG/HTML or Mermaid and Plannotator approval.",
+      "description": "Sketch a proposed code change visually with Mermaid before implementation.",
       "installTarget": "blueprint",
       "nextAction": "Ask your coding agent to use the blueprint skill.",
       "dependencies": [
-        "diagram-design",
-        "plannotator",
-        "explain-code-flow",
-        "system-atlas",
-        "mermaid-skill"
+        "code-contracts"
       ]
     },
     {
@@ -410,6 +349,7 @@
       "installTarget": "brainstorming",
       "nextAction": "Ask your coding agent to use the brainstorming skill.",
       "dependencies": [
+        "grill-me",
         "to-spec",
         "to-tickets"
       ]
@@ -439,16 +379,26 @@
       ]
     },
     {
+      "id": "skill:code-contracts",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "code-contracts",
+      "description": "Use when code contains @cc or CONTRACTS, when the user asks to record obligations beside code, or when contract compliance must be verified.",
+      "installTarget": "code-contracts",
+      "nextAction": "Ask your coding agent to use the code-contracts skill.",
+      "dependencies": []
+    },
+    {
       "id": "skill:code-review",
       "kind": "skill",
       "group": "Coding",
       "label": "code-review",
-      "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
+      "description": "Review changes since a fixed point along separate Standards and Spec axes, plus Code Contracts when the repository defines @cc or CONTRACTS obligations. Runs enabled reviews in parallel sub-agents and reports them side by side. Use for branches, PRs, work-in-progress changes, or \"review since X\".",
       "installTarget": "code-review",
       "nextAction": "Ask your coding agent to use the code-review skill.",
       "dependencies": [
-        "system-atlas",
-        "loom"
+        "loom",
+        "code-contracts"
       ]
     },
     {
@@ -469,7 +419,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "database-pro",
-      "description": "Use when writing or optimizing SQL queries, designing database schemas, tuning database performance, or administering PostgreSQL/MySQL. Invoke for EXPLAIN analysis, indexing, JSONB, replication, VACUUM, window functions, CTEs, monitoring, partitioning.",
+      "description": "Use when writing or optimizing SQL queries, designing database schemas, planning database migrations, or administering PostgreSQL/MySQL. Invoke for EXPLAIN analysis, indexing, JSONB, replication, VACUUM, schema changes, data backfills, zero-downtime deployment, monitoring, or partitioning.",
       "installTarget": "database-pro",
       "nextAction": "Ask your coding agent to use the database-pro skill.",
       "dependencies": []
@@ -496,19 +446,6 @@
       "nextAction": "Ask your coding agent to use the e2e-test skill.",
       "dependencies": [
         "tdd"
-      ]
-    },
-    {
-      "id": "skill:grill-with-docs",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "grill-with-docs",
-      "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.",
-      "installTarget": "grill-with-docs",
-      "nextAction": "Ask your coding agent to use the grill-with-docs skill.",
-      "dependencies": [
-        "domain-modeling",
-        "grilling"
       ]
     },
     {
@@ -565,13 +502,10 @@
       "kind": "skill",
       "group": "Coding",
       "label": "refactor",
-      "description": "Five-angle refactor review with before/after proposals, annotation approval, and verified implementation.",
+      "description": "Strict refactor review with visual before/after proposals and verified implementation.",
       "installTarget": "refactor",
       "nextAction": "Ask your coding agent to use the refactor skill.",
-      "dependencies": [
-        "write-simply",
-        "plannotator"
-      ]
+      "dependencies": []
     },
     {
       "id": "skill:release",
@@ -688,8 +622,7 @@
       "installTarget": "wayfinder",
       "nextAction": "Ask your coding agent to use the wayfinder skill.",
       "dependencies": [
-        "domain-modeling",
-        "grilling",
+        "grill-me",
         "prototype",
         "research",
         "loom"
@@ -706,29 +639,14 @@
       "dependencies": []
     },
     {
-      "id": "skill:domain-modeling",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "domain-modeling",
-      "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR.",
-      "installTarget": "domain-modeling",
-      "nextAction": "Ask your coding agent to use the domain-modeling skill.",
-      "dependencies": []
-    },
-    {
       "id": "skill:explain-code-flow",
       "kind": "skill",
       "group": "Coding",
       "label": "explain-code-flow",
-      "description": "Explain a feature from system context to runtime detail, reusing atlas figures and facts. Show changed flows in polished SVG/HTML or economical Mermaid views.",
+      "description": "Explain a feature's runtime flow, data transformations, and input/output contracts as a visual narrative with Mermaid. Use when explaining code flow, creating a code walkthrough, or tracing an object's full lineage.",
       "installTarget": "explain-code-flow",
       "nextAction": "Ask your coding agent to use the explain-code-flow skill.",
-      "dependencies": [
-        "diagram-design",
-        "plannotator",
-        "system-atlas",
-        "mermaid-skill"
-      ]
+      "dependencies": []
     },
     {
       "id": "skill:improve-codebase-architecture",
@@ -740,19 +658,43 @@
       "nextAction": "Ask your coding agent to use the improve-codebase-architecture skill.",
       "dependencies": [
         "codebase-design",
-        "domain-modeling",
-        "grilling"
+        "grill-me"
       ]
     },
     {
-      "id": "skill:literate-programming",
+      "id": "skill:modularity-design",
       "kind": "skill",
       "group": "Coding",
-      "label": "literate-programming",
-      "description": "Transform a codebase into a literate program — a .lit.md essay that weaves prose, diagrams, and named chunks and tangles back to source. Use when the user asks for a literate program, .lit.md, weave, tangle, or wants the system written as a narrative that can regenerate the files.",
-      "installTarget": "literate-programming",
-      "nextAction": "Ask your coding agent to use the literate-programming skill.",
+      "label": "modularity-design",
+      "description": "Designs modular high-level architectures from functional requirements and produces design documents for each module. Use when designing a new system, creating architecture documentation, or producing module-level design specs with integration contracts and test specifications.\n",
+      "installTarget": "modularity-design",
+      "nextAction": "Ask your coding agent to use the modularity-design skill.",
+      "dependencies": [
+        "balanced-coupling"
+      ]
+    },
+    {
+      "id": "skill:modularity-document",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "modularity-document",
+      "description": "Produces modularity review documents in both Markdown and HTML formats. Use when writing the final review output from a modularity analysis.\n",
+      "installTarget": "modularity-document",
+      "nextAction": "Ask your coding agent to use the modularity-document skill.",
       "dependencies": []
+    },
+    {
+      "id": "skill:modularity-review",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "modularity-review",
+      "description": "Analyzes a codebase's modularity imbalances using the Balanced Coupling model and produces a review of design issues. Use when reviewing existing code for coupling problems, assessing architecture quality, identifying distributed monolith risks, or finding areas where changes are unexpectedly expensive.\n",
+      "installTarget": "modularity-review",
+      "nextAction": "Ask your coding agent to use the modularity-review skill.",
+      "dependencies": [
+        "balanced-coupling",
+        "modularity-document"
+      ]
     },
     {
       "id": "skill:show-me",
@@ -763,19 +705,6 @@
       "installTarget": "show-me",
       "nextAction": "Ask your coding agent to use the show-me skill.",
       "dependencies": []
-    },
-    {
-      "id": "skill:system-atlas",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "system-atlas",
-      "description": "Build a detailed, searchable, code-bound product atlas; refresh it incrementally from pinned Git commits.",
-      "installTarget": "system-atlas",
-      "nextAction": "Ask your coding agent to use the system-atlas skill.",
-      "dependencies": [
-        "diagram-design",
-        "mermaid-skill"
-      ]
     },
     {
       "id": "skill:ponytail",
@@ -858,6 +787,18 @@
       ]
     },
     {
+      "id": "skill:markitdown",
+      "kind": "skill",
+      "group": "Wiki",
+      "label": "markitdown",
+      "description": "Convert local documents, media, archives, and URLs to Markdown in a Wiki Vault. Use when importing PDF, DOCX, PPTX, XLSX, images, audio, EPUB, ZIP, YouTube, or web content into wiki notes.",
+      "installTarget": "markitdown",
+      "nextAction": "Ask your coding agent to use the markitdown skill.",
+      "dependencies": [
+        "uv"
+      ]
+    },
+    {
       "id": "skill:qmd",
       "kind": "skill",
       "group": "Wiki",
@@ -884,21 +825,9 @@
       "kind": "skill",
       "group": "General",
       "label": "grill-me",
-      "description": "A relentless interview to sharpen a plan or design.",
+      "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.",
       "installTarget": "grill-me",
       "nextAction": "Ask your coding agent to use the grill-me skill.",
-      "dependencies": [
-        "grilling"
-      ]
-    },
-    {
-      "id": "skill:grilling",
-      "kind": "skill",
-      "group": "General",
-      "label": "grilling",
-      "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.",
-      "installTarget": "grilling",
-      "nextAction": "Ask your coding agent to use the grilling skill.",
       "dependencies": []
     },
     {
@@ -931,6 +860,18 @@
       "installTarget": "i-have-adhd",
       "nextAction": "Ask your coding agent to use the i-have-adhd skill.",
       "dependencies": []
+    },
+    {
+      "id": "skill:glab",
+      "kind": "skill",
+      "group": "General",
+      "label": "glab",
+      "description": "Use when creating, reading, updating, or closing GitLab issues and merge requests with the glab CLI.",
+      "installTarget": "glab",
+      "nextAction": "Ask your coding agent to use the glab skill.",
+      "dependencies": [
+        "glab"
+      ]
     },
     {
       "id": "skill:jira",
@@ -1047,8 +988,7 @@
       "installTarget": "plannotator",
       "nextAction": "Ask your coding agent to use the plannotator skill.",
       "dependencies": [
-        "system-atlas",
-        "github:Yassimba/plannotator"
+        "github:backnotprop/plannotator"
       ]
     },
     {
@@ -1056,8 +996,8 @@
       "kind": "herdr-plugin",
       "group": "Herdr plugins",
       "label": "Annotate",
-      "description": "Annotate terminal selections, review documents and agent replies, and send feedback directly to the agent (plannotator/herdr-annotate). Needs Bun on PATH.",
-      "installTarget": "plannotator/herdr-annotate",
+      "description": "Annotate selections and review replies with Loom's colored Mermaid TUI fork. Needs Bun and the pi-loom-mermaid renderer.",
+      "installTarget": "Yassimba/herdr-annotate",
       "nextAction": "Run `herdr server reload-config`, then use your Herdr prefix with `A`, `O`, or `Shift+O`.",
       "windowsWsl": true
     },
@@ -1066,21 +1006,21 @@
       "kind": "tool",
       "group": "Tools",
       "label": "sem",
-      "description": "Semantic code search, diffs, and change impact. Binary prerequisite for Sem MCP.",
+      "description": "Semantic Git history, diffs, blame, and change impact from the command line.",
       "installTarget": "github:Ataraxy-Labs/sem[exe=sem]",
-      "nextAction": "For agent access, select MCP servers → sem in loom add.",
+      "nextAction": "Run `sem --help`, then use Sem from the command line when reviewing repository history or change impact.",
       "bin": "sem",
       "companions": []
     },
     {
-      "id": "tool:gortex",
+      "id": "tool:codebase-memory-mcp",
       "kind": "tool",
       "group": "Tools",
-      "label": "gortex",
-      "description": "Local repository graph and code intelligence for Pi and Zed.",
-      "installTarget": "github:zzet/gortex[exe=gortex]",
-      "nextAction": "Run `loom init --gortex` in a repository to configure Pi and Zed, start Gortex, and track it.",
-      "bin": "gortex",
+      "label": "codebase-memory-mcp",
+      "description": "Persistent local repository graph and change-impact analysis for coding agents.",
+      "installTarget": "npm:codebase-memory-mcp",
+      "nextAction": "Loom configures Codebase Memory for Pi with its read-only analysis profile.",
+      "bin": "codebase-memory-mcp",
       "companions": []
     },
     {
@@ -1109,6 +1049,17 @@
       ]
     },
     {
+      "id": "tool:bun",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "bun",
+      "description": "TypeScript runtime for Herdr Annotate and the Mermaid document CLI.",
+      "installTarget": "bun",
+      "nextAction": "Run `bun --version` to check the runtime. Select it with Herdr Annotate.",
+      "bin": "bun",
+      "companions": []
+    },
+    {
       "id": "tool:herdr",
       "kind": "tool",
       "group": "Tools",
@@ -1127,8 +1078,44 @@
       "label": "rtk",
       "description": "Compress command output for coding agents to reduce token usage.",
       "installTarget": "github:rtk-ai/rtk",
-      "nextAction": "Run `rtk init --global` for Claude Code or `rtk init --global --agent cursor` for Cursor, then restart the agent.",
+      "nextAction": "Loom configures RTK for Pi automatically. For other agents, run the matching `rtk init --global --agent <agent>` command, then restart the agent.",
       "bin": "rtk",
+      "companions": []
+    },
+    {
+      "id": "tool:headroom",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "headroom",
+      "description": "Local proxy that compresses AI-agent context before it reaches the model.",
+      "installTarget": "pipx:headroom-ai",
+      "nextAction": "Run `headroom doctor`, then launch an agent with `headroom wrap <agent>`. Set `HEADROOM_BEACON=off` to disable anonymous telemetry.",
+      "bin": "headroom",
+      "companions": [
+        "python",
+        "uv"
+      ]
+    },
+    {
+      "id": "tool:magnitude",
+      "kind": "tool",
+      "group": "Local models",
+      "label": "magnitude",
+      "description": "Local inference server for Apple silicon Macs with hardware-aware model recommendations and tuning.",
+      "installTarget": "npm:@magnitudedev/cli",
+      "nextAction": "Run `magnitude setup` to profile your Mac, choose a model, and connect your coding agent.",
+      "bin": "magnitude",
+      "companions": []
+    },
+    {
+      "id": "tool:llmfit",
+      "kind": "tool",
+      "group": "Local models",
+      "label": "llmfit",
+      "description": "Hardware-aware TUI for finding local models that fit, with estimated and measured speed.",
+      "installTarget": "ubi:AlexsJones/llmfit",
+      "nextAction": "Run `llmfit` to compare models, then `llmfit bench` to measure tokens per second.",
+      "bin": "llmfit",
       "companions": []
     },
     {
@@ -1162,6 +1149,17 @@
       "installTarget": "gh",
       "nextAction": "Run `gh auth login` once.",
       "bin": "gh",
+      "companions": []
+    },
+    {
+      "id": "tool:jira-cli",
+      "kind": "tool",
+      "group": "Tools",
+      "label": "jira-cli",
+      "description": "View, create, and update Jira issues from the terminal. Used by the jira skill.",
+      "installTarget": "github:ankitpokhrel/jira-cli[exe=jira]",
+      "nextAction": "Run `jira init` to configure your Jira connection.",
+      "bin": "jira",
       "companions": []
     },
     {
@@ -1332,8 +1330,8 @@
       "group": "Tools",
       "label": "plannotator",
       "description": "Browser-based plan and code review, document annotation, and Guided Reviews for coding agents. The plannotator skill drives it.",
-      "installTarget": "github:Yassimba/plannotator",
-      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart.",
+      "installTarget": "github:backnotprop/plannotator",
+      "nextAction": "Run `plannotator --help`.",
       "bin": "plannotator",
       "companions": []
     },
@@ -1375,18 +1373,33 @@
       "companions": []
     },
     {
-      "id": "mcp-server:sem",
+      "id": "mcp-server:context7",
       "kind": "mcp-server",
       "group": "MCP servers",
-      "label": "sem",
-      "description": "Semantic code search, diffs, and change impact through Pi’s MCP gateway. Tools are discovered on request.",
-      "installTarget": "sem",
-      "version": "0.24.0",
-      "source": "https://github.com/Ataraxy-Labs/sem/releases/tag/v0.24.0",
+      "label": "context7",
+      "description": "Look up current library documentation and code examples through Context7’s hosted MCP server. Queries are sent to Context7; no local server or API key is required for basic use.",
+      "installTarget": "context7",
+      "source": "https://mcp.context7.com/mcp",
       "dependencies": [
         "pi-mcp-adapter"
       ],
-      "nextAction": "Restart Pi in the selected project and open /mcp to check Sem. Tool exposure is gateway-only; first launch may discover metadata."
+      "nextAction": "Restart Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
+    },
+    {
+      "id": "mcp-server:codebase-memory-mcp",
+      "kind": "mcp-server",
+      "group": "MCP servers",
+      "label": "codebase-memory-mcp",
+      "description": "Persistent local repository graph and change-impact analysis through Pi’s MCP gateway.",
+      "installTarget": "codebase-memory-mcp",
+      "version": "0.10.8",
+      "source": "https://github.com/DeusData/codebase-memory-mcp/releases/tag/v0.10.8",
+      "dependencies": [
+        "pi-mcp-adapter",
+        "npm:codebase-memory-mcp",
+        "@yassimba/pi-code-intelligence"
+      ],
+      "nextAction": "Run `loom init` in the repository to create a fast initial index, then restart Pi and open /mcp. Loom uses Codebase Memory’s read-only analysis profile."
     }
   ]
 }

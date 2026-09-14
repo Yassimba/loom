@@ -16,7 +16,7 @@ To keep it installed:
 pi install ./plugins/pi-loom
 ```
 
-Restart Pi after installing to run the startup check. The package is also registered in Loom's setup catalog for publication; it is not added to existing installations automatically.
+Loom setup installs this package automatically whenever Pi is installed or selected. Restart Pi after installing to run the startup check.
 
 ## Behavior
 

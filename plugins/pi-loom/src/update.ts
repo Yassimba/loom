@@ -46,7 +46,7 @@ export async function checkLoomUpdate(
     const result = await exec("loom", ["--version"], { timeout: 1500, signal });
     if (result.code !== 0 || result.killed || signal.aborted) return undefined;
     if (!new RegExp(`^loom ${VERSION}$`).test(result.stdout.trim())) return undefined;
-    const response = await fetch(MANIFEST_URL, { signal });
+    const response = await fetch(`${MANIFEST_URL}?${Date.now()}`, { signal });
     if (!response.ok) return undefined;
     return availableLoomVersion(result.stdout, await response.text());
   } catch {

@@ -34,6 +34,14 @@ for (const file of fixtures) {
     const metrics = r.metrics;
     assert.ok(metrics, "render returned null");
     assert.ok(r.deterministic, "repeated render differs");
+    // Every edge label the source writes shows up, at least by its head:
+    // a label that does not fit is truncated with an ellipsis, never dropped.
+    const src = readFileSync(join(dir, file), "utf8");
+    const plain = (r.plain ?? []).join("\n");
+    for (const m of src.matchAll(/-->\s*\|([^|]+)\|/g)) {
+      const head = m[1].trim().slice(0, 6);
+      assert.ok(plain.includes(head), `edge label ${JSON.stringify(m[1].trim())} was dropped`);
+    }
     const got = Object.fromEntries(TRACKED.map((k) => [k, metrics[k]])) as Tracked;
     seen[name] = got;
     const want = baseline[name];
@@ -41,6 +49,54 @@ for (const file of fixtures) {
     for (const k of TRACKED) assert.ok(got[k] <= want[k], `${k}: ${got[k]} > baseline ${want[k]}`);
   });
 }
+
+test("back-edge side exit clears a wider source in the dataset lifecycle", () => {
+  const proposed = `H[Dataset finishes] --> I[Lifecycle module retains result]
+    I --> J{Persistence acknowledged?}
+    J -->|Yes| K[Publish progress]
+    K --> L{Every accepted Dataset durable?}
+    L -->|No| I
+    L -->|Yes| M[Publish complete terminal Run Result]
+    J -->|No| N[Keep failure and pending results]
+    N --> O[Recovery policy needs a decision]`;
+  const before = `subgraph Before
+    A[Dataset finishes] --> B[Append live result]
+    B --> C{Dataset write succeeds?}
+    C -->|Yes| D[Publish progress]
+    C -->|No| E[Stop collecting results]
+    E --> F[Mark Run Record terminal]
+    F --> G[History can lack live results]
+    end`;
+  const failure = "J -->|No| N[Keep failure and pending results]";
+  const right = proposed
+    .replace(failure, "")
+    .replace("J -->|Yes| K", `${failure}\n    J -->|Yes| K`);
+  for (const source of [
+    `flowchart TB\n${proposed}`,
+    `flowchart TB\n${before}\nsubgraph Proposed\n${proposed}\nend`,
+    `flowchart TB\n${right}`,
+    `flowchart TB\n${right}\nL --> L`,
+  ]) {
+    const r = renderFixture(registry, "dataset-lifecycle", source);
+    assert.ok(r.plain && r.metrics);
+    assert.ok(r.deterministic);
+    const text = r.plain.join("\n");
+    if (source.endsWith("L --> L")) {
+      const row = r.plain.findIndex((line) => line.includes("Every accepted Dataset"));
+      // The self-loop owns one side, so the return climbs the other: both
+      // stay on the box's sides and neither needs the top.
+      assert.match(r.plain[row], /└─+║/, "the return leaves the side away from the loop");
+      assert.match(r.plain[row], /╟─╮|╭─╢/, "the self-loop keeps its own side");
+    } else {
+      assert.match(
+        text,
+        /└─+║ (Every accepted|.*durable\?)|durable\? +║─+┘/,
+        "No leaves the source side directly into its return lane",
+      );
+    }
+    for (const key of HARD_KEYS) assert.equal(r.metrics[key], 0, key);
+  }
+});
 
 test.after(() => {
   if (process.env.UPDATE_MERMAID_BASELINE) {

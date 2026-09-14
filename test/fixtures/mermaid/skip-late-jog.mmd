@@ -1,0 +1,8 @@
+flowchart LR
+subgraph s [adapters]
+  E[engines.py] --> M[migrations/ env.py]
+  E --> S[sessions.py]
+  S --> ST[store.py]
+  ST --> SC[schema.py]
+  M --> SC
+end

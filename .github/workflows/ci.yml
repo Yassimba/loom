@@ -23,6 +23,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Install pinned Bun for packaged CLI tests
+        run: npm install --global bun@1.4.2
       - run: npm run check:js
       - run: bash -n install.sh
 

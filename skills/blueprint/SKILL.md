@@ -1,58 +1,25 @@
 ---
 name: blueprint
-description: "Plan substantial code changes using atlas context and projected views in SVG/HTML or Mermaid and Plannotator approval."
+description: "Sketch a proposed code change visually with Mermaid before implementation."
 ---
 
 # Blueprint
 
-Explain what will change. Existing facts come from the atlas plus verified local
-changes; proposed elements visibly say PROJECTED. The approved plan is the
-implementation contract.
+Design the proposed change, load the `ponytail` skill if available and reuse as much of the existing code and interfaces before adding abstractions or dependencies.
 
-## 1. Pin and inspect
+Run the `code-contracts` skill's obligation sweep while designing. Once the direction is approved, write each approved contract into its existing target declaration or `CONTRACTS` file before implementation begins; make contract-only edits and validate them with `cc-check format` and `cc-check list`. Do not create implementation scaffolding merely to host a contract. When the target code does not exist yet or an assumption still needs approval, leave the contract in the blueprint instead.
 
-Start `ai-docs/blueprints/<slug>/plan.md` with outcome, acceptance criteria,
-constraints, affected surface, and repository target state. Name the runtime
-entry and tracer when relevant. Resolve ambiguity that changes system shape.
+Include a `## Code contracts` section listing materialized contracts by path and ID, followed by unmaterialized proposals with their intended path, exact `@cc` text, and blocker. If no candidate survives the skill's violation-and-alternative test, say so and explain why. Completion: no approved contract remains only in the blueprint when a valid code location already exists.
 
-Follow [the shared atlas consumer procedure](../system-atlas/references/consume.md).
-Record reused topic IDs and baseline pins in `overlay.json`; put new facts and
-source references directly in the plan. Inspect the relevant delta and gaps.
+Then present the change using mermaid diagrams, clear enough to decide whether and how to build it:
+the goal, current versus proposed behavior, affected code, key trade-offs,
+and how success will be verified. Ground existing behavior in source; distinguish
+proposals and unknowns from facts.
 
-Done when the change boundary, target, reused context, and uncertainties are
-explicit. No separate brief, evidence packet, or figure-selection report.
+Use fenced `mermaid` blocks; they render automatically in the user's session.
+At minimum, show the structure, input and output flow, interface dependencies, code-contract status, and a code snippet of the main interfaces.
 
-## 2. Project
+Add object lineage or lifecycle views when they make the proposal easier to assess.
+Use the diagram types that fit. Use complementary views for distinct questions.
 
-Give each planned change a stable ID (C1, C2, …) in the plan's Changes section:
-target, current → proposed behavior, reason, and verification. Include ordered
-implementation steps, compatibility/migration needs, risks, and rollback where
-applicable.
-
-Select atlas figures by question, then follow
-[the shared output preference](../system-atlas/references/overlays.md). For a comparison use
-[the diff convention](../explain-code-flow/references/diagram-diff.md).
-Separate atlas-to-current drift from current-to-proposal changes. Proposed
-elements remain unbound and visibly PROJECTED.
-
-Done when the plan explains every change and acceptance criterion, and its
-figures reveal the important structure, runtime journey, or contracts.
-
-## 3. Review and lock
-
-Follow [references/guided-review.md](references/guided-review.md) for the compact
-artifact contract, validation, Plannotator submission, and lock. Write plainly;
-define unfamiliar terms once and remove repetition during the authoring pass.
-
-Revise only affected plan sections and figures after feedback. Implementation
-begins after explicit approval and successful lock. A later design change gets
-a new reviewed revision rather than editing the approved contract.
-
-Done when the approved plan, generated context/figures, and target baseline are
-bound by the approval record.
-
-## After implementation
-
-Follow [references/verify-built.md](references/verify-built.md). Compare every
-promised change and acceptance criterion with built source, explain drift, and
-reuse unaffected diagrams.
+Mark upcoming changes with `:::red` for removed, `:::green` for added, and `:::orange` for changed.

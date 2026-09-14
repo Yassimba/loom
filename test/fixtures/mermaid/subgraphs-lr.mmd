@@ -1,0 +1,46 @@
+flowchart LR
+    subgraph INPUT[Input and discovery]
+      CLI[CLI] --> CONFIG[Config loader]
+      CONFIG --> PROJECTS[Project discovery]
+      EDITOR[Editor LSP] --> PROJECTS
+      API[HTTP API] --> PROJECTS
+    end
+
+    subgraph CORE[Runtime and extension graph]
+      PROJECTS --> RUNTIME[Project runtime]
+      RUNTIME --> CATALOG[Extension catalog]
+      CATALOG --> ORDER[Dependency ordering]
+      ORDER --> ADMIT[Admission checks]
+      ADMIT --> PLUGINS[Loaded extensions]
+      PLUGINS --> FORMAT[Format registry]
+      PLUGINS --> RULES[Lint rules]
+      PLUGINS --> COMMANDS[Command registry]
+    end
+
+    subgraph DATA[Snapshots and execution]
+      RUNTIME --> SNAPSHOT[Project snapshot]
+      SNAPSHOT --> CACHE[Snapshot cache]
+      CACHE --> RUN[Check run]
+      RUN --> RESULTS[Results]
+      RESULTS --> HISTORY[Run history]
+      HISTORY --> DIFF[Diff engine]
+    end
+
+    subgraph OUTPUT[Clients and feedback]
+      COMMANDS --> TERMINAL[Terminal output]
+      RESULTS --> DIAGNOSTICS[Diagnostics]
+      DIAGNOSTICS --> EDITOR
+      DIFF --> REVIEW[Review report]
+      REVIEW --> API
+      CACHE --> SESSION[Editor session]
+      SESSION --> EDITOR
+    end
+
+    FORMAT --> RUN
+    RULES --> RUN
+    CONFIG --> SNAPSHOT
+    API --> REVIEW
+    CLI --> COMMANDS
+    PROJECTS --> SESSION
+    DIFF --> COMMANDS
+    ADMIT --> SNAPSHOT

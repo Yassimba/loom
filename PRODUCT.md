@@ -4,56 +4,49 @@
 
 ## Platform
 
-terminal (Rust CLI + ratatui TUI; not web/ios/android)
+adaptive
 
 ## Users
 
-Developers who want Yassimba's curated agent setup on their machine: a
-first-time installer running the one-line bootstrap, and returning users
-adding a capability or updating. They read the terminal at a glance and
-expect installer conventions (pick → review → install), not a dashboard.
+Loom serves curious developers who are new to coding-agent tooling, experienced agent users who want exact control, and non-technical teammates who need plain language and safe guidance.
 
 ## Product Purpose
 
-`loom` installs exact-pinned tools (via mise), agent skills into one or more
-agent trees (Claude Code, Codex, Cursor, …), Pi packages, Herdr plugins, and a
-few editor settings — then keeps them updated. Success: a fresh machine is set
-up in one sitting with no surprises, and `loom update` / `loom status` /
-`loom init` read as one product.
+Loom sets up and maintains coding agents, shared skills, pinned tools, Pi packages, project instructions, and searchable Wiki Vaults. Success means a user can choose outcomes they understand, review every resulting change, complete setup safely, and immediately use what was installed.
 
 ## Positioning
 
-One reviewed catalog, one pin manifest, one installer for every agent tree.
-Nothing is "latest"; the plan is shown before anything runs.
+Loom provides one reviewed, reproducible setup surface across multiple coding agents while preserving user choices and existing local modifications.
 
 ## Operating Context
 
-- Interactive wizard (`loom`, `loom setup`, `loom add`) in an 80–120 column
-  terminal; mouse optional.
-- Non-interactive paths: `--skill/--tool/--pi-package/--herdr-plugin`,
-  `--yes`, `--dry-run`; scripted in CI (`full-install.yml`) with stdout
-  captured, so plain output must stay readable without color or a TTY.
-- `loom update`, `loom status`, `loom init`, `loom sync` print short reports.
+People run Loom in a terminal during first-time machine setup, when adding capabilities, when initializing repositories, and when updating or repairing an existing installation. Setup may involve global and project scope, multiple agents, external package managers, authentication, and long-running downloads or indexing.
 
 ## Capabilities and Constraints
 
-- Catalog is embedded at build time (`cli/loom/setup-catalog.json`).
-- Skills may depend on other skills (pulled in transitively, shown as
-  "required by").
-- Runtimes (mise, Pi, Herdr) are prerequisites derived from the selection —
-  not user choices.
-- Terminal palette only: cyan accent, green ok, yellow optional/warn, red
-  error, dim for secondary text; must honor `NO_COLOR` and `TERM=dumb`.
+- Setup starts from user goals and allows multiple goals at once.
+- Users can inspect and change every selected capability; there is no default or Express path yet.
+- Loom may automatically repair missing, outdated, or partially installed official resources when the repair is safe.
+- Loom must ask before overwriting edits, replacing custom sources, changing authentication, or taking destructive action.
+- Installation must preserve completed work, explain failures without exposing secrets, and support retry or resumption.
+- The CLI supports macOS, Linux, native Windows, and WSL2.
 
 ## Brand Commitments
 
-Name: loom. Voice: plain, short, no exclamation marks. Marks: `✓ ! ○` in
-reports; checkboxes in the wizard.
+Use the Loom name and its direct, calm, plain-language voice. Keep expert detail available without requiring users to understand package managers, agent internals, or dependency terminology.
+
+## Evidence on Hand
+
+The repository contains the working Rust setup wizard, reviewed catalog metadata, install and update tests, Loom documentation, and the woven purple Loom logo. Do not invent adoption, performance, or reliability claims.
 
 ## Product Principles
 
-- Show the plan before running it; never surprise.
-- One key model everywhere: arrows move, space picks, enter continues, esc
-  goes back.
-- Every report line names the thing and its state; failures name the fix.
-- Fewer screens, denser information, consistent columns.
+- Ask what the person wants to accomplish before asking which tools they know.
+- Explain every selection and machine change in plain language.
+- Automate safe recovery while protecting intentional customization.
+- Keep full control available without making expertise a prerequisite.
+- Finish with verified, goal-specific actions rather than installation counts alone.
+
+## Accessibility & Inclusion
+
+The terminal experience must remain keyboard-first, mouse-usable, readable in narrow terminals, compatible with plain and dumb terminals, and understandable without prior coding-agent knowledge.

@@ -92,7 +92,7 @@ pub fn run_uninstall(system: &(dyn System + Sync), options: &UninstallOptions) -
             crate::wizard::WizardOutcome::UninstallSelection(chosen) => Some(chosen),
             crate::wizard::WizardOutcome::Cancelled
             | crate::wizard::WizardOutcome::NothingSelected => {
-                println!("Cancelled; no changes made.");
+                Out::detect().verdict(true, "Cancelled; no changes made");
                 return Ok(true);
             }
             _ => bail!("uninstall wizard returned an install result"),
@@ -226,7 +226,6 @@ fn uninstall_wizard_selection(
                 zed_keymap: home.join(".config/zed/keymap.json"),
                 pi_fff_config: home.join(".pi/agent/pi-fff.json"),
                 pi_adhd_flag: home.join(".pi/agent/.i-have-adhd-always"),
-                diagrams: home.join(".config/loom/diagrams.json"),
             },
             status: crate::PrerequisiteStatus {
                 pi: true,
@@ -302,6 +301,13 @@ fn print_uninstall_plan(plan: &UninstallPlan) {
             &step.resource_id,
             if step.missing_only {
                 "already missing; prune ownership record"
+            } else if step.resource_id.starts_with("core:")
+                || step
+                    .receipts
+                    .iter()
+                    .any(|receipt| matches!(receipt, Receipt::MiseTool { .. }))
+            {
+                "remove Loom selection/ownership; keep shared runtime"
             } else {
                 "remove"
             },
@@ -318,8 +324,13 @@ fn print_uninstall_plan(plan: &UninstallPlan) {
 fn print_uninstall_report(report: &UninstallReport) {
     let out = Out::detect();
     for id in &report.removed {
-        out.row(Mark::Ok, id, "removed");
+        out.row(Mark::Ok, id, "Loom ownership removed");
     }
+    out.row(
+        Mark::Off,
+        "mise",
+        "shared runtimes, PATH and shell activation preserved",
+    );
     for id in &report.missing_pruned {
         out.row(Mark::Off, id, "ownership record pruned");
     }
@@ -585,7 +596,7 @@ pub fn execute_uninstall_plan(
                 continue 'steps;
             }
             if current_status != ReceiptStatus::Missing {
-                if let Err(message) = remove_receipt_and_selection(receipt, system, cancelled) {
+                if let Err(message) = remove_receipt(receipt, system, cancelled) {
                     report.failures.push(UninstallFailure {
                         target: step.resource_id.clone(),
                         message,
@@ -628,7 +639,7 @@ pub fn execute_uninstall_plan(
             .keys()
             .all(|id| final_steps.iter().any(|step| &step.resource_id == id))
     {
-        match schedule_final_cleanup(&final_steps, home, system) {
+        match schedule_final_cleanup(home, system) {
             Ok(()) => report
                 .removed
                 .extend(final_steps.iter().map(|step| step.resource_id.clone())),
@@ -641,29 +652,9 @@ pub fn execute_uninstall_plan(
     report
 }
 
-fn schedule_final_cleanup(
-    steps: &[&UninstallStep],
-    home: &Path,
-    system: &dyn System,
-) -> Result<(), String> {
-    let mise_installation = steps
-        .iter()
-        .flat_map(|step| &step.receipts)
-        .find_map(|receipt| match receipt {
-            Receipt::MiseInstallation {
-                root,
-                executable,
-                manager,
-                path_entry_added,
-            } => Some((
-                root.clone(),
-                executable.clone(),
-                manager.clone(),
-                path_entry_added.clone(),
-            )),
-            _ => None,
-        })
-        .filter(|_| !mise_has_foreign_use(home));
+// mise and its activation may now serve project-local configurations we cannot discover.
+// Keep the shared installation intact; only remove Loom's selection and ledger.
+fn schedule_final_cleanup(home: &Path, system: &dyn System) -> Result<(), String> {
     let cache = home.join(".cache").join("loom");
     fs::create_dir_all(&cache)
         .map_err(|error| format!("could not create {}: {error}", cache.display()))?;
@@ -673,51 +664,10 @@ fn schedule_final_cleanup(
     if cfg!(windows) {
         let script = cache.join("uninstall-final.ps1");
         let quote = |path: &Path| path.display().to_string().replace('\'', "''");
-        let remove_mise = mise_installation.as_ref().map_or_else(
-            || "mise prune --yes 2>$null | Out-Null".into(),
-            |(root, executable, manager, path_entry)| {
-                let uninstall = match manager.as_deref() {
-                    Some("winget") => "winget uninstall --id jdx.mise --silent 2>$null | Out-Null".into(),
-                    Some("scoop") => "scoop uninstall mise 2>$null | Out-Null".into(),
-                    _ => executable.as_ref().map_or_else(String::new, |path| {
-                        let shim = path.with_file_name("mise-shim.exe");
-                        format!(
-                            "Remove-Item -LiteralPath '{}' -Force -ErrorAction SilentlyContinue\nRemove-Item -LiteralPath '{}' -Force -ErrorAction SilentlyContinue",
-                            quote(path), quote(&shim)
-                        )
-                    }),
-                };
-                let remove_path = path_entry.as_ref().map_or_else(String::new, |entry| {
-                    format!(
-                        "$ownedPath='{}'; $userPath=[Environment]::GetEnvironmentVariable('Path',[System.EnvironmentVariableTarget]::User); $kept=@($userPath -split ';' | Where-Object {{ $_ -and $_ -ne $ownedPath }}); [Environment]::SetEnvironmentVariable('Path',($kept -join ';'),[System.EnvironmentVariableTarget]::User)",
-                        quote(entry)
-                    )
-                });
-                format!(
-                    "{}\n{}\nRemove-Item -LiteralPath '{}' -Recurse -Force -ErrorAction SilentlyContinue",
-                    uninstall, remove_path, quote(root)
-                )
-            },
-        );
-        let activation_cleanup = steps
-            .iter()
-            .flat_map(|step| &step.receipts)
-            .filter_map(|receipt| match receipt {
-                Receipt::ActivationLine { path, line } => Some(format!(
-                    "$p='{}'; $l='{}'; if (Test-Path -LiteralPath $p) {{ @((Get-Content -LiteralPath $p) | Where-Object {{ $_ -ne $l }}) | Set-Content -LiteralPath $p }}",
-                    quote(path),
-                    line.replace('\'', "''")
-                )),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
         let body = format!(
-            "$parentPid = [int]$args[0]\nwhile (Get-Process -Id $parentPid -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 100 }}\n{}\nRemove-Item -LiteralPath '{}' -Force -ErrorAction SilentlyContinue\nRemove-Item -LiteralPath '{}' -Force -ErrorAction SilentlyContinue\n{}\nRemove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue\n",
-            activation_cleanup,
+            "$parentPid = [int]$args[0]\nwhile (Get-Process -Id $parentPid -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 100 }}\nRemove-Item -LiteralPath '{}' -Force -ErrorAction SilentlyContinue\nRemove-Item -LiteralPath '{}' -Force -ErrorAction SilentlyContinue\nRemove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue\n",
             quote(&selection),
             quote(&state_path),
-            remove_mise,
         );
         fs::write(&script, body)
             .map_err(|error| format!("could not write {}: {error}", script.display()))?;
@@ -738,37 +688,10 @@ fn schedule_final_cleanup(
         let script = cache.join("uninstall-final.sh");
         let quote_value = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
         let quote = |path: &Path| quote_value(&path.display().to_string());
-        let remove_mise = mise_installation.as_ref().map_or_else(
-            || "mise prune --yes >/dev/null 2>&1 || true".into(),
-            |(root, executable, _, _)| {
-                format!(
-                    "rm -rf -- {}\n{}",
-                    quote(root),
-                    executable
-                        .as_ref()
-                        .map_or_else(String::new, |path| format!("rm -f -- {}", quote(path)))
-                )
-            },
-        );
-        let activation_cleanup = steps
-            .iter()
-            .flat_map(|step| &step.receipts)
-            .filter_map(|receipt| match receipt {
-                Receipt::ActivationLine { path, line } => Some(format!(
-                    "p={}; l={}; if [ -f \"$p\" ]; then t=\"$p.loom-uninstall.$$\"; grep -Fvx -- \"$l\" \"$p\" >\"$t\" || true; mv \"$t\" \"$p\"; fi",
-                    quote(path),
-                    quote_value(line)
-                )),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
         let body = format!(
-            "#!/bin/sh\nwhile kill -0 \"$1\" 2>/dev/null; do sleep 0.1; done\n{}\nrm -f -- {} {}\n{}\nrm -f -- \"$0\"\n",
-            activation_cleanup,
+            "#!/bin/sh\nwhile kill -0 \"$1\" 2>/dev/null; do sleep 0.1; done\nrm -f -- {} {}\nrm -f -- \"$0\"\n",
             quote(&selection),
             quote(&state_path),
-            remove_mise,
         );
         fs::write(&script, body)
             .map_err(|error| format!("could not write {}: {error}", script.display()))?;
@@ -778,49 +701,20 @@ fn schedule_final_cleanup(
     }
 }
 
-fn mise_has_foreign_use(home: &Path) -> bool {
-    let config = home.join(".config").join("mise");
-    let loom = crate::manifest::conf_d_target(home);
-    let mut pending = vec![config];
-    while let Some(directory) = pending.pop() {
-        let Ok(entries) = fs::read_dir(directory) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path == loom {
-                continue;
-            }
-            if path.is_dir() {
-                pending.push(path);
-            } else if path
-                .extension()
-                .is_some_and(|extension| extension == "toml")
-            {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn remove_receipt_and_selection(
-    receipt: &Receipt,
-    system: &dyn System,
-    cancelled: &std::sync::atomic::AtomicBool,
-) -> Result<(), String> {
-    remove_receipt(receipt, system, cancelled)?;
-    if let Receipt::MiseTool { key } = receipt {
-        crate::manifest::remove_selected(system, std::slice::from_ref(key), cancelled)?;
-    }
-    Ok(())
-}
-
 fn remove_receipt(
     receipt: &Receipt,
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
+    let run = |command: CommandSpec| match system.run_controlled(
+        &command,
+        crate::system::MANAGER_COMMAND_TIMEOUT,
+        cancelled,
+    ) {
+        Ok(result) if result.success => Ok(()),
+        Ok(result) => Err(crate::install::command_failure_message(&result)),
+        Err(error) => Err(error.to_string()),
+    };
     match receipt {
         Receipt::McpEntry { path, name, digest } => {
             crate::mcp::remove_entry(path, name, digest).map_err(|e| e.to_string())?
@@ -843,30 +737,14 @@ fn remove_receipt(
             } else {
                 vec!["uninstall".into(), target.clone()]
             };
-            let result = system
-                .run_controlled(
-                    &CommandSpec::new(manager, args),
-                    crate::system::MANAGER_COMMAND_TIMEOUT,
-                    cancelled,
-                )
-                .map_err(|error| error.to_string())?;
-            if !result.success {
-                return Err(crate::install::command_failure_message(&result));
-            }
+            run(CommandSpec::new(manager, args))?;
         }
         Receipt::Command { program, args } => {
-            let result = system
-                .run_controlled(
-                    &CommandSpec::new(program, args.clone()),
-                    crate::system::MANAGER_COMMAND_TIMEOUT,
-                    cancelled,
-                )
-                .map_err(|error| error.to_string())?;
-            if !result.success {
-                return Err(crate::install::command_failure_message(&result));
-            }
+            run(CommandSpec::new(program, args.clone()))?;
         }
-        Receipt::MiseTool { .. } => {}
+        Receipt::MiseTool { key } => {
+            crate::manifest::remove_selected(system, std::slice::from_ref(key), cancelled)?;
+        }
         Receipt::Path {
             path,
             path_kind,

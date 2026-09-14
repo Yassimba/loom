@@ -1,0 +1,7 @@
+flowchart LR
+    Extension["RDF Extension"] --> Driver["Datasource Driver<br/>opens RDF graph"]
+    Extension --> Engine["SHACL Check Engine<br/>performs checks"]
+    Extension -. optional .-> Inspector["Schema Inspector<br/>compares structure"]
+    Turbine["Turbine Engine"] --> Driver
+    Turbine --> Engine
+    Turbine --> Inspector

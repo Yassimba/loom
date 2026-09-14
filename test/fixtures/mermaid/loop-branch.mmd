@@ -1,0 +1,8 @@
+flowchart TD
+  A[start] --> B{check}
+  B -->|ok| C[process]
+  B -->|bad| D[reject]
+  C --> E{more?}
+  E -->|yes| B
+  E -->|no| F[finish]
+  D --> F

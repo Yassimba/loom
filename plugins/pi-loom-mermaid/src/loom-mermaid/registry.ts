@@ -8,6 +8,7 @@
  */
 
 import type { Canvas } from './canvas.ts'
+import { architecture } from './diagrams/architecture.ts'
 import { classDiagram } from './diagrams/class.ts'
 import { er } from './diagrams/er.ts'
 import { flowchart } from './diagrams/flowchart.ts'
@@ -22,6 +23,7 @@ import { headerKind, statementsOf } from './statements.ts'
 
 /** A diagram type this renderer draws. */
 export type DiagramKind =
+  | 'architecture'
   | 'flowchart'
   | 'state'
   | 'class'
@@ -49,9 +51,12 @@ export interface Diagram {
     warnings: string[]
     classDefs: Record<string, Record<string, string>>
   } | null
+  /** Optional top-down retry; `null` means this source cannot change direction. */
+  renderDown?: Diagram['render']
 }
 
 const DIAGRAMS: Diagram[] = [
+  architecture,
   flowchart,
   state,
   classDiagram,

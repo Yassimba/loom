@@ -104,7 +104,10 @@ test("checkLoomUpdate uses bounded execution and the published main manifest", a
     globalThis,
     "fetch",
     async (url: string | URL | Request, options?: RequestInit) => {
-      assert.equal(url, "https://raw.githubusercontent.com/Yassimba/loom/main/manifest/loom.toml");
+      assert.match(
+        String(url),
+        /^https:\/\/raw\.githubusercontent\.com\/Yassimba\/loom\/main\/manifest\/loom\.toml\?\d+$/,
+      );
       assert.ok(options?.signal instanceof AbortSignal);
       return new Response(manifest("0.20.0"));
     },

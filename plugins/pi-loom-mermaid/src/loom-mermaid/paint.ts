@@ -21,6 +21,7 @@ import { fitLabel } from './labels.ts'
 import {
   edgeText,
   half,
+  type Hook,
   type LaneLabel,
   type Layout,
   type NodeExtra,
@@ -58,7 +59,7 @@ export function paint(graph: Graph, extras: NodeExtra[], lay: Layout): Canvas {
     canvas.curStyle =
       edge.line === 'dotted' ? STY_DOT : edge.line === 'thick' ? STY_THICK : STY_SOLID
     const route = routes[i]
-    if (route.points.length === 0) drawSelfLoop(canvas, placed[edge.from], edge)
+    if (route.points.length === 0) drawSelfLoop(canvas, placed[edge.from], edge, route.hook ?? 'right')
     else drawRoute(canvas, edge, route)
     for (const { text, row, x } of route.labels) placeLabel(canvas, text, row, x)
   })
@@ -175,7 +176,16 @@ function drawFrame(canvas: Canvas, p: Placed, title: string, sub: Canvas, mirror
     // Mirrored: the bottom border becomes the top after the flip.
     drawTextOverEdges(canvas, ` ${t} `, p.x + 1, mirrored ? p.y + p.h - 1 : p.y, 'text')
   }
-  canvas.blit(sub, p.x + 1 + half(p.w - 2 - sub.w), p.y + 1 + half(p.h - 2 - sub.h))
+  // Padding between border and contents stays free for port stubs.
+  for (let y = p.y + 1; y < p.y + p.h - 1; y++) {
+    for (let x = p.x + 1; x < p.x + p.w - 1; x++) canvas.occupied[canvas.idx(x, y)] = 0
+  }
+  canvas.blit(sub, ...frameOrigin(p, sub))
+}
+
+/** Where a frame's sub-canvas is stamped: centred inside the border. */
+export function frameOrigin(p: Placed, sub: Canvas): [number, number] {
+  return [p.x + 1 + half(p.w - 2 - sub.w), p.y + 1 + half(p.h - 2 - sub.h)]
 }
 
 // ------------------------------------------------------------------- routing
@@ -215,6 +225,8 @@ function drawRoute(canvas: Canvas, edge: Edge, route: Route): void {
   const leave = toward(points[0], points[1])
   const arrive = toward(points[points.length - 2], points[points.length - 1])
   canvas.junction(sx, sy, leave)
+  // Frame borders a cross-frame route passes straight through.
+  for (const [x, y, kind] of route.through ?? []) canvas.junction(x, y, kind === 'v' ? U | D : kind === 'h' ? L | R : 0)
   for (let k = 0; k + 1 < points.length; k++) {
     const [x0, y0] = points[k]
     const [x1, y1] = points[k + 1]
@@ -228,26 +240,42 @@ function drawRoute(canvas: Canvas, edge: Edge, route: Route): void {
   }
 }
 
-/** A self-edge: a stub loop hanging below the box. */
-function drawSelfLoop(canvas: Canvas, p: Placed, edge: Edge): void {
+/**
+ * A self-edge. Top-down it hooks a bottom corner: out the side on the
+ * centre row, down, and back into the corner, so the bottom's centre and
+ * ports stay with the fan-out and returns. Left-to-right, where the sides
+ * carry the flow, it is a stub below the box.
+ */
+function drawSelfLoop(canvas: Canvas, p: Placed, edge: Edge, hook: Hook): void {
   const bottom = p.y + p.h - 1
-  const exitX = p.cx + 1
-  const retX = p.x + p.w - 2
-  if (retX <= exitX || bottom + 2 >= canvas.h) return
-
-  const [v, h, bl, br] =
+  const [v, h, tl, tr, bl, br] =
     edge.line === 'dotted'
-      ? ['╎', '╌', '╰', '╯']
+      ? ['╎', '╌', '╭', '╮', '╰', '╯']
       : edge.line === 'thick'
-        ? ['┃', '━', '┗', '┛']
-        : ['│', '─', '╰', '╯']
-
-  canvas.junction(exitX, bottom, D)
-  canvas.set(exitX, bottom + 1, v, 'edge')
-  canvas.set(exitX, bottom + 2, bl, 'edge')
-  for (let x = exitX + 1; x < retX; x++) canvas.set(x, bottom + 2, h, 'edge')
-  canvas.set(retX, bottom + 2, br, 'edge')
-  canvas.set(retX, bottom + 1, headGlyph(edge.headTo, '▲'), 'edge')
+        ? ['┃', '━', '┏', '┓', '┗', '┛']
+        : ['│', '─', '╭', '╮', '╰', '╯']
+  if (hook === 'below') {
+    const exitX = p.cx + 1
+    const retX = p.x + p.w - 2
+    if (retX <= exitX || bottom + 2 >= canvas.h) return
+    canvas.junction(exitX, bottom, D)
+    canvas.set(exitX, bottom + 1, v, 'edge')
+    canvas.set(exitX, bottom + 2, bl, 'edge')
+    for (let x = exitX + 1; x < retX; x++) canvas.set(x, bottom + 2, h, 'edge')
+    canvas.set(retX, bottom + 2, br, 'edge')
+    canvas.set(retX, bottom + 1, headGlyph(edge.headTo, '▲'), 'edge')
+    return
+  }
+  const dir = hook === 'right' ? 1 : -1
+  const side = hook === 'right' ? p.x + p.w - 1 : p.x
+  const outer = side + 2 * dir
+  if (outer < 0 || outer >= canvas.w) return
+  canvas.junction(side, p.cy, hook === 'right' ? R : L)
+  canvas.set(side + dir, p.cy, h, 'edge')
+  canvas.set(outer, p.cy, hook === 'right' ? tr : tl, 'edge')
+  for (let y = p.cy + 1; y < bottom; y++) canvas.set(outer, y, v, 'edge')
+  canvas.set(outer, bottom, hook === 'right' ? br : bl, 'edge')
+  canvas.set(side + dir, bottom, headGlyph(edge.headTo, hook === 'right' ? '◄' : '►'), 'edge')
 }
 
 /**
@@ -259,15 +287,24 @@ function placeLaneLabels(canvas: Canvas, labels: LaneLabel[]): void {
   for (const { text, y, lo, hi } of labels) {
     const tw = stringWidth(text)
     const lastStart = hi - 1 - tw
-    if (lastStart < lo + 1 || y >= canvas.h) continue
-    const clear = (start: number): boolean => {
+    if (y >= canvas.h) continue
+    const clear = (start: number, row = y): boolean => {
       for (let x = start; x < start + tw; x++) {
-        const i = canvas.idx(x, y)
+        if (x >= canvas.w) return false
+        const i = canvas.idx(x, row)
         if (canvas.occupied[i] === 1) return false
         if ((canvas.mask[i] & (U | D)) !== 0) return false
         if (canvas.ch[i] !== ' ') return false
       }
       return true
+    }
+    // A run too short for its label takes the row above it (else below),
+    // starting where the run does: the label reads beside the arrow and
+    // the run stays as short as the layout made it.
+    if (lastStart < lo + 1) {
+      const row = [y - 1, y + 1].find((r) => r >= 0 && r < canvas.h && clear(lo + 1, r))
+      if (row !== undefined) drawTextOverEdges(canvas, text, lo + 1, row, 'edgeLabel')
+      continue
     }
     const mid = Math.min(Math.max(half(lo + hi) - half(tw), lo + 1), lastStart)
     let at = mid
@@ -302,24 +339,35 @@ function placeLabel(canvas: Canvas, label: string, row: number, x: number): void
 }
 
 function flushLabels(canvas: Canvas): void {
-  for (const { label, row, x } of canvas.labels.splice(0)) writeLabel(canvas, label, row, x)
+  for (const { label, row, x } of canvas.labels.splice(0)) {
+    // Two labels routed onto one row (adjacent buses into one rank) would
+    // truncate each other; the later one moves a row up, then down, if a
+    // row there is free for the whole text.
+    const glyphs = [...measured(label)]
+    const run = (r: number): number => (r >= 0 && r < canvas.h ? labelRun(canvas, glyphs, r, x) : 0)
+    const at = [row, row - 1, row + 1].find((r) => run(r) === glyphs.length) ?? row
+    let cx = x
+    for (const [c, cw] of glyphs.slice(0, run(at))) {
+      if (cw === 0) continue
+      for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(cx + k, at)] = 0
+      canvas.set(cx, at, c, 'edgeLabel')
+      for (let k = 1; k < cw; k++) canvas.set(cx + k, at, CONT, 'edgeLabel')
+      cx += cw
+    }
+  }
 }
 
-function writeLabel(canvas: Canvas, label: string, row: number, startX: number): void {
-  if (row >= canvas.h) return
+/** How many of `glyphs` fit from `(x, row)` before a non-blank cell. */
+function labelRun(canvas: Canvas, glyphs: [string, number][], row: number, startX: number): number {
   let x = startX
-  for (const [c, cw] of measured(label)) {
-    if (cw === 0) continue
-    if (x + cw > canvas.w) break
-    let blocked = false
+  for (let n = 0; n < glyphs.length; n++) {
+    const cw = glyphs[n][1]
+    if (x + cw > canvas.w) return n
     for (let k = 0; k < cw; k++) {
       const i = canvas.idx(x + k, row)
-      if (canvas.ch[i] !== ' ' || canvas.occupied[i]) blocked = true
+      if (canvas.ch[i] !== ' ' || canvas.occupied[i]) return n
     }
-    if (blocked) break
-    for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(x + k, row)] = 0
-    canvas.set(x, row, c, 'edgeLabel')
-    for (let k = 1; k < cw; k++) canvas.set(x + k, row, CONT, 'edgeLabel')
     x += cw
   }
+  return glyphs.length
 }

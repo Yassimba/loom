@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.3](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.2...loom-teams-v0.2.3) (2026-09-14)
+
+
+### Bug Fixes
+
+* **deps:** update rustls to 0.23.45 (RUSTSEC-2026-0285) ([a63960a](https://github.com/Yassimba/loom/commit/a63960a58de75143fe5a4769d45c647118628ab0))
+
+## [0.2.2](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.1...loom-teams-v0.2.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* bypass stale manifest caches in all clients ([#202](https://github.com/Yassimba/loom/issues/202)) ([a16013e](https://github.com/Yassimba/loom/commit/a16013ead9ecdd50519fad6a86400eb073185cf8))
+
 ## [0.2.1](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.0...loom-teams-v0.2.1) (2026-09-05)
 
 

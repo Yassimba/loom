@@ -40,7 +40,7 @@ case "$os" in
 esac
 
 # The published manifest pins the released tag; install exactly that.
-tag="$(curl -fsSL --retry 5 --retry-delay 3 "$MANIFEST_URL" \
+tag="$(curl -fsSL --retry 5 --retry-delay 3 "${MANIFEST_URL}?$(date +%s)" \
   | sed -n 's/^"github:Yassimba\/loom\[exe=loom-teams\]" = { version = "\([^"]*\)".*/\1/p')"
 [ -n "$tag" ] || { echo "$NAME: could not read the release pin from the manifest" >&2; exit 1; }
 

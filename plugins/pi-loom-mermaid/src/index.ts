@@ -85,13 +85,61 @@ function codeSpan(line: string): string {
   return `${fence}${padding}${content}${padding}${fence}`;
 }
 
+function renderListMermaid(markdown: string, availableWidth: number): string {
+  return markdown.replace(
+    /^([ \t]+)(`{3,}|~{3,})[ \t]*mermaid[^\n]*\n([\s\S]*?)^\1\2[ \t]*(?=\n|$)/gim,
+    (raw, indent: string, _fence: string, body: string) => {
+      const source = body
+        .split("\n")
+        .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
+        .join("\n");
+      const rendered = renderBlock(source, availableWidth);
+      return rendered === null
+        ? raw
+        : rendered
+            .trimEnd()
+            .split("\n")
+            .map((line) => indent + line)
+            .join("\n");
+    },
+  );
+}
+
+export function transformMermaidForDocument(markdown: string, availableWidth = 100): string {
+  return markdownParser
+    .lexer(markdown)
+    .map((token) => {
+      if (!isMermaid(token)) return token.raw;
+      const styledSource = withDiffClasses(token.text);
+      const art = render(styledSource.source, { maxWidth: availableWidth });
+      if (!art || art.width > availableWidth) return token.raw;
+      // The document viewer accepts SGR styling only, not terminal hyperlinks.
+      const withoutLinks = {
+        ...art,
+        styled: art.styled.map((row) => row.map((span) => ({ ...span, href: undefined }))),
+      };
+      const text = dimDefaultBorders(toAnsi(withoutLinks), styledSource.dimSgr).join("\n");
+      const longestRun = Math.max(
+        0,
+        ...Array.from(text.matchAll(/`+/g), (match) => match[0].length),
+      );
+      const fence = "`".repeat(Math.max(3, longestRun + 1));
+      return `${fence}loom-mermaid\n${text}\n${fence}\n`;
+    })
+    .join("");
+}
+
 export function transformMermaidMarkdown(markdown: string, context: TransformContext): string {
   if (context.messageType === "assistant-thinking") return markdown;
 
   return markdownParser
     .lexer(markdown)
     .map((token) => {
-      if (!isMermaid(token)) return token.raw;
+      if (!isMermaid(token)) {
+        return token.type === "list"
+          ? renderListMermaid(token.raw, context.availableWidth)
+          : token.raw;
+      }
       if (context.isStreaming === true && !isClosedFence(token.raw)) {
         if (diagramKind(token.text) === null) return token.raw;
         // Marked removes the last newline from unclosed code tokens.
@@ -110,6 +158,6 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
 export default function piLovelyMermaid(pi: ExtensionAPI): void {
   pi.registerMarkdownTransformer(transformMermaidMarkdown);
   pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\nYou can communicate visually using fenced \`mermaid\` blocks, rendered directly in the user’s session. Supported diagram types: flowchart, sequence, state, class, ER, mindmap, timeline, pie, and git graph. Use diagrams when your message is clearer visually than in prose. Keep them compact, with short labels; prefer top-down layouts for narrow terminals. Always visualize node diffs when it makes sense: use \`:::red\` for removed, \`:::green\` for added, and \`:::orange\` for changed nodes.`,
+    systemPrompt: `${event.systemPrompt}\n\nUse fenced \`mermaid\` blocks; they render automatically in the user’s session. Always use Mermaid when it is easier to read than prose. Choose by subject: architecture for deployed services, flowchart for dependencies/decisions, sequence for interactions, state for lifecycles, ER/class for models, mindmap for hierarchies, timeline/git graph for history, pie for proportions. Use complementary diagrams when explaining multiple aspects. Keep diagram labels short. Mark changes by appending :::red (removed), :::green (added), or :::orange (changed) after the node, outside its label brackets (A[Added]:::green, never A[Added :::green]); their default colors are automatic—do not add classDef for these diff markers. In general prefer colored outlines to logically group things (if there are no changes involved).`,
   }));
 }

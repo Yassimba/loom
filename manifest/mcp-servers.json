@@ -1,12 +1,23 @@
 {
   "servers": [
     {
-      "name": "sem",
-      "version": "0.24.0",
-      "source": "https://github.com/Ataraxy-Labs/sem/releases/tag/v0.24.0",
-      "description": "Semantic code search, diffs, and change impact through Pi’s MCP gateway. Tools are discovered on request.",
+      "name": "context7",
+      "source": "https://mcp.context7.com/mcp",
+      "description": "Look up current library documentation and code examples through Context7’s hosted MCP server. Queries are sent to Context7; no local server or API key is required for basic use.",
       "dependencies": ["pi-mcp-adapter"],
-      "nextAction": "Restart Pi in the selected project and open /mcp to check Sem. Tool exposure is gateway-only; first launch may discover metadata."
+      "nextAction": "Restart Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
+    },
+    {
+      "name": "codebase-memory-mcp",
+      "version": "0.10.8",
+      "source": "https://github.com/DeusData/codebase-memory-mcp/releases/tag/v0.10.8",
+      "description": "Persistent local repository graph and change-impact analysis through Pi’s MCP gateway.",
+      "dependencies": [
+        "pi-mcp-adapter",
+        "npm:codebase-memory-mcp",
+        "@yassimba/pi-code-intelligence"
+      ],
+      "nextAction": "Run `loom init` in the repository to create a fast initial index, then restart Pi and open /mcp. Loom uses Codebase Memory’s read-only analysis profile."
     }
   ]
 }

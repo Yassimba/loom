@@ -1,60 +1,53 @@
 ---
 name: explain-code-flow
-description: "Explain a feature from system context to runtime detail, reusing atlas figures and facts. Show changed flows in polished SVG/HTML or economical Mermaid views."
+description: "Explain a feature's runtime flow, data transformations, and input/output contracts as a visual narrative with Mermaid. Use when explaining code flow, creating a code walkthrough, or tracing an object's full lineage."
 ---
 
 # Explain Code Flow
 
-Explain the live entry, the values that travel, and the final result. Reuse the
-atlas's facts and figures through
-[the shared output preference](../system-atlas/references/overlays.md). Inspect
-the local delta and missing facts.
+Explain a feature's data flow: inputs, transformations, outputs, side effects,
+decisions, and failures. Ground every claim in actual code, with source references
+and explicit unknowns. Before tracing, read
+[references/repository-evidence.md](references/repository-evidence.md).
 
-## 1. Pin and retrieve
+## Trace the story
 
-Name the feature boundary, entry point, and target revision (working tree by
-default). For a diff, capture both revisions. Follow
-[the shared atlas consumer procedure](../system-atlas/references/consume.md).
-Confirm production code actually reaches the feature; show a composition gap
-when it does not.
+1. Start at the runtime entry point or public API, not an arbitrary file.
+2. Find the data spine: the important object or value that crosses stages.
+3. Follow the happy path from input to final output before adding branches.
+4. Trace failures, retries, and background or parallel processes as separate flows.
+5. Choose the clearest psychological order: top-down, data-centric, request narrative,
+   or problem-solution. Explain in the order a reader needs, not filesystem order.
 
-Done when retrieved topic IDs and pins, the target, relevant drift, and gaps
-are explicit. Keep new evidence in the walkthrough, not a separate brief.
+For object lineage, trace creation, mutations, mappings, copies, storage, and
+consumers. Show every identity or shape change and meaningful branch.
 
-## 2. Explain the path
+## Build narrative chunks
 
-Select the smallest set of atlas figures that covers the requested questions.
-Use the same figure with different highlights when it already contains the
-needed detail. Cover context and the runtime spine; add another view only for
-a distinct question. "More detail" first means a closer explanation of the
-existing nodes, edges, values and branches.
+Write a section outline before writing prose or code. Each section should:
 
-For a revision comparison, follow
-[references/diagram-diff.md](references/diagram-diff.md).
-Keep exact identifiers and source references beside each figure. A missing
-revision pin requires source verification, not a new layout. For a new detail absent from the atlas, name the closest figure and the
-specific coverage gap.
+1. Motivate the problem it solves
+2. Show a diagram
+3. Present the relevant code through focused excerpts and verified `file:line` references
+4. Explain non-obvious decisions
 
-Done when the entry-to-result path is complete and every new claim has source
-evidence or an explicit uncertainty.
+Treat each section as one conceptual chunk. Use one fenced `mermaid` block per
+concept; do not cram everything into one diagram. Label edges with the data type or action being
+performed, keep diagrams to about 10–15 nodes, and split larger concepts. Place each
+diagram before the code it describes so the reader has a mental model first.
 
-## 3. Deliver
+Do not reproduce complete files: source code remains the source of truth.
 
-Write `ai-docs/explanations/<feature>/walkthrough.md`: the whole path in one
-sentence, baseline and target, selected figures with short explanations, then
-the result. Link to the matching atlas topics/sections. Explain real values,
-decisions, side effects, and failures, not only function names. Keep changed
-items searchable as text. Source-check new/current references with
-`scripts/check-anchors.py`; historical references are checked against their
-named Git revisions.
+Read [references/content-brief-by-type.md](references/content-brief-by-type.md) to
+choose each diagram and
+[references/authoring-invariants.md](references/authoring-invariants.md) to keep it
+focused. Prefer operations in nodes and data on arrows. Add sequence, class, ER,
+state, or field-lineage views only when they answer a different question.
 
-Export selected atlas SVGs and Mermaid SVGs for embedding. Build
-`walkthrough.html` with `scripts/build-html.py`; the existing
-[annotation build](references/annotation-build.md) handles inlining. Inspect
-changed/new figures once. Reply with the result and walkthrough path.
+When comparing revisions, read
+[references/diagram-diff.md](references/diagram-diff.md). Show additions with
+`:::green`, removals with `:::red`, and changes with `:::orange` where supported.
 
-Done when the focused walkthrough is readable without opening the full atlas,
-its references identify the right revisions, and it links back to deeper detail.
-Record figure provenance: atlas figure ID/path and unchanged, overlaid,
-Mermaid adaptation, or new (with the coverage gap). Use the existing exporter. Reuse views locally; delegate only independent
-missing-code investigation when delegation is authorized.
+Deliver the walkthrough in chat with fenced `mermaid` blocks. Do not generate SVG,
+HTML, or image artifacts. The reader should be able to follow inputs to results
+without reconstructing the call graph.

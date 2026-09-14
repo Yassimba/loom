@@ -5,7 +5,7 @@ description: Use when the user wants to brainstorm or explore an idea — a feat
 
 # Brainstorming
 
-Turn a fuzzy idea into a clear direction through conversation. Brainstorming answers **what are we trying to do?** — *how will we build it?* belongs to `grill-with-docs`, so when the conversation drifts toward architecture, code, or "how should this fit this repo?", stop and offer to move there. The brief below is the only artifact this skill produces: no specs, issues, commits, or code.
+Turn a fuzzy idea into a clear direction through conversation. Brainstorming answers **what are we trying to do?** — *how will we build it?* belongs to `grill-me`, so when the conversation drifts toward architecture, code, or "how should this fit this repo?", stop and offer to move there. The brief below is the only artifact this skill produces: no specs, issues, commits, or code.
 
 If invoked with no idea attached, read `references/gamechanging-feature.md` and follow it to surface a candidate.
 
@@ -42,14 +42,14 @@ Promising directions:
 
 Recommended direction:
 
-Open questions for `grill-with-docs`:
+Open questions for `grill-me`:
 -
 -
 ```
 
 Then ask (use AskUserQuestion if available):
 
-> Want to run `grill-with-docs` to refine this idea further?
+> Want to run `grill-me` to refine this idea further?
 > Want to save this idea to pick up later?
 
 If they save it: write the brief to `ai-docs/plans/<YYYY-MM-DD-project>/idea.md` (today's date, short kebab-case project slug; create the directory), and if the visual companion ran, copy its mockup HTML files from the session's `screen_dir` into `mockups/` beside the brief. In that same directory, `/to-spec` will later write `spec.md` and `/to-tickets` will write `issues/<NNN>-<name>.md`.

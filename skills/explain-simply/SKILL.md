@@ -33,45 +33,28 @@ Prefer specific and literal language. Keep the real jargon when the reader needs
 
 Do not front-load every aspect of the topic. Follow the main path; depth belongs in follow-up questions.
 
-## Rendered story graphic
+## Mermaid story graphic
 
-After the verbal walkthrough, add one rendered graphic when the topic has a flow, sequence, before-and-after change, or one thing acting on another. Skip the graphic for static concepts with no useful motion, such as a variable or open source.
+After the verbal walkthrough, add one Mermaid diagram.
 
-Never use a Mermaid block or another code-block diagram as the graphic. Build one self-contained HTML file with inline SVG and deliver it as a rendered artifact.
+Use a fenced `mermaid` block so the diagram renders in the conversation.
 
-Make the graphic a vertical comic strip:
+- Keep the main path to about five steps.
+- Write each node or message as a plain subject-verb-object sentence.
+- Reading the labels in order must tell the full story.
+- Put caveats or examples on edges only when they add information.
+- Split any node that contains two actions.
 
-- Use separate, stacked scenes. Each scene shows one left-to-right action with three or four visual elements.
-- Write each panel title as a plain subject-verb-object sentence. Reading the titles from top to bottom must tell the full story.
-- Reuse the same recognizable SVG characters in every panel. Use friendly people, documents, robots, browser windows, or other concrete objects instead of changing abstract rectangles.
-- Put one plain caption under each scene. The caption adds why the step matters, a concrete example, or a caveat.
-- Split any scene that contains two actions.
-
-The subhead or caption must add information. It must not restate the panel title.
-
-### Visual style
-
-Use this light editorial style:
-
-- Set the page background to `#F7F8FC`.
-- Use Georgia at weight 400 for the title question and panel titles.
-- Use Helvetica or Arial for body text, captions, and labels.
-- Use `#E7EAF6` and `#DDE2F2` for lavender bands and fills, `#111111` for ink, `#5F6272` for secondary text, and `#C42A1C` as the only accent.
-- Use the accent sparingly for step labels, the active or user-owned element, key terms, or one arrow. Do not use purple or green.
-- Use near-square corners with a 3–4 px radius and `1.5px solid #111111` card borders.
-- Use a full-width lavender hero band with a `1.5px` black bottom rule.
-- Use small uppercase step labels at about 11 px with `letter-spacing: .12em` in brick red.
-
-Do not add meta copy such as `/explain-simply`, category labels, claims about the reader, or a decorative footer. The page is the explanation.
+Do not add meta copy such as `/explain-simply`, category labels, or claims about the reader. The diagram is the explanation.
 
 Before delivery, check two things:
 
-1. The panel titles alone tell the whole story.
-2. Each picture is clear in two seconds without tracing a path.
+1. The labels alone tell the whole story.
+2. The path is clear in two seconds without tracing crossed lines.
 
 ## Hand-off
 
-For a topic with a graphic, end the verbal answer with exactly this low-pressure line, then attach the rendered file in the same turn:
+For a topic with a diagram, end the verbal answer with exactly this low-pressure line, then include the Mermaid block in the same turn:
 
 > Here's a quick graphic in case helpful:
 

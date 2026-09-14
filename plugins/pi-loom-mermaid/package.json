@@ -1,11 +1,14 @@
 {
   "name": "@yassimba/pi-loom-mermaid",
-  "version": "0.2.0",
+  "version": "0.7.0",
   "description": "Loom's advanced Mermaid renderer for Pi, with better routing and color.",
   "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22.6"
+  },
+  "bin": {
+    "loom-mermaid-render": "./src/cli.ts"
   },
   "keywords": [
     "pi-package",
@@ -42,15 +45,14 @@
       "nextAction": "Set markdown.mermaid to off in Pi settings, run /reload, then use classDef styles in a Mermaid block."
     }
   },
+  "dependencies": {
+    "@earendil-works/pi-tui": "0.85.1"
+  },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": "*"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
-      "optional": true
-    },
-    "@earendil-works/pi-tui": {
       "optional": true
     }
   }

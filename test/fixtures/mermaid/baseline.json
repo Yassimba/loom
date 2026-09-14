@@ -1,4 +1,11 @@
 {
+  "biclique-private": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 885
+  },
   "class-inheritance": {
     "brokenLinks": 0,
     "edgeOverText": 0,
@@ -6,18 +13,25 @@
     "crossings": 0,
     "area": 858
   },
+  "class-lr-skips": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 5882
+  },
   "composite-states": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1518
+    "area": 1344
   },
   "concentrate": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
+    "crossings": 0,
     "area": 336
   },
   "cycles": {
@@ -25,13 +39,13 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1152
+    "area": 1419
   },
   "dense": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 3,
+    "crossings": 0,
     "area": 520
   },
   "er-cardinalities": {
@@ -39,76 +53,132 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 675
+    "area": 910
   },
   "fans": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
-    "area": 756
+    "crossings": 0,
+    "area": 702
+  },
+  "fork-before-join": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 192
   },
   "lane-order": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 1,
+    "crossings": 0,
     "area": 494
+  },
+  "lane-past-stack": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 1,
+    "area": 1184
+  },
+  "lane-shared-port": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 385
+  },
+  "lane-stacked": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 230
+  },
+  "loop-branch": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 768
   },
   "nested-subgraphs": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1020
+    "area": 1156
   },
   "parallel-edges": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 403
+    "area": 416
   },
   "reciprocal": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 450
+    "area": 480
   },
   "self-loops": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 703
+    "area": 325
+  },
+  "side-lane": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1320
   },
   "skip-labelled": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1288
+    "area": 1196
+  },
+  "skip-late-jog": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 847
   },
   "skip-lr": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 572
+    "area": 624
   },
   "state-lr": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 602
+    "area": 688
+  },
+  "subgraphs-lr": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 2,
+    "area": 8712
   },
   "unicode-wide": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 936
+    "area": 988
   }
 }

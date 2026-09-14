@@ -1,0 +1,43 @@
+classDiagram
+  direction LR
+  class ArgumentModel {
+    <<was build_arg_model>>
+    argument_model(name, arguments, requires_any_of, mutually_exclusive)$ type[BaseModel]
+  }
+  class ArgumentSpec {
+    <<was TemplateArgSpec>>
+    type: ArgumentType
+    required: bool
+    default: JsonValue
+    doc: str?
+  }
+  class ArgumentType {
+    <<enum, was TemplateArgType>>
+    STRING INTEGER NUMBER BOOLEAN
+    BOUND COLUMN LIST OBJECT SQL
+  }
+  class Argument {
+    <<was TemplateArg>>
+    name: str
+    type: ArgumentType
+    required: bool
+    default: JsonValue
+    doc: str?
+  }
+  class ArgumentRead {
+    <<was ArgumentUse>>
+    name: str
+    span: TextRange?
+    expression: str
+  }
+  class FrontMatter
+  class BodyAnalysis
+  class CheckType
+  CheckType o-- Argument : arguments
+  CheckType ..> ArgumentModel : argument_model
+  FrontMatter o-- ArgumentSpec : spec from front matter
+  BodyAnalysis o-- ArgumentRead : name from body
+  ArgumentSpec --> ArgumentType
+  Argument --> ArgumentType
+  Argument ..> ArgumentSpec : arguments
+  Argument ..> ArgumentRead : argument_reads
