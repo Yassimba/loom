@@ -16,6 +16,14 @@ export const MAX_CANVAS_CELLS = 1 << 21
 export const sat = (a: number, b: number): number => Math.max(0, a - b)
 export const half = (n: number): number => Math.floor(n / 2)
 
+/**
+ * Rows from a box's top to the row its edges meet. An even box has no
+ * middle row, so the arrow takes the one above centre: the box then hangs
+ * a row lower than the arrow instead of two rows higher, which reads as
+ * centred on it.
+ */
+export const mid = (h: number): number => half(h) - (h % 2 === 0 ? 1 : 0)
+
 /** Columns a label takes once fitted to `max`. */
 export const labelCols = (text: string, max: number): number => Math.min(stringWidth(text), max)
 

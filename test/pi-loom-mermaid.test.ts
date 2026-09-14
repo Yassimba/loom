@@ -582,10 +582,10 @@ test("two sources sharing two targets ride one trunk, a private dotted edge take
   assert.doesNotMatch(text, /╫/, "no hop");
   assert.match(
     text,
-    /optional +│ SHACL Check Engine/,
-    "the label sits above its own departure, not at the join",
+    /optional +┌─+┐\n[^\n]*├──┬─┼─+▶│ SHACL Check Engine/,
+    "the label sits on its own arm, a row above the arrival it names",
   );
-  assert.match(text, /│ Turbine Engine ├─┴─┴─+▶│ compares structure/, "one head for both");
+  assert.match(text, /│ Turbine Engine ├─┴─┴─+▶│ {2}Schema Inspector/, "one head for both");
 });
 
 test("LR class diagram: skips order freely, colliding labels move a row, no bus crossing", () => {

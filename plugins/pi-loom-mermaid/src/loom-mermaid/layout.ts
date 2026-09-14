@@ -22,6 +22,7 @@ import {
   labelCols,
   labelStart,
   MAX_CANVAS_CELLS,
+  mid,
   PAD,
   sat,
   type Placed,
@@ -810,7 +811,7 @@ function placeTd(
       const cx = centers[idx]
       const x = sat(cx, half(w))
       const y = rankY[r] + half(rankH[r] - h)
-      placed[idx] = { x, y, w, h, cx, cy: y + half(h), rank: r }
+      placed[idx] = { x, y, w, h, cx, cy: y + mid(h), rank: r }
       diagramW = Math.max(diagramW, x + w)
       if (sizes.selfLabelW[idx] > 0) diagramW = Math.max(diagramW, x + w + 4 + sizes.selfLabelW[idx])
     }
@@ -918,7 +919,7 @@ function placeLr(
   const delta = (i: number, end: 0 | 1): number => {
     const p = ends[i][end]
     const node = end === 0 ? graph.edges[i].from : graph.edges[i].to
-    return p === null ? 0 : p.box.cy - half(sizes.boxH[node])
+    return p === null ? 0 : p.box.cy - mid(sizes.boxH[node])
   }
   const align = new Map<number, number>()
   graph.nodes.forEach((_, v) => {
@@ -939,7 +940,7 @@ function placeLr(
   // (No entry spreading or local returns here: LR boxes are three rows tall,
   // so the centre row is the only usable port on a side.)
   const isSkip = (e: Edge): boolean => e.from !== e.to && ranks[e.to] - ranks[e.from] > 1
-  const boxTop = (i: number): number => sat(centers[i], half(sizes.boxH[i]))
+  const boxTop = (i: number): number => sat(centers[i], mid(sizes.boxH[i]))
   // A back-edge target's top-entry `▼` stub sits one row above its box;
   // a straight run through that cell would appear to carry the arrival.
   const stubRows = new Set<number>()
@@ -996,7 +997,8 @@ function placeLr(
       (_, j) =>
         ranks[j] <= ranks[e.from] ||
         ranks[j] >= ranks[e.to] ||
-        Math.abs(centers[j] - row) > half(sizes.boxH[j]),
+        row < sat(centers[j], mid(sizes.boxH[j])) ||
+        row > sat(centers[j], mid(sizes.boxH[j])) + sizes.boxH[j] - 1,
     )
   graph.edges.forEach((e, i) => {
     if (isSkip(e) && clearRow(e, entryRow(i))) edgeStraight[i] = true
@@ -1074,7 +1076,7 @@ function placeLr(
   // overhang must end before the rank after next, so its extent is checked
   // once the columns are known and a sink that reaches too far rejoins its
   // column.
-  const top = (i: number): number => sat(centers[i], half(sizes.boxH[i]))
+  const top = (i: number): number => sat(centers[i], mid(sizes.boxH[i]))
   const rowsMeet = (i: number, lo: number, hi: number): boolean => top(i) <= hi && lo < top(i) + sizes.boxH[i]
   const goesAround = (i: number): boolean => {
     const e = graph.edges[i]
@@ -1147,9 +1149,9 @@ function placeLr(
       const w = sizes.boxW[idx]
       const h = sizes.boxH[idx]
       const cy = centers[idx]
-      const y = sat(cy, half(h))
+      const y = sat(cy, mid(h))
       const x = rankX[r]
-      placed[idx] = { x, y, w, h, cx: x + half(w), cy: y + half(h), rank: r }
+      placed[idx] = { x, y, w, h, cx: x + half(w), cy: y + mid(h), rank: r }
       diagramH = Math.max(diagramH, y + h + (loops.has(idx) ? 2 : 0))
     }
   })
