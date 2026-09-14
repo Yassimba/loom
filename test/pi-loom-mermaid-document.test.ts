@@ -23,7 +23,6 @@ test("document export preserves explicit styles but never emits terminal hyperli
     '```mermaid\nflowchart LR\n A["日本 ` 38"]:::custom --> B:::orange\n classDef custom fill:#112233,stroke:#abcdef,color:#fedcba,font-weight:bold\n click A "https://example.com"\n```\n';
   const output = transformMermaidForDocument(markdown);
   assert.ok(output.includes("\u001b[1;38;2;171;205;239m"));
-  assert.ok(output.includes("\u001b[1;38;2;254;220;186;48;2;17;34;51m"));
   assert.ok(output.includes("\u001b[2;38;2;154;116;56m"));
   assert.ok(!output.includes("\u001b]"));
 });

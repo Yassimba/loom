@@ -66,7 +66,7 @@ export function paint(graph: Graph, extras: NodeExtra[], lay: Layout): Canvas {
   flushLabels(canvas)
   placeLaneLabels(canvas, routes.flatMap((r) => (r?.laneLabel === undefined ? [] : [r.laneLabel])))
 
-  canvas.finalizeMask(graph.dir === 'left' || graph.dir === 'right' ? 'h' : 'v')
+  canvas.finalizeMask()
   return canvas
 }
 
@@ -287,15 +287,24 @@ function placeLaneLabels(canvas: Canvas, labels: LaneLabel[]): void {
   for (const { text, y, lo, hi } of labels) {
     const tw = stringWidth(text)
     const lastStart = hi - 1 - tw
-    if (lastStart < lo + 1 || y >= canvas.h) continue
-    const clear = (start: number): boolean => {
+    if (y >= canvas.h) continue
+    const clear = (start: number, row = y): boolean => {
       for (let x = start; x < start + tw; x++) {
-        const i = canvas.idx(x, y)
+        if (x >= canvas.w) return false
+        const i = canvas.idx(x, row)
         if (canvas.occupied[i] === 1) return false
         if ((canvas.mask[i] & (U | D)) !== 0) return false
         if (canvas.ch[i] !== ' ') return false
       }
       return true
+    }
+    // A run too short for its label takes the row above it (else below),
+    // starting where the run does: the label reads beside the arrow and
+    // the run stays as short as the layout made it.
+    if (lastStart < lo + 1) {
+      const row = [y - 1, y + 1].find((r) => r >= 0 && r < canvas.h && clear(lo + 1, r))
+      if (row !== undefined) drawTextOverEdges(canvas, text, lo + 1, row, 'edgeLabel')
+      continue
     }
     const mid = Math.min(Math.max(half(lo + hi) - half(tw), lo + 1), lastStart)
     let at = mid
@@ -330,24 +339,35 @@ function placeLabel(canvas: Canvas, label: string, row: number, x: number): void
 }
 
 function flushLabels(canvas: Canvas): void {
-  for (const { label, row, x } of canvas.labels.splice(0)) writeLabel(canvas, label, row, x)
+  for (const { label, row, x } of canvas.labels.splice(0)) {
+    // Two labels routed onto one row (adjacent buses into one rank) would
+    // truncate each other; the later one moves a row up, then down, if a
+    // row there is free for the whole text.
+    const glyphs = [...measured(label)]
+    const run = (r: number): number => (r >= 0 && r < canvas.h ? labelRun(canvas, glyphs, r, x) : 0)
+    const at = [row, row - 1, row + 1].find((r) => run(r) === glyphs.length) ?? row
+    let cx = x
+    for (const [c, cw] of glyphs.slice(0, run(at))) {
+      if (cw === 0) continue
+      for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(cx + k, at)] = 0
+      canvas.set(cx, at, c, 'edgeLabel')
+      for (let k = 1; k < cw; k++) canvas.set(cx + k, at, CONT, 'edgeLabel')
+      cx += cw
+    }
+  }
 }
 
-function writeLabel(canvas: Canvas, label: string, row: number, startX: number): void {
-  if (row >= canvas.h) return
+/** How many of `glyphs` fit from `(x, row)` before a non-blank cell. */
+function labelRun(canvas: Canvas, glyphs: [string, number][], row: number, startX: number): number {
   let x = startX
-  for (const [c, cw] of measured(label)) {
-    if (cw === 0) continue
-    if (x + cw > canvas.w) break
-    let blocked = false
+  for (let n = 0; n < glyphs.length; n++) {
+    const cw = glyphs[n][1]
+    if (x + cw > canvas.w) return n
     for (let k = 0; k < cw; k++) {
       const i = canvas.idx(x + k, row)
-      if (canvas.ch[i] !== ' ' || canvas.occupied[i]) blocked = true
+      if (canvas.ch[i] !== ' ' || canvas.occupied[i]) return n
     }
-    if (blocked) break
-    for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(x + k, row)] = 0
-    canvas.set(x, row, c, 'edgeLabel')
-    for (let k = 1; k < cw; k++) canvas.set(x + k, row, CONT, 'edgeLabel')
     x += cw
   }
+  return glyphs.length
 }

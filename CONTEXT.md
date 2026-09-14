@@ -72,7 +72,4 @@ _Avoid_: code peek (that is review's inline component), popover (that is the
 hover preview)
 
 **Walkthrough**:
-The artifact a diagram-and-prose skill produces: a `.md` repo copy plus a
-built `.html` with SVGs inlined, opened for annotation. Explain-code-flow's
-walkthrough explains a feature; the guided review's walkthrough chapters a
-changeset.
+A diagram-and-prose explanation. Explain-code-flow delivers a feature walkthrough in chat with fenced Mermaid; a guided review chapters a changeset.

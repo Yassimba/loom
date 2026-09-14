@@ -1,8 +1,4 @@
-# Skills this skill invokes; installers pull them in transitively.
-skills:
-  - grilling
-
 upstream:
   repository: https://github.com/mattpocock/skills
-  path: skills/productivity/grill-me
+  path: skills/productivity/grilling
   commit: 3cca18b368ae95cdbdebbff572ccafa662551015

@@ -11,7 +11,7 @@ import { Canvas, D, drawTextOverEdges, L, R, U } from './canvas.ts'
 import type { NoteAnchor, SeqItem, Sequence } from './diagrams/sequence.ts'
 import { fitLabel, type Limits } from './labels.ts'
 import type { CanvasResult } from './graph-render.ts'
-import { half, MAX_CANVAS_CELLS, PAD, type Placed, sat } from './layout.ts'
+import { half, MAX_CANVAS_CELLS, PAD, type Placed, sat } from './layout-geom.ts'
 import { drawBox } from './paint.ts'
 import { stringWidth } from './width.ts'
 

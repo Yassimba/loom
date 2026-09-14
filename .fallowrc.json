@@ -20,6 +20,11 @@
     "maxCognitive": 20,
     "maxCrap": 250
   },
+  "audit": {
+    "deadCodeBaseline": ".fallow-baselines/pi-guardrails-dead-code.json",
+    "healthBaseline": ".fallow-baselines/pi-guardrails-health.json",
+    "dupesBaseline": ".fallow-baselines/pi-guardrails-dupes.json"
+  },
   "rules": {
     "dev-dependencies-in-production": "off"
   }

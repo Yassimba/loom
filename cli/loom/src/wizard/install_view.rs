@@ -1,21 +1,17 @@
 //! The Install stage: progress gauge, task list, and the result summary.
-use super::render::{bordered, field, highlight, list_offset, pad, plural};
+use super::render::{bordered, field, highlight, plural};
 use super::render::{ACCENT, ERR, OK, SPINNER, TITLE, WARN};
 use super::state::{ExecStatus, InstallStage, Wizard};
 use crate::ui::chrome;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Gauge, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Cell, Gauge, Paragraph, Row, Table, TableState, Wrap};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl Wizard {
     pub(super) fn render_install(&self, frame: &mut Frame, area: Rect, stage: &InstallStage) {
-        let wiki_next = self
-            .expanded_selection()
-            .iter()
-            .any(|resource| resource.group == "Wiki");
         let mut goal_actions = stage
             .report
             .as_ref()
@@ -70,7 +66,7 @@ impl Wizard {
         let summary = stage
             .report
             .as_ref()
-            .map(|report| self.install_summary(stage, report, active, &goal_actions, wiki_next));
+            .map(|report| self.install_summary(stage, report, active, &goal_actions));
         let summary_height = summary.as_ref().map_or(0, |paragraph| {
             (paragraph.line_count(area.width.saturating_sub(chrome::PANEL_FRAME)) as u16 + 2)
                 .min(area.height.saturating_sub(6))
@@ -147,10 +143,7 @@ impl Wizard {
                         ("⊘".into(), Style::new().fg(WARN), message.clone())
                     }
                 };
-                let mut spans = vec![
-                    Span::styled(format!(" {mark} "), style),
-                    Span::raw(format!("{} ", pad(&item.label, label_width))),
-                ];
+                let mut spans = Vec::new();
                 if !matches!(item.status, ExecStatus::Pending) {
                     let elapsed = item
                         .started
@@ -166,21 +159,30 @@ impl Wizard {
                         style.add_modifier(Modifier::DIM),
                     ));
                 }
-                ListItem::new(Line::from(spans))
+                Row::new([
+                    Cell::from(Span::styled(format!(" {mark} "), style)),
+                    Cell::from(item.label.as_str()),
+                    Cell::from(Line::from(spans)),
+                ])
             })
             .collect::<Vec<_>>();
-        let visible = steps_area.height.saturating_sub(2);
-        let offset = if stage.running {
-            list_offset(stage.items.len(), visible, active)
-        } else {
-            (stage.scroll as usize).min(stage.items.len().saturating_sub(visible as usize))
-        };
-        let list = List::new(items).block(bordered(" Tasks ", false));
-        let mut state = ListState::default()
-            .with_offset(offset)
-            .with_selected((!stage.running).then_some(active));
+        let list = Table::new(
+            items,
+            [
+                Constraint::Length(3),
+                Constraint::Length(label_width as u16 + 1),
+                Constraint::Fill(1),
+            ],
+        )
+        .column_spacing(0)
+        .block(bordered(" Tasks ", false));
+        let mut state = TableState::default().with_selected(Some(active));
         frame.render_stateful_widget(
-            list.highlight_style(highlight(!stage.running)),
+            list.row_highlight_style(if stage.running {
+                Style::default()
+            } else {
+                highlight(true)
+            }),
             steps_area,
             &mut state,
         );
@@ -205,18 +207,10 @@ impl Wizard {
         report: &crate::InstallReport,
         active: usize,
         goal_actions: &[(String, String)],
-        wiki_next: bool,
     ) -> Paragraph<'static> {
         let mut lines = Vec::new();
         if report.failures.is_empty() {
-            lines.push(Line::styled(
-                if wiki_next {
-                    "✓ General setup done; Wiki setup is next"
-                } else {
-                    "✓ Ready to try"
-                },
-                Style::new().fg(OK).bold(),
-            ));
+            lines.push(Line::styled("✓ Ready to try", Style::new().fg(OK).bold()));
             lines.push(Line::from(format!(
                 "{} installed, nothing failed.",
                 report.installed.len()
@@ -259,18 +253,14 @@ impl Wizard {
                 ));
             }
 
-            if wiki_next || goal_actions.is_empty() {
+            if goal_actions.is_empty() {
                 lines.push(field(
                     "next",
-                    if wiki_next {
-                        "continue to choose a Wiki Vault".into()
-                    } else {
-                        crate::app::install_next_action(
-                            self.model.mode,
-                            &self.expanded_selection(),
-                            report,
-                        )
-                    },
+                    crate::app::install_next_action(
+                        self.model.mode,
+                        &self.expanded_selection(),
+                        report,
+                    ),
                     ACCENT,
                 ));
             }

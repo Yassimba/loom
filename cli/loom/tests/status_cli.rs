@@ -69,7 +69,7 @@ fn general_status_excludes_vault_scoped_packages() {
         assert!(inventory
             .lines()
             .any(|line| { line.contains("subagents") && line.contains("catalog item installed") }));
-        assert!(inventory.lines().any(|line| {
+        assert!(!inventory.lines().any(|line| {
             line.contains("web-access") && line.contains("catalog item not installed")
         }));
     }
@@ -101,7 +101,7 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
     fs::write(home.join("product/package.json"), "{}").unwrap();
     fs::write(
         ready.join(".pi/settings.json"),
-        r#"{"packages": ["../product", "npm:@companion-ai/feynman@0.3.47"]}"#,
+        r#"{"packages": ["../../product", "npm:@companion-ai/feynman@0.3.47"]}"#,
     )
     .unwrap();
     let mut registry = WikiRegistry::default();
@@ -111,6 +111,7 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
             path: path.clone(),
             feynman: true,
             confluence: true,
+            qmd: true,
         })
         .collect();
     registry.save(&home).unwrap();
@@ -213,7 +214,7 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
     registry.save(&home).unwrap();
     fs::write(
         ready.join(".pi/settings.json"),
-        r#"{"packages": ["../product"]}"#,
+        r#"{"packages": ["../../product"]}"#,
     )
     .unwrap();
     fs::remove_file(ready.join(".agents/skills/confluence-export/SKILL.md")).unwrap();

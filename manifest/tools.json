@@ -4,14 +4,15 @@
     {
       "key": "github:Ataraxy-Labs/sem[exe=sem]",
       "label": "sem",
-      "description": "Semantic code search, diffs, and change impact. Binary prerequisite for Sem MCP.",
-      "nextAction": "For agent access, select MCP servers → sem in loom add."
+      "description": "Semantic Git history, diffs, blame, and change impact from the command line.",
+      "nextAction": "Run `sem --help`, then use Sem from the command line when reviewing repository history or change impact."
     },
     {
-      "key": "github:zzet/gortex[exe=gortex]",
-      "label": "gortex",
-      "description": "Local repository graph and code intelligence for Pi and Zed.",
-      "nextAction": "Run `loom init --gortex` in a repository to configure Pi and Zed, start Gortex, and track it."
+      "key": "npm:codebase-memory-mcp",
+      "label": "codebase-memory-mcp",
+      "bin": "codebase-memory-mcp",
+      "description": "Persistent local repository graph and change-impact analysis for coding agents.",
+      "nextAction": "Loom configures Codebase Memory for Pi with its read-only analysis profile."
     },
     {
       "key": "ubi:Yassimba/loom",
@@ -45,7 +46,15 @@
       "label": "rtk",
       "bin": "rtk",
       "description": "Compress command output for coding agents to reduce token usage.",
-      "nextAction": "Run `rtk init --global` for Claude Code or `rtk init --global --agent cursor` for Cursor, then restart the agent."
+      "nextAction": "Loom configures RTK for Pi automatically. For other agents, run the matching `rtk init --global --agent <agent>` command, then restart the agent."
+    },
+    {
+      "key": "pipx:headroom-ai",
+      "label": "headroom",
+      "bin": "headroom",
+      "description": "Local proxy that compresses AI-agent context before it reaches the model.",
+      "nextAction": "Run `headroom doctor`, then launch an agent with `headroom wrap <agent>`. Set `HEADROOM_BEACON=off` to disable anonymous telemetry.",
+      "companions": ["python", "uv"]
     },
     {
       "key": "npm:@magnitudedev/cli",
@@ -194,10 +203,10 @@
       "companions": ["uv"]
     },
     {
-      "key": "github:Yassimba/plannotator",
+      "key": "github:backnotprop/plannotator",
       "label": "plannotator",
       "description": "Browser-based plan and code review, document annotation, and Guided Reviews for coding agents. The plannotator skill drives it.",
-      "nextAction": "In Claude Code run `/plugin marketplace add backnotprop/plannotator` and `/plugin install plannotator@plannotator`, then restart."
+      "nextAction": "Run `plannotator --help`."
     },
     {
       "key": "github:AgriciDaniel/claude-obsidian",
