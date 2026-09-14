@@ -575,7 +575,7 @@ test("two sources sharing two targets ride one trunk, a private dotted edge take
   );
   assert.ok(drawn);
   const text = drawn.plain.join("\n");
-  assert.match(text, /│ RDF Extension ├─┬─┼─+▶│/, "dotted fork, then the trunk join");
+  assert.match(text, /│ RDF Extension ├─+┬─┼─+▶│/, "dotted fork, then the trunk join");
   // Two private arrivals into one target must share the approach or
   // cross (PrivateFanIn.lean): the dotted arm drops to Turbine's row
   // and joins its fan there, no hop.

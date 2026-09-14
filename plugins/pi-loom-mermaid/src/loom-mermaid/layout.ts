@@ -1138,19 +1138,17 @@ function placeLr(
 
   let diagramH = 1
   for (let v = graph.nodes.length; v < centers.length; v++) diagramH = Math.max(diagramH, centers[v] + 1)
-  // A box sits at the column edge its own edges use: the right edge when
-  // something leaves it, so a narrow box beside a wide one reaches the
-  // next rank in a short run rather than one as wide as the widest label;
-  // the left edge when nothing leaves, which shortens what arrives
-  // instead. A sink wide enough to overhang keeps the left edge too.
-  const sink = graph.nodes.map((_, i) => !graph.edges.some((e) => e.from === i && e.to !== i))
+  // Every box in a rank shares the column's left edge, where what arrives
+  // meets it, so a fan reaches its targets on one line instead of a
+  // staircase. Departures all run to the band's bus anyway, so nothing is
+  // lost on that side; a sink wide enough to overhang starts there too.
   byRank.forEach((row, r) => {
     for (const idx of row) {
       const w = sizes.boxW[idx]
       const h = sizes.boxH[idx]
       const cy = centers[idx]
       const y = sat(cy, half(h))
-      const x = overhang.has(idx) || sink[idx] ? rankX[r] : rankX[r] + colW[r] - w
+      const x = rankX[r]
       placed[idx] = { x, y, w, h, cx: x + half(w), cy: y + half(h), rank: r }
       diagramH = Math.max(diagramH, y + h + (loops.has(idx) ? 2 : 0))
     }
@@ -1636,12 +1634,13 @@ function forwardRouteLr(
   // bus is often too narrow to hold a word, and a label written there
   // lands on the edge's own trunk.
   if (edge.label !== null) {
-    // A straight edge has no bus to clear: the whole run is its own.
-    // Otherwise the label clears every track in the band, not just this
-    // edge's: the neighbouring trunks run through the same rows.
+    // A straight edge has no bus to clear, so its label may sit at the
+    // source. It still joins its siblings past the bus when they went
+    // there: one arm of a fan labelled at the fork and the rest at their
+    // targets reads as though the fork itself were named.
     const straight = ry === ly && !bundled
     const fits = straight || rx + 2 + labelCols(edge.label, max) < band[0]
-    const x = !straight && (atArrival || !fits) ? band[1] + 2 : rx + 2
+    const x = atArrival || (!straight && !fits) ? band[1] + 2 : rx + 2
     labels.push({ text: edge.label, row: sat(atArrival ? ly : ry, 1), x })
   }
   const route: Route = { points, labels: fitted(labels, max) }
