@@ -394,10 +394,9 @@ fn write_config(path: &Path, before: &str, after: &str) -> Result<()> {
 }
 
 fn entry_digest(value: &Value) -> String {
-    format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(value).expect("JSON serializes"))
-    )
+    crate::ownership::hex(&Sha256::digest(
+        serde_json::to_vec(value).expect("JSON serializes"),
+    ))
 }
 
 pub fn install(server: Server, destination: &SkillDestination, system: &dyn System) -> Result<()> {
