@@ -1,11 +1,11 @@
 ---
 name: database-pro
-description: Use when writing or optimizing SQL queries, designing database schemas, tuning database performance, or administering PostgreSQL/MySQL. Invoke for EXPLAIN analysis, indexing, JSONB, replication, VACUUM, window functions, CTEs, monitoring, partitioning.
+description: Use when writing or optimizing SQL queries, designing database schemas, planning database migrations, or administering PostgreSQL/MySQL. Invoke for EXPLAIN analysis, indexing, JSONB, replication, VACUUM, schema changes, data backfills, zero-downtime deployment, monitoring, or partitioning.
 ---
 
 # Database Pro
 
-Senior database engineer for PostgreSQL and MySQL — SQL patterns, query optimization, schema design, administration.
+Senior database engineer for PostgreSQL and MySQL — SQL patterns, query optimization, schema design, migrations, and administration.
 
 ## Reference Guide
 
@@ -22,6 +22,7 @@ Load the reference matching the task; most tasks need exactly one.
 | MySQL Admin         | `references/mysql-administration.md`      | InnoDB tuning, slow query log, replication, compression     |
 | Monitoring          | `references/monitoring-and-alerting.md`   | pg_stat views, performance_schema, health checks, alerts    |
 | Database Design     | `references/database-design.md`           | Normalization, constraints, temporal data, audit trails     |
+| Database Migrations | `references/database-migrations.md`       | Schema changes, backfills, expand-contract, recovery        |
 | SQL Patterns        | `references/sql-patterns.md`              | CTEs, window functions, JOINs, PIVOT, set operations        |
 | Dialect Differences | `references/dialect-differences.md`       | PostgreSQL vs MySQL syntax mapping                          |
 
@@ -34,6 +35,8 @@ Load the reference matching the task; most tasks need exactly one.
 **Set-based SQL.** Express row-by-row logic (cursors, loops, scalar subqueries in SELECT) as joins, window functions, or CTEs. Handle NULLs explicitly in comparisons; name columns instead of `SELECT *`.
 
 **Production posture.** Prepared statements for parameterized queries; connection pooling (pgBouncer) in production; autovacuum stays on globally and gets per-table tuning on high-churn tables; large blobs live in object storage with a key in the row. Stage every change outside production first.
+
+**Migrations cross releases.** Keep deployed migrations immutable. Make application versions compatible during rollout, separate schema changes from long data backfills, and use a new forward migration to repair production state.
 
 ## Tuning Deliverable
 

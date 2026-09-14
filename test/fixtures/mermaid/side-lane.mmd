@@ -1,0 +1,9 @@
+flowchart TD
+    SRC[Mermaid src] --> STRIP[stripControls]
+    STRIP --> REG[diagramFor]
+    REG -->|null| NOART[return null]
+    REG --> FIT{fits maxWidth?}
+    FIT -->|yes| ART[MermaidArt]
+    FIT -->|no| DOWN[renderDown]
+    DOWN --> COLL[collapse subgraphs]
+    COLL --> SB[sourceBox]

@@ -1,0 +1,84 @@
+{
+  "finding_counts": {
+    "plugins/pi-guardrails/extensions/guardrails/commands/settings/index.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/extensions/guardrails/commands/settings/path-list-editor.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/extensions/guardrails/components/pattern-editor.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/extensions/path-access/index.ts": {
+      "complexity_high": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/extensions/path-access/prompt.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/extensions/permission-gate/index.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/src/core/shell/ast.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/src/core/shell/command-args.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/src/shared/config/loader.ts": {
+      "complexity_high": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/src/shared/config/migration/004-env-files-to-policies.ts": {
+      "complexity_high": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/src/shared/glob.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "plugins/pi-guardrails/src/shared/paths/bash-paths.ts": {
+      "complexity_high": {
+        "count": 1
+      }
+    }
+  },
+  "runtime_coverage_findings": [],
+  "target_keys": [
+    "plugins/pi-guardrails/extensions/guardrails/commands/settings/utils.ts:dead code",
+    "plugins/pi-guardrails/extensions/guardrails/commands/onboarding/config.ts:dead code",
+    "plugins/pi-guardrails/extensions/guardrails/commands/settings/examples.ts:dead code",
+    "plugins/pi-guardrails/src/shared/paths/bash-paths.ts:high impact",
+    "plugins/pi-guardrails/src/shared/config/migration/004-env-files-to-policies.ts:complexity",
+    "plugins/pi-guardrails/src/shared/config/loader.ts:complexity",
+    "plugins/pi-guardrails/src/core/shell/ast.ts:high impact",
+    "plugins/pi-guardrails/extensions/path-access/index.ts:complexity"
+  ]
+}

@@ -139,18 +139,7 @@ fn has_significant_token(content: &str) -> bool {
 /// Indent every line after the first by two spaces, so a multi-line value
 /// sits correctly under a two-space array element.
 fn indent_item(rendered: &str) -> String {
-    rendered
-        .lines()
-        .enumerate()
-        .map(|(index, line)| {
-            if index == 0 {
-                line.to_owned()
-            } else {
-                format!("  {line}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    rendered.lines().collect::<Vec<_>>().join("\n  ")
 }
 
 /// Parse a JSONC value fragment by stripping comments and trailing commas.
@@ -184,20 +173,7 @@ fn parse_value(fragment: &str) -> Result<Value> {
 }
 
 fn render(value: &Value) -> String {
-    // Indent nested lines to sit under a two-space top-level entry.
-    serde_json::to_string_pretty(value)
-        .unwrap_or_else(|_| value.to_string())
-        .lines()
-        .enumerate()
-        .map(|(index, line)| {
-            if index == 0 {
-                line.to_owned()
-            } else {
-                format!("  {line}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    indent_item(&serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()))
 }
 
 fn root_open_brace(content: &str) -> Result<usize> {

@@ -56,7 +56,7 @@ impl System for FakeSystem {
         Ok(CommandResult {
             success: !shown.contains("broken"),
             stdout: if shown == "pi list" {
-                "npm:pi-markdown-preview".into()
+                "npm:pi-web-access".into()
             } else {
                 String::new()
             },
@@ -325,12 +325,12 @@ fn executor_removes_dependents_first_and_keeps_failed_receipts() {
 fn pi_uninstall_uses_a_package_source() {
     let home = temp_home("pi-source");
     let mut state = state(vec![owned(
-        "pi-package:preview",
+        "pi-package:web-access",
         OwnershipScope::Global,
         &[],
         Receipt::Manager {
             manager: "pi".into(),
-            target: "pi-markdown-preview".into(),
+            target: "pi-web-access".into(),
         },
     )]);
     state.save(&home).unwrap();
@@ -350,9 +350,9 @@ fn pi_uninstall_uses_a_package_source() {
 
     assert_eq!(
         system.commands.into_inner().unwrap(),
-        vec!["pi list", "pi uninstall npm:pi-markdown-preview"]
+        vec!["pi list", "pi uninstall npm:pi-web-access"]
     );
-    assert_eq!(report.removed, vec!["pi-package:preview"]);
+    assert_eq!(report.removed, vec!["pi-package:web-access"]);
     std::fs::remove_dir_all(home).unwrap();
 }
 
