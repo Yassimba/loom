@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.11.0](https://github.com/Yassimba/loom/compare/loom-v1.10.1...loom-v1.11.0) (2026-09-14)
+
+
+### Features
+
+* add contract commands, guardrails, and mermaid layout fixes ([d9cf2ba](https://github.com/Yassimba/loom/commit/d9cf2bacfa3d17560c00236b16158dfbf8e5e114))
+* **loom:** add contract commands and land in-progress CLI work ([3890d2a](https://github.com/Yassimba/loom/commit/3890d2ad59cbdc7f59a7af5f39b520380ee90ba9))
+* remove serena integration from loom ([b790298](https://github.com/Yassimba/loom/commit/b7902982e3c3562806660b0c4bfd5608493d71f1))
+
+
+### Bug Fixes
+
+* **loom:** preserve read-only contracts across platforms ([a556269](https://github.com/Yassimba/loom/commit/a556269795fb4389901dcb1eb3d3ce6f6846c0f6))
+
+## [1.10.1](https://github.com/Yassimba/loom/compare/loom-v1.10.0...loom-v1.10.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* **loom:** preserve reviewed installs and tool ownership ([4e9d30e](https://github.com/Yassimba/loom/commit/4e9d30edc36654209900849d8f3af6eeee357ed0))
+
 ## [1.10.0](https://github.com/Yassimba/loom/compare/loom-v1.9.0...loom-v1.10.0) (2026-09-11)
 
 
@@ -93,7 +114,6 @@
 * **loom:** add Sem MCP and colored Mermaid rendering ([db54b81](https://github.com/Yassimba/loom/commit/db54b819bee319fbda6f22b450396a4c4f24e1bc))
 * **loom:** install Pi skills in portable tree ([5dcbf63](https://github.com/Yassimba/loom/commit/5dcbf63afb0287fd17500c5927b4841172871866))
 * **loom:** install Pi skills in portable tree ([7b3bbcf](https://github.com/Yassimba/loom/commit/7b3bbcf46031920e52e30960a625a611332ff83e))
-* **loom:** replace codegraph with sem and gortex ([f2a01bb](https://github.com/Yassimba/loom/commit/f2a01bbc8cf3d4f95bcd0c0308e01bb73231b25c))
 * **manifest:** install the plannotator fork with figure-led Guided Reviews ([30eb18b](https://github.com/Yassimba/loom/commit/30eb18b46dff85dadda30d59db2d5a357b0e3fb3))
 * **manifest:** install the plannotator fork with figure-led Guided Reviews ([fb7eaad](https://github.com/Yassimba/loom/commit/fb7eaad6d44f75254ded1d3b28ff151e048e86dd))
 * **pi-loom-mermaid:** colored rendering with layered layout and interior routing ([21e71fb](https://github.com/Yassimba/loom/commit/21e71fbf4384f0ff7e30b2af8fe6f9430612bf0d))

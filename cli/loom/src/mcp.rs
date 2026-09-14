@@ -7,65 +7,83 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-pub const SEM_TOOL_KEY: &str = "github:Ataraxy-Labs/sem[exe=sem]";
 pub const ADAPTER_SPEC: &str = "npm:pi-mcp-adapter@2.32.1";
 pub const EXPOSURE_NOTE: &str = "Pi gateway only (directTools=false); lifecycle unchanged. First launch may discover server metadata. Restart Pi and use /mcp to check live health.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Server {
-    Sem,
     Context7,
+    CodebaseMemory,
 }
 
 impl Server {
     pub fn from_name(name: &str) -> Result<Self> {
         match name {
-            "sem" => Ok(Self::Sem),
             "context7" => Ok(Self::Context7),
+            "codebase-memory-mcp" => Ok(Self::CodebaseMemory),
             _ => bail!("unverified MCP server"),
         }
     }
 
     pub fn name(self) -> &'static str {
         match self {
-            Self::Sem => "sem",
             Self::Context7 => "context7",
+            Self::CodebaseMemory => "codebase-memory-mcp",
+        }
+    }
+
+    fn executable(self) -> Option<&'static str> {
+        match self {
+            Self::Context7 => None,
+            Self::CodebaseMemory => Some("codebase-memory-mcp"),
+        }
+    }
+
+    fn tool_dependency(self) -> Option<&'static str> {
+        match self {
+            Self::Context7 => None,
+            Self::CodebaseMemory => Some("tool:codebase-memory-mcp"),
         }
     }
 
     fn entry(self) -> Value {
         match self {
-            Self::Sem => json!({"command": "sem", "args": ["mcp"], "directTools": false}),
             Self::Context7 => json!({"url": "https://mcp.context7.com/mcp", "directTools": false}),
+            Self::CodebaseMemory => json!({
+                "command": "codebase-memory-mcp",
+                "args": ["--tool-profile=analysis"],
+                "directTools": false
+            }),
         }
     }
 
     fn compatible_entry(self, entry: &Value) -> bool {
-        self.entry()
-            .as_object()
-            .unwrap()
-            .iter()
-            .all(|(key, value)| {
-                entry.get(key) == Some(value)
-                    || (self == Self::Sem
-                        && key == "command"
-                        && entry
+        let expected = self.entry();
+        expected.as_object().unwrap().iter().all(|(key, value)| {
+            entry.get(key) == Some(value)
+                || (key == "command"
+                    && self.executable().is_some_and(|binary| {
+                        entry
                             .get(key)
                             .and_then(Value::as_str)
                             .is_some_and(|command| {
-                                Path::new(command).file_name() == Some("sem".as_ref())
-                            }))
-            })
-            && entry.get("disabled").is_none_or(|v| v == false)
+                                let path = Path::new(command);
+                                path.is_absolute() && path.file_name() == Some(binary.as_ref())
+                            })
+                    }))
+        }) && entry.get("disabled").is_none_or(|v| v == false)
             && entry.get("socket").is_none()
-            && match self {
-                Self::Sem => entry.get("url").is_none(),
-                Self::Context7 => entry.get("command").is_none() && entry.get("args").is_none(),
+            && match self.executable() {
+                Some(_) => entry.get("url").is_none(),
+                None => entry.get("command").is_none() && entry.get("args").is_none(),
             }
     }
 
     fn prerequisites_present(self, system: &dyn System) -> bool {
-        system.command_exists("pi") && (self != Self::Sem || system.command_exists("sem"))
+        system.command_exists("pi")
+            && self
+                .executable()
+                .is_none_or(|binary| system.command_exists(binary))
     }
 }
 
@@ -429,8 +447,8 @@ pub fn install(server: Server, destination: &SkillDestination, system: &dyn Syst
         "tool:pi".into(),
         "pi-package:pi-mcp-adapter".into(),
     ];
-    if server == Server::Sem {
-        depends_on.push("tool:sem".into());
+    if let Some(tool) = server.tool_dependency() {
+        depends_on.push(tool.into());
     }
     state.record(crate::ownership::OwnedResource {
         id,

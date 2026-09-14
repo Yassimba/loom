@@ -1,6 +1,6 @@
 //! `loom init` — make a repository ready for coding agents: instructions,
-//! issue tracking, domain docs, editor links, coding standards, and optional
-//! integrations selected from project and machine evidence.
+//! issue tracking, domain docs, editor links, coding standards, and installed
+//! code-intelligence tools selected from project and machine evidence.
 //!
 //! Templates are configuration: editing them in the repo and merging to main
 //! changes what every future init writes, like the tool manifest. Sections
@@ -86,7 +86,6 @@ pub struct InitOptions {
     pub domain: Option<DomainLayout>,
     pub editor: Option<Editor>,
     pub coding_standards: Option<bool>,
-    pub gortex: Option<bool>,
     pub yes: bool,
     pub force: bool,
 }
@@ -123,6 +122,7 @@ const RETIRED_SECTIONS: [&str; 1] = ["beads"];
 
 const BASE_TEMPLATE: &str = "manifest/init/AGENTS.base.md";
 const CODING_STANDARDS_TEMPLATE: &str = "manifest/init/CODING_STANDARDS.md";
+const CODE_INTELLIGENCE_TEMPLATE: &str = "manifest/init/sections/code-intelligence.md";
 const BEADS_WORKFLOW_TEMPLATE: &str = "skills/loom/references/issue-tracker-beads.md";
 const LOCAL_WORKFLOW_TEMPLATE: &str = "skills/loom/references/issue-tracker-local.md";
 const DOMAIN_TEMPLATE: &str = "skills/loom/references/domain.md";
@@ -181,13 +181,39 @@ fn find_fence(content: &str, name: &str) -> Option<Fence> {
     })
 }
 
-/// Detection defaults from evidence in the project.
+/// Detection defaults from evidence in the project or a nested workspace.
 fn detect(project: &Path) -> (bool, bool) {
-    let python = ["pyproject.toml", "setup.py", "requirements.txt"]
-        .iter()
-        .any(|file| project.join(file).exists());
-    let rust = project.join("Cargo.toml").exists();
-    (python, rust)
+    (
+        contains_project_file(project, &["pyproject.toml", "setup.py", "requirements.txt"]),
+        contains_project_file(project, &["Cargo.toml"]),
+    )
+}
+
+fn contains_project_file(project: &Path, names: &[&str]) -> bool {
+    let mut directories = vec![(project.to_path_buf(), 0usize)];
+    while let Some((directory, depth)) = directories.pop() {
+        let Ok(entries) = fs::read_dir(directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if entry.file_type().is_ok_and(|kind| kind.is_file())
+                && names.iter().any(|candidate| name == *candidate)
+            {
+                return true;
+            }
+            if depth < 4
+                && entry.file_type().is_ok_and(|kind| kind.is_dir())
+                && !matches!(
+                    name.to_str(),
+                    Some(".git" | ".venv" | "node_modules" | "target" | "vendor")
+                )
+            {
+                directories.push((entry.path(), depth + 1));
+            }
+        }
+    }
+    false
 }
 
 fn select_yes_no(prompt: &str, help: &str, default: bool, assume_yes: bool) -> Result<bool> {
@@ -246,7 +272,6 @@ struct InitFeatures {
     domain: Option<DomainLayout>,
     editor: Option<Editor>,
     coding_standards: bool,
-    gortex: bool,
 }
 
 fn has_project_selection(options: &InitOptions) -> bool {
@@ -262,194 +287,97 @@ fn has_project_selection(options: &InitOptions) -> bool {
 fn choose_features(
     project: &Path,
     beads_tools_installed: bool,
-    gortex_installed: bool,
     default_editor: Editor,
     options: &InitOptions,
     mut ask: impl FnMut(&'static str, &'static str, bool) -> Result<bool>,
 ) -> Result<InitFeatures> {
-    if has_project_selection(options) || options.gortex == Some(true) {
-        if options.tracker == Some(Tracker::Beads) && !beads_tools_installed {
-            anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
-        }
-        if options.gortex == Some(true) && !gortex_installed {
-            anyhow::bail!("Gortex is not installed; run `loom add --tool gortex`");
-        }
-        return Ok(InitFeatures {
-            project_instructions: has_project_selection(options),
-            python: options.python.unwrap_or(false),
-            rust: options.rust.unwrap_or(false),
-            adhd: options.adhd.unwrap_or(false),
-            tracker: options.tracker,
-            domain: options.domain,
-            editor: options.editor,
-            coding_standards: options.coding_standards.unwrap_or(false),
-            gortex: options.gortex.unwrap_or(false),
-        });
-    }
-
-    let (python_default, rust_default) = detect(project);
-    let project_instructions = ask(
-        "Set up project agent instructions?",
-        "Creates or updates AGENTS.md and CLAUDE.md for this project.",
-        true,
-    )?;
-    let (python, rust, adhd, tracker, domain, editor, coding_standards) = if project_instructions {
-        (
-            match options.python {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Add Python instructions?",
-                    "Adds typing, uv, and Python quality commands to AGENTS.md.",
-                    python_default,
-                )?,
-            },
-            match options.rust {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Add Rust instructions?",
-                    "Adds Rust conventions, Clippy, and test commands to AGENTS.md.",
-                    rust_default,
-                )?,
-            },
-            match options.adhd {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Use ADHD-friendly agent output?",
-                    "Requests short, scannable progress updates for this project.",
-                    false,
-                )?,
-            },
-            Some(match options.tracker {
-                Some(explicit) => explicit,
-                None => select_choice(
-                    "Choose the issue tracker",
-                    "Beads provides a dependency graph; local Markdown stores issues under ai-docs/plans/.",
-                    vec![Tracker::Beads, Tracker::Local],
-                    if beads_tools_installed || project.join(".beads").is_dir() {
-                        Tracker::Beads
-                    } else {
-                        Tracker::Local
-                    },
-                    options.yes,
-                )?,
-            }),
-            Some(match options.domain {
-                Some(explicit) => explicit,
-                None => select_choice(
-                    "Choose the domain-doc layout",
-                    "Most repositories have one context; monorepos may map several contexts.",
-                    vec![DomainLayout::Single, DomainLayout::Multi],
-                    if project.join("CONTEXT-MAP.md").exists() {
-                        DomainLayout::Multi
-                    } else {
-                        DomainLayout::Single
-                    },
-                    options.yes,
-                )?,
-            }),
-            Some(match options.editor {
-                Some(explicit) => explicit,
-                None => select_choice(
-                    "Choose the editor for source links",
-                    "Agents use this URL scheme for clickable file and line links.",
-                    vec![
-                        Editor::Vscode,
-                        Editor::Zed,
-                        Editor::Cursor,
-                        Editor::Jetbrains,
-                        Editor::None,
-                    ],
-                    default_editor,
-                    options.yes,
-                )?,
-            }),
-            match options.coding_standards {
-                Some(explicit) => explicit,
-                None => ask(
-                    "Add coding standards?",
-                    "Creates CODING_STANDARDS.md with type, design, and simplicity checks.",
-                    true,
-                )?,
-            },
-        )
-    } else {
-        (false, false, false, None, None, None, false)
+    let explicit = has_project_selection(options);
+    let mut features = InitFeatures {
+        project_instructions: explicit,
+        python: options.python.unwrap_or(false),
+        rust: options.rust.unwrap_or(false),
+        adhd: options.adhd.unwrap_or(false),
+        tracker: options.tracker,
+        domain: options.domain,
+        editor: options.editor,
+        coding_standards: options.coding_standards.unwrap_or(false),
     };
-    if tracker == Some(Tracker::Beads) && !beads_tools_installed {
+    if !explicit {
+        let (python_default, rust_default) = detect(project);
+        features.project_instructions = ask(
+            "Set up project agent instructions?",
+            "Creates or updates AGENTS.md and CLAUDE.md for this project.",
+            true,
+        )?;
+        if features.project_instructions {
+            let mut choose_bool = |explicit: Option<bool>, prompt, help, default| {
+                explicit.map_or_else(|| ask(prompt, help, default), Ok)
+            };
+            features.python = choose_bool(
+                options.python,
+                "Add Python instructions?",
+                "Adds typing, uv, and Python quality commands to AGENTS.md.",
+                python_default,
+            )?;
+            features.rust = choose_bool(
+                options.rust,
+                "Add Rust instructions?",
+                "Adds Rust conventions, Clippy, and test commands to AGENTS.md.",
+                rust_default,
+            )?;
+            features.adhd = choose_bool(
+                options.adhd,
+                "Use ADHD-friendly agent output?",
+                "Requests short, scannable progress updates for this project.",
+                false,
+            )?;
+            features.tracker = Some(select_choice(
+                "Choose the issue tracker",
+                "Beads provides a dependency graph; local Markdown stores issues under ai-docs/plans/.",
+                vec![Tracker::Beads, Tracker::Local],
+                if beads_tools_installed || project.join(".beads").is_dir() {
+                    Tracker::Beads
+                } else {
+                    Tracker::Local
+                },
+                options.yes,
+            )?);
+            features.domain = Some(select_choice(
+                "Choose the domain-doc layout",
+                "Most repositories have one context; monorepos may map several contexts.",
+                vec![DomainLayout::Single, DomainLayout::Multi],
+                if project.join("CONTEXT-MAP.md").exists() {
+                    DomainLayout::Multi
+                } else {
+                    DomainLayout::Single
+                },
+                options.yes,
+            )?);
+            features.editor = Some(select_choice(
+                "Choose the editor for source links",
+                "Agents use this URL scheme for clickable file and line links.",
+                vec![
+                    Editor::Vscode,
+                    Editor::Zed,
+                    Editor::Cursor,
+                    Editor::Jetbrains,
+                    Editor::None,
+                ],
+                default_editor,
+                options.yes,
+            )?);
+            features.coding_standards = choose_bool(
+                options.coding_standards,
+                "Add coding standards?",
+                "Creates CODING_STANDARDS.md with type, design, and simplicity checks.",
+                true,
+            )?;
+        }
+    }
+    if features.tracker == Some(Tracker::Beads) && !beads_tools_installed {
         anyhow::bail!("Beads needs br and bv; run `loom add --tool beads --tool beads-viewer`");
     }
-    let gortex = match options.gortex {
-        Some(true) if !gortex_installed => {
-            anyhow::bail!("Gortex is not installed; run `loom add --tool gortex`");
-        }
-        Some(explicit) => explicit,
-        None if gortex_installed => ask(
-            "Set up Gortex?",
-            "Wires Pi and Zed without hooks, starts Gortex, and tracks this repository.",
-            true,
-        )?,
-        None => false,
-    };
-    Ok(InitFeatures {
-        project_instructions,
-        python,
-        rust,
-        adhd,
-        tracker,
-        domain,
-        editor,
-        coding_standards,
-        gortex,
-    })
-}
-
-// gortex v0.64.0 injects mandatory tool guidance even with --no-hooks; remove this
-// compatibility patch once the pinned adapter gates orientation on ENFORCE itself.
-const GORTEX_ORIENTATION: &str = "if (decision.orientation) parts.push(decision.orientation);";
-const SAFE_GORTEX_ORIENTATION: &str =
-    "if (ENFORCE && decision.orientation) parts.push(decision.orientation);";
-
-fn setup_gortex(system: &dyn System, project: &Path, home: &Path) -> Result<()> {
-    let result = system
-        .run(
-            &CommandSpec::new(
-                "gortex",
-                [
-                    "install",
-                    "--yes",
-                    "--no-hooks",
-                    "--agents",
-                    "pi,zed",
-                    "--start",
-                    "--track",
-                    "--track-path",
-                    ".",
-                ],
-            )
-            .in_dir(project),
-        )
-        .context("could not start Gortex setup")?;
-    if !result.success {
-        anyhow::bail!(
-            "Gortex setup failed: {}",
-            crate::install::command_failure_message(&result)
-        );
-    }
-
-    let extension = home.join(".pi/agent/extensions/gortex/index.ts");
-    let source = fs::read_to_string(&extension)
-        .with_context(|| format!("could not read {}", extension.display()))?;
-    if source.contains(SAFE_GORTEX_ORIENTATION) {
-        return Ok(());
-    }
-    if !source.contains(GORTEX_ORIENTATION) {
-        anyhow::bail!(
-            "Gortex's Pi adapter changed; refusing to patch {}",
-            extension.display()
-        );
-    }
-    let patched = source.replacen(GORTEX_ORIENTATION, SAFE_GORTEX_ORIENTATION, 1);
-    crate::fs_tx::atomic_write(&extension, patched.as_bytes()).map_err(anyhow::Error::msg)
+    Ok(features)
 }
 
 fn setup_beads(system: &dyn System, project: &Path) -> Result<bool> {
@@ -526,6 +454,69 @@ fn ignore_agent_docs(project: &Path) -> Result<&'static str> {
     Ok("ignores ai-docs/")
 }
 
+fn setup_codebase_memory(system: &dyn System, project: &Path) -> Result<Option<&'static str>> {
+    if !system.command_exists("codebase-memory-mcp") {
+        return Ok(None);
+    }
+    let path = project.display().to_string();
+    let status = system
+        .run_probe(
+            &CommandSpec::new(
+                "codebase-memory-mcp",
+                [
+                    "cli".to_string(),
+                    "--json".to_string(),
+                    "index_status".to_string(),
+                    "--project".to_string(),
+                    path.clone(),
+                ],
+            )
+            .in_dir(project),
+        )
+        .context("could not inspect the Codebase Memory index")?;
+    if status.success {
+        return Ok(Some("already indexed"));
+    }
+    let result = system
+        .run(
+            &CommandSpec::new(
+                "codebase-memory-mcp",
+                [
+                    "cli".to_string(),
+                    "--json".to_string(),
+                    "index_repository".to_string(),
+                    "--repo-path".to_string(),
+                    path,
+                    "--mode".to_string(),
+                    "fast".to_string(),
+                ],
+            )
+            .in_dir(project),
+        )
+        .context("could not index the Codebase Memory project")?;
+    if !result.success {
+        anyhow::bail!(
+            "Codebase Memory indexing failed: {}",
+            crate::install::command_failure_message(&result)
+        );
+    }
+    Ok(Some("registered with fast index"))
+}
+
+fn setup_code_intelligence(system: &dyn System, project: &Path, out: &Out) -> Result<()> {
+    if let Some(detail) = setup_codebase_memory(system, project)? {
+        out.row(Mark::Ok, "Codebase Memory", detail);
+    }
+    Ok(())
+}
+
+fn code_intelligence_section(template: &str) -> String {
+    template.replace(
+        "{{tools}}",
+        "- Use Codebase Memory for architecture, call paths, and change impact.",
+    )
+}
+
 fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
     interactive
         || options.yes
@@ -536,7 +527,6 @@ fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
         || options.domain.is_some()
         || options.editor.is_some()
         || options.coding_standards.is_some()
-        || options.gortex.is_some()
 }
 
 pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
@@ -550,7 +540,6 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     let features = choose_features(
         &project,
         system.command_exists("br") && system.command_exists("bv"),
-        system.command_exists("gortex"),
         detect_editor(system),
         options,
         |prompt, help, default| select_yes_no(prompt, help, default, options.yes),
@@ -558,16 +547,12 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     let out = Out::detect();
     let home = system.home_dir().context("home directory is unavailable")?;
     out.title("init", tidy_path(&project, &home));
-    if features.gortex {
-        setup_gortex(system, &project, &home)?;
-        out.row(Mark::Ok, "Gortex", "Pi and Zed wired; repository tracked");
-    }
     if !features.project_instructions {
-        if features.gortex {
-            out.verdict(true, "Done");
-        } else {
-            out.verdict(true, "Nothing selected; no changes made");
-        }
+        setup_code_intelligence(system, &project, &out)?;
+        out.verdict(
+            true,
+            "Nothing else selected; project integrations are ready",
+        );
         return Ok(true);
     }
     // Templates come from the published repo, so init output is publish-gated.
@@ -602,6 +587,13 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         .map(|_| fs::read_to_string(repo_root.join(DOMAIN_TEMPLATE)))
         .transpose()
         .with_context(|| format!("template missing: {DOMAIN_TEMPLATE}"))?;
+    let code_intelligence = if system.command_exists("codebase-memory-mcp") {
+        let template = fs::read_to_string(repo_root.join(CODE_INTELLIGENCE_TEMPLATE))
+            .with_context(|| format!("template missing: {CODE_INTELLIGENCE_TEMPLATE}"))?;
+        Some(code_intelligence_section(&template))
+    } else {
+        None
+    };
     let mut chosen: Vec<(&'static str, String)> = Vec::new();
     for section in &SECTIONS {
         let wanted = match section.name {
@@ -617,6 +609,9 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
                 .with_context(|| format!("template missing: {}", section.template))?;
             chosen.push((section.name, content));
         }
+    }
+    if let Some(content) = code_intelligence {
+        chosen.push(("code-intelligence", content));
     }
 
     let agents_path = project.join("AGENTS.md");
@@ -721,6 +716,7 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
     }
     let ignore_detail = ignore_agent_docs(&project).context("could not update .gitignore")?;
     out.row(Mark::Ok, ".gitignore", ignore_detail);
+    setup_code_intelligence(system, &project, &out)?;
 
     out.verdict(true, "Done");
     if existing.is_none() {
@@ -895,6 +891,13 @@ pub(crate) fn sync_projects_from(
                     .map_err(|error| format!("template missing: {}: {error}", section.template))?;
                 sections.push((section.name, content));
             }
+            if system.command_exists("codebase-memory-mcp") {
+                let template = fs::read_to_string(repo_root.join(CODE_INTELLIGENCE_TEMPLATE))
+                    .map_err(|error| {
+                        format!("template missing: {CODE_INTELLIGENCE_TEMPLATE}: {error}")
+                    })?;
+                sections.push(("code-intelligence", code_intelligence_section(&template)));
+            }
             Ok((base, sections))
         });
     let (base, sections) = match templates {
@@ -962,6 +965,15 @@ mod tests {
             .iter()
             .map(|(name, content)| (*name, content.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn code_intelligence_section_routes_to_codebase_memory() {
+        let template = "## Code intelligence\n\n{{tools}}\n- Verify with source.";
+        assert_eq!(
+            code_intelligence_section(template),
+            "## Code intelligence\n\n- Use Codebase Memory for architecture, call paths, and change impact.\n- Verify with source."
+        );
     }
 
     #[test]
@@ -1040,13 +1052,6 @@ mod tests {
         commands: Mutex<Vec<CommandSpec>>,
     }
 
-    fn write_gortex_extension(home: &Path) -> std::path::PathBuf {
-        let path = home.join(".pi/agent/extensions/gortex/index.ts");
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, format!("before\n{GORTEX_ORIENTATION}\nafter\n")).unwrap();
-        path
-    }
-
     impl System for RecordingSystem {
         fn command_exists(&self, _name: &str) -> bool {
             false
@@ -1064,6 +1069,78 @@ mod tests {
         }
     }
 
+    struct CodeIntelligenceSystem {
+        commands: Mutex<Vec<CommandSpec>>,
+        indexed: bool,
+    }
+
+    impl System for CodeIntelligenceSystem {
+        fn command_exists(&self, name: &str) -> bool {
+            name == "codebase-memory-mcp"
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
+            self.commands.lock().unwrap().push(command.clone());
+            Ok(CommandResult {
+                success: command.program != "codebase-memory-mcp"
+                    || command.args.get(2).map(String::as_str) != Some("index_status")
+                    || self.indexed,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        }
+    }
+
+    #[test]
+    fn codebase_memory_indexes_the_project_once() {
+        let project = std::env::temp_dir().join(format!(
+            "loom-init-code-intelligence-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(project.join(".git")).unwrap();
+        let system = CodeIntelligenceSystem {
+            commands: Mutex::new(Vec::new()),
+            indexed: false,
+        };
+
+        assert_eq!(
+            setup_codebase_memory(&system, &project).unwrap(),
+            Some("registered with fast index")
+        );
+        assert_eq!(
+            system
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .map(CommandSpec::display)
+                .collect::<Vec<_>>(),
+            [
+                format!(
+                    "codebase-memory-mcp cli --json index_status --project {}",
+                    project.display()
+                ),
+                format!(
+                    "codebase-memory-mcp cli --json index_repository --repo-path {} --mode fast",
+                    project.display()
+                ),
+            ]
+        );
+
+        let system = CodeIntelligenceSystem {
+            commands: Mutex::new(Vec::new()),
+            indexed: true,
+        };
+        assert_eq!(
+            setup_codebase_memory(&system, &project).unwrap(),
+            Some("already indexed")
+        );
+        assert_eq!(system.commands.lock().unwrap().len(), 1);
+        fs::remove_dir_all(project).unwrap();
+    }
+
     #[test]
     fn noninteractive_init_requires_explicit_consent() {
         let mut options = InitOptions {
@@ -1074,7 +1151,6 @@ mod tests {
             domain: None,
             editor: None,
             coding_standards: None,
-            gortex: None,
             yes: false,
             force: false,
         };
@@ -1100,14 +1176,12 @@ mod tests {
             domain: None,
             editor: None,
             coding_standards: None,
-            gortex: None,
             yes: false,
             force: false,
         };
 
         let selected = choose_features(
             Path::new(env!("CARGO_MANIFEST_DIR")),
-            true,
             true,
             Editor::Cursor,
             &options,
@@ -1126,7 +1200,6 @@ mod tests {
                 domain: None,
                 editor: None,
                 coding_standards: false,
-                gortex: false,
             }
         );
     }
@@ -1143,7 +1216,6 @@ mod tests {
             domain: None,
             editor: None,
             coding_standards: None,
-            gortex: None,
             yes: true,
             force: false,
         };
@@ -1151,7 +1223,6 @@ mod tests {
         let mut asked = Vec::new();
         let selected = choose_features(
             project,
-            true,
             true,
             Editor::Cursor,
             &options,
@@ -1173,18 +1244,13 @@ mod tests {
                 domain: Some(DomainLayout::Single),
                 editor: Some(Editor::Cursor),
                 coding_standards: true,
-                gortex: true,
             }
         );
-        let local_defaults = choose_features(
-            project,
-            false,
-            false,
-            Editor::None,
-            &options,
-            |_, _, default| Ok(default),
-        )
-        .unwrap();
+        let local_defaults =
+            choose_features(project, false, Editor::None, &options, |_, _, default| {
+                Ok(default)
+            })
+            .unwrap();
         assert_eq!(local_defaults.tracker, Some(Tracker::Local));
         assert_eq!(local_defaults.editor, Some(Editor::None));
 
@@ -1216,27 +1282,14 @@ mod tests {
                     "Creates CODING_STANDARDS.md with type, design, and simplicity checks.".into(),
                     true,
                 ),
-                (
-                    "Set up Gortex?".into(),
-                    "Wires Pi and Zed without hooks, starts Gortex, and tracks this repository."
-                        .into(),
-                    true,
-                ),
             ]
         );
 
         let mut asked = Vec::new();
-        let selected = choose_features(
-            project,
-            false,
-            false,
-            Editor::None,
-            &options,
-            |prompt, _, _| {
-                asked.push(prompt.to_string());
-                Ok(false)
-            },
-        )
+        let selected = choose_features(project, false, Editor::None, &options, |prompt, _, _| {
+            asked.push(prompt.to_string());
+            Ok(false)
+        })
         .unwrap();
 
         assert_eq!(asked, ["Set up project agent instructions?"]);
@@ -1253,110 +1306,6 @@ mod tests {
         );
         assert_eq!(render_gitignore("target\n/ai-docs/\n"), None);
         assert_eq!(render_gitignore("ai-docs\n"), None);
-    }
-
-    #[test]
-    fn gortex_setup_from_a_nested_directory_tracks_the_repository_root() {
-        struct NestedSystem {
-            home: std::path::PathBuf,
-            current: std::path::PathBuf,
-            commands: Mutex<Vec<CommandSpec>>,
-        }
-
-        impl System for NestedSystem {
-            fn command_exists(&self, name: &str) -> bool {
-                name == "gortex"
-            }
-
-            fn home_dir(&self) -> Option<std::path::PathBuf> {
-                Some(self.home.clone())
-            }
-
-            fn current_dir(&self) -> Option<std::path::PathBuf> {
-                Some(self.current.clone())
-            }
-
-            fn refresh_path(&self) {}
-
-            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-                self.commands.lock().unwrap().push(command.clone());
-                Ok(CommandResult {
-                    success: true,
-                    stdout: String::new(),
-                    stderr: String::new(),
-                })
-            }
-        }
-
-        let root = std::env::temp_dir().join(format!(
-            "loom-gortex-root-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let nested = root.join("packages/example");
-        fs::create_dir_all(root.join(".git")).unwrap();
-        fs::create_dir_all(&nested).unwrap();
-        let system = NestedSystem {
-            home: root.clone(),
-            current: nested,
-            commands: Mutex::new(Vec::new()),
-        };
-        write_gortex_extension(&root);
-        let options = InitOptions {
-            python: None,
-            rust: None,
-            adhd: None,
-            tracker: None,
-            domain: None,
-            editor: None,
-            coding_standards: None,
-            gortex: Some(true),
-            yes: false,
-            force: false,
-        };
-
-        run_init(&system, &options).unwrap();
-
-        assert_eq!(system.commands.lock().unwrap()[0].cwd, Some(root.clone()));
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn gortex_setup_is_non_enforcing_and_tracks_the_project() {
-        let system = RecordingSystem {
-            commands: Mutex::new(Vec::new()),
-        };
-        let project = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let home = std::env::temp_dir().join(format!("loom-gortex-{}", std::process::id()));
-        let extension = write_gortex_extension(&home);
-
-        setup_gortex(&system, project, &home).unwrap();
-        assert!(fs::read_to_string(extension)
-            .unwrap()
-            .contains(SAFE_GORTEX_ORIENTATION));
-        fs::remove_dir_all(home).unwrap();
-
-        assert_eq!(
-            *system.commands.lock().unwrap(),
-            [CommandSpec::new(
-                "gortex",
-                [
-                    "install",
-                    "--yes",
-                    "--no-hooks",
-                    "--agents",
-                    "pi,zed",
-                    "--start",
-                    "--track",
-                    "--track-path",
-                    ".",
-                ]
-            )
-            .in_dir(project)]
-        );
     }
 
     #[test]

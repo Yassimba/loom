@@ -1,0 +1,10 @@
+flowchart LR
+  layout[layout.ts] --> rank[layout-rank.ts]
+  layout --> tracks[layout-tracks.ts]
+  layout --> geom[layout-geom.ts]
+  layout --> place[placement.ts]
+  rank --> place
+  tracks --> geom
+  layout --> canvas[canvas.ts]
+  canvas --> paint[paint.ts]
+  paint --> ansi[ansi.ts]

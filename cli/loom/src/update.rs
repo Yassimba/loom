@@ -789,7 +789,7 @@ mod tests {
     #[test]
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
-        let listed = "User packages:\n  npm:pi-subagents\n  npm:@yassimba/pi-add-dir\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
+        let listed = "User packages:\n  npm:pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
             .map(|command| command.display())
@@ -800,7 +800,7 @@ mod tests {
             .any(|command| command == "pi install npm:pi-subagents@0.66.0"));
         assert!(commands
             .iter()
-            .any(|command| command == "pi install npm:@yassimba/pi-add-dir@latest"));
+            .any(|command| command == "pi install npm:@yassimba/pi-guardrails@latest"));
         assert!(commands
             .iter()
             .any(|command| command == "pi install -l npm:pi-subagents@0.66.0"));

@@ -62,7 +62,7 @@ Note: the global `merge` skill is not a rename of `resolving-merge-conflicts`
 
 Use Conventional Commits. [release-please](https://github.com/googleapis/release-please)
 (`release.yml`, config in `release-please-config.json`) keeps one release PR
-per changed component — `cli/loom`, `cli/loom-teams`, `plugins/pi-fast`, `plugins/pi-add-dir` —
+per changed component — `cli/loom`, `cli/loom-teams`, `plugins/pi-fast`, `plugins/pi-guardrails` —
 with the version bump and changelog. Merging it tags `<component>-vX.Y.Z`,
 uploads the binaries, then moves the `manifest/loom.toml` pin to the new tag
 and publishes to npm. A skill
@@ -88,7 +88,7 @@ Never move anything from `drafts/` or `personal/` into `skills/` or list it in
 unreviewed and personal skills hardcode local paths. Promote a draft into
 `skills/` first (`sync-skills.sh promote <name>`), then list it.
 
-A skill whose flow invokes another skill (`Run a /grilling session`, `route
+A skill whose flow invokes another skill (`Run a /grill-me session`, `route
 through /diagnosing-bugs`) declares it in a per-skill `deps.yml` next to its
 SKILL.md, as a bare skill name, so installers pull deps in transitively (the
 catalog generator bakes the graph into `cli/loom/setup-catalog.json` for the CLI).

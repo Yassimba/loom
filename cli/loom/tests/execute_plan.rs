@@ -1,8 +1,9 @@
+mod common;
+use common::install;
 use loom::manifest::PI_TOOL_KEY;
 use loom::{
-    execute_install_plan, execute_install_plan_with, execute_install_plan_with_control,
-    CommandResult, CommandSpec, InstallPlan, InstallStep, SkillAgent, SkillDestination, SkillScope,
-    StepAction, StepStatus, System,
+    execute_attempt, CommandResult, CommandSpec, InstallPlan, InstallStep, Operation, SkillAgent,
+    SkillDestination, SkillScope, StepStatus, System,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,29 +25,47 @@ impl System for FakeSystem {
     fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
         let display = command.display();
         self.commands.lock().unwrap().push(display.clone());
-        if display.contains("herdr.dev/install") {
+        if display.contains("mise.run") {
             Ok(CommandResult {
                 success: false,
-                stdout: String::new(),
+                stdout: fake_listing().into(),
                 stderr: "network unavailable".into(),
             })
         } else {
             Ok(CommandResult {
                 success: true,
-                stdout: String::new(),
+                stdout: fake_listing().into(),
                 stderr: String::new(),
             })
         }
     }
 }
 
-fn step(target: &str, manager: &str, program: &str) -> InstallStep {
+fn step(target: &str, manager: &str) -> InstallStep {
+    let name = target
+        .split_once(':')
+        .map_or(target, |(_, name)| name)
+        .to_owned();
+    let operation = match manager {
+        "pi" => Operation::PiPackage {
+            spec: format!("npm:{name}"),
+            name,
+            project: false,
+        },
+        "herdr" => Operation::HerdrPlugin {
+            source: name.clone(),
+            name,
+        },
+        _ => panic!("unsupported test manager"),
+    };
     InstallStep {
         target: target.into(),
-        manager: manager.into(),
-        action: StepAction::Command(CommandSpec::new(program, std::iter::empty::<String>())),
-        verification: None,
+        operation,
     }
+}
+
+fn fake_listing() -> &'static str {
+    "User packages:\n  npm:one\n  npm:two\n  npm:three\n  npm:sample\n  npm:pi\n  npm:hold-pi-lane\njumplist annotate two"
 }
 
 struct OverlapSystem {
@@ -91,7 +110,7 @@ impl System for OverlapSystem {
         drop(active);
         Ok(CommandResult {
             success: true,
-            stdout: String::new(),
+            stdout: fake_listing().into(),
             stderr: String::new(),
         })
     }
@@ -100,15 +119,14 @@ impl System for OverlapSystem {
 #[test]
 fn independent_manager_lanes_start_before_either_finishes() {
     let plan = InstallPlan {
-        prerequisites: vec![
-            step("mise", "mise", "install-mise"),
-            step("Herdr", "herdr", "install-herdr"),
+        steps: vec![
+            step("pi-package:one", "pi"),
+            step("herdr-plugin:two", "herdr"),
         ],
-        resources: Vec::new(),
     };
     let system = OverlapSystem::new();
 
-    let report = execute_install_plan(&plan, &system);
+    let report = install(&plan, &system);
 
     assert!(report.failures.is_empty());
     assert!(
@@ -120,11 +138,7 @@ fn independent_manager_lanes_start_before_either_finishes() {
 #[test]
 fn cancellation_skips_resources_before_launch() {
     let plan = InstallPlan {
-        prerequisites: Vec::new(),
-        resources: vec![
-            step("pi-package:one", "pi", "install-one"),
-            step("pi-package:two", "pi", "install-two"),
-        ],
+        steps: vec![step("pi-package:one", "pi"), step("pi-package:two", "pi")],
     };
     let system = FakeSystem {
         commands: Mutex::new(Vec::new()),
@@ -132,10 +146,9 @@ fn cancellation_skips_resources_before_launch() {
     let cancelled = AtomicBool::new(true);
     let mut statuses = Vec::new();
 
-    let report =
-        execute_install_plan_with_control(&plan, &system, &cancelled, &mut |index, status| {
-            statuses.push((index, status))
-        });
+    let report = execute_attempt(&plan, &system, &cancelled, &[], &mut |index, status| {
+        statuses.push((index, status))
+    });
 
     assert!(system.commands.lock().unwrap().is_empty());
     assert_eq!(
@@ -149,17 +162,49 @@ fn cancellation_skips_resources_before_launch() {
 }
 
 #[test]
+fn resume_skips_completed_steps_that_still_verify() {
+    let plan = InstallPlan {
+        steps: vec![step("pi-package:one", "pi"), step("pi-package:two", "pi")],
+    };
+    for (completed, expected_commands, expected_installed) in [
+        (
+            0,
+            ["pi list", "pi install npm:two", "pi list"],
+            ["pi-package:one", "pi-package:two"],
+        ),
+        (
+            1,
+            ["pi list", "pi install npm:one", "pi list"],
+            ["pi-package:two", "pi-package:one"],
+        ),
+    ] {
+        let system = FakeSystem {
+            commands: Mutex::new(Vec::new()),
+        };
+        let mut statuses = Vec::new();
+        let report = execute_attempt(
+            &plan,
+            &system,
+            &AtomicBool::new(false),
+            &[completed],
+            &mut |index, status| statuses.push((index, status)),
+        );
+        assert_eq!(*system.commands.lock().unwrap(), expected_commands);
+        assert!(statuses.contains(&(completed, StepStatus::Verifying)));
+        assert!(statuses.contains(&(1 - completed, StepStatus::Running)));
+        assert!(report.failures.is_empty());
+        assert_eq!(report.installed, expected_installed);
+    }
+}
+
+#[test]
 fn resources_in_the_same_manager_lane_never_overlap() {
     let plan = InstallPlan {
-        prerequisites: Vec::new(),
-        resources: vec![
-            step("pi-package:one", "pi", "install-one"),
-            step("pi-package:two", "pi", "install-two"),
-        ],
+        steps: vec![step("pi-package:one", "pi"), step("pi-package:two", "pi")],
     };
     let system = OverlapSystem::new();
 
-    let report = execute_install_plan(&plan, &system);
+    let report = install(&plan, &system);
 
     assert!(report.failures.is_empty());
     assert!(
@@ -243,7 +288,7 @@ impl System for MiseRuntimeSystem {
                 if self.fail_install {
                     return Ok(CommandResult {
                         success: false,
-                        stdout: String::new(),
+                        stdout: fake_listing().into(),
                         stderr: "runtime install failed".into(),
                     });
                 }
@@ -260,7 +305,7 @@ impl System for MiseRuntimeSystem {
         }
         Ok(CommandResult {
             success: true,
-            stdout: "annotate".into(),
+            stdout: fake_listing().into(),
             stderr: String::new(),
         })
     }
@@ -269,19 +314,20 @@ impl System for MiseRuntimeSystem {
 #[test]
 fn pi_packages_wait_when_mise_is_installing_pi() {
     let plan = InstallPlan {
-        prerequisites: vec![InstallStep {
-            target: "tools".into(),
-            manager: "mise".into(),
-            action: StepAction::SyncTools {
-                tools: vec![PI_TOOL_KEY.into()],
+        steps: vec![
+            InstallStep {
+                target: "tools".into(),
+
+                operation: Operation::Tools {
+                    tools: vec![PI_TOOL_KEY.into()],
+                },
             },
-            verification: None,
-        }],
-        resources: vec![step("pi-package:sample", "pi", "pi")],
+            step("pi-package:sample", "pi"),
+        ],
     };
     let system = MiseRuntimeSystem::new("pi");
 
-    let report = execute_install_plan(&plan, &system);
+    let report = install(&plan, &system);
 
     assert!(report.failures.is_empty());
     assert_eq!(report.installed, vec!["pi-package:sample"]);
@@ -289,6 +335,17 @@ fn pi_packages_wait_when_mise_is_installing_pi() {
         !system.runtime_started_early.load(Ordering::SeqCst),
         "Pi packages must wait until mise has installed Pi"
     );
+    // Preserve the report contract: newly prepared tools are not resource rows,
+    // while a resumed tool row that verifies is reported as already installed.
+    let retry = execute_attempt(
+        &plan,
+        &system,
+        &AtomicBool::new(false),
+        &[0, 1],
+        &mut |_, _| {},
+    );
+    assert!(retry.failures.is_empty());
+    assert_eq!(retry.installed, ["tools", "pi-package:sample"]);
 }
 
 #[test]
@@ -318,14 +375,20 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
             &destination,
         )
         .unwrap();
-        assert!(plan.prerequisites.iter().any(|step| {
-            matches!(&step.action, StepAction::SyncTools { tools }
+        assert!(plan.prerequisites().any(|step| {
+            matches!(&step.operation, Operation::Tools { tools }
                 if tools.contains(&"bun".into()) && tools.contains(&"herdr".into()))
         }));
         let mut statuses = Vec::new();
-        let report = execute_install_plan_with(&plan, &system, &mut |index, status| {
-            statuses.push((index, status));
-        });
+        let report = execute_attempt(
+            &plan,
+            &system,
+            &AtomicBool::new(false),
+            &[],
+            &mut |index, status| {
+                statuses.push((index, status));
+            },
+        );
         assert!(
             !system.runtime_started_early.load(Ordering::SeqCst),
             "Herdr plugins must wait until mise has installed Herdr and Bun"
@@ -334,7 +397,7 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
             assert!(report.installed.is_empty(), "{report:?}");
             assert!(system.runtime_calls.lock().unwrap().is_empty());
             assert!(statuses.contains(&(
-                plan.prerequisites.len(),
+                plan.prerequisite_count(),
                 StepStatus::Skipped("Herdr is unavailable".into())
             )));
             if fail_install {
@@ -360,78 +423,83 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
 #[test]
 fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
     let plan = InstallPlan {
-        prerequisites: vec![InstallStep {
-            target: "Herdr".into(),
-            manager: "herdr".into(),
-            action: StepAction::Command(CommandSpec::new(
-                "sh",
-                ["-c", "curl -fsSL https://herdr.dev/install.sh | sh"],
-            )),
-            verification: None,
-        }],
-        resources: vec![
-            step("herdr-plugin:jumplist", "herdr", "herdr"),
-            step("pi-package:sample", "pi", "pi"),
-        ],
-    };
-    let system = FakeSystem {
-        commands: std::sync::Mutex::new(Vec::new()),
-    };
-
-    let report = execute_install_plan(&plan, &system);
-
-    assert_eq!(report.installed, vec!["pi-package:sample"]);
-    assert_eq!(report.failures.len(), 2);
-    assert_eq!(report.failures[0].target, "Herdr");
-    assert!(report.failures[0]
-        .message
-        .contains("package source could not be reached"));
-    assert!(report.failures[0].message.contains("retry"));
-    assert_eq!(report.failures[1].target, "herdr-plugin:jumplist");
-    assert_eq!(report.failures[1].message, "Herdr is unavailable");
-    let mut commands = system.commands.into_inner().unwrap();
-    commands.sort();
-    assert_eq!(
-        commands,
-        vec!["pi", "sh -c curl -fsSL https://herdr.dev/install.sh | sh"]
-    );
-}
-
-#[test]
-fn failed_prerequisite_skips_later_prerequisites_in_its_lane() {
-    let plan = InstallPlan {
-        prerequisites: vec![
+        steps: vec![
             InstallStep {
-                target: "Herdr".into(),
-                manager: "herdr".into(),
-                action: StepAction::Command(CommandSpec::new(
-                    "sh",
-                    ["-c", "curl -fsSL https://herdr.dev/install.sh | sh"],
-                )),
-                verification: None,
+                target: "mise".into(),
+                operation: Operation::BootstrapMise(loom::Platform::Unix),
             },
-            step("prepare-herdr", "herdr", "prepare-herdr"),
+            InstallStep {
+                target: "tools".into(),
+                operation: Operation::Tools {
+                    tools: vec!["herdr".into()],
+                },
+            },
+            step("herdr-plugin:jumplist", "herdr"),
+            step("pi-package:sample", "pi"),
         ],
-        resources: vec![step("herdr-plugin:jumplist", "herdr", "herdr")],
     };
     let system = FakeSystem {
-        commands: std::sync::Mutex::new(Vec::new()),
+        commands: Mutex::new(Vec::new()),
     };
-    let mut statuses = Vec::new();
-
-    let report = execute_install_plan_with(&plan, &system, &mut |index, status| {
-        statuses.push((index, status));
-    });
-
+    let report = install(&plan, &system);
+    assert_eq!(report.installed, ["pi-package:sample"]);
     assert_eq!(
         report
             .failures
             .iter()
             .map(|failure| failure.target.as_str())
             .collect::<Vec<_>>(),
-        vec!["Herdr", "prepare-herdr", "herdr-plugin:jumplist"]
+        ["mise", "tools", "herdr-plugin:jumplist"]
     );
-    assert!(statuses.contains(&(1, StepStatus::Skipped("Herdr is unavailable".into()))));
+    assert!(report.failures[0]
+        .message
+        .contains("package source could not be reached"));
+    assert!(report.failures[0].message.contains("retry"));
+    assert_eq!(report.failures[1].message, "mise is unavailable");
+    assert_eq!(report.failures[2].message, "Herdr is unavailable");
+    let commands = system.commands.into_inner().unwrap();
+    assert!(!commands
+        .iter()
+        .any(|command| command.starts_with("mise ") || command.starts_with("herdr ")));
+}
+
+#[test]
+fn failed_prerequisite_skips_later_prerequisites_in_its_lane() {
+    let plan = InstallPlan {
+        steps: vec![
+            InstallStep {
+                target: "mise".into(),
+                operation: Operation::BootstrapMise(loom::Platform::Unix),
+            },
+            InstallStep {
+                target: "tools".into(),
+                operation: Operation::Tools {
+                    tools: vec!["herdr".into()],
+                },
+            },
+            step("herdr-plugin:jumplist", "herdr"),
+        ],
+    };
+    let system = FakeSystem {
+        commands: Mutex::new(Vec::new()),
+    };
+    let mut statuses = Vec::new();
+    let report = execute_attempt(
+        &plan,
+        &system,
+        &AtomicBool::new(false),
+        &[],
+        &mut |index, status| statuses.push((index, status)),
+    );
+    assert_eq!(
+        report
+            .failures
+            .iter()
+            .map(|failure| failure.target.as_str())
+            .collect::<Vec<_>>(),
+        ["mise", "tools", "herdr-plugin:jumplist"]
+    );
+    assert!(statuses.contains(&(1, StepStatus::Skipped("mise is unavailable".into()))));
     assert_eq!(system.commands.into_inner().unwrap().len(), 1);
 }
 
@@ -447,7 +515,7 @@ impl System for HiddenCommandSystem {
     fn run(&self, _command: &CommandSpec) -> anyhow::Result<CommandResult> {
         Ok(CommandResult {
             success: true,
-            stdout: String::new(),
+            stdout: fake_listing().into(),
             stderr: String::new(),
         })
     }
@@ -456,24 +524,29 @@ impl System for HiddenCommandSystem {
 #[test]
 fn successful_bootstrap_must_make_its_manager_available() {
     let plan = InstallPlan {
-        prerequisites: vec![InstallStep {
-            target: "Herdr".into(),
-            manager: "herdr".into(),
-            action: StepAction::Command(CommandSpec::new("sh", ["-c", "install herdr"])),
-            verification: None,
-        }],
-        resources: vec![step("herdr-plugin:jumplist", "herdr", "herdr")],
+        steps: vec![
+            InstallStep {
+                target: "mise".into(),
+                operation: Operation::BootstrapMise(loom::Platform::Unix),
+            },
+            InstallStep {
+                target: "tools".into(),
+                operation: Operation::Tools {
+                    tools: vec!["herdr".into()],
+                },
+            },
+            step("herdr-plugin:jumplist", "herdr"),
+        ],
     };
-
-    let report = execute_install_plan(&plan, &HiddenCommandSystem);
-
+    let report = install(&plan, &HiddenCommandSystem);
     assert!(report.installed.is_empty());
-    assert_eq!(report.failures[0].target, "Herdr");
+    assert_eq!(report.failures[0].target, "mise");
     assert_eq!(
         report.failures[0].message,
-        "installer completed, but herdr is still unavailable on PATH"
+        "installer completed, but mise is still unavailable on PATH"
     );
-    assert_eq!(report.failures[1].message, "Herdr is unavailable");
+    assert_eq!(report.failures[1].message, "mise is unavailable");
+    assert_eq!(report.failures[2].message, "Herdr is unavailable");
 }
 
 /// Fakes curl and tar with filesystem side effects, so the native skill
@@ -574,7 +647,7 @@ impl System for SkillInstallSystem {
         }
         Ok(CommandResult {
             success: true,
-            stdout: String::new(),
+            stdout: fake_listing().into(),
             stderr: String::new(),
         })
     }
@@ -594,15 +667,12 @@ fn copy_skills_plan(skills: &[&str], system: &SkillInstallSystem) -> InstallPlan
 
 fn copy_skills_plan_for(skills: &[&str], destination: SkillDestination) -> InstallPlan {
     InstallPlan {
-        prerequisites: Vec::new(),
-        resources: vec![InstallStep {
+        steps: vec![InstallStep {
             target: "skills".into(),
-            manager: "skills".into(),
-            action: StepAction::CopySkills {
+            operation: Operation::Skills {
                 skills: skills.iter().map(ToString::to_string).collect(),
                 destination,
             },
-            verification: None,
         }],
     }
 }
@@ -621,7 +691,7 @@ fn project_install_creates_only_selected_agent_targets() {
         &project,
     );
 
-    let report = execute_install_plan(&copy_skills_plan_for(&["tdd"], destination), &system);
+    let report = install(&copy_skills_plan_for(&["tdd"], destination), &system);
 
     assert!(report.failures.is_empty());
     assert!(project.join(".claude/skills/tdd/SKILL.md").is_file());
@@ -639,7 +709,7 @@ fn skills_are_copied_into_every_detected_tree() {
     // OpenCode-only destination or its session adapter is skipped. No expiry.
     let system = SkillInstallSystem::new("copy", &["tdd", "commit"]);
 
-    let report = execute_install_plan(&copy_skills_plan(&["tdd", "commit"], &system), &system);
+    let report = install(&copy_skills_plan(&["tdd", "commit"], &system), &system);
 
     assert_eq!(report.installed, vec!["skills"]);
     assert!(report.failures.is_empty());
@@ -661,7 +731,7 @@ fn skills_are_copied_into_every_detected_tree() {
 fn a_skill_missing_from_the_downloaded_repo_fails_the_step() {
     let system = SkillInstallSystem::new("missing", &["commit"]);
 
-    let report = execute_install_plan(&copy_skills_plan(&["tdd"], &system), &system);
+    let report = install(&copy_skills_plan(&["tdd"], &system), &system);
 
     assert!(report.installed.is_empty());
     assert_eq!(report.failures[0].target, "skills");
@@ -675,16 +745,17 @@ fn a_skill_missing_from_the_downloaded_repo_fails_the_step() {
 fn tools_and_skills_share_one_download_and_cleanup() {
     let system = SkillInstallSystem::new("shared-repository", &["tdd"]);
     let mut plan = copy_skills_plan(&["tdd"], &system);
-    plan.prerequisites.push(InstallStep {
-        target: "tools".into(),
-        manager: "mise".into(),
-        action: StepAction::SyncTools {
-            tools: vec!["gh".into()],
+    plan.steps.insert(
+        0,
+        InstallStep {
+            target: "tools".into(),
+            operation: Operation::Tools {
+                tools: vec!["gh".into()],
+            },
         },
-        verification: None,
-    });
+    );
 
-    let report = execute_install_plan(&plan, &system);
+    let report = install(&plan, &system);
 
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert!(system.tree().join("tdd/SKILL.md").is_file());
@@ -719,7 +790,7 @@ fn symlinked_skills_survive_an_install_untouched() {
     fs::create_dir_all(system.tree()).unwrap();
     std::os::unix::fs::symlink(&checkout, system.tree().join("tdd")).unwrap();
 
-    let report = execute_install_plan(&copy_skills_plan(&["tdd"], &system), &system);
+    let report = install(&copy_skills_plan(&["tdd"], &system), &system);
 
     assert_eq!(report.installed, vec!["skills"]);
     let target = system.tree().join("tdd");
@@ -733,15 +804,14 @@ fn symlinked_skills_survive_an_install_untouched() {
 #[test]
 fn parallel_managers_still_report_in_plan_order() {
     let plan = InstallPlan {
-        prerequisites: Vec::new(),
-        resources: vec![
-            step("pi-package:one", "pi", "pi"),
-            step("herdr-plugin:two", "herdr", "herdr"),
-            step("pi-package:three", "pi", "pi"),
+        steps: vec![
+            step("pi-package:one", "pi"),
+            step("herdr-plugin:two", "herdr"),
+            step("pi-package:three", "pi"),
         ],
     };
 
-    let report = execute_install_plan(&plan, &HiddenCommandSystem);
+    let report = install(&plan, &HiddenCommandSystem);
 
     assert!(report.failures.is_empty());
     assert_eq!(
@@ -787,8 +857,7 @@ fn installed_bundle_skips_only_pi_and_preserves_skill_only_and_filtered_installs
             &system.home,
             &system.home,
         );
-        let report =
-            execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+        let report = install(&copy_skills_plan_for(&["ponytail"], destination), &system);
         assert!(report.failures.is_empty(), "{report:?}");
         assert!(system.tree().join("ponytail/SKILL.md").is_file());
         assert!(system
@@ -836,8 +905,7 @@ fn pi_install_migrates_only_unchanged_owned_legacy_copies() {
             &system.home,
             &system.home,
         );
-        let report =
-            execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+        let report = install(&copy_skills_plan_for(&["ponytail"], destination), &system);
         assert!(report.failures.is_empty(), "{report:?}");
         assert_eq!(path.exists(), edited);
         assert_eq!(
@@ -919,7 +987,7 @@ fn selected_bundle_finishes_before_copy_and_failed_package_keeps_standalone() {
             &destination,
         )
         .unwrap();
-        let report = execute_install_plan(&plan, &system);
+        let report = install(&plan, &system);
         assert_eq!(report.failures.is_empty(), !fail);
         if fail {
             assert!(report
@@ -956,9 +1024,8 @@ fn unrelated_failed_pi_package_does_not_block_standalone_skills() {
         &system.skills.home,
     );
     let mut plan = copy_skills_plan_for(&["ponytail"], destination);
-    plan.resources
-        .push(step("pi-package:unrelated", "pi", "pi"));
-    let report = execute_install_plan(&plan, &system);
+    plan.steps.push(step("pi-package:unrelated", "pi"));
+    let report = install(&plan, &system);
     assert!(report.installed.contains(&"skills".into()));
     assert!(system
         .skills
@@ -1007,7 +1074,7 @@ fn shared_global_and_project_copies_are_excluded_only_from_real_pi_discovery() {
             &system.home,
             &project,
         );
-        let report = execute_install_plan(
+        let report = install(
             &copy_skills_plan_for(&["ponytail"], destination.clone()),
             &system,
         );
@@ -1106,7 +1173,7 @@ fn shared_exclusions_preserve_user_entries_and_reconcile_removed_provider() {
     let original = serde_json::json!({"packages":["npm:@dietrichgebert/ponytail@4.9.0"],"theme":"custom","skills":[entry,"!unrelated"]});
     fs::write(&settings, original.to_string()).unwrap();
     let plan = copy_skills_plan_for(&["ponytail"], destination.clone());
-    assert!(execute_install_plan(&plan, &system).failures.is_empty());
+    assert!(install(&plan, &system).failures.is_empty());
     assert!(
         loom::InstallState::load(&system.home)
             .unwrap()
@@ -1117,17 +1184,14 @@ fn shared_exclusions_preserve_user_entries_and_reconcile_removed_provider() {
     let mut config = original.clone();
     config["skills"] = serde_json::json!(["!unrelated"]);
     fs::write(&settings, config.to_string()).unwrap();
-    assert!(execute_install_plan(&plan, &system).failures.is_empty());
-    assert!(
-        execute_install_plan(&plan, &system).failures.is_empty(),
-        "idempotent"
-    );
+    assert!(install(&plan, &system).failures.is_empty());
+    assert!(install(&plan, &system).failures.is_empty(), "idempotent");
     let mut config: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
     assert_eq!(config["skills"].as_array().unwrap().len(), 2);
     config["packages"] = serde_json::json!([]); // direct pi remove, then next Loom install/update
     fs::write(&settings, config.to_string()).unwrap();
-    assert!(execute_install_plan(&plan, &system).failures.is_empty());
+    assert!(install(&plan, &system).failures.is_empty());
     let config: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
     assert_eq!(config["skills"], serde_json::json!(["!unrelated"]));
@@ -1156,7 +1220,7 @@ fn project_only_provider_conflict_does_not_change_settings_or_skills() {
         &system.home,
         &project,
     );
-    let report = execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+    let report = install(&copy_skills_plan_for(&["ponytail"], destination), &system);
     assert!(
         report.failures.iter().any(|failure| failure
             .message
@@ -1190,13 +1254,13 @@ fn malformed_ledger_and_explicit_inclusions_do_not_get_overwritten() {
     let ledger = system.home.join(loom::ownership::STATE_PATH);
     fs::create_dir_all(ledger.parent().unwrap()).unwrap();
     fs::write(&ledger, "malformed").unwrap();
-    assert!(!execute_install_plan(&plan, &system).failures.is_empty());
+    assert!(!install(&plan, &system).failures.is_empty());
     assert_eq!(fs::read_to_string(&settings).unwrap(), PONYTAIL_SETTINGS);
     assert_eq!(fs::read_to_string(&ledger).unwrap(), "malformed");
     fs::remove_file(ledger).unwrap();
     let explicit = serde_json::json!({"packages":["npm:@dietrichgebert/ponytail@4.9.0"], "skills":[format!("+{}", shared.display())]});
     fs::write(&settings, explicit.to_string()).unwrap();
-    assert!(!execute_install_plan(&plan, &system).failures.is_empty());
+    assert!(!install(&plan, &system).failures.is_empty());
     assert_eq!(fs::read_to_string(&settings).unwrap(), explicit.to_string());
     assert_eq!(fs::read_to_string(shared).unwrap(), "# shared");
 }
@@ -1217,7 +1281,7 @@ fn shared_alias_to_bundled_file_is_not_excluded_from_pi() {
         &system.home,
         &project,
     );
-    let report = execute_install_plan(&copy_skills_plan_for(&["ponytail"], destination), &system);
+    let report = install(&copy_skills_plan_for(&["ponytail"], destination), &system);
     assert!(report.failures.is_empty(), "{report:?}");
     assert_eq!(
         fs::read_to_string(system.home.join(".pi/agent/settings.json")).unwrap(),

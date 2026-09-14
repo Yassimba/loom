@@ -21,8 +21,8 @@ This page covers every tool in [Loom’s tool manifest](manifest/loom.toml), plu
 | ------------------------------------------ | ------------------------------------------------------------------------- |
 | [Pi](https://github.com/earendil-works/pi) | A coding agent that runs in your terminal.                                |
 | [Herdr](https://github.com/herdrdev/herdr) | Runs coding agents in separate terminal panes. Use macOS, Linux, or WSL2. |
-| [sem](https://github.com/Ataraxy-Labs/sem) | Searches code and shows how a change affects other code.                  |
-| [Gortex](https://github.com/zzet/gortex)   | Maps code relationships and makes them available to Pi and Zed.           |
+| [sem](https://github.com/Ataraxy-Labs/sem) | Searches Git history and shows how a change affects code.                 |
+| [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) | Builds a local repository graph for exploration and impact analysis. |
 | [RTK](https://github.com/rtk-ai/rtk)       | Shortens command output so agents use fewer tokens.                       |
 
 ## Code review and hosting
@@ -30,7 +30,7 @@ This page covers every tool in [Loom’s tool manifest](manifest/loom.toml), plu
 | Tool                                                               | What it does                                                                     |
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | [tuicr](https://github.com/agavra/tuicr)                           | Reviews code changes in the terminal and exports comments.                       |
-| [Plannotator — Loom fork](https://github.com/Yassimba/plannotator) | Reviews plans, code, and documents in a browser. This is the fork Loom installs. |
+| [Plannotator](https://github.com/backnotprop/plannotator)          | Reviews plans, code, and documents in a browser.                                  |
 | [GitHub CLI (`gh`)](https://github.com/cli/cli)                    | Manages GitHub pull requests, issues, and releases from the terminal.            |
 | [GitLab CLI (`glab`)](https://gitlab.com/gitlab-org/cli)           | Manages GitLab merge requests and issues. Its official repository is on GitLab.  |
 | [glab-tui](https://github.com/rcieri/glab-tui)                     | Browses GitLab and GitHub projects in a terminal interface.                      |
@@ -72,8 +72,8 @@ This page covers every tool in [Loom’s tool manifest](manifest/loom.toml), plu
 
 ## MCP servers for Pi
 
-Loom can also connect Pi to [sem](https://github.com/Ataraxy-Labs/sem) for local code search and [Context7](https://github.com/upstash/context7) for library documentation. Both use [pi-mcp-adapter](https://www.npmjs.com/package/pi-mcp-adapter). See the [MCP setup instructions](README.md#mcp-servers).
+Loom connects Pi through [pi-mcp-adapter](https://www.npmjs.com/package/pi-mcp-adapter). Reviewed servers are local [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) repository graph/impact analysis, and hosted [Context7](https://github.com/upstash/context7) library documentation. See the [MCP setup instructions](README.md#mcp-servers).
 
-For manual Context7 setup, add `"context7": { "url": "https://mcp.context7.com/mcp", "directTools": false }` under `mcpServers` in your Pi MCP config. Basic use needs no API key; queries go to Context7’s hosted service. Follow the linked projects’ setup instructions if you need higher rate limits.
+All use gateway-only exposure. Loom uses Codebase Memory’s read-only analysis profile.
 
 Installing a tool does not sign you into its service or connect it to an agent. Follow its setup instructions after installation. For example, GitHub CLI uses `gh auth login` and GitLab CLI uses `glab auth login`.
