@@ -146,7 +146,7 @@ test("software profile keeps Sem CLI and adds exact local code MCP dependencies"
   assert.ok(profile.resources.includes(sem.id));
   assert.deepEqual(
     catalog.resources.filter(({ kind }) => kind === "mcp-server").map(({ label }) => label),
-    ["context7", "serena", "codebase-memory-mcp"],
+    ["context7", "codebase-memory-mcp"],
   );
   assert.deepEqual(pi.dependencies, ["pi-mcp-adapter"]);
   const context7 = catalog.resources.find(({ id }) => id === "mcp-server:context7");
@@ -160,21 +160,13 @@ test("software profile keeps Sem CLI and adds exact local code MCP dependencies"
   );
   assert.equal(routing.installTarget, "@yassimba/pi-code-intelligence");
 
-  for (const [name, version, tool] of [
-    ["serena", "1.7.0", "pipx:serena-agent"],
-    ["codebase-memory-mcp", "0.10.8", "npm:codebase-memory-mcp"],
-  ]) {
-    const server = catalog.resources.find(({ id }) => id === `mcp-server:${name}`);
-    const binary = catalog.resources.find(({ id }) => id === `tool:${name}`);
-    assert.equal(server.version, version);
-    assert.deepEqual(server.dependencies, [
-      "pi-mcp-adapter",
-      tool,
-      "@yassimba/pi-code-intelligence",
-    ]);
-    assert.equal(binary.installTarget, tool);
-    assert.ok(profile.resources.includes(server.id));
-  }
+  const [name, version, tool] = ["codebase-memory-mcp", "0.10.8", "npm:codebase-memory-mcp"];
+  const server = catalog.resources.find(({ id }) => id === `mcp-server:${name}`);
+  const binary = catalog.resources.find(({ id }) => id === `tool:${name}`);
+  assert.equal(server.version, version);
+  assert.deepEqual(server.dependencies, ["pi-mcp-adapter", tool, "@yassimba/pi-code-intelligence"]);
+  assert.equal(binary.installTarget, tool);
+  assert.ok(profile.resources.includes(server.id));
 });
 
 test("the setup catalog carries ordered profiles with exact resource ids", async () => {

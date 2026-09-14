@@ -26,7 +26,6 @@
         "pi-package:@yassimba/pi-loom-mermaid",
         "tool:bun",
         "tool:sem",
-        "mcp-server:serena",
         "mcp-server:codebase-memory-mcp",
         "tool:tuicr",
         "tool:gh",
@@ -144,9 +143,9 @@
       "kind": "pi-package",
       "group": "Pi packages",
       "label": "Code Intelligence",
-      "description": "Guide Pi toward Serena for live symbols and Codebase Memory for repository architecture without blocking native tools.",
+      "description": "Guide Pi toward Codebase Memory for repository architecture without blocking native tools.",
       "installTarget": "@yassimba/pi-code-intelligence",
-      "nextAction": "Restart Pi; the extension routes code exploration automatically when Serena or Codebase Memory is configured."
+      "nextAction": "Restart Pi; the extension routes code exploration automatically when Codebase Memory is configured."
     },
     {
       "id": "pi-package:@yassimba/pi-loom-mermaid",
@@ -1014,20 +1013,6 @@
       "companions": []
     },
     {
-      "id": "tool:serena",
-      "kind": "tool",
-      "group": "Tools",
-      "label": "serena",
-      "description": "LSP-backed symbol navigation and editing for coding agents.",
-      "installTarget": "pipx:serena-agent",
-      "nextAction": "Loom configures Serena for Pi through the MCP gateway.",
-      "bin": "serena",
-      "companions": [
-        "python",
-        "uv"
-      ]
-    },
-    {
       "id": "tool:codebase-memory-mcp",
       "kind": "tool",
       "group": "Tools",
@@ -1399,22 +1384,6 @@
         "pi-mcp-adapter"
       ],
       "nextAction": "Restart Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
-    },
-    {
-      "id": "mcp-server:serena",
-      "kind": "mcp-server",
-      "group": "MCP servers",
-      "label": "serena",
-      "description": "LSP-backed symbol navigation and editing through Pi’s MCP gateway.",
-      "installTarget": "serena",
-      "version": "1.7.0",
-      "source": "https://github.com/oraios/serena/releases/tag/v1.7.0",
-      "dependencies": [
-        "pi-mcp-adapter",
-        "pipx:serena-agent",
-        "@yassimba/pi-code-intelligence"
-      ],
-      "nextAction": "Run `loom init` in the repository, then restart Pi and open /mcp. Loom keeps Serena’s dashboard available without opening it and disables memories for Pi."
     },
     {
       "id": "mcp-server:codebase-memory-mcp",

@@ -309,13 +309,8 @@ mod tests {
 
     #[test]
     fn local_code_intelligence_tools_keep_reviewed_exact_pins() {
-        let rendered = render_selection(
-            BUNDLED_MANIFEST,
-            "",
-            &["pipx:serena-agent".into(), "npm:codebase-memory-mcp".into()],
-        )
-        .unwrap();
-        assert!(rendered.contains("\"pipx:serena-agent\" = { version = \"1.7.0\", uvx_args = \"--python 3.13.7\", pipx_args = \"--python 3.13.7\" }"));
+        let rendered =
+            render_selection(BUNDLED_MANIFEST, "", &["npm:codebase-memory-mcp".into()]).unwrap();
         assert!(rendered.contains("\"npm:codebase-memory-mcp\" = \"0.10.8\""));
     }
 

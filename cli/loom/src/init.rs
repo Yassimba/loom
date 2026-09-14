@@ -454,106 +454,6 @@ fn ignore_agent_docs(project: &Path) -> Result<&'static str> {
     Ok("ignores ai-docs/")
 }
 
-fn setup_serena(system: &dyn System, project: &Path) -> Result<Option<String>> {
-    if !system.command_exists("serena") {
-        return Ok(None);
-    }
-    let config = project.join(".serena/project.yml");
-    let created = if config.is_file() {
-        false
-    } else {
-        let result = system
-            .run(
-                &CommandSpec::new(
-                    "serena",
-                    [
-                        "project".to_string(),
-                        "create".to_string(),
-                        project.display().to_string(),
-                    ],
-                )
-                .in_dir(project),
-            )
-            .context("could not register the Serena project")?;
-        if !result.success {
-            anyhow::bail!(
-                "Serena project registration failed: {}",
-                crate::install::command_failure_message(&result)
-            );
-        }
-        true
-    };
-
-    let (python, rust) = detect(project);
-    let languages = [(python, "python"), (rust, "rust")]
-        .into_iter()
-        .filter_map(|(present, language)| present.then_some(language))
-        .collect::<Vec<_>>();
-    if !languages.is_empty() {
-        let content = fs::read_to_string(&config)
-            .with_context(|| format!("could not read {}", config.display()))?;
-        if let Some(updated) = add_serena_language_servers(&content, &languages)? {
-            crate::fs_tx::atomic_write(&config, updated.as_bytes())
-                .map_err(anyhow::Error::msg)
-                .with_context(|| format!("could not update {}", config.display()))?;
-            return Ok(Some(format!(
-                "registered; configured {}",
-                languages.join(", ")
-            )));
-        }
-    }
-    Ok(Some(if created {
-        "registered".to_string()
-    } else {
-        "already registered".to_string()
-    }))
-}
-
-fn add_serena_language_servers(content: &str, languages: &[&str]) -> Result<Option<String>> {
-    let newline = if content.contains("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
-    let mut offset = 0;
-    let mut list_end = None;
-    let mut existing = Vec::new();
-    let mut in_languages = false;
-
-    for line in content.split_inclusive('\n') {
-        let value = line.trim_end_matches(['\r', '\n']);
-        if value == "language_servers:" {
-            in_languages = true;
-            list_end = Some(offset + line.len());
-        } else if in_languages && value.starts_with("- ") {
-            existing.push(value.trim_start_matches("- ").trim());
-            list_end = Some(offset + line.len());
-        } else if in_languages {
-            break;
-        }
-        offset += line.len();
-    }
-
-    let Some(insert_at) = list_end else {
-        anyhow::bail!("Serena project config has no block-style language_servers list");
-    };
-    let missing = languages
-        .iter()
-        .filter(|language| !existing.contains(language))
-        .copied()
-        .collect::<Vec<_>>();
-    if missing.is_empty() {
-        return Ok(None);
-    }
-    let additions = missing
-        .iter()
-        .map(|language| format!("- {language}{newline}"))
-        .collect::<String>();
-    let mut updated = content.to_string();
-    updated.insert_str(insert_at, &additions);
-    Ok(Some(updated))
-}
-
 fn setup_codebase_memory(system: &dyn System, project: &Path) -> Result<Option<&'static str>> {
     if !system.command_exists("codebase-memory-mcp") {
         return Ok(None);
@@ -604,30 +504,17 @@ fn setup_codebase_memory(system: &dyn System, project: &Path) -> Result<Option<&
 }
 
 fn setup_code_intelligence(system: &dyn System, project: &Path, out: &Out) -> Result<()> {
-    if let Some(detail) = setup_serena(system, project)? {
-        out.row(Mark::Ok, "Serena", detail);
-    }
     if let Some(detail) = setup_codebase_memory(system, project)? {
         out.row(Mark::Ok, "Codebase Memory", detail);
     }
     Ok(())
 }
 
-fn code_intelligence_section(
-    template: &str,
-    serena: bool,
-    codebase_memory: bool,
-) -> Option<String> {
-    let mut tools = Vec::new();
-    if serena {
-        tools.push(
-            "- Use Serena first for symbols, references, diagnostics, and structural refactors.",
-        );
-    }
-    if codebase_memory {
-        tools.push("- Use Codebase Memory for architecture, call paths, and change impact.");
-    }
-    (!tools.is_empty()).then(|| template.replace("{{tools}}", &tools.join("\n")))
+fn code_intelligence_section(template: &str) -> String {
+    template.replace(
+        "{{tools}}",
+        "- Use Codebase Memory for architecture, call paths, and change impact.",
+    )
 }
 
 fn init_has_consent(options: &InitOptions, interactive: bool) -> bool {
@@ -700,12 +587,10 @@ pub fn run_init(system: &dyn System, options: &InitOptions) -> Result<bool> {
         .map(|_| fs::read_to_string(repo_root.join(DOMAIN_TEMPLATE)))
         .transpose()
         .with_context(|| format!("template missing: {DOMAIN_TEMPLATE}"))?;
-    let serena_installed = system.command_exists("serena");
-    let codebase_memory_installed = system.command_exists("codebase-memory-mcp");
-    let code_intelligence = if serena_installed || codebase_memory_installed {
+    let code_intelligence = if system.command_exists("codebase-memory-mcp") {
         let template = fs::read_to_string(repo_root.join(CODE_INTELLIGENCE_TEMPLATE))
             .with_context(|| format!("template missing: {CODE_INTELLIGENCE_TEMPLATE}"))?;
-        code_intelligence_section(&template, serena_installed, codebase_memory_installed)
+        Some(code_intelligence_section(&template))
     } else {
         None
     };
@@ -1006,17 +891,12 @@ pub(crate) fn sync_projects_from(
                     .map_err(|error| format!("template missing: {}: {error}", section.template))?;
                 sections.push((section.name, content));
             }
-            let serena = system.command_exists("serena");
-            let codebase_memory = system.command_exists("codebase-memory-mcp");
-            if serena || codebase_memory {
+            if system.command_exists("codebase-memory-mcp") {
                 let template = fs::read_to_string(repo_root.join(CODE_INTELLIGENCE_TEMPLATE))
                     .map_err(|error| {
                         format!("template missing: {CODE_INTELLIGENCE_TEMPLATE}: {error}")
                     })?;
-                if let Some(content) = code_intelligence_section(&template, serena, codebase_memory)
-                {
-                    sections.push(("code-intelligence", content));
-                }
+                sections.push(("code-intelligence", code_intelligence_section(&template)));
             }
             Ok((base, sections))
         });
@@ -1088,18 +968,12 @@ mod tests {
     }
 
     #[test]
-    fn code_intelligence_section_lists_only_installed_tools() {
+    fn code_intelligence_section_routes_to_codebase_memory() {
         let template = "## Code intelligence\n\n{{tools}}\n- Verify with source.";
-        assert!(code_intelligence_section(template, false, false).is_none());
-
-        let serena = code_intelligence_section(template, true, false).unwrap();
-        assert!(serena.contains("Use Serena first"));
-        assert!(!serena.contains("Codebase Memory"));
-
-        let both = code_intelligence_section(template, true, true).unwrap();
-        assert!(both.contains("Use Serena first"));
-        assert!(both.contains("Use Codebase Memory"));
-        assert!(!both.contains("{{tools}}"));
+        assert_eq!(
+            code_intelligence_section(template),
+            "## Code intelligence\n\n- Use Codebase Memory for architecture, call paths, and change impact.\n- Verify with source."
+        );
     }
 
     #[test]
@@ -1202,21 +1076,13 @@ mod tests {
 
     impl System for CodeIntelligenceSystem {
         fn command_exists(&self, name: &str) -> bool {
-            matches!(name, "serena" | "codebase-memory-mcp")
+            name == "codebase-memory-mcp"
         }
 
         fn refresh_path(&self) {}
 
         fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
             self.commands.lock().unwrap().push(command.clone());
-            if command.program == "serena" {
-                let project = Path::new(command.args.last().unwrap());
-                fs::create_dir_all(project.join(".serena"))?;
-                fs::write(
-                    project.join(".serena/project.yml"),
-                    "project_name: fixture\nlanguage_servers:\n- typescript\n\nencoding: utf-8\n",
-                )?;
-            }
             Ok(CommandResult {
                 success: command.program != "codebase-memory-mcp"
                     || command.args.get(2).map(String::as_str) != Some("index_status")
@@ -1228,35 +1094,17 @@ mod tests {
     }
 
     #[test]
-    fn installed_code_intelligence_tools_register_the_project_once() {
+    fn codebase_memory_indexes_the_project_once() {
         let project = std::env::temp_dir().join(format!(
             "loom-init-code-intelligence-{}",
             std::process::id()
         ));
         fs::create_dir_all(project.join(".git")).unwrap();
-        fs::create_dir_all(project.join("cli/app")).unwrap();
-        fs::create_dir_all(project.join("services/api")).unwrap();
-        fs::write(
-            project.join("cli/app/Cargo.toml"),
-            "[package]\nname='fixture'\n",
-        )
-        .unwrap();
-        fs::write(
-            project.join("services/api/pyproject.toml"),
-            "[project]\nname='fixture'\n",
-        )
-        .unwrap();
         let system = CodeIntelligenceSystem {
             commands: Mutex::new(Vec::new()),
             indexed: false,
         };
 
-        assert_eq!(
-            setup_serena(&system, &project).unwrap(),
-            Some("registered; configured python, rust".to_string())
-        );
-        let serena_config = fs::read_to_string(project.join(".serena/project.yml")).unwrap();
-        assert!(serena_config.contains("- typescript\n- python\n- rust\n"));
         assert_eq!(
             setup_codebase_memory(&system, &project).unwrap(),
             Some("registered with fast index")
@@ -1270,7 +1118,6 @@ mod tests {
                 .map(CommandSpec::display)
                 .collect::<Vec<_>>(),
             [
-                format!("serena project create {}", project.display()),
                 format!(
                     "codebase-memory-mcp cli --json index_status --project {}",
                     project.display()
@@ -1282,20 +1129,10 @@ mod tests {
             ]
         );
 
-        fs::create_dir_all(project.join(".serena")).unwrap();
-        fs::write(
-            project.join(".serena/project.yml"),
-            "project_name: fixture\nlanguage_servers:\n- typescript\n- python\n- rust\n",
-        )
-        .unwrap();
         let system = CodeIntelligenceSystem {
             commands: Mutex::new(Vec::new()),
             indexed: true,
         };
-        assert_eq!(
-            setup_serena(&system, &project).unwrap(),
-            Some("already registered".to_string())
-        );
         assert_eq!(
             setup_codebase_memory(&system, &project).unwrap(),
             Some("already indexed")

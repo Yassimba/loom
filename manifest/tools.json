@@ -8,14 +8,6 @@
       "nextAction": "Run `sem --help`, then use Sem from the command line when reviewing repository history or change impact."
     },
     {
-      "key": "pipx:serena-agent",
-      "label": "serena",
-      "bin": "serena",
-      "description": "LSP-backed symbol navigation and editing for coding agents.",
-      "nextAction": "Loom configures Serena for Pi through the MCP gateway.",
-      "companions": ["python", "uv"]
-    },
-    {
       "key": "npm:codebase-memory-mcp",
       "label": "codebase-memory-mcp",
       "bin": "codebase-memory-mcp",

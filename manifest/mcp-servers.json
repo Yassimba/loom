@@ -8,18 +8,6 @@
       "nextAction": "Restart Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
     },
     {
-      "name": "serena",
-      "version": "1.7.0",
-      "source": "https://github.com/oraios/serena/releases/tag/v1.7.0",
-      "description": "LSP-backed symbol navigation and editing through Pi’s MCP gateway.",
-      "dependencies": [
-        "pi-mcp-adapter",
-        "pipx:serena-agent",
-        "@yassimba/pi-code-intelligence"
-      ],
-      "nextAction": "Run `loom init` in the repository, then restart Pi and open /mcp. Loom keeps Serena’s dashboard available without opening it and disables memories for Pi."
-    },
-    {
       "name": "codebase-memory-mcp",
       "version": "0.10.8",
       "source": "https://github.com/DeusData/codebase-memory-mcp/releases/tag/v0.10.8",

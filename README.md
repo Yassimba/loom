@@ -56,7 +56,7 @@ Run the macOS or Linux install command inside Ubuntu.
    Use the implement skill to build the CSV export ticket.
    ```
 
-`loom init` can create agent instructions, issue tracking, domain notes, coding standards, and editor links. When Serena or Codebase Memory is installed, it also registers the repository, adds detected Python and Rust language servers to Serena, creates a fast initial graph index, and adds a short code-intelligence section to `AGENTS.md`. Run `loom init --yes` to accept the detected defaults.
+`loom init` can create agent instructions, issue tracking, domain notes, coding standards, and editor links. When Codebase Memory is installed, it also creates a fast initial graph index and adds a short code-intelligence section to `AGENTS.md`. Run `loom init --yes` to accept the detected defaults.
 
 <details>
 <summary>Optional setup</summary>
@@ -169,21 +169,20 @@ Loom installs Pi's standalone skills in `.agents/skills`. Start Pi from the proj
 
 ## MCP servers
 
-MCP connects Pi to extra tools. Loom offers three reviewed servers:
+MCP connects Pi to extra tools. Loom offers two reviewed servers:
 
 | Server | What it adds |
 | --- | --- |
-| [Serena](https://github.com/oraios/serena) | Local LSP-backed symbol navigation and editing |
 | [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) | Local repository graph and change-impact analysis |
 | [Context7](https://github.com/upstash/context7) | Hosted library documentation and code examples |
 
 ```bash
-loom add --mcp-server serena --mcp-server codebase-memory-mcp --agent pi
+loom add --mcp-server codebase-memory-mcp --agent pi
 ```
 
-Loom installs the selected local binaries, shared Pi MCP adapter, and a non-blocking routing extension that nudges agents toward the code-intelligence tools after repeated native searches. Add `--scope project` for project-only server configuration; binaries, Pi, and packages remain machine-wide. All tools use gateway-only exposure. Loom keeps Serena’s dashboard available without opening it, disables its overlapping memory surface, and restricts Codebase Memory to its read-only analysis profile. Run `loom init` in each repository, then restart Pi and open `/mcp` to check the connections.
+Loom installs the selected local binaries, shared Pi MCP adapter, and a non-blocking routing extension that nudges agents toward Codebase Memory after repeated native searches. Add `--scope project` for project-only server configuration; binaries, Pi, and packages remain machine-wide. All tools use gateway-only exposure. Loom restricts Codebase Memory to its read-only analysis profile. Run `loom init` in each repository, then restart Pi and open `/mcp` to check the connections.
 
-Context7 queries leave the machine. Serena and Codebase Memory run as local stdio servers.
+Context7 queries leave the machine. Codebase Memory runs as a local stdio server.
 
 ## Wiki vaults
 

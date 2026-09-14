@@ -356,7 +356,7 @@ fn rtk_configures_pi_when_pi_is_present_or_selected() {
 }
 
 #[test]
-fn local_mcp_servers_pull_exact_tools_and_pi_gateway() {
+fn codebase_memory_pulls_exact_tool_and_pi_gateway() {
     let root = std::env::temp_dir().join(format!(
         "loom-local-mcp-plan-{}-{}",
         std::process::id(),
@@ -372,64 +372,60 @@ fn local_mcp_servers_pull_exact_tools_and_pi_gateway() {
     let home = home.canonicalize().unwrap();
     let project = project.canonicalize().unwrap();
     let catalog = loom::Catalog::embedded().unwrap();
-    for (name, tool_id, install_target) in [
-        ("serena", "tool:serena", "pipx:serena-agent"),
-        (
-            "codebase-memory-mcp",
-            "tool:codebase-memory-mcp",
-            "npm:codebase-memory-mcp",
-        ),
-    ] {
-        let selected = catalog.find(&[format!("mcp-server:{name}")]).unwrap();
-        let expanded = expand_skill_dependencies(&catalog.resources, selected, &[SkillAgent::Pi]);
-        assert!(expanded.iter().any(|resource| resource.id == tool_id));
-        assert!(expanded
-            .iter()
-            .any(|resource| resource.id == "pi-package:pi-mcp-adapter"));
-        assert!(expanded
-            .iter()
-            .any(|resource| { resource.id == "pi-package:@yassimba/pi-code-intelligence" }));
+    let (name, tool_id, install_target) = (
+        "codebase-memory-mcp",
+        "tool:codebase-memory-mcp",
+        "npm:codebase-memory-mcp",
+    );
+    let selected = catalog.find(&[format!("mcp-server:{name}")]).unwrap();
+    let expanded = expand_skill_dependencies(&catalog.resources, selected, &[SkillAgent::Pi]);
+    assert!(expanded.iter().any(|resource| resource.id == tool_id));
+    assert!(expanded
+        .iter()
+        .any(|resource| resource.id == "pi-package:pi-mcp-adapter"));
+    assert!(expanded
+        .iter()
+        .any(|resource| { resource.id == "pi-package:@yassimba/pi-code-intelligence" }));
 
-        let pi_destination =
-            SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &home, &project);
-        let plan = build_plan(
-            &expanded,
-            PrerequisiteStatus {
-                pi: true,
-                herdr: false,
-                mise: true,
-            },
-            Platform::Unix,
-            &pi_destination,
-        )
-        .unwrap();
-        assert!(plan.prerequisites().any(|step| {
-            matches!(&step.operation, Operation::Tools { tools } if tools.contains(&install_target.to_string()))
-        }));
-        assert!(plan
-            .resources()
-            .any(|step| step.target == format!("mcp-server:{name}")));
+    let pi_destination =
+        SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &home, &project);
+    let plan = build_plan(
+        &expanded,
+        PrerequisiteStatus {
+            pi: true,
+            herdr: false,
+            mise: true,
+        },
+        Platform::Unix,
+        &pi_destination,
+    )
+    .unwrap();
+    assert!(plan.prerequisites().any(|step| {
+        matches!(&step.operation, Operation::Tools { tools } if tools.contains(&install_target.to_string()))
+    }));
+    assert!(plan
+        .resources()
+        .any(|step| step.target == format!("mcp-server:{name}")));
 
-        let destination = SkillDestination::new(
-            vec![SkillAgent::Claude],
-            SkillScope::Global,
-            &home,
-            &project,
-        );
-        assert!(build_plan(
-            &expanded,
-            PrerequisiteStatus {
-                pi: false,
-                herdr: false,
-                mise: true,
-            },
-            Platform::Unix,
-            &destination,
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("Pi selected"));
-    }
+    let destination = SkillDestination::new(
+        vec![SkillAgent::Claude],
+        SkillScope::Global,
+        &home,
+        &project,
+    );
+    assert!(build_plan(
+        &expanded,
+        PrerequisiteStatus {
+            pi: false,
+            herdr: false,
+            mise: true,
+        },
+        Platform::Unix,
+        &destination,
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("Pi selected"));
     std::fs::remove_dir_all(root).unwrap();
 }
 

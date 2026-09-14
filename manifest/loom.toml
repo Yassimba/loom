@@ -46,9 +46,6 @@ herdr = { version = "0.9.0", os = ["macos", "linux"] }
 # semantic Git history, diffs, and change impact
 "github:Ataraxy-Labs/sem[exe=sem]" = "v0.24.0"
 
-# LSP-backed symbol navigation and editing for coding agents
-"pipx:serena-agent" = { version = "1.7.0", uvx_args = "--python 3.13.7", pipx_args = "--python 3.13.7" }
-
 # persistent local repository graph and impact analysis
 "npm:codebase-memory-mcp" = "0.10.8"
 

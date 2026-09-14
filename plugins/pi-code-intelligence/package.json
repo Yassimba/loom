@@ -1,7 +1,7 @@
 {
   "name": "@yassimba/pi-code-intelligence",
   "version": "0.1.0",
-  "description": "Route Pi code exploration toward Serena and Codebase Memory without blocking native tools",
+  "description": "Route Pi code exploration toward Codebase Memory without blocking native tools",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -11,7 +11,6 @@
     "pi-package",
     "pi",
     "pi-coding-agent",
-    "serena",
     "code-intelligence"
   ],
   "files": [
@@ -36,8 +35,8 @@
   "loom": {
     "catalog": {
       "label": "Code Intelligence",
-      "description": "Guide Pi toward Serena for live symbols and Codebase Memory for repository architecture without blocking native tools.",
-      "nextAction": "Restart Pi; the extension routes code exploration automatically when Serena or Codebase Memory is configured."
+      "description": "Guide Pi toward Codebase Memory for repository architecture without blocking native tools.",
+      "nextAction": "Restart Pi; the extension routes code exploration automatically when Codebase Memory is configured."
     }
   },
   "peerDependencies": {

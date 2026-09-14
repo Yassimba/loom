@@ -41,7 +41,7 @@ Installing a command-line tool does not connect it to an account. Run its login 
 
 ## 3. Connect MCP servers
 
-Loom reviews three Pi servers: local Serena for symbol/LSP editing, local Codebase Memory for repository graph/impact analysis, and hosted Context7 for library documentation. Context7 needs no local install or API key for basic use.
+Loom reviews two Pi servers: local Codebase Memory for repository graph/impact analysis, and hosted Context7 for library documentation. Context7 needs no local install or API key for basic use.
 
 ### OpenCode
 
@@ -99,10 +99,10 @@ Open **Settings > Cursor Settings > Tools & MCP**, then add Context7 as a remote
 Let Loom install the local binaries, shared adapter, and reviewed entries:
 
 ```bash
-loom add --mcp-server serena --mcp-server codebase-memory-mcp --agent pi
+loom add --mcp-server codebase-memory-mcp --agent pi
 ```
 
-Use `--scope project` for project-only server configuration. Both servers run locally over stdio with gateway-only exposure. Serena uses the `ide` context with its startup dashboard disabled. Codebase Memory uses its read-only analysis profile. Restart Pi and open `/mcp` to check the connections.
+Use `--scope project` for project-only server configuration. Codebase Memory runs locally over stdio with gateway-only exposure and its read-only analysis profile. Restart Pi and open `/mcp` to check the connections.
 
 Install Context7 separately with `loom add --mcp-server context7 --agent pi`.
 

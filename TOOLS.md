@@ -22,7 +22,6 @@ This page covers every tool in [Loom’s tool manifest](manifest/loom.toml), plu
 | [Pi](https://github.com/earendil-works/pi) | A coding agent that runs in your terminal.                                |
 | [Herdr](https://github.com/herdrdev/herdr) | Runs coding agents in separate terminal panes. Use macOS, Linux, or WSL2. |
 | [sem](https://github.com/Ataraxy-Labs/sem) | Searches Git history and shows how a change affects code.                 |
-| [Serena](https://github.com/oraios/serena) | Gives coding agents LSP-backed symbol navigation and editing.             |
 | [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) | Builds a local repository graph for exploration and impact analysis. |
 | [RTK](https://github.com/rtk-ai/rtk)       | Shortens command output so agents use fewer tokens.                       |
 
@@ -73,8 +72,8 @@ This page covers every tool in [Loom’s tool manifest](manifest/loom.toml), plu
 
 ## MCP servers for Pi
 
-Loom connects Pi through [pi-mcp-adapter](https://www.npmjs.com/package/pi-mcp-adapter). Reviewed servers are local [Serena](https://github.com/oraios/serena) symbol/LSP editing, local [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) repository graph/impact analysis, and hosted [Context7](https://github.com/upstash/context7) library documentation. See the [MCP setup instructions](README.md#mcp-servers).
+Loom connects Pi through [pi-mcp-adapter](https://www.npmjs.com/package/pi-mcp-adapter). Reviewed servers are local [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) repository graph/impact analysis, and hosted [Context7](https://github.com/upstash/context7) library documentation. See the [MCP setup instructions](README.md#mcp-servers).
 
-All use gateway-only exposure. Loom disables Serena’s startup dashboard and uses Codebase Memory’s read-only analysis profile.
+All use gateway-only exposure. Loom uses Codebase Memory’s read-only analysis profile.
 
 Installing a tool does not sign you into its service or connect it to an agent. Follow its setup instructions after installation. For example, GitHub CLI uses `gh auth login` and GitLab CLI uses `glab auth login`.

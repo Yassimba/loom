@@ -120,6 +120,37 @@ fn plan_server(destination: &SkillDestination, name: &str) -> loom::InstallPlan 
 }
 
 #[test]
+fn unreviewed_mcp_server_is_rejected_before_mutation() {
+    let home = common::temp_home("mcp-unreviewed");
+    assert!(mcp::Server::from_name("unreviewed-server").is_err());
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_loom"))
+        .args([
+            "add",
+            "--mcp-server",
+            "unreviewed-server",
+            "--agent",
+            "pi",
+            "--yes",
+        ])
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env("PATH", "")
+        .current_dir(&home)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("unreviewed-server"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_dir(&home).unwrap().count(), 0);
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn mcp_with_shared_agent_selection_does_not_require_pending_skill_copies() {
     std::env::set_var("LOOM_REPO_DIR", common::repo_root());
     for scope in [SkillScope::Global, SkillScope::Project] {
@@ -140,144 +171,88 @@ fn mcp_with_shared_agent_selection_does_not_require_pending_skill_copies() {
 }
 
 #[test]
-fn local_servers_write_exact_entries_and_record_tool_dependencies() {
-    for (server, name, expected, tool) in [
-        (
-            mcp::Server::Serena,
-            "serena",
-            json!({
-                "command": "serena",
-                "args": [
-                    "start-mcp-server",
-                    "--context",
-                    "ide",
-                    "--project-from-cwd",
-                    "--add-mode",
-                    "no-memories",
-                    "--open-web-dashboard",
-                    "false"
-                ],
-                "directTools": false
-            }),
-            "tool:serena",
-        ),
-        (
-            mcp::Server::CodebaseMemory,
-            "codebase-memory-mcp",
-            json!({
-                "command": "codebase-memory-mcp",
-                "args": ["--tool-profile=analysis"],
-                "directTools": false
-            }),
-            "tool:codebase-memory-mcp",
-        ),
-    ] {
-        let destination = destination(name, SkillScope::Global);
-        adapter(&destination.home, "2.33.0");
-        let stub = Stub::new(&destination.home);
+fn codebase_memory_writes_exact_entry_and_records_tool_dependency() {
+    let (server, name, expected, tool) = (
+        mcp::Server::CodebaseMemory,
+        "codebase-memory-mcp",
+        json!({
+            "command": "codebase-memory-mcp",
+            "args": ["--tool-profile=analysis"],
+            "directTools": false
+        }),
+        "tool:codebase-memory-mcp",
+    );
+    let destination = destination(name, SkillScope::Global);
+    adapter(&destination.home, "2.33.0");
+    let stub = Stub::new(&destination.home);
 
-        mcp::install(server, &destination, &stub).unwrap();
+    mcp::install(server, &destination, &stub).unwrap();
 
-        let config = read_generated_jsonc(&mcp::config_path(&destination));
-        assert_eq!(config["mcpServers"][name], expected);
-        let state = ownership::InstallState::load(&destination.home).unwrap();
-        assert!(state.resources[&format!("mcp-server:{name}")]
-            .depends_on
-            .contains(&tool.into()));
-        fs::remove_dir_all(destination.home).unwrap();
-    }
+    let config = read_generated_jsonc(&mcp::config_path(&destination));
+    assert_eq!(config["mcpServers"][name], expected);
+    let state = ownership::InstallState::load(&destination.home).unwrap();
+    assert!(state.resources[&format!("mcp-server:{name}")]
+        .depends_on
+        .contains(&tool.into()));
+    fs::remove_dir_all(destination.home).unwrap();
 }
 
 #[test]
-fn local_servers_accept_absolute_binaries_and_require_the_binary() {
-    for (server, name, args) in [
-        (
-            mcp::Server::Serena,
-            "serena",
-            json!([
-                "start-mcp-server",
-                "--context",
-                "ide",
-                "--project-from-cwd",
-                "--add-mode",
-                "no-memories",
-                "--open-web-dashboard",
-                "false"
-            ]),
-        ),
-        (
-            mcp::Server::CodebaseMemory,
-            "codebase-memory-mcp",
-            json!(["--tool-profile=analysis"]),
-        ),
+fn codebase_memory_accepts_absolute_binary_and_requires_it() {
+    let (server, name, args) = (
+        mcp::Server::CodebaseMemory,
+        "codebase-memory-mcp",
+        json!(["--tool-profile=analysis"]),
+    );
+    let destination = destination(&format!("{name}-absolute"), SkillScope::Global);
+    adapter(&destination.home, "2.33.0");
+    let path = mcp::config_path(&destination);
+    write_json(
+        &path,
+        json!({"mcpServers": {(name): {
+            "command": format!("/opt/loom/bin/{name}"),
+            "args": args,
+            "directTools": false
+        }}}),
+    );
+    let stub = Stub::new(&destination.home);
+    assert!(mcp::configured(server, &destination, &stub));
+
+    let missing = Stub {
+        missing_binary: Some(name),
+        ..Stub::new(&destination.home)
+    };
+    assert!(!mcp::configured(server, &destination, &missing));
+    assert!(mcp::install(server, &destination, &missing)
+        .unwrap_err()
+        .to_string()
+        .contains("prerequisites missing"));
+    fs::remove_dir_all(destination.home).unwrap();
+}
+
+#[test]
+fn codebase_memory_conflicts_fail_before_mutation() {
+    let (server, name, valid_args) = (
+        mcp::Server::CodebaseMemory,
+        "codebase-memory-mcp",
+        json!(["--tool-profile=analysis"]),
+    );
+    for entry in [
+        json!({"command": name, "args": valid_args.clone(), "directTools": true}),
+        json!({"command": name, "args": valid_args.clone(), "directTools": false, "disabled": true}),
+        json!({"command": name, "args": valid_args.clone(), "directTools": false, "socket": "private"}),
+        json!({"command": name, "args": valid_args.clone(), "directTools": false, "url": "https://private.invalid"}),
+        json!({"command": format!("./{name}"), "args": valid_args.clone(), "directTools": false}),
+        json!({"command": format!("bin/{name}"), "args": valid_args.clone(), "directTools": false}),
     ] {
-        let destination = destination(&format!("{name}-absolute"), SkillScope::Global);
+        let destination = destination(&format!("{name}-conflict"), SkillScope::Global);
         adapter(&destination.home, "2.33.0");
         let path = mcp::config_path(&destination);
-        write_json(
-            &path,
-            json!({"mcpServers": {(name): {
-                "command": format!("/opt/loom/bin/{name}"),
-                "args": args,
-                "directTools": false
-            }}}),
-        );
-        let stub = Stub::new(&destination.home);
-        assert!(mcp::configured(server, &destination, &stub));
-
-        let missing = Stub {
-            missing_binary: Some(name),
-            ..Stub::new(&destination.home)
-        };
-        assert!(!mcp::configured(server, &destination, &missing));
-        assert!(mcp::install(server, &destination, &missing)
-            .unwrap_err()
-            .to_string()
-            .contains("prerequisites missing"));
+        write_json(&path, json!({"mcpServers": {(name): entry}}));
+        let before = fs::read(&path).unwrap();
+        assert!(mcp::preflight(server, &destination).is_err());
+        assert_eq!(fs::read(path).unwrap(), before);
         fs::remove_dir_all(destination.home).unwrap();
-    }
-}
-
-#[test]
-fn local_server_conflicts_fail_before_mutation() {
-    for (server, name, valid_args) in [
-        (
-            mcp::Server::Serena,
-            "serena",
-            json!([
-                "start-mcp-server",
-                "--context",
-                "ide",
-                "--project-from-cwd",
-                "--add-mode",
-                "no-memories",
-                "--open-web-dashboard",
-                "false"
-            ]),
-        ),
-        (
-            mcp::Server::CodebaseMemory,
-            "codebase-memory-mcp",
-            json!(["--tool-profile=analysis"]),
-        ),
-    ] {
-        for entry in [
-            json!({"command": name, "args": valid_args.clone(), "directTools": true}),
-            json!({"command": name, "args": valid_args.clone(), "directTools": false, "disabled": true}),
-            json!({"command": name, "args": valid_args.clone(), "directTools": false, "socket": "private"}),
-            json!({"command": name, "args": valid_args.clone(), "directTools": false, "url": "https://private.invalid"}),
-            json!({"command": format!("./{name}"), "args": valid_args.clone(), "directTools": false}),
-            json!({"command": format!("bin/{name}"), "args": valid_args.clone(), "directTools": false}),
-        ] {
-            let destination = destination(&format!("{name}-conflict"), SkillScope::Global);
-            adapter(&destination.home, "2.33.0");
-            let path = mcp::config_path(&destination);
-            write_json(&path, json!({"mcpServers": {(name): entry}}));
-            let before = fs::read(&path).unwrap();
-            assert!(mcp::preflight(server, &destination).is_err());
-            assert_eq!(fs::read(path).unwrap(), before);
-            fs::remove_dir_all(destination.home).unwrap();
-        }
     }
 }
 

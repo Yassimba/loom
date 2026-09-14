@@ -25,7 +25,6 @@
         "pi-package:@yassimba/pi-loom-mermaid",
         "tool:bun",
         "tool:sem",
-        "mcp-server:serena",
         "mcp-server:codebase-memory-mcp",
         "tool:tuicr",
         "tool:gh",

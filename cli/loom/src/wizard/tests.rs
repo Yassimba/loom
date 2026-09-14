@@ -159,7 +159,7 @@ fn wizard() -> Wizard {
 
 #[test]
 fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
-    for name in ["context7", "serena", "codebase-memory-mcp"] {
+    for name in ["context7", "codebase-memory-mcp"] {
         let root =
             std::env::temp_dir().join(format!("loom-mcp-wizard-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();

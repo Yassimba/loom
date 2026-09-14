@@ -13,7 +13,6 @@ pub const EXPOSURE_NOTE: &str = "Pi gateway only (directTools=false); lifecycle 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Server {
     Context7,
-    Serena,
     CodebaseMemory,
 }
 
@@ -21,7 +20,6 @@ impl Server {
     pub fn from_name(name: &str) -> Result<Self> {
         match name {
             "context7" => Ok(Self::Context7),
-            "serena" => Ok(Self::Serena),
             "codebase-memory-mcp" => Ok(Self::CodebaseMemory),
             _ => bail!("unverified MCP server"),
         }
@@ -30,7 +28,6 @@ impl Server {
     pub fn name(self) -> &'static str {
         match self {
             Self::Context7 => "context7",
-            Self::Serena => "serena",
             Self::CodebaseMemory => "codebase-memory-mcp",
         }
     }
@@ -38,7 +35,6 @@ impl Server {
     fn executable(self) -> Option<&'static str> {
         match self {
             Self::Context7 => None,
-            Self::Serena => Some("serena"),
             Self::CodebaseMemory => Some("codebase-memory-mcp"),
         }
     }
@@ -46,7 +42,6 @@ impl Server {
     fn tool_dependency(self) -> Option<&'static str> {
         match self {
             Self::Context7 => None,
-            Self::Serena => Some("tool:serena"),
             Self::CodebaseMemory => Some("tool:codebase-memory-mcp"),
         }
     }
@@ -54,20 +49,6 @@ impl Server {
     fn entry(self) -> Value {
         match self {
             Self::Context7 => json!({"url": "https://mcp.context7.com/mcp", "directTools": false}),
-            Self::Serena => json!({
-                "command": "serena",
-                "args": [
-                    "start-mcp-server",
-                    "--context",
-                    "ide",
-                    "--project-from-cwd",
-                    "--add-mode",
-                    "no-memories",
-                    "--open-web-dashboard",
-                    "false"
-                ],
-                "directTools": false
-            }),
             Self::CodebaseMemory => json!({
                 "command": "codebase-memory-mcp",
                 "args": ["--tool-profile=analysis"],
