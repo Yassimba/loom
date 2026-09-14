@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.2...loom-teams-v0.2.3) (2026-09-14)
+
+
+### Bug Fixes
+
+* **deps:** update rustls to 0.23.45 (RUSTSEC-2026-0285) ([a63960a](https://github.com/Yassimba/loom/commit/a63960a58de75143fe5a4769d45c647118628ab0))
+
 ## [0.2.2](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.1...loom-teams-v0.2.2) (2026-09-08)
 
 
