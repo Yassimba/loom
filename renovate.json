@@ -47,6 +47,12 @@
       "matchFileNames": ["manifest/loom.toml"],
       "matchPackageNames": ["Yassimba/loom"],
       "enabled": false
+    },
+    {
+      "description": "tokei publishes no prebuilt binaries after 12.1.2, so the asset-based aqua backend cannot install anything newer; the macOS cargo backend builds from source and stays current",
+      "matchPackageNames": ["XAMPPRocky/tokei"],
+      "matchDatasources": ["aqua"],
+      "enabled": false
     }
   ],
 
