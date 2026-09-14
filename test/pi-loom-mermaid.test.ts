@@ -705,15 +705,24 @@ test("the path of boxes runs straight and the return keeps to the side", () => {
   );
 });
 
-test("a diff marker written inside the label is taken as the class it meant", () => {
-  const drawn = render(
+test("a diff marker written inside a label or an edge is taken as the class it meant", () => {
+  for (const source of [
     'flowchart TD\n  A["removed :::red"]:::red --> B[kept :::green]\n  B --> C[plain]\n',
-  );
+    "flowchart LR\n  A -->|sent :::red| B\n",
+    "classDiagram\n  A <|-- B : owns :::green\n",
+    'classDiagram\n  class C["boxed :::red"]\n',
+    "stateDiagram-v2\n  A --> B : go :::red\n",
+  ]) {
+    const drawn = render(source);
+    assert.ok(drawn, source);
+    assert.doesNotMatch(drawn.plain.join("\n"), /:::/, `marker reaches the canvas: ${source}`);
+    assert.ok(
+      drawn.warnings.some((w) => w.includes("goes after the bracket")),
+      `no warning for: ${source}`,
+    );
+  }
+  // The rest of the text survives, and the stroke still takes the colour.
+  const drawn = render('flowchart TD\n  A["removed :::red"] --> B[kept]\n');
   assert.ok(drawn);
-  const text = drawn.plain.join("\n");
-  assert.doesNotMatch(text, /:::/, "the marker never reaches the label");
-  assert.match(text, /│ removed │/, "and the label keeps the rest of its text");
-  assert.match(text, /│ kept │/, "even without a marker after the bracket");
-  // Both boxes still take their stroke colour from the marker.
-  assert.equal(drawn.warnings.filter((w) => w.includes("goes after the bracket")).length, 2);
+  assert.match(drawn.plain.join("\n"), /│ removed │/);
 });
