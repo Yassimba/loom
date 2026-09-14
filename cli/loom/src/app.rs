@@ -173,11 +173,27 @@ pub fn install_selected(
     if resources.iter().any(|r| r.kind == ResourceKind::McpServer) {
         build_install_plan(&resources, status, platform, &destination)?;
     }
+    let configure_rtk_pi = resources
+        .iter()
+        .any(|resource| resource.install_target == crate::manifest::RTK_TOOL_KEY)
+        && (status.pi
+            || resources.iter().any(|resource| {
+                resource.install_target == crate::manifest::PI_TOOL_KEY
+                    || matches!(
+                        resource.kind,
+                        ResourceKind::PiPackage | ResourceKind::McpServer
+                    )
+            }))
+        && !crate::install::rtk_pi_configured(system);
     let installed = detect_installed(&resources, status, system, &destination);
     let resources = resources
         .into_iter()
         .zip(installed)
-        .filter_map(|(resource, installed)| (!installed).then_some(resource))
+        .filter_map(|(resource, installed)| {
+            (!installed
+                || (configure_rtk_pi && resource.install_target == crate::manifest::RTK_TOOL_KEY))
+                .then_some(resource)
+        })
         .collect::<Vec<_>>();
     if resources.is_empty() {
         let out = Out::detect();

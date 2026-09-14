@@ -1,6 +1,4 @@
 # Skills/tools this skill invokes; installers pull them in transitively.
-skills:
-  - system-atlas
 tools:
   - plannotator
 

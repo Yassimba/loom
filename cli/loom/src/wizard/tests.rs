@@ -159,20 +159,21 @@ fn wizard() -> Wizard {
 
 #[test]
 fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
-    for name in ["sem", "context7"] {
+    for name in ["context7", "codebase-memory-mcp"] {
         let root =
             std::env::temp_dir().join(format!("loom-mcp-wizard-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let root = root.canonicalize().unwrap();
+        let mut ids = vec![
+            format!("mcp-server:{name}"),
+            "pi-package:pi-mcp-adapter".into(),
+        ];
+        if name != "context7" {
+            ids.push(format!("tool:{name}"));
+        }
         let mut model = model(ready());
-        model.resources = crate::Catalog::embedded()
-            .unwrap()
-            .find(&[
-                format!("mcp-server:{name}"),
-                "pi-package:pi-mcp-adapter".into(),
-            ])
-            .unwrap();
-        model.installed = vec![false; 2];
+        model.resources = crate::Catalog::embedded().unwrap().find(&ids).unwrap();
+        model.installed = vec![false; model.resources.len()];
         model.settings.clear();
         model.profiles.clear();
         model.dry_run = true;
@@ -2236,32 +2237,35 @@ fn project_scope_honours_global_installs_but_global_scope_ignores_project_ones()
     let mut model = model(ready());
     model
         .resources
-        .push(resource(ResourceKind::McpServer, "MCP servers", "sem"));
+        .push(resource(ResourceKind::McpServer, "MCP servers", "context7"));
     model.installed.push(false);
-    let sem = model.resources.len() - 1;
+    let context7 = model.resources.len() - 1;
     let mut wizard = Wizard::new(model, crate::wizard::wiki::WikiBrowser::default());
-    // sem configured only for this project.
-    let mut project = vec![false; sem + 1];
-    project[sem] = true;
-    wizard.set_installed_scoped(vec![false; sem + 1], project);
-    assert!(!wizard.resource_installed(sem));
+    // Context7 configured only for this project.
+    let mut project = vec![false; context7 + 1];
+    project[context7] = true;
+    wizard.set_installed_scoped(vec![false; context7 + 1], project);
+    assert!(!wizard.resource_installed(context7));
     wizard.skill_scope = SkillScope::Project;
-    assert!(wizard.resource_installed(sem));
-    assert!(!wizard.installed_globally_only(sem));
-    // sem configured globally: counts everywhere, and says so in project scope.
-    let mut global = vec![false; sem + 1];
-    global[sem] = true;
-    wizard.set_installed_scoped(global, vec![false; sem + 1]);
-    assert!(wizard.resource_installed(sem));
-    assert!(wizard.installed_globally_only(sem));
-    assert_eq!(wizard.selection_reason(sem), "Already installed globally");
-    go_to(&mut wizard, Item::Resource(sem));
+    assert!(wizard.resource_installed(context7));
+    assert!(!wizard.installed_globally_only(context7));
+    // Context7 configured globally: counts everywhere, and says so in project scope.
+    let mut global = vec![false; context7 + 1];
+    global[context7] = true;
+    wizard.set_installed_scoped(global, vec![false; context7 + 1]);
+    assert!(wizard.resource_installed(context7));
+    assert!(wizard.installed_globally_only(context7));
+    assert_eq!(
+        wizard.selection_reason(context7),
+        "Already installed globally"
+    );
+    go_to(&mut wizard, Item::Resource(context7));
     let output = screen(&mut wizard, 200, 32);
     assert!(output.contains("Already installed globally"), "{output}");
     assert_eq!(output.matches("Already installed").count(), 1, "{output}");
     wizard.skill_scope = SkillScope::Global;
-    assert!(wizard.resource_installed(sem));
-    assert!(!wizard.installed_globally_only(sem));
+    assert!(wizard.resource_installed(context7));
+    assert!(!wizard.installed_globally_only(context7));
 }
 
 /// Simulate the worker returning the reviewed job with its completed rows.

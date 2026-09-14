@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modularity Review</title>
+<style>
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    --max-width: 820px;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #ffffff;
+    --bg-secondary: #f6f8fa;
+    --bg-tertiary: #eef1f5;
+    --text: #1a1a1a;
+    --text-secondary: #4a5568;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --accent: #2b6cb0;
+    --accent-light: #ebf4ff;
+    --severity-critical: #c53030;
+    --severity-critical-bg: #fff5f5;
+    --severity-significant: #c05621;
+    --severity-significant-bg: #fffaf0;
+    --severity-minor: #2b6cb0;
+    --severity-minor-bg: #ebf8ff;
+    --table-stripe: #f7fafc;
+    --link: #2b6cb0;
+    --link-hover: #1a4971;
+    --shadow: rgba(0, 0, 0, 0.06);
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #1a1a1a;
+    --bg-secondary: #242424;
+    --bg-tertiary: #2e2e2e;
+    --text: #e2e2e2;
+    --text-secondary: #a0a0a0;
+    --text-muted: #717171;
+    --border: #333333;
+    --accent: #b0b0b0;
+    --accent-light: #2a2a2a;
+    --severity-critical: #fc8181;
+    --severity-critical-bg: #2d1b1b;
+    --severity-significant: #f6ad55;
+    --severity-significant-bg: #2d2415;
+    --severity-minor: #a0a0a0;
+    --severity-minor-bg: #282828;
+    --table-stripe: #222222;
+    --link: #e0c97f;
+    --link-hover: #f0dca0;
+    --shadow: rgba(0, 0, 0, 0.2);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    margin: 0;
+    padding: 2rem 1.5rem;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+
+  /* Theme toggle */
+  .theme-toggle {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: var(--text);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    z-index: 100;
+  }
+
+  .theme-toggle:hover {
+    background: var(--bg-tertiary);
+  }
+
+  /* Typography */
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.5rem 0;
+    color: var(--text);
+  }
+
+  h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 2.5rem 0 1rem 0;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.8rem 0 0.6rem 0;
+    color: var(--text);
+  }
+
+  p {
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+  }
+
+  a {
+    color: var(--link);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease;
+  }
+
+  a:hover {
+    color: var(--link-hover);
+    border-bottom-color: var(--link-hover);
+  }
+
+  /* Metadata */
+  .meta {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .meta strong {
+    color: var(--text-secondary);
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.9rem;
+  }
+
+  th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  td {
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  tr:nth-child(even) td {
+    background: var(--table-stripe);
+  }
+
+  /* Severity badges */
+  .severity {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.15rem 0.6rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .severity-critical {
+    color: var(--severity-critical);
+    background: var(--severity-critical-bg);
+  }
+
+  .severity-significant {
+    color: var(--severity-significant);
+    background: var(--severity-significant-bg);
+  }
+
+  .severity-minor {
+    color: var(--severity-minor);
+    background: var(--severity-minor-bg);
+  }
+
+  /* Issue cards */
+  .issue {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    margin: 1.5rem 0;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+
+  .issue h2 {
+    margin-top: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .issue h3 {
+    font-size: 1rem;
+  }
+
+  .issue-meta {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  /* Lists */
+  ul, ol {
+    padding-left: 1.5rem;
+    color: var(--text-secondary);
+  }
+
+  li {
+    margin-bottom: 0.35rem;
+  }
+
+  /* Code */
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--bg-tertiary);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+
+  /* Horizontal rule */
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 3rem 0 1.5rem 0;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .footer a {
+    color: var(--text-muted);
+    border-bottom-color: var(--border);
+  }
+
+  .footer a:hover {
+    color: var(--link);
+  }
+
+  /* Print */
+  @media print {
+    .theme-toggle { display: none; }
+    body { padding: 0; }
+    .issue { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+  <span id="theme-icon"></span>
+</button>
+
+<div class="container">
+  <h1 id="modularity-review">Modularity Review</h1>
+<div class="meta"><strong>Scope</strong>: <code>plugins/pi-guardrails</code><br>
+<strong>Date</strong>: 2026-09-13</div>
+<h2 id="executive-summary">Executive Summary</h2>
+<p>Pi Guardrails protects files, enforces workspace boundaries, and
+gates dangerous shell commands through three co-deployed Pi extension
+entrypoints. Its pure safety primitives and prompt event contract are
+modular, but the package needs attention in two high-volatility areas:
+the file-safety composition root and the configuration surface. The most
+important finding is that <code>extensions/path-access/index.ts</code>
+owns policy enforcement while importing workspace behavior from deep
+inside <code>/add-dir</code>, so three independently named features must
+share ordering and state knowledge to remain correct. Configuration
+changes have a similar cascade across TypeScript types, JSON Schema,
+merge rules, migrations, and a large string-addressed settings
+command.</p>
+<h2 id="coupling-overview">Coupling Overview</h2>
+<table>
+<thead>
+<tr>
+<th>Integration</th>
+<th><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Strength</a></th>
+<th><a
+href="https://coupling.dev/posts/dimensions-of-coupling/distance/">Distance</a></th>
+<th><a
+href="https://coupling.dev/posts/dimensions-of-coupling/volatility/">Volatility</a></th>
+<th><a
+href="https://coupling.dev/posts/core-concepts/balance/">Balanced?</a></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Path Access runtime → Guardrails policies</td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Functional</a>
+— shares rule compilation, tool applicability, severity ordering, and
+execution precedence</td>
+<td>High — sibling feature boundary</td>
+<td>High — safety behavior is expected to change</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Path Access runtime → <code>/add-dir</code> workspace control</td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Functional</a>
+— shares root state, scope vocabulary, trust rules, and persistence
+behavior</td>
+<td>High — imports a deep command module</td>
+<td>High — workspace behavior and Pi integration are expected to
+change</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Bash target extraction → boundary enforcement</td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Functional</a>
+— extractor embeds downstream eligibility decisions</td>
+<td>High — shared/core layer to extension runtime</td>
+<td>High — tool and path interpretation will evolve</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Config types → schema, loader, migrations, and settings</td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Model</a>
+plus functional duplication</td>
+<td>High — five separate implementation surfaces</td>
+<td>High — configuration and UI are expected to change</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Settings command → feature-specific editors</td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Functional</a>
+— conversions and mutations are repeated inside one command</td>
+<td>Low — same command module and adjacent UI files</td>
+<td>High — configuration and UI are expected to change</td>
+<td><strong>No: low cohesion</strong></td>
+</tr>
+<tr>
+<td>Permission Gate runtime → core rule engine</td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Contract</a>
+— <code>Action</code>, <code>Rule</code>, and <code>Safety</code>
+discriminated contracts</td>
+<td>High — extension to core boundary</td>
+<td>High — safety behavior will evolve</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Prompt producers → Herdr adapter</td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Contract</a>
+— paired opened/closed events correlated by <code>prompt.id</code></td>
+<td>High — separate Pi entrypoint and optional external consumer</td>
+<td>Moderate implementation volatility</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Config loader → <code>@aliou/pi-utils-settings</code></td>
+<td><a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">Contract</a>
+— scoped loader API and explicit merge hook</td>
+<td>High — package dependency</td>
+<td>Low functional, moderate implementation volatility</td>
+<td><strong>Yes</strong></td>
+</tr>
+</tbody>
+</table>
+<div class="issue">
+<h2
+id="issue-file-safety-is-composed-inside-the-path-access-feature">Issue:
+File safety is composed inside the Path Access feature</h2>
+<p class="issue-meta"><strong>Integration</strong>: Path Access runtime → Guardrails
+policies and <code>/add-dir</code> workspace control<br>
+<strong>Severity</strong>: <span class="severity severity-critical">Critical</span></p>
+<h3 id="knowledge-leakage">Knowledge Leakage</h3>
+<p><code>extensions/path-access/index.ts:16-21</code> imports policy
+compilation, blocked-tool sets, protection ranking, and rule
+construction from <code>extensions/guardrails/rules.ts</code>. The same
+runtime imports <code>WorkspaceRootControl</code> from the deep command
+path <code>extensions/guardrails/commands/add-dir</code> and knows its
+mutable <code>paths</code> set plus its
+<code>add(path, scope, ctx)</code> operation
+(<code>extensions/path-access/index.ts:15,101-105,156-166</code>). It
+also owns the implicit rule that protected-file policies execute before
+workspace-boundary checks
+(<code>extensions/path-access/index.ts:82-95</code>).</p>
+<p>This is <a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">functional
+coupling</a>: the modules share safety requirements and execution
+semantics rather than a narrow integration contract. The dependency
+graph is technically acyclic, but ownership is circular—Guardrails
+registers Path Access, while Path Access knows Guardrails policy and
+command internals.</p>
+<h3 id="complexity-impact">Complexity Impact</h3>
+<p>A developer changing file-policy precedence, workspace scopes,
+project trust, or approval persistence must reason across the bootstrap,
+Path Access runtime, policy rules, <code>/add-dir</code>, grants,
+configuration, and prompt result mapping. That is more than the 4±1
+units a developer can reliably hold at once, making outcomes <a
+href="https://coupling.dev/posts/core-concepts/complexity/">complex and
+less predictable</a>. A locally reasonable refactor—such as registering
+policies as a separate <code>tool_call</code> hook—can silently change
+which rule wins because Pi hook ordering becomes part of the safety
+contract.</p>
+<h3 id="cascading-changes">Cascading Changes</h3>
+<ul>
+<li>Adding a workspace scope changes <code>/add-dir</code>, Path Access
+prompt results, trust filtering, config persistence, and runtime grant
+mapping.</li>
+<li>Changing policy precedence changes <code>checkPolicyTargets</code>,
+Path Access blocking behavior, and user-visible reasons.</li>
+<li>Moving Path Access to an independent entrypoint would require
+reproducing Guardrails startup ordering and workspace state.</li>
+<li>Replacing <code>/add-dir</code> UI would still force changes in Path
+Access because its runtime imports the command-owned control type.</li>
+</ul>
+<p>The <a
+href="https://coupling.dev/posts/dimensions-of-coupling/distance/">distance</a>
+is high at the package-module level, and the user confirmed all three
+feature areas are highly <a
+href="https://coupling.dev/posts/dimensions-of-coupling/volatility/">volatile</a>.
+High strength plus high distance plus high volatility violates the <a
+href="https://coupling.dev/posts/core-concepts/balance/">balance
+rule</a>.</p>
+<h3 id="recommended-improvement">Recommended Improvement</h3>
+<p>Reduce distance rather than pretending these requirements are
+independent. Put protected-file policy and workspace-boundary ordering
+in one feature-neutral file-safety composition module owned by the
+Guardrails entrypoint. Move workspace-root state and mutation out of the
+<code>/add-dir</code> command into a small workspace module;
+<code>/add-dir</code> and reactive approvals should both call it.</p>
+<p>Keep prompts, command registration, and persistence adapters
+separate, but make them depend inward on the workspace and file-safety
+modules. The trade-off is one explicit internal composition module, but
+it matches the already strong cohesion and removes deep
+feature-to-command imports. Do not split these checks into separately
+loaded hooks unless their precedence becomes an explicit Pi-level
+contract.</p>
+<div class="issue">
+</div>
+<h2
+id="issue-configuration-has-several-manually-synchronized-sources-of-truth">Issue:
+Configuration has several manually synchronized sources of truth</h2>
+<p class="issue-meta"><strong>Integration</strong>: <code>GuardrailsConfig</code> → JSON
+Schema, defaults, merge rules, migrations, and settings UI<br>
+<strong>Severity</strong>: <span class="severity severity-critical">Critical</span></p>
+<h3 id="knowledge-leakage-1">Knowledge Leakage</h3>
+<p>The configuration model in
+<code>src/shared/config/types.ts:22-161</code> is repeated manually in
+<code>schema.json</code>, interpreted again by merge functions in
+<code>src/shared/config/loader.ts:21-96</code>, represented through
+string IDs in
+<code>extensions/guardrails/commands/settings/index.ts:262-569</code>,
+and transformed by eleven ordered migrations. Defaults add another
+functional representation in
+<code>src/shared/config/defaults.ts</code>.</p>
+<p>This starts as <a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">model
+coupling</a>—the same configuration concepts are shared—but becomes
+stronger functional coupling because each surface independently encodes
+validation, precedence, defaults, and mutation behavior. For example,
+allowed paths are typed in core, copied into JSON Schema, deduplicated
+in the loader, filtered in settings, and normalized again by
+<code>PathListEditor</code>.</p>
+<h3 id="complexity-impact-1">Complexity Impact</h3>
+<p>A field addition can compile successfully while leaving editor
+validation, persisted schema, merge semantics, or UI mutation stale.
+String paths such as <code>features.*</code>,
+<code>pathAccess.allowedPaths</code>, and <code>permissionGate.*</code>
+are not checked against <code>GuardrailsConfig</code>, so renames do not
+produce complete compiler errors. Developers must inspect at least
+types, schema, defaults, loader, migration history, settings sections,
+and tests before predicting the effect of one model change.</p>
+<h3 id="cascading-changes-1">Cascading Changes</h3>
+<ul>
+<li>Changing <code>WorkspaceRoot</code> requires synchronized edits to
+types, schema, merge identity, settings exposure, <code>/add-dir</code>,
+and migration compatibility.</li>
+<li>Changing <code>PatternConfig</code> affects policy rules, dangerous
+patterns, schema definitions, editors, examples, and persistence
+conversions.</li>
+<li>Changing array merge semantics affects all three scopes and any UI
+that assumes replacement rather than additive behavior.</li>
+<li>Renaming a settings field can leave string-addressed reads and
+writes silently disconnected.</li>
+</ul>
+<p>Because configuration and UI are planned to change substantially,
+this high-strength, high-<a
+href="https://coupling.dev/posts/dimensions-of-coupling/distance/">distance</a>
+relationship is not neutralized by low volatility. It is an active <a
+href="https://coupling.dev/posts/core-concepts/modularity/">modularity</a>
+risk.</p>
+<h3 id="recommended-improvement-1">Recommended Improvement</h3>
+<p>Generate <code>schema.json</code> from the TypeScript configuration
+types using the schema tooling already supported by
+<code>@aliou/pi-utils-settings</code>; keep migrations as the explicit
+compatibility boundary. Then centralize each field's normalization and
+merge identity beside its model—for example, one
+<code>AllowedPath</code> normalizer/key and one
+<code>WorkspaceRoot</code> merge function reused by loader and UI.</p>
+<p>Do not create a generic configuration framework. Keep
+<code>ConfigLoader</code>, but replace untyped field strings with a
+bounded union or feature-local constants generated from the actual
+settings sections. The cost is a schema-generation check and a few
+explicit adapters; the benefit is that model changes fail in one
+deterministic place rather than drifting across five surfaces.</p>
+<div class="issue">
+</div>
+<h2
+id="issue-target-extraction-contains-a-downstream-authorization-decision">Issue:
+Target extraction contains a downstream authorization decision</h2>
+<p class="issue-meta"><strong>Integration</strong>:
+<code>src/shared/paths/bash-paths.ts</code> → Path Access boundary
+checks<br>
+<strong>Severity</strong>: <span class="severity severity-significant">Significant</span></p>
+<h3 id="knowledge-leakage-2">Knowledge Leakage</h3>
+<p><code>BashPathTarget</code> exposes <code>checkPathAccess</code>
+(<code>src/shared/paths/bash-paths.ts:23-26</code>), and extraction
+computes it using the current workspace boundary and filesystem
+plausibility (<code>src/shared/paths/bash-paths.ts:70-91</code>). Its
+comments explicitly justify behavior using the downstream fact that
+<code>checkPathAccess</code> allows in-workspace paths. The Path Access
+runtime then treats the boolean as authorization-pipeline eligibility
+(<code>extensions/path-access/index.ts:107-109</code>), while policy
+checks intentionally inspect every target regardless of that flag
+(<code>extensions/path-access/index.ts:42-51</code>).</p>
+<p>The extractor therefore shares functional knowledge of two consumers:
+policies require broad evidence, while workspace enforcement requires
+prompt-suppression heuristics. This is implicit <a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">functional
+coupling</a> disguised as a generic shared target model.</p>
+<h3 id="complexity-impact-2">Complexity Impact</h3>
+<p>Changes to command classification or plausibility can either create
+noisy prompts or remove policy evidence. A developer cannot determine
+whether changing <code>maybePathLike</code>, creation-command handling,
+or missing-path suppression is safe by reading the extractor alone; they
+must trace both policy and boundary consumers. The boolean name also
+hides why a candidate was excluded, so test failures expose outcomes
+without preserving the evidence behind them.</p>
+<h3 id="cascading-changes-2">Cascading Changes</h3>
+<ul>
+<li>Supporting a new tool or shell wrapper changes command
+classification, extraction, policy matching, and prompt behavior.</li>
+<li>Changing missing-path heuristics can alter both authorization
+prompts and protected-file enforcement.</li>
+<li>Moving workspace boundaries from <code>cwd</code> to multiple roots
+changes assumptions embedded in a nominally shared parser.</li>
+<li>Adding a third target consumer must either inherit Path Access
+semantics or reinterpret the boolean.</li>
+</ul>
+<p>The safety domain is highly volatile, so this high-strength,
+cross-layer relationship is unbalanced even though both modules ship
+together.</p>
+<h3 id="recommended-improvement-2">Recommended Improvement</h3>
+<p>Reduce <a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">integration
+strength</a> with a factual target contract. Replace
+<code>checkPathAccess</code> with neutral evidence such as
+<code>explicitPath</code> or <code>plausibleLocalPath</code>; keep
+canonical path and unresolved-expansion state. Apply workspace
+membership and prompt-suppression policy in the file-safety composition
+module, not in shell extraction.</p>
+<p>Keep AST walking, command argument classification, and plausibility
+tables together—they are strongly coupled and appropriately close. The
+trade-off is a slightly richer target value, but it prevents parsing
+code from owning authorization semantics and makes each consumer's
+decision testable.</p>
+<div class="issue">
+</div>
+<h2
+id="issue-settings-combines-unrelated-feature-forms-and-repeats-adapters">Issue:
+Settings combines unrelated feature forms and repeats adapters</h2>
+<p class="issue-meta"><strong>Integration</strong>: Settings command → policy, path-access,
+and permission-gate configuration<br>
+<strong>Severity</strong>: <span class="severity severity-significant">Significant</span></p>
+<h3 id="knowledge-leakage-3">Knowledge Leakage</h3>
+<p><code>extensions/guardrails/commands/settings/index.ts</code>
+contains feature metadata, a 190-line policy editor, the config-store
+adapter, draft mutation helpers, pattern/path conversions, all feature
+sections, and change dispatch. Policy pattern conversion appears twice
+in <code>createPolicyRuleEditor</code>
+(<code>settings/index.ts:132-201</code>), while
+<code>patternSubmenu</code> and <code>patternConfigSubmenu</code>
+implement two more representations
+(<code>settings/index.ts:306-385</code>). Policy ID collision behavior
+is separately implemented by <code>addPolicyRuleDraft</code>
+(<code>settings/utils.ts:72-101</code>) and
+<code>appendPolicyRule</code>
+(<code>settings/examples.ts:333-358</code>).</p>
+<p>This is both duplicated functional knowledge and <a
+href="https://coupling.dev/posts/core-concepts/balance/">low
+cohesion</a>: policy editing, path editing, permission editing, and
+generic persistence sit at low distance despite having largely separate
+change reasons.</p>
+<h3 id="complexity-impact-3">Complexity Impact</h3>
+<p>A developer changing one feature must navigate a 500-plus-line
+command that also owns the other two. Similar-looking adapters have
+different semantics: policy pattern editing discards descriptions, while
+permission allow/deny editing preserves nonredundant descriptions. The
+duplication makes it unclear whether that difference is intentional or
+drift.</p>
+<h3 id="cascading-changes-3">Cascading Changes</h3>
+<ul>
+<li>Adding a pattern field requires updating several editor conversions
+and the add-rule wizard.</li>
+<li>Changing policy ID rules requires updating normal rule creation and
+example insertion.</li>
+<li>Adding a Path Access field expands the same section builder and
+string-based dispatcher used by unrelated features.</li>
+<li>Changing editor behavior risks policy and permission forms because
+they share <code>PatternEditor</code> through different adapters.</li>
+</ul>
+<p>Low strength plus low distance is another unbalanced state under the
+<a href="https://coupling.dev/posts/core-concepts/balance/">balance
+rule</a>: unrelated responsibilities accumulate cognitive load even
+without direct runtime coupling.</p>
+<h3 id="recommended-improvement-3">Recommended Improvement</h3>
+<p>Keep one <code>/guardrails:settings</code> command and one config
+store, but extract three feature-owned section builders: policies, Path
+Access, and Permission Gate. Add two pure pattern
+adapters—optional-description and required-description—and one shared
+policy-ID collision helper. Return ordinary <code>SettingsSection</code>
+values; no registry, plugin framework, or dependency injection layer is
+needed.</p>
+<p>The trade-off is several smaller files, but each change gains a clear
+location and the existing settings library remains the stable <a
+href="https://coupling.dev/posts/dimensions-of-coupling/integration-strength/">contract</a>.
+Extract only the repeated behavior and feature sections; leave one-off
+orchestration in the command.</p>
+</div>
+<div class="footer"><em>This analysis was performed using the <a
+href="https://coupling.dev">Balanced Coupling</a> model by <a
+href="https://vladikk.com">Vlad Khononov</a>.</em></div>
+</div>
+
+<script>
+  function getDefaultTheme() {
+    const hour = new Date().getHours();
+    return (hour >= 7 && hour < 19) ? 'light' : 'dark';
+  }
+
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('modularity-review-theme', theme);
+    document.getElementById('theme-icon').textContent = theme === 'light' ? '☾' : '☀';
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    setTheme(current === 'light' ? 'dark' : 'light');
+  }
+
+  const saved = localStorage.getItem('modularity-review-theme');
+  setTheme(saved || getDefaultTheme());
+</script>
+</body>
+</html>
+

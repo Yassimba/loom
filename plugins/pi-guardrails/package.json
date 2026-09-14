@@ -1,0 +1,74 @@
+{
+  "name": "@yassimba/pi-guardrails",
+  "version": "0.17.1",
+  "description": "Security guardrails for Pi: protected paths, workspace boundaries, and dangerous-command gates.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "guardrails",
+    "security"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yassimba/loom.git",
+    "directory": "plugins/pi-guardrails"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src",
+    "extensions",
+    "README.md",
+    "schema.json",
+    "!src/**/*.test.ts",
+    "!extensions/**/*.test.ts"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/guardrails/index.ts",
+      "./extensions/permission-gate/index.ts",
+      "./extensions/herdr/index.ts"
+    ],
+    "video": "https://assets.aliou.me/github/aliou/pi-guardrails/demo.mp4",
+    "image": "https://assets.aliou.me/github/aliou/pi-guardrails/banner.png"
+  },
+  "loom": {
+    "catalog": {
+      "label": "Pi Guardrails",
+      "description": "Protect sensitive paths, add trusted workspace roots, and gate dangerous commands in Pi.",
+      "nextAction": "Start Pi and run /guardrails:onboarding or /add-dir."
+    }
+  },
+  "dependencies": {
+    "@aliou/pi-utils-settings": "^0.19.1",
+    "@aliou/sh": "^0.2.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@golevelup/ts-vitest": "^4.0.0",
+    "memfs": "^4.57.2",
+    "vitest": "^4.1.4"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

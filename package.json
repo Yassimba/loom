@@ -15,8 +15,8 @@
     "catalog:generate": "node scripts/generate-setup-catalog.mjs",
     "catalog:check": "node scripts/generate-setup-catalog.mjs --check",
     "check:rust": "cargo fmt --manifest-path cli/loom/Cargo.toml -- --check && cargo clippy --manifest-path cli/loom/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path cli/loom/Cargo.toml",
-    "test": "node --experimental-strip-types --test test/*.test.mjs test/*.test.ts",
-    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.mjs test/*.test.ts && npm run test --workspaces --if-present",
+    "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "audit": "fallow audit",
@@ -28,7 +28,6 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
     "@earendil-works/pi-coding-agent": "0.85.1",
-    "@earendil-works/pi-server": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@types/node": "26.5.1",
     "fallow": "3.25.0",

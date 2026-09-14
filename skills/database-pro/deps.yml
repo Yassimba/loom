@@ -1,0 +1,4 @@
+upstream:
+  repository: https://github.com/affaan-m/ECC
+  path: skills/database-migrations
+  commit: 8321021c54d670126ce3b2969d5deb880b4b0c2a

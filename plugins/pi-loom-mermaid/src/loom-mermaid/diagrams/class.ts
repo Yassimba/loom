@@ -136,12 +136,14 @@ function parseClass(src: string): Graph | null {
         if (open) curClass = 'skip'
       } else {
         const idx = declare(name)
-        if (idx !== null && label !== null) {
+        const marked = graph.marked(label, `class "${name}"`)
+        if (idx !== null && marked.text !== null) {
           const node = graph.nodes[idx]
-          node.label = label
+          node.label = marked.text
           // The name is the last title line (an annotation may precede it).
           const title = node.sections?.[0]
-          if (title) title[title.length - 1] = label
+          if (title) title[title.length - 1] = marked.text
+          if (marked.name !== null) graph.addClass(idx, marked.name)
         }
         if (open) curClass = idx ?? 'skip'
       }

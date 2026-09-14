@@ -297,8 +297,7 @@ pub(crate) fn project_opencode_adapter_path(project_root: &Path) -> PathBuf {
 }
 
 /// The selection plus the transitive closure of catalog skill dependencies,
-/// deduplicated, dependencies appended after the explicit selection. Plannotator
-/// includes its review extension when Pi is a selected destination.
+/// deduplicated, dependencies appended after the explicit selection.
 pub fn expand_skill_dependencies(
     all: &[Resource],
     selection: Vec<Resource>,
@@ -320,14 +319,6 @@ pub fn expand_skill_dependencies(
                     .iter()
                     .map(|name| format!("skill:{name}")),
             );
-        }
-        if agents.contains(&SkillAgent::Pi)
-            && matches!(
-                resource.install_target.as_str(),
-                "plannotator" | "github:Yassimba/plannotator"
-            )
-        {
-            dependencies.push("@plannotator/pi-extension".into());
         }
         cursor += 1;
         for name in dependencies {
@@ -976,43 +967,6 @@ mod tests {
         assert_eq!(
             SkillAgent::Grok.project_skill_tree(project),
             project.join(".grok").join("skills")
-        );
-    }
-
-    #[test]
-    fn plannotator_adds_pi_extension_only_for_pi_and_only_once() {
-        let catalog = crate::Catalog::embedded().unwrap();
-        let extension = catalog
-            .resources
-            .iter()
-            .find(|r| r.install_target == "@plannotator/pi-extension")
-            .unwrap();
-        for target in ["plannotator", "github:Yassimba/plannotator"] {
-            let selected = catalog
-                .resources
-                .iter()
-                .find(|r| r.install_target == target)
-                .unwrap()
-                .clone();
-            for agents in [vec![], vec![SkillAgent::Claude], vec![SkillAgent::Pi]] {
-                let expanded =
-                    expand_skill_dependencies(&catalog.resources, vec![selected.clone()], &agents);
-                assert_eq!(
-                    expanded.iter().any(|r| r.id == extension.id),
-                    agents.contains(&SkillAgent::Pi)
-                );
-            }
-            let expanded = expand_skill_dependencies(
-                &catalog.resources,
-                vec![selected, extension.clone()],
-                &[SkillAgent::Pi],
-            );
-            assert_eq!(expanded.iter().filter(|r| r.id == extension.id).count(), 1);
-        }
-        let unrelated = skill("unrelated", &[]);
-        assert_eq!(
-            expand_skill_dependencies(&catalog.resources, vec![unrelated], &[SkillAgent::Pi]).len(),
-            1
         );
     }
 

@@ -145,6 +145,7 @@ pub enum Operation {
         source: String,
         name: String,
     },
+    RtkPi,
     Mcp {
         server: crate::mcp::Server,
         destination: crate::SkillDestination,
@@ -163,6 +164,7 @@ impl Operation {
                 CommandSpec::new("pi", args)
             }
             Self::HerdrPlugin { source, .. } => CommandSpec::new("herdr", ["plugin", "install", source, "--yes"]),
+            Self::RtkPi => CommandSpec::new("rtk", ["init", "--global", "--agent", "pi", "--no-patch"]),
             _ => return None,
         })
     }
@@ -195,18 +197,16 @@ impl Operation {
                     String::new()
                 }
             ),
-            Self::Tools { tools } => format!(
-                "add to the mise selection and install: {}{}",
-                tools.join(", "),
-                if tools.iter().any(|key| key == crate::mcp::SEM_TOOL_KEY) {
-                    " (machine-wide Sem v0.24.0)"
-                } else {
-                    ""
-                }
-            ),
-            Self::BootstrapMise(_) | Self::PiPackage { .. } | Self::HerdrPlugin { .. } => {
-                self.command().expect("command operation").display()
+            Self::Tools { tools } => {
+                format!(
+                    "add to the mise selection and install: {}",
+                    tools.join(", ")
+                )
             }
+            Self::BootstrapMise(_)
+            | Self::PiPackage { .. }
+            | Self::HerdrPlugin { .. }
+            | Self::RtkPi => self.command().expect("command operation").display(),
         }
     }
 }
@@ -224,6 +224,7 @@ impl InstallStep {
             Operation::Skills { .. } => "skills",
             Operation::PiPackage { .. } | Operation::Mcp { .. } => "pi",
             Operation::HerdrPlugin { .. } => "herdr",
+            Operation::RtkPi => "rtk",
         }
     }
 
@@ -297,11 +298,6 @@ pub fn build_install_plan(
             std::iter::once(tool.install_target.clone()).chain(tool.companions.iter().cloned())
         })
         .collect::<Vec<_>>();
-    if mcp_servers.contains(&crate::mcp::Server::Sem)
-        && !tools.iter().any(|key| key == crate::mcp::SEM_TOOL_KEY)
-    {
-        tools.push(crate::mcp::SEM_TOOL_KEY.into());
-    }
     if needs_pi && !status.pi && !tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()) {
         tools.push(crate::manifest::PI_TOOL_KEY.into());
     }
@@ -316,10 +312,18 @@ pub fn build_install_plan(
             operation: Operation::BootstrapMise(platform),
         });
     }
+    let configure_rtk_pi = tools.contains(&crate::manifest::RTK_TOOL_KEY.to_string())
+        && (status.pi || needs_pi || tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()));
     if !tools.is_empty() {
         steps.push(InstallStep {
             target: "tools".into(),
             operation: Operation::Tools { tools },
+        });
+    }
+    if configure_rtk_pi {
+        steps.push(InstallStep {
+            target: "rtk-pi".into(),
+            operation: Operation::RtkPi,
         });
     }
     let skills = resources
@@ -557,6 +561,15 @@ fn install_lanes<'a>(pending: &[IndexedStep<'a>]) -> Vec<InstallLane<'a>> {
             lane.waits_for = Some("pi");
         }
     }
+    if pending
+        .iter()
+        .any(|indexed| indexed.step.operation == Operation::RtkPi)
+        && lanes.iter().any(|lane| lane.manager == "mise")
+    {
+        if let Some(lane) = lanes.iter_mut().find(|lane| lane.manager == "rtk") {
+            lane.waits_for = Some("mise");
+        }
+    }
     for (manager, tool_key) in [("pi", crate::manifest::PI_TOOL_KEY), ("herdr", "herdr")] {
         let runtime_via_mise = pending.iter().any(|indexed| {
             matches!(&indexed.step.operation,
@@ -662,7 +675,7 @@ fn execute_step(
     execute_action(step, system, cancelled, repository).or_else(|| {
         if matches!(
             step.operation,
-            Operation::PiPackage { .. } | Operation::HerdrPlugin { .. }
+            Operation::PiPackage { .. } | Operation::HerdrPlugin { .. } | Operation::RtkPi
         ) {
             verifying();
         }
@@ -720,7 +733,7 @@ pub(crate) fn step_is_present(
             })
         }
         Operation::BootstrapMise(_) => false,
-        Operation::PiPackage { .. } | Operation::HerdrPlugin { .. } => {
+        Operation::PiPackage { .. } | Operation::HerdrPlugin { .. } | Operation::RtkPi => {
             verify_step(step, system, cancelled).is_none()
         }
     }
@@ -834,6 +847,18 @@ fn verify_step(
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Option<String> {
+    if step.operation == Operation::RtkPi {
+        let Some(home) = system.home_dir() else {
+            return Some("verification failed: home directory is unavailable".into());
+        };
+        let path = crate::settings::pi_agent_dir(&home).join("extensions/rtk.ts");
+        return (!rtk_pi_configured(system)).then(|| {
+            format!(
+                "verification did not find the RTK Pi extension at {}",
+                path.display()
+            )
+        });
+    }
     let (command, needle, project) = match &step.operation {
         Operation::PiPackage { name, project, .. } => {
             (CommandSpec::new("pi", ["list"]), name, Some(*project))
@@ -858,6 +883,14 @@ fn verify_step(
         }
         Err(error) => Some(format!("verification failed: {error}")),
     }
+}
+
+pub(crate) fn rtk_pi_configured(system: &dyn System) -> bool {
+    system.home_dir().is_some_and(|home| {
+        crate::settings::pi_agent_dir(&home)
+            .join("extensions/rtk.ts")
+            .is_file()
+    })
 }
 
 /// Reduce tool diagnostics to a safe cause and recovery action. Never echo
