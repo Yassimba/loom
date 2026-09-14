@@ -78,6 +78,19 @@ jobs:
         with:
           name: loom-linux-x64
           path: loom-linux
+      - name: Inspect WSL before installation
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
+          New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
+          foreach ($option in @("version", "status")) {
+            $evidence = "$evidenceDir/wsl-$option.txt"
+            New-Item -ItemType File -Path $evidence -Force | Out-Null
+            wsl "--$option" 2>&1 | Tee-Object -FilePath $evidence
+            $code = $LASTEXITCODE
+            if ($code -ne 0) { exit $code }
+          }
       - name: Discover WSL distributions
         id: wsl-discovery
         timeout-minutes: 1
@@ -85,6 +98,7 @@ jobs:
         run: |
           $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
           New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
+          New-Item -ItemType File -Path "$evidenceDir/wsl-list-quiet.txt" -Force | Out-Null
           $listing = @(wsl --list --quiet 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-list-quiet.txt")
           $code = $LASTEXITCODE
           $listing | ForEach-Object { Write-Host $_ }
@@ -96,7 +110,10 @@ jobs:
         timeout-minutes: 5
         shell: pwsh
         run: |
-          wsl --install -d Ubuntu --no-launch 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/loom-windows-e2e/wsl-install.txt"
+          New-Item -ItemType File -Path "$env:RUNNER_TEMP/loom-windows-e2e/wsl-install.txt" -Force | Out-Null
+          # Microsoft recommends web download when the default install hangs:
+          # https://learn.microsoft.com/windows/wsl/install
+          wsl --install --web-download -d Ubuntu --no-launch 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/loom-windows-e2e/wsl-install.txt"
           $code = $LASTEXITCODE
           if ($code -ne 0) { exit $code }
       - name: Inspect Ubuntu WSL version
@@ -105,9 +122,6 @@ jobs:
         shell: pwsh
         run: |
           $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
-          wsl --version 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-version.txt"
-          $code = $LASTEXITCODE
-          if ($code -ne 0) { exit $code }
           $listing = @(wsl --list --verbose 2>&1 | Tee-Object -FilePath "$evidenceDir/wsl-list-before-conversion.txt")
           $code = $LASTEXITCODE
           $listing | ForEach-Object { Write-Host $_ }
