@@ -29,7 +29,7 @@ fn contracts(home: &Path, project: &Path, args: &[&str]) -> Output {
             loom::digest_path(home).unwrap(),
             loom::digest_path(project).unwrap()
         ],
-        "checker changed files"
+        "checker changed files: {args:?}"
     );
     output
 }
@@ -270,9 +270,19 @@ fn filesystem_scope(home: &Path) {
             use std::os::unix::ffi::OsStringExt;
             let non_utf8 = project.join(OsString::from_vec(vec![0xff]));
             fs::create_dir(&non_utf8).unwrap();
-            fs::write(non_utf8.join("CONTRACTS"), "@cc invalid").unwrap();
-            let value = report(&contracts(home, &project, &["check", "--json"]), 2);
-            assert!(!value["errors"].as_array().unwrap().is_empty());
+            for content in ["@cc invalid", "@cc valid\nBody\n"] {
+                fs::write(non_utf8.join("CONTRACTS"), content).unwrap();
+                for command in ["check", "list"] {
+                    let value = report(&contracts(home, &project, &[command, ".", "--json"]), 2);
+                    assert!(
+                        value["errors"][0]["message"]
+                            .as_str()
+                            .unwrap()
+                            .contains("UTF-8"),
+                        "{value}"
+                    );
+                }
+            }
         }
         fs::remove_dir_all(outside).unwrap();
     }
@@ -303,6 +313,7 @@ fn contracts_closed_stdout_is_an_io_error_not_a_panic() {
     ] {
         let before = loom::digest_path(&root).unwrap();
         let (writer, reader) = UnixStream::pair().unwrap();
+        reader.shutdown(std::net::Shutdown::Both).unwrap();
         drop(reader);
         let output = Command::new(env!("CARGO_BIN_EXE_loom"))
             .arg("contracts")
@@ -608,6 +619,8 @@ fn diff_stale_and_test_anchors_follow_one_change() {
     std::os::unix::fs::symlink(real_git.trim(), home.join("bin/git")).unwrap();
     let git = |args: &[&str]| {
         let output = Command::new("git")
+            // Fixture commits must finish all writes before read-only snapshots.
+            .args(["-c", "maintenance.auto=false"])
             .args(args)
             .current_dir(&project)
             .env("GIT_AUTHOR_NAME", "t")
@@ -696,6 +709,16 @@ fn diff_stale_and_test_anchors_follow_one_change() {
     // Committing everything leaves nothing to report.
     git(&["add", "."]);
     git(&["commit", "-qm", "change"]);
+    // A stale stat cache must not let read-only Git commands rewrite .git/index.
+    for (index, command) in ["diff", "affected", "propose"].into_iter().enumerate() {
+        fs::File::open(project.join("pay.rs"))
+            .unwrap()
+            .set_times(fs::FileTimes::new().set_modified(
+                std::time::UNIX_EPOCH + std::time::Duration::from_secs(index as u64 + 1),
+            ))
+            .unwrap();
+        report(&contracts(&home, &project, &[command, "--json"]), 0);
+    }
     let value = report(&contracts(&home, &project, &["diff", "--json"]), 0);
     assert_eq!(value, json!({"added": [], "changed": [], "removed": []}));
     let value = report(&contracts(&home, &project, &["propose", "--json"]), 0);

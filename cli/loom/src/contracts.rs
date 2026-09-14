@@ -434,6 +434,11 @@ fn duplicate_diagnostics(contracts: &[Contract]) -> Vec<Diagnostic> {
 /// Parse one file's contracts, choosing directory or declaration scope by name.
 fn read_contracts(path: &Path, root: &Path) -> Result<(Vec<Contract>, Vec<Diagnostic>)> {
     let relative = path.strip_prefix(root).unwrap_or(path);
+    ensure!(
+        relative.to_str().is_some(),
+        "path is not valid UTF-8: {}",
+        relative.display()
+    );
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         // One unreadable file is a finding: it must not hide every other contract.
@@ -475,6 +480,8 @@ fn identity(contract: &Contract) -> (PathBuf, Option<String>, String) {
 /// Run git in `root` and return stdout; the first non-empty stderr line is the error.
 fn git(root: &Path, args: &[&str]) -> Result<String> {
     let output = std::process::Command::new("git")
+        // Even `git diff` can refresh .git/index when only file stats changed.
+        .args(["-c", "diff.autoRefreshIndex=false"])
         .args(args)
         .current_dir(root)
         .output()

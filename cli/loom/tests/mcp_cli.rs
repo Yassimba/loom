@@ -207,10 +207,12 @@ fn codebase_memory_accepts_absolute_binary_and_requires_it() {
     let destination = destination(&format!("{name}-absolute"), SkillScope::Global);
     adapter(&destination.home, "2.33.0");
     let path = mcp::config_path(&destination);
+    let binary = destination.home.join("bin").join(name);
+    assert!(binary.is_absolute());
     write_json(
         &path,
         json!({"mcpServers": {(name): {
-            "command": format!("/opt/loom/bin/{name}"),
+            "command": binary,
             "args": args,
             "directTools": false
         }}}),
