@@ -296,7 +296,7 @@
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "installTarget": "pi-web-access",
-      "version": "0.28.0",
+      "version": "0.29.0",
       "nextAction": "Ask Pi to search the web."
     },
     {
