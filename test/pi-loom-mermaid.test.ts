@@ -684,15 +684,23 @@ test("a lane leg climbs past the boxes stacked under its target, not through the
   assert.match(leg, /[│╫]/, "the leg is drawn beside the box, not swallowed by it");
 });
 
-test("a head label riding a long leg reserves no column beside its chain", () => {
+test("the path of boxes runs straight and the return keeps to the side", () => {
   const drawn = render(
     readFileSync(new URL("./fixtures/mermaid/loop-branch.mmd", import.meta.url), "utf8"),
   );
   assert.ok(drawn);
   const rows = drawn.plain;
-  // The return climbs immediately left of the branch boxes: the `yes`
-  // label rides the leg it already has, so no width is reserved beside
-  // the column, and the two sit a plain gap apart.
-  const border = rows.find((l) => l.includes("┌─────────┐")) as string;
-  assert.ok(border.includes("│ ┌─────────┐"), `return hugs the boxes: ${border}`);
+  const col = (needle: string): number => {
+    const row = rows.find((l) => l.includes(needle)) as string;
+    return row.indexOf(needle) + needle.length / 2;
+  };
+  // start, check, process, more? and finish share one column; the branch
+  // to reject splits off it and the return climbs outside the boxes.
+  const spine = ["│ start │", "║ check ║", "│ process │", "║ more? ║", "│ finish │"].map(col);
+  assert.ok(Math.max(...spine) - Math.min(...spine) <= 1, `spine drifts: ${spine.join()}`);
+  assert.ok(col("│ reject │") > Math.max(...spine), "reject splits to the side");
+  assert.ok(
+    rows.some((l) => l.includes("yes")),
+    "the return keeps its label",
+  );
 });

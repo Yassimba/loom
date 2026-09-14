@@ -21,6 +21,8 @@ export interface LayeredGraph {
   layers: number[][]
   up: number[][]
   down: number[][]
+  /** Virtual nodes of returns, drawn as columns beside the boxes. */
+  lanes?: Set<number>
 }
 
 export function brandesKoepf(
@@ -50,6 +52,7 @@ export function brandesKoepf(
         layers: fromRight ? layers.map((row) => [...row].reverse()) : layers,
         up: fromBottom ? g.down : g.up,
         down: fromBottom ? g.up : g.down,
+        lanes: g.lanes,
       }
       const vpos = new Array<number>(n).fill(0)
       for (const row of view.layers) row.forEach((v, i) => (vpos[v] = i))
@@ -180,6 +183,13 @@ function alignVertically(g: LayeredGraph, pos: number[], conflicts: Set<number>,
       const ups = real.length > 0 ? real : all
       const d = ups.length
       if (d === 0) continue
+      // A return's column ordered before the boxes would claim their
+      // parent first and, once claimed, the monotonic sweep denies every
+      // box behind it: the path of boxes bends around a line drawn beside
+      // them. It gives way where a box wants the same parent. A forward
+      // skip keeps its claim, since it runs among the boxes and reads
+      // worse bent than they do.
+      if (g.lanes?.has(v) && ups.some((u) => u < realCount && g.down[u].some((w) => w < realCount))) continue
       const medians = d % 2 === 1 ? [ups[(d - 1) / 2]] : [ups[d / 2 - 1], ups[d / 2]]
       for (const u of medians) {
         if (align[v] !== v) break

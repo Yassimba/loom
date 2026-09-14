@@ -390,18 +390,17 @@ function placeTd(
   })
   // A side entry's head label rides its leg: the chain's last node keeps
   // that much room on its box side.
+  // The leg the label rides runs from the chain's column to the box, and
+  // is usually longer than the label already; reserving width beside the
+  // column regardless pushes every box in the rank over by a word. How
+  // long the leg really is only the placement knows, so these are settled
+  // once it has run.
+  const sideLabels: { v: number; to: number; w: number; side: number }[] = []
   sidePorts(first).entry.forEach((side, i) => {
     const text = edgeText(graph.edges[i])
     if (side === 0 || text === null || chainLabel[i] !== null) return
     const v = layered.chains[i].at(-1) as number
-    const w = labelCols(text, maxLabel) + 3
-    // The leg already runs from the chain's column to the box: when that
-    // is longer than the label, the label rides it and the column needs
-    // nothing reserved beside it. Reserving anyway pushes every box in the
-    // rank over by a label's width for a label that was never there.
-    if (Math.abs(first[graph.edges[i].to] - first[v]) >= w) return
-    if (side > 0) labelPadLeft[v] = Math.max(labelPadLeft[v], w)
-    else labelPad[v] = Math.max(labelPad[v], w)
+    sideLabels.push({ v, to: graph.edges[i].to, w: labelCols(text, maxLabel) + 3, side })
   })
   /** Forward bus rows in the band below rank `r` whose span covers column `p`. */
   // Forward buses on band r: an edge's first hop runs from its source to
@@ -468,6 +467,21 @@ function placeTd(
     return [lo, box, text]
   }
   let centers = place()
+  // A side entry whose leg came out shorter than its label reserves the
+  // room after all, and the placement runs again.
+  for (let pass = 0; pass < 2; pass++) {
+    let again = false
+    for (const s of sideLabels) {
+      const pad = s.side > 0 ? labelPadLeft : labelPad
+      // The leg ends at the box's border, not its centre.
+      const leg = Math.abs(centers[s.to] - centers[s.v]) - half(sizes.layW[s.to])
+      if (pad[s.v] >= s.w || leg >= s.w) continue
+      pad[s.v] = s.w
+      again = true
+    }
+    if (!again) break
+    centers = place()
+  }
   // A head label reserves room on the right by default. A box
   // whose one labelled arrival would fit on its left instead flips it
   // there when that narrows the drawing (dagre's label dummy, either side).

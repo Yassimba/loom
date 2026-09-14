@@ -130,6 +130,8 @@ export interface Layered extends LayeredGraph {
   chains: number[][]
   /** Virtual nodes on more than one chain (a concentrated trunk). */
   shared: Set<number>
+  /** Virtual nodes of returns: columns drawn beside the boxes, not among them. */
+  lanes: Set<number>
 }
 
 /**
@@ -213,7 +215,7 @@ function normalize(
     }
     link(prev, e.to, upward)
   })
-  return { layers, up, down, chains, shared }
+  return { layers, up, down, chains, shared, lanes: new Set<number>() }
 }
 
 /**
@@ -252,7 +254,10 @@ export function orderRanks(
   const outside = new Map<number, number>()
   edges.forEach((e, i) => {
     if (e.from === e.to || ranks[e.to] >= ranks[e.from]) return
-    for (const v of layered.chains[i]) outside.set(v, e.from)
+    for (const v of layered.chains[i]) {
+      outside.set(v, e.from)
+      layered.lanes.add(v)
+    }
   })
   const isTrailing = (v: number): boolean => trailing[v] ?? false
   const partition = (row: number[]): void => {
