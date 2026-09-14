@@ -63,9 +63,9 @@
     }
   },
   "devDependencies": {
-    "@golevelup/ts-vitest": "^4.0.0",
-    "memfs": "^4.57.2",
-    "vitest": "^4.1.4"
+    "@golevelup/ts-vitest": "4.0.0",
+    "memfs": "4.78.0",
+    "vitest": "4.1.11"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
