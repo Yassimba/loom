@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.0](https://github.com/Yassimba/loom/compare/loom-v1.10.1...loom-v1.11.0) (2026-09-14)
+
+
+### Features
+
+* add contract commands, guardrails, and mermaid layout fixes ([d9cf2ba](https://github.com/Yassimba/loom/commit/d9cf2bacfa3d17560c00236b16158dfbf8e5e114))
+* **loom:** add contract commands and land in-progress CLI work ([3890d2a](https://github.com/Yassimba/loom/commit/3890d2ad59cbdc7f59a7af5f39b520380ee90ba9))
+* remove serena integration from loom ([b790298](https://github.com/Yassimba/loom/commit/b7902982e3c3562806660b0c4bfd5608493d71f1))
+
+
+### Bug Fixes
+
+* **loom:** preserve read-only contracts across platforms ([a556269](https://github.com/Yassimba/loom/commit/a556269795fb4389901dcb1eb3d3ce6f6846c0f6))
+
 ## [1.10.1](https://github.com/Yassimba/loom/compare/loom-v1.10.0...loom-v1.10.1) (2026-09-13)
 
 
