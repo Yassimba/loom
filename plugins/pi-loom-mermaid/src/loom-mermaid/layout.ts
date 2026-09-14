@@ -1112,6 +1112,9 @@ function placeLr(
       const kinds: string[] = []
       const edges = graph.edges.flatMap((e, i) => (e.from !== e.to && pick(e, v) ? [i] : []))
       if (new Set(edges.map((i) => graph.edges[i].from)).size > 1) return
+      // Edges out of different boxes in one frame merge into one bus on
+      // the way, which loses the distinction two rows would draw.
+      if (new Set(edges.map((i) => graph.edges[i].fromAnchor?.node)).size > 1) return
       // Plain solid edges keep the centre row; the odd one out moves.
       const read = (i: number): string => `${graph.edges[i].line}|${edgeText(graph.edges[i]) ?? ''}`
       for (const i of edges) if (!kinds.includes(read(i))) kinds.push(read(i))
@@ -1136,10 +1139,13 @@ function placeLr(
     return p === null ? centers[graph.edges[i].to] + (entryOffset.get(i) ?? 0) : boxTop(graph.edges[i].to) + p.box.cy
   }
   // A skip whose target row crosses no box on any intermediate rank runs
-  // straight through the diagram into the target's left side; otherwise
-  // the bottom lane. (No chains here: LR back edges must lane, and a
-  // diagram mixing interior skips with laned returns crosses itself.)
+  // straight through the diagram into the target's left side; failing
+  // that, one whose own row is clear runs along it and steps to the
+  // target's row in the last band. Otherwise the bottom lane. (No chains
+  // here: LR back edges must lane, and a diagram mixing interior skips
+  // with laned returns crosses itself.)
   const edgeStraight = new Array<boolean>(graph.edges.length).fill(false)
+  const jogLate = new Array<boolean>(graph.edges.length).fill(false)
   const clearRow = (e: Edge, row: number): boolean =>
     !stubRows.has(row) &&
     graph.nodes.every(
@@ -1150,7 +1156,9 @@ function placeLr(
         row > sat(centers[j], mid(sizes.boxH[j])) + sizes.boxH[j] - 1,
     )
   graph.edges.forEach((e, i) => {
-    if (isSkip(e) && clearRow(e, entryRow(i))) edgeStraight[i] = true
+    if (!isSkip(e)) return
+    if (clearRow(e, entryRow(i))) edgeStraight[i] = true
+    else if (clearRow(e, exitRow(i))) edgeStraight[i] = jogLate[i] = true
   })
   ends = resolve((i) => {
     const e = graph.edges[i]
@@ -1165,7 +1173,7 @@ function placeLr(
     ends[i][0] !== null && ends[i][1] !== null ? `${graph.edges[i].from}>${graph.edges[i].to}` : biclique.get(i)
   const entryY = graph.edges.map((_, i) => (edgeStraight[i] ? entryRow(i) : -1))
   const jogs = chainJogs(graph, ranks, layered, centers, (e, i) =>
-    entryY[i] === -1 ? null : { exit: exitRow(i), entry: entryY[i] },
+    entryY[i] === -1 ? null : { exit: exitRow(i), entry: entryY[i], band: jogLate[i] ? ranks[e.to] - 1 : undefined },
   )
   const jogTrack = new Map<ChainJog, number>()
 
@@ -1234,8 +1242,10 @@ function placeLr(
   const bandRows = (i: number, r: number): [number, number] | null => {
     const e = graph.edges[i]
     if (e.from === e.to || goesAround(i) || ranks[e.from] > r || ranks[e.to] <= r) return null
-    const entry = entryRow(i)
-    return ranks[e.from] === r ? [Math.min(exitRow(i), entry), Math.max(exitRow(i), entry)] : [entry, entry]
+    const [entry, exit] = [entryRow(i), exitRow(i)]
+    const jogAt = jogLate[i] ? ranks[e.to] - 1 : ranks[e.from]
+    if (r === jogAt) return [Math.min(exit, entry), Math.max(exit, entry)]
+    return jogLate[i] ? [exit, exit] : [entry, entry]
   }
   const overhangs = (i: number): boolean => {
     const r = ranks[i]
@@ -1462,6 +1472,23 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
 
   const byRank: number[][] = Array.from({ length: maxRank + 1 }, () => [])
   for (let idx = 0; idx < ranks.length; idx++) byRank[ranks[idx]].push(idx)
+  // Boxes hanging off one frame each keep the order their inner ends
+  // sit in across the frame: the crossing count sees one frame node, and
+  // with none counted the ordering keeps the declaration order.
+  const vertical = graph.dir === 'down' || graph.dir === 'up'
+  const anchorOrder = (v: number): number | null => {
+    const ins = graph.edges.filter((e) => e.to === v && e.from !== v)
+    const a = ins[0]?.fromAnchor
+    if (ins.length !== 1 || a === undefined || graph.edges.some((e) => e.from === v && e.to !== v)) return null
+    return vertical ? a.x + a.w / 2 : a.y + a.h / 2
+  }
+  for (const row of byRank) {
+    const key = row.map((v) => ({ v, from: graph.edges.find((e) => e.to === v)?.from, at: anchorOrder(v) }))
+    key.sort((p, q) => (p.at === null || q.at === null || p.from !== q.from ? 0 : p.at - q.at))
+    key.forEach((k, i) => {
+      row[i] = k.v
+    })
+  }
   // Top-down routes every edge through the interior. Left-to-right boxes
   // are three rows tall, leaving no port off the centre row for a return,
   // so LR back edges go around in a lane below. Their endpoints go last
@@ -1470,7 +1497,6 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
   // runs straight through the interior when its row is clear (which the
   // ordering can only make likelier), and lanes only as a fallback, where
   // `onTop` picks the side no box blocks.
-  const vertical = graph.dir === 'down' || graph.dir === 'up'
   const interior = (): boolean => vertical
   const inLane = new Array<boolean>(graph.nodes.length).fill(false)
   for (const e of graph.edges) {

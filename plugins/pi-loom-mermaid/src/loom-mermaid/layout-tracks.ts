@@ -468,14 +468,15 @@ export interface ChainJog extends TrackSpan {
  * coordinate to the first chain coordinate, between chain nodes where they
  * differ, and from the last one to the entry coordinate. Edges `exit`
  * returns `null` for take no part (they stay on a lane). A back edge walks
- * its bands upward.
+ * its bands upward. An edge without a chain jogs in its first band unless
+ * `band` names another.
  */
 export function chainJogs(
   graph: Graph,
   ranks: number[],
   layered: Layered,
   centers: number[],
-  ends: (e: Edge, i: number) => { exit: number; entry: number } | null,
+  ends: (e: Edge, i: number) => { exit: number; entry: number; band?: number } | null,
 ): ChainJog[] {
   const jogs: ChainJog[] = []
   graph.edges.forEach((e, i) => {
@@ -488,7 +489,7 @@ export function chainJogs(
     for (let k = 0; k + 1 < stops.length; k++) {
       if (stops[k] === stops[k + 1]) continue
       jogs.push({
-        band: upward ? ranks[e.from] - 1 - k : ranks[e.from] + k,
+        band: at.band ?? (upward ? ranks[e.from] - 1 - k : ranks[e.from] + k),
         at: stops[k + 1],
         start: Math.min(stops[k], stops[k + 1]),
         end: Math.max(stops[k], stops[k + 1]),

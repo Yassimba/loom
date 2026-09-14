@@ -69,6 +69,21 @@ export function brandesKoepf(
   const chosen = straightest(runs, g, size, realCount)
   const centers = runs[chosen].map((c, v) => c + offset(v))
   const root = roots[chosen]
+  const members = new Map<number, number[]>()
+  for (let v = 0; v < n; v++) {
+    const list = members.get(root[v])
+    if (list) list.push(v)
+    else members.set(root[v], [v])
+  }
+  // An offset is measured from the sources' row, not from wherever the
+  // compaction left the node after a sibling took the alignment: a node
+  // on its own goes to the sources' mean plus its offset, and the sweep
+  // below moves it on only where that collides.
+  for (let v = 0; v < realCount; v++) {
+    const ups = g.up[v].filter((u) => u < realCount)
+    if (offset(v) === 0 || ups.length === 0 || (members.get(root[v])?.length ?? 1) > 1) continue
+    centers[v] = ups.reduce((a, u) => a + centers[u], 0) / ups.length + offset(v)
+  }
 
   // Rounding, offsets and the class shifts of the compaction can shave a
   // cell off a separation; sweeping each layer left to right restores it,
@@ -76,12 +91,6 @@ export function brandesKoepf(
   // straight, until every layer holds. Then pin the origin at 0.
   /** Centre distance that keeps `sep(l, r)` cells between the two boxes. */
   const gap = (l: number, r: number): number => size[l] / 2 + sep(l, r) + size[r] / 2
-  const members = new Map<number, number[]>()
-  for (let v = 0; v < n; v++) {
-    const list = members.get(root[v])
-    if (list) list.push(v)
-    else members.set(root[v], [v])
-  }
   for (let pass = 0; pass < n; pass++) {
     let moved = false
     for (const row of g.layers) {

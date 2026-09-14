@@ -146,6 +146,13 @@
     "crossings": 0,
     "area": 1196
   },
+  "skip-late-jog": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 847
+  },
   "skip-lr": {
     "brokenLinks": 0,
     "edgeOverText": 0,
