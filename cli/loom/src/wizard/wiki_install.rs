@@ -1,10 +1,10 @@
 //! Per-Vault work uses the regular installer and the existing reviewed Wiki setup.
 use super::state::{ExecStatus, InstallEvent, Model, Wizard};
 use super::wiki::{Capability, WikiBrowser};
+use crate::session::InstallOwnership;
 use crate::wiki::{VaultRecord, WikiOperation, WikiOutcome, WikiRequest};
 use crate::{InstallPlan, Resource, SkillAgent, SkillDestination, SkillScope, System};
 use anyhow::Result;
-use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -12,7 +12,7 @@ use std::time::Duration;
 #[derive(Clone)]
 pub(super) struct WikiInstall {
     pub record: VaultRecord,
-    pub request: Option<WikiRequest>,
+    pub operation: Option<WikiOperation>,
     pub labels: Vec<String>,
     pub resources: Vec<Resource>,
     pub plan: InstallPlan,
@@ -26,23 +26,10 @@ impl WikiBrowser {
             .filter(|record| !self.selected(record).is_empty())
             .map(|record| {
                 let selected = self.selected(record);
-                let operation = self
-                    .pending
-                    .get(&record.path)
-                    .and_then(|p| p.operation.clone())
-                    .unwrap_or(WikiOperation::Repair);
                 let feynman = record.feynman || selected.contains(&Capability::Feynman);
                 let confluence = record.confluence || selected.contains(&Capability::Confluence);
                 let qmd = record.qmd || selected.contains(&Capability::Qmd);
                 let needs_wiki = selected.iter().any(|c| !matches!(c, Capability::Skill(_)));
-                let request = needs_wiki.then(|| WikiRequest {
-                    operation,
-                    vault: record.path.clone(),
-                    feynman,
-                    confluence,
-                    qmd,
-                    yes: false,
-                });
                 let direct = selected
                     .iter()
                     .filter_map(|capability| {
@@ -87,7 +74,12 @@ impl WikiBrowser {
                         confluence,
                         qmd,
                     },
-                    request,
+                    operation: needs_wiki.then(|| {
+                        self.pending
+                            .get(&record.path)
+                            .and_then(|p| p.operation.clone())
+                            .unwrap_or(WikiOperation::Repair)
+                    }),
                     labels: selected.iter().map(|c| c.label().to_owned()).collect(),
                     resources,
                     plan,
@@ -100,10 +92,7 @@ impl WikiBrowser {
 
 impl Wizard {
     pub(super) fn wiki_jobs(&self) -> Result<Vec<WikiInstall>> {
-        self.wiki
-            .as_ref()
-            .map(|browser| browser.jobs(&self.model))
-            .unwrap_or_else(|| Ok(Vec::new()))
+        self.wiki.jobs(&self.model)
     }
 }
 
@@ -131,12 +120,11 @@ impl WikiInstall {
                     && (!self.record.confluence || record.confluence)
                     && (!self.record.qmd || record.qmd)
             })
-        }) && (self.request.is_none() || crate::wiki::inspect_vault(system, &self.record).healthy)
+        }) && (self.operation.is_none() || crate::wiki::inspect_vault(system, &self.record).healthy)
             && self
                 .plan
-                .prerequisites
+                .steps
                 .iter()
-                .chain(&self.plan.resources)
                 .all(|step| crate::install::step_is_present(step, system, cancelled))
     }
 
@@ -152,10 +140,7 @@ impl WikiInstall {
         let mut notes = Vec::new();
         let path = &self.record.path;
         let registry = crate::wiki::WikiRegistry::load(&self.destination.home)?;
-        let create = self
-            .request
-            .as_ref()
-            .is_some_and(|request| request.operation == WikiOperation::Create);
+        let create = self.operation == Some(WikiOperation::Create);
         anyhow::ensure!(
             crate::wiki::absolute_vault_target(system, path, create)? == *path,
             "Knowledgebase path changed since review: {}",
@@ -168,8 +153,15 @@ impl WikiInstall {
                 path.display()
             );
         }
-        if let Some(request) = &self.request {
-            let mut request = request.clone();
+        if let Some(operation) = &self.operation {
+            let mut request = WikiRequest {
+                operation: operation.clone(),
+                vault: path.clone(),
+                feynman: self.record.feynman,
+                confluence: self.record.confluence,
+                qmd: self.record.qmd,
+                yes: false,
+            };
             if let Some(record) = registry.vaults.iter().find(|record| record.path == *path) {
                 request.feynman |= record.feynman;
                 request.confluence |= record.confluence;
@@ -218,52 +210,41 @@ impl WikiInstall {
             "Knowledgebase is missing; not recreated: {}",
             path.display()
         );
-        let before = crate::app::existing_skill_paths(&self.resources, &self.destination);
-        let _ = sender.send(InstallEvent::Detail(
-            index,
-            "Installing selected skills in this Wiki".into(),
-        ));
-        let mut tools_installed = false;
-        let mut report = crate::execute_install_plan_with_control(
-            &self.plan,
-            system,
-            cancelled,
-            &mut |index, status| {
-                if matches!(
-                    status,
-                    crate::StepStatus::Prepared | crate::StepStatus::Installed
-                ) && self
-                    .plan
-                    .prerequisites
-                    .iter()
-                    .chain(&self.plan.resources)
-                    .nth(index)
-                    .is_some_and(|step| matches!(step.action, crate::StepAction::SyncTools { .. }))
-                {
-                    tools_installed = true;
-                }
-            },
-        );
-        if tools_installed {
-            report.installed.push("tools".into());
-        }
-        crate::app::record_install_ownership(
-            system,
+        let ownership = InstallOwnership::capture(
             &self.resources,
-            &self.destination,
             &[],
-            &BTreeMap::new(),
             paths,
-            false,
-            &before,
+            &self.destination,
             crate::PrerequisiteStatus {
                 pi: true,
                 herdr: true,
                 mise: true,
             },
-            &report,
-        )
-        .map_err(anyhow::Error::msg)?;
+        );
+        let _ = sender.send(InstallEvent::Detail(
+            index,
+            "Installing selected skills in this Wiki".into(),
+        ));
+        let mut prepared_tools = false;
+        let mut report = crate::install::execute_attempt(
+            &self.plan,
+            system,
+            cancelled,
+            &[],
+            &mut |index, status| {
+                prepared_tools |= status == crate::StepStatus::Prepared
+                    && matches!(
+                        self.plan.steps[index].operation,
+                        crate::Operation::Tools { .. }
+                    );
+            },
+        );
+        if prepared_tools {
+            report.installed.push("tools".into());
+        }
+        ownership
+            .record(system, &report.installed)
+            .map_err(anyhow::Error::msg)?;
         anyhow::ensure!(
             report.failures.is_empty(),
             "{}",

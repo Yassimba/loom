@@ -1,4 +1,5 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
+  - grill-me
   - to-spec
   - to-tickets

@@ -1,7 +1,6 @@
 use loom::{
-    build_install_plan as build_plan, expand_skill_dependencies, CommandSpec, InstallPlan,
-    Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
-    StepAction, VerificationSpec,
+    build_install_plan as build_plan, expand_skill_dependencies, InstallPlan, Operation, Platform,
+    PrerequisiteStatus, Resource, ResourceKind, SkillAgent, SkillDestination, SkillScope,
 };
 use pretty_assertions::assert_eq;
 
@@ -49,26 +48,6 @@ fn skill_with_deps(id: &str, target: &str, dependencies: &[&str]) -> Resource {
 }
 
 #[test]
-fn sem_mcp_rejects_destinations_without_pi() {
-    let mut destination = skill_destination();
-    destination.agents = vec![SkillAgent::Claude];
-    let error = build_plan(
-        &[resource(ResourceKind::McpServer, "mcp-server:sem", "sem")],
-        PrerequisiteStatus {
-            pi: false,
-            herdr: false,
-            mise: false,
-        },
-        Platform::Unix,
-        &destination,
-    )
-    .unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("other agent adapters are not yet verified"));
-}
-
-#[test]
 fn mixed_selection_copies_skills_and_delegates_the_rest() {
     let resources = vec![
         resource(ResourceKind::Skill, "skill:tdd", "tdd"),
@@ -91,49 +70,25 @@ fn mixed_selection_copies_skills_and_delegates_the_rest() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert!(plan.prerequisites.is_empty());
+    assert!(plan.prerequisite_count() == 0);
     assert_eq!(
-        plan.resources
-            .iter()
-            .map(|step| step.action.clone())
+        plan.resources()
+            .map(|step| step.operation.clone())
             .collect::<Vec<_>>(),
         vec![
-            StepAction::CopySkills {
+            Operation::Skills {
                 skills: vec!["tdd".into()],
                 destination: skill_destination(),
             },
-            StepAction::Command(CommandSpec::new(
-                "pi",
-                ["install", "npm:@yassimba/pi-fast@latest"],
-            )),
-            StepAction::Command(CommandSpec::new(
-                "herdr",
-                [
-                    "plugin",
-                    "install",
-                    "Yassimba/loom/plugins/herdr-jumplist",
-                    "--yes",
-                ],
-            )),
-        ]
-    );
-    assert_eq!(
-        plan.resources
-            .iter()
-            .map(|step| step.verification.clone())
-            .collect::<Vec<_>>(),
-        vec![
-            // Skills are verified inside the copy: each tree must end up
-            // with <skill>/SKILL.md.
-            None,
-            Some(VerificationSpec {
-                command: CommandSpec::new("pi", ["list"]),
-                needle: Some("@yassimba/pi-fast".into()),
-            }),
-            Some(VerificationSpec {
-                command: CommandSpec::new("herdr", ["plugin", "list"]),
-                needle: Some("yassin.jumplist".into()),
-            }),
+            Operation::PiPackage {
+                spec: "npm:@yassimba/pi-fast@latest".into(),
+                name: "@yassimba/pi-fast".into(),
+                project: false
+            },
+            Operation::HerdrPlugin {
+                source: "Yassimba/loom/plugins/herdr-jumplist".into(),
+                name: "yassin.jumplist".into()
+            },
         ]
     );
 }
@@ -156,14 +111,13 @@ fn git_pi_package_uses_its_exact_source() {
     let plan = build_install_plan(&[example], status, Platform::Unix).unwrap();
 
     assert_eq!(
-        plan.resources[0].action,
-        StepAction::Command(CommandSpec::new(
-            "pi",
-            [
-                "install",
-                "git:github.com/example/pi-example@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            ],
-        ))
+        plan.resources().next().unwrap().operation,
+        Operation::PiPackage {
+            spec: "git:github.com/example/pi-example@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .into(),
+            name: "pi-example".into(),
+            project: false
+        }
     );
 }
 
@@ -189,8 +143,8 @@ fn skill_selection_expands_to_its_dependency_closure() {
     .unwrap();
 
     assert_eq!(
-        plan.resources[0].action,
-        StepAction::CopySkills {
+        plan.resources().next().unwrap().operation,
+        Operation::Skills {
             skills: vec!["release".into(), "commit".into(), "write-simply".into(),],
             destination: skill_destination(),
         }
@@ -216,9 +170,8 @@ fn missing_foundations_are_installed_before_selected_resources() {
     let plan = build_install_plan(&resources, status, Platform::Windows).unwrap();
 
     assert_eq!(
-        plan.prerequisites
-            .iter()
-            .map(|step| step.action.display())
+        plan.prerequisites()
+            .map(|step| step.operation.display())
             .collect::<Vec<_>>(),
         vec![
             "powershell -NoProfile -ExecutionPolicy Bypass -Command winget install --id jdx.mise --silent --accept-package-agreements --accept-source-agreements",
@@ -243,9 +196,8 @@ fn selecting_a_pi_package_without_pi_uses_the_pinned_mise_runtime() {
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
     assert_eq!(
-        plan.prerequisites
-            .iter()
-            .map(|step| step.action.display())
+        plan.prerequisites()
+            .map(|step| step.operation.display())
             .collect::<Vec<_>>(),
         vec![
             "sh -c curl -fsSL https://mise.run | sh",
@@ -269,7 +221,7 @@ fn an_installed_pi_needs_no_runtime_install() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert_eq!(plan.resources.len(), 1);
+    assert_eq!(plan.resources().count(), 1);
 }
 
 #[test]
@@ -292,12 +244,12 @@ fn selected_tools_sync_through_mise_before_resources() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert_eq!(plan.prerequisites.len(), 1);
-    let step = &plan.prerequisites[0];
-    assert_eq!(step.manager, "mise");
+    assert_eq!(plan.prerequisite_count(), 1);
+    let step = &plan.steps[0];
+    assert_eq!(step.manager(), "mise");
     assert_eq!(
-        step.action,
-        StepAction::SyncTools {
+        step.operation,
+        Operation::Tools {
             tools: vec![
                 "gh".to_string(),
                 "npm:@earendil-works/pi-coding-agent".to_string(),
@@ -305,8 +257,8 @@ fn selected_tools_sync_through_mise_before_resources() {
         }
     );
     // The tool resource itself produces no separate resource step.
-    assert_eq!(plan.resources.len(), 1);
-    assert_eq!(plan.resources[0].manager, "pi");
+    assert_eq!(plan.resources().count(), 1);
+    assert_eq!(plan.resources().next().unwrap().manager(), "pi");
 }
 
 #[test]
@@ -320,16 +272,13 @@ fn tools_without_mise_get_a_mise_prerequisite() {
 
     let plan = build_install_plan(&resources, status, Platform::Unix).unwrap();
 
-    assert_eq!(plan.prerequisites.len(), 2);
-    assert_eq!(plan.prerequisites[0].manager, "mise");
+    assert_eq!(plan.prerequisite_count(), 2);
+    assert_eq!(plan.steps[0].manager(), "mise");
     assert!(matches!(
-        plan.prerequisites[0].action,
-        StepAction::Command(_)
+        plan.steps[0].operation,
+        Operation::BootstrapMise(_)
     ));
-    assert!(matches!(
-        plan.prerequisites[1].action,
-        StepAction::SyncTools { .. }
-    ));
+    assert!(matches!(plan.steps[1].operation, Operation::Tools { .. }));
 }
 
 #[test]
@@ -345,14 +294,139 @@ fn tool_companions_join_the_mise_sync() {
     let plan = build_install_plan(&[envx], status, Platform::Unix).unwrap();
 
     assert_eq!(
-        plan.prerequisites[0].action,
-        StepAction::SyncTools {
+        plan.steps[0].operation,
+        Operation::Tools {
             tools: vec![
                 "github:mikeleppane/envx".to_string(),
                 "cargo:envex".to_string(),
             ],
         }
     );
+}
+
+#[test]
+fn rtk_configures_pi_when_pi_is_present_or_selected() {
+    let rtk = resource(ResourceKind::Tool, "tool:rtk", loom::manifest::RTK_TOOL_KEY);
+    let pi = resource(ResourceKind::Tool, "tool:pi", loom::manifest::PI_TOOL_KEY);
+
+    let with_installed_pi = build_install_plan(
+        std::slice::from_ref(&rtk),
+        PrerequisiteStatus {
+            pi: true,
+            herdr: false,
+            mise: true,
+        },
+        Platform::Unix,
+    )
+    .unwrap();
+    assert!(with_installed_pi
+        .steps
+        .iter()
+        .any(|step| step.operation == Operation::RtkPi));
+
+    let with_selected_pi = build_install_plan(
+        &[rtk.clone(), pi],
+        PrerequisiteStatus {
+            pi: false,
+            herdr: false,
+            mise: true,
+        },
+        Platform::Unix,
+    )
+    .unwrap();
+    assert!(with_selected_pi
+        .steps
+        .iter()
+        .any(|step| step.operation == Operation::RtkPi));
+
+    let without_pi = build_install_plan(
+        &[rtk],
+        PrerequisiteStatus {
+            pi: false,
+            herdr: false,
+            mise: true,
+        },
+        Platform::Unix,
+    )
+    .unwrap();
+    assert!(!without_pi
+        .steps
+        .iter()
+        .any(|step| step.operation == Operation::RtkPi));
+}
+
+#[test]
+fn codebase_memory_pulls_exact_tool_and_pi_gateway() {
+    let root = std::env::temp_dir().join(format!(
+        "loom-local-mcp-plan-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let home = root.join("home");
+    let project = root.join("project");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&project).unwrap();
+    let home = home.canonicalize().unwrap();
+    let project = project.canonicalize().unwrap();
+    let catalog = loom::Catalog::embedded().unwrap();
+    let (name, tool_id, install_target) = (
+        "codebase-memory-mcp",
+        "tool:codebase-memory-mcp",
+        "npm:codebase-memory-mcp",
+    );
+    let selected = catalog.find(&[format!("mcp-server:{name}")]).unwrap();
+    let expanded = expand_skill_dependencies(&catalog.resources, selected, &[SkillAgent::Pi]);
+    assert!(expanded.iter().any(|resource| resource.id == tool_id));
+    assert!(expanded
+        .iter()
+        .any(|resource| resource.id == "pi-package:pi-mcp-adapter"));
+    assert!(expanded
+        .iter()
+        .any(|resource| { resource.id == "pi-package:@yassimba/pi-code-intelligence" }));
+
+    let pi_destination =
+        SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &home, &project);
+    let plan = build_plan(
+        &expanded,
+        PrerequisiteStatus {
+            pi: true,
+            herdr: false,
+            mise: true,
+        },
+        Platform::Unix,
+        &pi_destination,
+    )
+    .unwrap();
+    assert!(plan.prerequisites().any(|step| {
+        matches!(&step.operation, Operation::Tools { tools } if tools.contains(&install_target.to_string()))
+    }));
+    assert!(plan
+        .resources()
+        .any(|step| step.target == format!("mcp-server:{name}")));
+
+    let destination = SkillDestination::new(
+        vec![SkillAgent::Claude],
+        SkillScope::Global,
+        &home,
+        &project,
+    );
+    assert!(build_plan(
+        &expanded,
+        PrerequisiteStatus {
+            pi: false,
+            herdr: false,
+            mise: true,
+        },
+        Platform::Unix,
+        &destination,
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("Pi selected"));
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
