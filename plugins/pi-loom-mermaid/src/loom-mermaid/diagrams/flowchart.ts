@@ -263,8 +263,16 @@ function parseNode(
   if (shaped.unclosed !== undefined) {
     graph.warnings.push(`node "${id}": label is missing its closing \`${shaped.unclosed}\``)
   }
-  const index = graph.nodeIndex(id, shaped.label, shaped.shape)
+  // `A[Added :::green]` belongs outside the bracket, but written inside it
+  // the marker would render as part of the label. Take it as the class it
+  // was meant to be: no label ends in one by intent.
+  const inside = shaped.label === null ? null : /^(.*?)\s*:::([A-Za-z0-9_-]*[A-Za-z0-9_])$/s.exec(shaped.label)
+  const index = graph.nodeIndex(id, inside === null ? shaped.label : inside[1], shaped.shape)
   if (index === null) return null
+  if (inside !== null) {
+    graph.addClass(index, inside[2])
+    graph.warnings.push(`node "${id}": \`:::${inside[2]}\` goes after the bracket, not inside the label`)
+  }
 
   // `id:::name` (after any shape) attaches an author class to the node —
   // upstream drops the rest of the line here.
