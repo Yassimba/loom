@@ -250,7 +250,20 @@ pub fn digest_path(path: &Path) -> Result<String, String> {
     } else {
         return Err(format!("{} is not a file or directory", path.display()));
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hex(&hasher.finalize()))
+}
+
+/// Lowercase hex of a digest.
+///
+/// Formatting through `{:x}` binds us to the digest crate's output type
+/// implementing `LowerHex`, which sha2 0.11 no longer does.
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+
+    bytes.iter().fold(String::new(), |mut out, byte| {
+        let _ = write!(out, "{byte:02x}");
+        out
+    })
 }
 
 fn digest_tree(root: &Path, directory: &Path, hasher: &mut Sha256) -> Result<(), String> {
