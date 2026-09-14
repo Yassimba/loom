@@ -144,6 +144,37 @@ test("WSL provisioning uses web download and retains bounded failure evidence", 
   assert.equal(steps.find((step) => step.name === "Upload Windows E2E evidence").if, "always()");
 });
 
+test("WSL install failure collects bounded service, event, and network evidence", async () => {
+  const smoke = parse(await readFile(join(repoRoot, ".github/workflows/full-install.yml"), "utf8"));
+  const steps = smoke.jobs["windows-wsl"].steps;
+  const install = steps.find((step) => step.id === "wsl-install");
+  const diagnostics = steps.find((step) => step.name === "Diagnose WSL installation failure");
+  assert.ok(install && diagnostics, "retain diagnostics after the install step times out");
+  assert.equal(install["timeout-minutes"], 5);
+  assert.equal(diagnostics.if, "always() && steps.wsl-install.outcome == 'failure'");
+  assert.equal(diagnostics["timeout-minutes"], 1);
+  assert.equal(diagnostics["continue-on-error"], undefined);
+  assert.ok(steps.indexOf(diagnostics) > steps.indexOf(install));
+  assert.ok(
+    steps.indexOf(diagnostics) <
+      steps.findIndex((step) => step.name === "Upload Windows E2E evidence"),
+  );
+  assert.match(diagnostics.run, /Get-Service/);
+  assert.match(diagnostics.run, /Get-WinEvent[\s\S]*-MaxEvents 20/);
+  assert.match(diagnostics.run, /AddMinutes\(-10\)/);
+  assert.match(diagnostics.run, /--connect-timeout 5 --max-time 15/);
+  assert.match(
+    diagnostics.run,
+    /raw\.githubusercontent\.com\/microsoft\/WSL\/master\/distributions\/DistributionInfo\.json/,
+  );
+  assert.match(
+    diagnostics.run,
+    /Select-Object TimeCreated, LogName, ProviderName, Id, LevelDisplayName/,
+  );
+  assert.doesNotMatch(diagnostics.run, /Select-Object[^\n]*(?:Message|Properties|\*)/);
+  assert.match(diagnostics.run, /if \(\$networkCode -ne 0\) \{ exit \$networkCode \}/);
+});
+
 test("Unix smoke checks the published pin rather than an unreleased Cargo version", {
   skip: process.platform === "win32",
 }, async () => {

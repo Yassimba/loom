@@ -106,6 +106,7 @@ jobs:
           $distros = $listing -replace "`0", "" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
           "install_ubuntu=$($distros -notcontains 'Ubuntu')" >> $env:GITHUB_OUTPUT
       - name: Install Ubuntu in WSL if absent
+        id: wsl-install
         if: steps.wsl-discovery.outputs.install_ubuntu == 'True'
         timeout-minutes: 5
         shell: pwsh
@@ -183,6 +184,38 @@ jobs:
           if (-not (Select-String -Quiet -Path "$evidenceDir/wsl-feynman-plan.txt" -SimpleMatch "would enter the Vault-scoped setup")) {
             throw "WSL plan omitted the vault-scoped setup handoff"
           }
+      - name: Diagnose WSL installation failure
+        if: always() && steps.wsl-install.outcome == 'failure'
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          $evidenceDir = "$env:RUNNER_TEMP/loom-windows-e2e"
+          foreach ($name in @("services", "events", "network")) {
+            New-Item -ItemType File -Path "$evidenceDir/wsl-$name.txt" -Force | Out-Null
+          }
+          Get-Service | Where-Object { $_.Name -in @("WslService", "LxssManager", "vmcompute", "hns") } |
+            Select-Object Name, Status, StartType | ConvertTo-Json | Set-Content "$evidenceDir/wsl-services.txt"
+          # WSL 2.7.13 fetches this manifest before printing download progress.
+          curl.exe --silent --fail --location --connect-timeout 5 --max-time 15 --output NUL --write-out "http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} first_byte=%{time_starttransfer} total=%{time_total}\n" https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json | Set-Content "$evidenceDir/wsl-network.txt"
+          $networkCode = $LASTEXITCODE
+          "exit_code=$networkCode" | Add-Content "$evidenceDir/wsl-network.txt"
+          $logs = @("System") + @(Get-WinEvent -ListLog * | Where-Object {
+            $_.IsEnabled -and $_.LogName -match "Lxss|Hyper-V-Compute|Host-Network-Service"
+          } | Select-Object -ExpandProperty LogName)
+          foreach ($log in $logs) {
+            $filter = @{ LogName = $log; StartTime = (Get-Date).AddMinutes(-10) }
+            if ($log -eq "System") { $filter.ProviderName = "Service Control Manager" }
+            try {
+              # Metadata only: never upload event payloads, environment, or command lines.
+              Get-WinEvent -FilterHashtable $filter -MaxEvents 20 -ErrorAction Stop |
+                Select-Object TimeCreated, LogName, ProviderName, Id, LevelDisplayName |
+                ConvertTo-Json -Compress | Add-Content "$evidenceDir/wsl-events.txt"
+            } catch {
+              if ($_.FullyQualifiedErrorId -notlike "NoMatchingEventsFound*") { throw }
+              "No events in $log during the last ten minutes" | Add-Content "$evidenceDir/wsl-events.txt"
+            }
+          }
+          if ($networkCode -ne 0) { exit $networkCode }
       - name: Upload Windows E2E evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
