@@ -74,8 +74,11 @@ test("back-edge side exit clears a wider source in the dataset lifecycle", () =>
     assert.ok(r.deterministic);
     const text = r.plain.join("\n");
     if (source.endsWith("L --> L")) {
-      const row = r.plain.findIndex((line) => line.includes("Every accepted Dataset"));
-      assert.match(r.plain[row - 1], /╧/, "a self-loop owning the side keeps the top fallback");
+      const row = r.plain.findIndex((line) => line.includes("durable?"));
+      // The self-loop owns one side, so the return climbs the other: both
+      // stay on the box's sides and neither needs the top.
+      assert.match(r.plain[row], /└─+║/, "the return leaves the side away from the loop");
+      assert.match(r.plain[row], /╟─╮|╭─╢/, "the self-loop keeps its own side");
     } else {
       assert.match(
         text,

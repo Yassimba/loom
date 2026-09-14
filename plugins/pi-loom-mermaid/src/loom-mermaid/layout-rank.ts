@@ -226,6 +226,9 @@ function normalize(
  * by adjacent-transposition cleanup; sweeping stops after two rounds without
  * improvement, keeping whichever ordering crossed least.
  *
+ * Returns are pinned to one end of every rank they cross, `trailing`
+ * nodes to the last position.
+ *
  * `trailing` nodes must end their rank (lane endpoints: the strip they exit
  * toward lies past the rank's last box, so anything ordered beyond them
  * would be cut through). The constraint is applied inside every sweep, so the
@@ -239,12 +242,33 @@ export function orderRanks(
   trailing: boolean[] = [],
 ): Layered {
   const n = ranks.length
+  const layered = normalize(byRank, edges, ranks, interior)
+  // A return climbs a column of its own. Ordered among the boxes it runs
+  // between a fan and that fan's targets: both meet at the node the return
+  // enters, so the layered count sees no crossing where the drawing has
+  // one (the fan leaves along a bus row, the return arrives on it). The
+  // column is pinned to the end of the rank its own source sits toward,
+  // which leaves every box between the return's ends on one hand.
+  const outside = new Map<number, number>()
+  edges.forEach((e, i) => {
+    if (e.from === e.to || ranks[e.to] >= ranks[e.from]) return
+    for (const v of layered.chains[i]) outside.set(v, e.from)
+  })
   const isTrailing = (v: number): boolean => trailing[v] ?? false
   const partition = (row: number[]): void => {
-    row.sort((a, b) => Number(isTrailing(a)) - Number(isTrailing(b)))
+    const side = (v: number, i: number): number => {
+      const src = outside.get(v)
+      if (src === undefined) return 0
+      const own = byRank[ranks[src]]
+      const at = own.indexOf(src)
+      return (at < 0 ? i * 2 : at * 2) < (at < 0 ? row.length : own.length) ? -1 : 1
+    }
+    const keyed = row.map((v, i) => ({ v, k: side(v, i), t: Number(isTrailing(v)) }))
+    keyed.sort((a, b) => a.k - b.k || a.t - b.t)
+    for (let i = 0; i < keyed.length; i++) row[i] = keyed[i].v
   }
   for (const row of byRank) partition(row)
-  const layered = normalize(byRank, edges, ranks, interior)
+  for (const row of layered.layers) partition(row)
   if (byRank.length < 2 || n < 3) return layered
 
   const { layers, up, down } = layered

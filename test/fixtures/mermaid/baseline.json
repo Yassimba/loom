@@ -25,7 +25,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1792
+    "area": 1683
   },
   "concentrate": {
     "brokenLinks": 0,
@@ -39,7 +39,7 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "crossings": 0,
-    "area": 1666
+    "area": 1820
   },
   "dense": {
     "brokenLinks": 0,
@@ -96,6 +96,13 @@
     "danglingHeads": 0,
     "crossings": 0,
     "area": 230
+  },
+  "loop-branch": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 768
   },
   "nested-subgraphs": {
     "brokenLinks": 0,
