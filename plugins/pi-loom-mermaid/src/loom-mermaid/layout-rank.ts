@@ -190,6 +190,8 @@ function normalize(
   }
   const fromReach = reach('from')
   const toReach = reach('to')
+  const siblings = new Map<number, Set<number>>()
+  for (const e of edges) siblings.set(e.from, (siblings.get(e.from) ?? new Set()).add(e.to))
   edges.forEach((e, i) => {
     if (!takes(e)) return
     const upward = ranks[e.to] < ranks[e.from]
@@ -206,7 +208,13 @@ function normalize(
         v = up.length
         up.push([])
         down.push([])
-        layers[r].push(v)
+        // Seeded right after the last box its own source also reaches in
+        // this rank, so a skip stays with the fan it leaves with. A
+        // zero-crossing order is never swept, so this seed is where the
+        // chain stays; appended past every box it would run back across
+        // the exits of boxes that have nothing to do with it.
+        const sibling = layers[r].findLastIndex((u) => siblings.get(e.from)?.has(u))
+        layers[r].splice(sibling + 1 || layers[r].length, 0, v)
         if (key !== null) trunks.set(key, v)
       } else shared.add(v)
       chains[i].push(v)

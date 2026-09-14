@@ -17,6 +17,8 @@
  * its endpoint's centre rather than the centre itself.
  */
 
+import { half } from './layout-geom.ts'
+
 export interface LayeredGraph {
   layers: number[][]
   up: number[][]
@@ -72,6 +74,8 @@ export function brandesKoepf(
   // cell off a separation; sweeping each layer left to right restores it,
   // moving a whole aligned block so the run's straight segments stay
   // straight, until every layer holds. Then pin the origin at 0.
+  /** Centre distance that keeps `sep(l, r)` cells between the two boxes. */
+  const gap = (l: number, r: number): number => size[l] / 2 + sep(l, r) + size[r] / 2
   const members = new Map<number, number[]>()
   for (let v = 0; v < n; v++) {
     const list = members.get(root[v])
@@ -83,8 +87,7 @@ export function brandesKoepf(
     for (const row of g.layers) {
       for (let i = 1; i < row.length; i++) {
         const [u, w] = [row[i - 1], row[i]]
-        const gap = size[u] / 2 + sep(u, w) + size[w] / 2
-        const deficit = centers[u] + gap - centers[w]
+        const deficit = centers[u] + gap(u, w) - centers[w]
         if (deficit <= 0) continue
         for (const m of members.get(root[w]) ?? [w]) centers[m] += deficit
         moved = true
@@ -100,7 +103,7 @@ export function brandesKoepf(
       const row = g.layers[layerOf[v]]
       const i = pos[v]
       const at = (u: number): number => centers[u] + (block.includes(u) ? d : 0)
-      const ok = (l: number, r: number): boolean => at(l) + size[l] / 2 + sep(l, r) + size[r] / 2 <= at(r)
+      const ok = (l: number, r: number): boolean => at(l) + gap(l, r) <= at(r)
       return (i === 0 || ok(row[i - 1], v)) && (i === row.length - 1 || ok(v, row[i + 1]))
     })
   for (const row of g.layers) {
@@ -117,10 +120,73 @@ export function brandesKoepf(
       if (d !== undefined) for (const m of block) centers[m] += d
     }
   }
+  snapLanes(g, centers, size, gap, root, members, layerOf, pos, realCount)
   let min = Number.POSITIVE_INFINITY
   for (const row of g.layers) for (const v of row) min = Math.min(min, centers[v] - size[v] / 2)
   if (!Number.isFinite(min)) min = 0
-  return centers.map((c) => Math.max(0, Math.round(c - min)))
+  const cells = centers.map((c) => Math.max(0, Math.round(c - min)))
+  // A one-wide chain node has a half-cell centre; rounded apart from a
+  // box beside it, the one blank cell between them can vanish. Push the
+  // block over where it did. Lanes are placed again later, with their
+  // label room, so they may touch here.
+  const edgeR = (v: number): number => cells[v] - half(size[v]) + size[v] - 1
+  const edgeL = (v: number): number => cells[v] - half(size[v])
+  for (const row of g.layers) {
+    for (let i = 1; i < row.length; i++) {
+      const [u, w] = [row[i - 1], row[i]]
+      if ((u >= realCount) === (w >= realCount) || g.lanes?.has(u) || g.lanes?.has(w)) continue
+      const push = edgeR(u) + 2 - edgeL(w)
+      if (push <= 0) continue
+      for (const m of members.get(root[w]) ?? [w]) cells[m] += push
+    }
+  }
+  return cells
+}
+
+/**
+ * Side lanes: leaves hanging off the same aligned block on the same side,
+ * one per layer, line up their outer edge. Compaction packs each against its
+ * own neighbour, so the column wanders with that neighbour's width. Moving
+ * outward only, to an edge that already exists, neither widens the drawing
+ * nor crosses anything; a row neighbour on the far side still caps the move.
+ */
+function snapLanes(
+  g: LayeredGraph,
+  centers: number[],
+  size: number[],
+  gap: (left: number, right: number) => number,
+  root: number[],
+  members: Map<number, number[]>,
+  layerOf: number[],
+  pos: number[],
+  realCount: number,
+): void {
+  const lanes = new Map<string, { left: boolean; lane: number[] }>()
+  for (let v = 0; v < realCount; v++) {
+    if ((members.get(root[v])?.length ?? 1) > 1) continue
+    const near = [...g.up[v], ...g.down[v]]
+    if (near.length !== 1 || near[0] >= realCount) continue
+    const side = Math.sign(centers[v] - centers[near[0]])
+    if (side === 0) continue
+    const key = `${root[near[0]]}:${side}`
+    const entry = lanes.get(key) ?? { left: side < 0, lane: [] }
+    entry.lane.push(v)
+    lanes.set(key, entry)
+  }
+  for (const { left, lane } of lanes.values()) {
+    if (lane.length < 2 || new Set(lane.map((v) => layerOf[v])).size < lane.length) continue
+    // Edges as drawn: a box starts `half(size)` left of its rounded centre.
+    const edge = (v: number): number => centers[v] + (left ? -half(size[v]) : size[v] - half(size[v]))
+    const target = left ? Math.min(...lane.map(edge)) : Math.max(...lane.map(edge))
+    for (const v of lane) {
+      const row = g.layers[layerOf[v]]
+      const i = pos[v]
+      let c = target + (left ? half(size[v]) : half(size[v]) - size[v])
+      if (left && i > 0) c = Math.max(c, centers[row[i - 1]] + gap(row[i - 1], v))
+      else if (!left && i < row.length - 1) c = Math.min(c, centers[row[i + 1]] - gap(v, row[i + 1]))
+      centers[v] = c
+    }
+  }
 }
 
 /**

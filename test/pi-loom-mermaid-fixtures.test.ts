@@ -34,6 +34,14 @@ for (const file of fixtures) {
     const metrics = r.metrics;
     assert.ok(metrics, "render returned null");
     assert.ok(r.deterministic, "repeated render differs");
+    // Every edge label the source writes shows up, at least by its head:
+    // a label that does not fit is truncated with an ellipsis, never dropped.
+    const src = readFileSync(join(dir, file), "utf8");
+    const plain = (r.plain ?? []).join("\n");
+    for (const m of src.matchAll(/-->\s*\|([^|]+)\|/g)) {
+      const head = m[1].trim().slice(0, 6);
+      assert.ok(plain.includes(head), `edge label ${JSON.stringify(m[1].trim())} was dropped`);
+    }
     const got = Object.fromEntries(TRACKED.map((k) => [k, metrics[k]])) as Tracked;
     seen[name] = got;
     const want = baseline[name];

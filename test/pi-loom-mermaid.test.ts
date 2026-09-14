@@ -575,17 +575,17 @@ test("two sources sharing two targets ride one trunk, a private dotted edge take
   );
   assert.ok(drawn);
   const text = drawn.plain.join("\n");
-  assert.match(text, /│ RDF Extension ├─+┬─┼─+▶│/, "dotted fork, then the trunk join");
+  assert.match(text, /│ RDF Extension +├─+┬─┼─+▶│/, "dotted fork, then the trunk join");
   // Two private arrivals into one target must share the approach or
   // cross (PrivateFanIn.lean): the dotted arm drops to Turbine's row
   // and joins its fan there, no hop.
   assert.doesNotMatch(text, /╫/, "no hop");
   assert.match(
     text,
-    /optional +┌─+┐\n[^\n]*├──┬─┼─+▶│ SHACL Check Engine/,
+    /optional +┌─+┐\n[^\n]*├─+┬─┼─+▶│ +SHACL Check Engine/,
     "the label sits on its own arm, a row above the arrival it names",
   );
-  assert.match(text, /│ Turbine Engine ├─┴─┴─+▶│ {2}Schema Inspector/, "one head for both");
+  assert.match(text, /│ Turbine Engine ├─┴─┴─+▶│ +Schema Inspector/, "one head for both");
 });
 
 test("LR class diagram: skips order freely, colliding labels move a row, no bus crossing", () => {
@@ -725,4 +725,25 @@ test("a diff marker written inside a label or an edge is taken as the class it m
   const drawn = render('flowchart TD\n  A["removed :::red"] --> B[kept]\n');
   assert.ok(drawn);
   assert.match(drawn.plain.join("\n"), /│ removed │/);
+});
+
+test("leaves hanging off one side of a trunk share a left edge", () => {
+  const src = readFileSync("test/fixtures/mermaid/side-lane.mmd", "utf8");
+  const art = render(src);
+  assert.ok(art);
+  const left = (label: string): number =>
+    art.plain.find((l) => l.includes(label))?.indexOf("│") ?? -1;
+  assert.equal(left("return null"), left("MermaidArt"));
+});
+
+test("a trunk of close widths is padded to one width", () => {
+  const src = readFileSync("test/fixtures/mermaid/side-lane.mmd", "utf8");
+  const art = render(src);
+  assert.ok(art);
+  const width = (label: string): number => {
+    const line = art.plain.find((l) => l.includes(label)) ?? "";
+    return line.lastIndexOf("│") - line.indexOf("│");
+  };
+  assert.equal(width("stripControls"), width("collapse subgraphs"));
+  assert.notEqual(width("return null"), width("collapse subgraphs"));
 });

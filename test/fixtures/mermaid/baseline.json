@@ -132,6 +132,13 @@
     "crossings": 0,
     "area": 325
   },
+  "side-lane": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "crossings": 0,
+    "area": 1320
+  },
   "skip-labelled": {
     "brokenLinks": 0,
     "edgeOverText": 0,

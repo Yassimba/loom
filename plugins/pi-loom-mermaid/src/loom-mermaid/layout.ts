@@ -13,7 +13,7 @@
 import type { Canvas } from './canvas.ts'
 import type { Anchor, Edge, LineKind } from './graph.ts'
 import type { Graph } from './graph.ts'
-import { fitLabel, type Limits, wrapLabel } from './labels.ts'
+import { DEFAULT_LIMITS, fitLabel, type Limits, wrapLabel } from './labels.ts'
 import {
   edgeText,
   GAP_X,
@@ -57,6 +57,80 @@ interface NodeSizes {
   titleW: number[]
   /** Edge labels are fitted to this many columns. */
   maxLabel: number
+  /**
+   * Widen columns of boxes to one width. Off once labels are being
+   * tightened for fit, and off with a return in the diagram: its ports
+   * sit beside the box edges as sized, and a widened box reroutes it.
+   */
+  padTrunks: boolean
+}
+
+/**
+ * Boxes within this many columns of a column's narrowest pad together;
+ * wider ones are outliers and stay. Boxes narrower than the floor are
+ * never padded, a one-letter label swimming in a wide box looks worse
+ * than a jiggle.
+ */
+const TRUNK_SPREAD = 10
+const TRUNK_MIN = 8
+
+/**
+ * Widen `column`'s boxes to the widest among those within the spread of
+ * the narrowest; wider outliers keep their size. `false` if fewer than
+ * `least` boxes qualify or the narrowest is under `floor`.
+ */
+function widenColumn(sizes: NodeSizes, column: number[], least: number, floor: number): boolean {
+  const lo = Math.min(...column.map((v) => sizes.boxW[v]))
+  const close = column.filter((v) => sizes.boxW[v] - lo <= TRUNK_SPREAD)
+  if (close.length < least || lo < floor) return false
+  const w = Math.max(...close.map((v) => sizes.boxW[v]))
+  for (const v of close) {
+    sizes.layW[v] += w - sizes.boxW[v]
+    sizes.boxW[v] = w
+  }
+  return true
+}
+
+/**
+ * A trunk: consecutive-rank boxes joined by an edge and placed on one
+ * centre. Widening its boxes to the widest reads as one column rather
+ * than a stack of jiggling widths; the leaves hanging off one side of it
+ * form a column of their own. Only plain boxes when the widths are close,
+ * and only top-down: left-to-right, width is rank distance.
+ */
+function padTrunks(graph: Graph, extras: NodeExtra[], ranks: number[], centers: number[], sizes: NodeSizes): boolean {
+  const n = graph.nodes.length
+  const plain = (v: number): boolean => extras[v].kind === 'plain'
+  const degree = new Array<number>(n).fill(0)
+  const next = new Array<number>(n).fill(-1)
+  for (const e of graph.edges) {
+    degree[e.from]++
+    degree[e.to]++
+    if (ranks[e.to] !== ranks[e.from] + 1 || centers[e.from] !== centers[e.to]) continue
+    if (!plain(e.from) || !plain(e.to)) continue
+    next[e.from] = next[e.from] === -1 ? e.to : -2
+  }
+  const hasPrev = new Set(next.filter((v) => v >= 0))
+  let padded = false
+  for (let head = 0; head < n; head++) {
+    if (hasPrev.has(head) || next[head] < 0) continue
+    const run: number[] = []
+    for (let v = head; v >= 0; v = next[v]) run.push(v)
+    padded ||= widenColumn(sizes, run, 3, TRUNK_MIN)
+    const inRun = new Set(run)
+    for (const side of [-1, 1]) {
+      const leaves = graph.edges
+        .filter(
+          (e) =>
+            inRun.has(e.from) && degree[e.to] === 1 && plain(e.to) && Math.sign(centers[e.to] - centers[e.from]) === side,
+        )
+        .map((e) => e.to)
+      if (new Set(leaves.map((v) => ranks[v])).size === leaves.length) {
+        padded ||= widenColumn(sizes, leaves, 2, TRUNK_MIN)
+      }
+    }
+  }
+  return padded
 }
 
 /** What to draw inside a node box. */
@@ -251,7 +325,10 @@ function placeTd(
   // shifts to that endpoint's port so it runs straight from it.
   const isBack = (e: Edge): boolean => e.from !== e.to && ranks[e.to] < ranks[e.from]
   const allAtHead = headPad(() => false)
-  const first = assignPositions(layered, sizes.layW, GAP_X, (node) => allAtHead[node])
+  let first = assignPositions(layered, sizes.layW, GAP_X, (node) => allAtHead[node])
+  if (sizes.padTrunks && padTrunks(graph, extras, ranks, first, sizes)) {
+    first = assignPositions(layered, sizes.layW, GAP_X, (node) => allAtHead[node])
+  }
   // An edge with a chain carries its label beside the chain's vertical
   // (dagre's label dummy), on whichever chain node has slack enough beside
   // it in the first placement, nearest the middle; the node then reserves
@@ -853,7 +930,66 @@ function placeTd(
     }
     return forwardRoute(from, to, edge, bandEnd[from.rank] + edgeBus[i], edgeEntryX[i], edgeLabelLeft[i], maxLabel)
   })
+  sideArrivals(graph, extras, placed, routes, isBack)
   return { canvasW: contentW, canvasH, routes }
+}
+
+/**
+ * A private arrival — the one edge of its line style into a target the
+ * main flow enters from above — from a box standing wholly beside that
+ * target comes in through the near side instead of dropping onto the
+ * top beside the others: down from the source, along the target's
+ * centre row, head against its border. Shared-style arrivals stay on
+ * the bus; pulled out they would only cross it. One per side, only
+ * where the L crosses no box or route, unlabelled only (labels are
+ * placed above the top ports).
+ *
+ * ponytail: a post-pass, so the top slot and bus track the edge was
+ * given stay reserved (a blank cell above the target at most). Fold into
+ * the port assignment if that gap ever shows.
+ */
+function sideArrivals(graph: Graph, extras: NodeExtra[], placed: Placed[], routes: Route[], isBack: (e: Edge) => boolean): void {
+  const clearOfBoxes = (x0: number, x1: number, y0: number, y1: number): boolean =>
+    placed.every((p) => x1 < p.x || p.x + p.w - 1 < x0 || y1 < p.y || p.y + p.h - 1 < y0)
+  const clearOfRoutes = (skip: number, x0: number, x1: number, y0: number, y1: number): boolean =>
+    routes.every(
+      (r, k) =>
+        k === skip ||
+        r.points.every((a, j) => {
+          if (j === 0) return true
+          const b = r.points[j - 1]
+          const [sx0, sx1] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])]
+          const [sy0, sy1] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])]
+          return x1 < sx0 || sx1 < x0 || y1 < sy0 || sy1 < y0
+        }),
+    )
+  const taken = new Set<string>()
+  graph.edges.forEach((e, i) => {
+    const [from, to] = [placed[e.from], placed[e.to]]
+    if (e.from === e.to || isBack(e) || to.rank !== from.rank + 1 || e.label !== null) return
+    if (extras[e.from].kind !== 'plain' || extras[e.to].kind !== 'plain') return
+    const right = from.x > to.x + to.w
+    const left = from.x + from.w < to.x
+    if (!right && !left) return
+    const others = graph.edges.filter((o, k) => k !== i && o.to === e.to && o.from !== o.to)
+    if (others.length === 0 || others.some((o) => o.line === e.line)) return
+    const key = `${e.to}:${right ? 'r' : 'l'}`
+    if (taken.has(key)) return
+    const [bx, by, cy] = [from.cx, from.y + from.h, to.cy]
+    const head = right ? to.x + to.w : to.x - 1
+    const [hx0, hx1] = [Math.min(bx, head), Math.max(bx, head)]
+    if (!clearOfBoxes(bx, bx, by, cy) || !clearOfBoxes(hx0, hx1, cy, cy)) return
+    if (!clearOfRoutes(i, bx, bx, by, cy) || !clearOfRoutes(i, hx0, hx1, cy, cy)) return
+    taken.add(key)
+    routes[i] = {
+      points: [
+        [bx, by - 1],
+        [bx, cy],
+        [head, cy],
+      ],
+      labels: [],
+    }
+  })
 }
 
 function placeLr(
@@ -866,6 +1002,19 @@ function placeLr(
   placed: Placed[],
   extras: NodeExtra[],
 ): Plan {
+  // A rank is a column as wide as its widest box already, so widening the
+  // rest costs nothing and lines up every arrowhead: no floor here, a
+  // short label in a table column reads as a table column. A rank whose
+  // departures mix line styles keeps its runways: past the bus the cells
+  // are shared and drawn solid, so the stub is where a dotted edge shows.
+  // Not with a skip: its lane leg climbs a column picked beside the boxes
+  // as sized, and a widened box would swallow it.
+  if (sizes.padTrunks && graph.edges.every((e) => ranks[e.to] === ranks[e.from] + 1)) {
+    byRank.forEach((row, r) => {
+      const styles = new Set(graph.edges.filter((e) => ranks[e.from] === r && e.from !== e.to).map((e) => e.line))
+      if (styles.size <= 1) widenColumn(sizes, row.filter((i) => extras[i].kind === 'plain'), 2, 1)
+    })
+  }
   const colW = byRank.map((row) =>
     row.length === 0 ? 0 : Math.max(...row.map((i) => sizes.boxW[i])),
   )
@@ -1250,7 +1399,7 @@ function placeLr(
             bundleOf(i) !== undefined,
             to.cy + (entryOffset.get(i) ?? 0),
             labelAtArrival(i),
-            [bandEnd[from.rank] + 1, bandEnd[from.rank] + 1 + Math.max(0, busTracks[from.rank] - 1)],
+            busTracks[from.rank] > 0 ? [bandEnd[from.rank] + 1, bandEnd[from.rank] + busTracks[from.rank]] : null,
           )
         : to.rank > from.rank && edgeStraight[i]
           ? skipRouteLr(from, to, edge, skipRoute[i], max)
@@ -1416,6 +1565,8 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
         : 0,
     ),
     maxLabel: limits.label,
+    padTrunks:
+      limits.wrap >= DEFAULT_LIMITS.wrap && !limits.collapse && graph.edges.every((e) => ranks[e.to] > ranks[e.from]),
   }
 
   const placed: Placed[] = Array.from({ length: n }, () => ({
@@ -1608,7 +1759,8 @@ function forwardRouteLr(
   bundled = false,
   entry = to.cy,
   atArrival = false,
-  band: [number, number] = [bus, bus],
+  /** Columns the band's buses occupy; `null` when nothing runs there. */
+  band: [number, number] | null = null,
 ): Route {
   const rx = from.x + from.w - 1
   const ry = from.cy
@@ -1636,13 +1788,15 @@ function forwardRouteLr(
   // bus is often too narrow to hold a word, and a label written there
   // lands on the edge's own trunk.
   if (edge.label !== null) {
-    // A straight edge has no bus to clear, so its label may sit at the
-    // source. It still joins its siblings past the bus when they went
-    // there: one arm of a fan labelled at the fork and the rest at their
-    // targets reads as though the fork itself were named.
+    // A straight edge has no bus of its own to clear, so its label may sit
+    // at the source, unless another edge's bus crosses its row there: then
+    // it too goes past the buses, where its siblings' labels are. It still
+    // joins its siblings past the bus when they went there: one arm of a
+    // fan labelled at the fork and the rest at their targets reads as
+    // though the fork itself were named.
     const straight = ry === ly && !bundled
-    const fits = straight || rx + 2 + labelCols(edge.label, max) < band[0]
-    const x = atArrival || (!straight && !fits) ? band[1] + 2 : rx + 2
+    const fits = band === null || (straight && rx + 2 > band[1]) || rx + 2 + labelCols(edge.label, max) < band[0]
+    const x = band !== null && (atArrival || !fits) ? band[1] + 2 : rx + 2
     labels.push({ text: edge.label, row: sat(atArrival ? ly : ry, 1), x })
   }
   const route: Route = { points, labels: fitted(labels, max) }

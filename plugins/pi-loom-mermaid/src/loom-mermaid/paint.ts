@@ -287,15 +287,24 @@ function placeLaneLabels(canvas: Canvas, labels: LaneLabel[]): void {
   for (const { text, y, lo, hi } of labels) {
     const tw = stringWidth(text)
     const lastStart = hi - 1 - tw
-    if (lastStart < lo + 1 || y >= canvas.h) continue
-    const clear = (start: number): boolean => {
+    if (y >= canvas.h) continue
+    const clear = (start: number, row = y): boolean => {
       for (let x = start; x < start + tw; x++) {
-        const i = canvas.idx(x, y)
+        if (x >= canvas.w) return false
+        const i = canvas.idx(x, row)
         if (canvas.occupied[i] === 1) return false
         if ((canvas.mask[i] & (U | D)) !== 0) return false
         if (canvas.ch[i] !== ' ') return false
       }
       return true
+    }
+    // A run too short for its label takes the row above it (else below),
+    // starting where the run does: the label reads beside the arrow and
+    // the run stays as short as the layout made it.
+    if (lastStart < lo + 1) {
+      const row = [y - 1, y + 1].find((r) => r >= 0 && r < canvas.h && clear(lo + 1, r))
+      if (row !== undefined) drawTextOverEdges(canvas, text, lo + 1, row, 'edgeLabel')
+      continue
     }
     const mid = Math.min(Math.max(half(lo + hi) - half(tw), lo + 1), lastStart)
     let at = mid
