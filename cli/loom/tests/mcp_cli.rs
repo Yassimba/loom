@@ -560,3 +560,128 @@ fn context7_cli_add_and_status_use_context7_identity() {
     );
     fs::remove_dir_all(destination.home).unwrap();
 }
+
+#[test]
+fn context7_and_skills_serialize_shared_ownership_transactions() {
+    use std::sync::Condvar;
+    use std::time::Duration;
+    struct OrderedSystem {
+        stub: Stub,
+        skills_started: Mutex<bool>,
+        gate: Condvar,
+    }
+    impl System for OrderedSystem {
+        fn command_exists(&self, _: &str) -> bool {
+            true
+        }
+        fn refresh_path(&self) {}
+        fn home_dir(&self) -> Option<PathBuf> {
+            self.stub.home_dir()
+        }
+        fn current_dir(&self) -> Option<PathBuf> {
+            self.stub.current_dir()
+        }
+        fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
+            if command
+                .args
+                .get(1)
+                .is_some_and(|spec| spec == "npm:hold-pi-lane")
+            {
+                let _ = self
+                    .gate
+                    .wait_timeout_while(
+                        self.skills_started.lock().unwrap(),
+                        Duration::from_millis(100),
+                        |started| !*started,
+                    )
+                    .unwrap();
+                return Ok(CommandResult {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                });
+            }
+            let mut result = self.stub.run(command)?;
+            if command.program == "pi" && command.args.first().is_some_and(|arg| arg == "list") {
+                result.stdout.push_str("  npm:hold-pi-lane\n");
+            }
+            Ok(result)
+        }
+    }
+    std::env::set_var("LOOM_REPO_DIR", common::repo_root());
+    let d = destination("mcp-ledger-order", SkillScope::Global);
+    adapter(&d.home, "2.33.0");
+    let bundled = loom::Catalog::embedded()
+        .unwrap()
+        .find(&["pi-package:i-have-adhd".into()])
+        .unwrap()
+        .remove(0);
+    write_json(
+        &d.home.join(".pi/agent/settings.json"),
+        json!({"packages":["npm:pi-mcp-adapter@2.33.0", bundled.pi_install_spec()]}),
+    );
+    let package = d.home.join(".pi/agent/git/github.com/ayghri/i-have-adhd");
+    write_json(
+        &package.join("package.json"),
+        json!({"pi":{"skills":["./skills"]}}),
+    );
+    fs::create_dir_all(package.join("skills/i-have-adhd")).unwrap();
+    fs::write(
+        package.join("skills/i-have-adhd/SKILL.md"),
+        "# bundled skill",
+    )
+    .unwrap();
+    let mut plan = plan(&d);
+    plan.steps
+        .retain(|step| step.target != "pi-package:pi-mcp-adapter");
+    plan.steps.insert(
+        0,
+        loom::InstallStep {
+            target: "pi-package:hold-pi-lane".into(),
+            operation: loom::Operation::PiPackage {
+                spec: "npm:hold-pi-lane".into(),
+                name: "hold-pi-lane".into(),
+                project: false,
+            },
+        },
+    );
+    plan.steps.push(loom::InstallStep {
+        target: "skill:i-have-adhd".into(),
+        operation: loom::Operation::Skills {
+            skills: vec!["i-have-adhd".into()],
+            destination: d.clone(),
+        },
+    });
+    let system = OrderedSystem {
+        stub: Stub::new(&d.home),
+        skills_started: Mutex::new(false),
+        gate: Condvar::new(),
+    };
+    let report = loom::execute_attempt(
+        &plan,
+        &system,
+        &AtomicBool::new(false),
+        &[],
+        &mut |index, status| {
+            if matches!(plan.steps[index].operation, loom::Operation::Skills { .. })
+                && status == loom::StepStatus::Running
+            {
+                *system.skills_started.lock().unwrap() = true;
+                system.gate.notify_all();
+                let state = ownership::InstallState::load(&d.home).unwrap();
+                assert!(
+                    state.resources.contains_key("mcp-server:context7"),
+                    "skills started before the MCP ownership commit"
+                );
+            }
+        },
+    );
+    assert!(report.failures.is_empty(), "{report:?}");
+    let state = ownership::InstallState::load(&d.home).unwrap();
+    assert!(state.resources.contains_key("mcp-server:context7"));
+    assert!(state.resources["pi-package:i-have-adhd"]
+        .receipts
+        .iter()
+        .any(|receipt| matches!(receipt, ownership::Receipt::PiSkillExclusion { .. })));
+    fs::remove_dir_all(d.home).unwrap();
+}
