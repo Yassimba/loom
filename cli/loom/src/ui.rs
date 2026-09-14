@@ -15,8 +15,42 @@
 use crate::InstallPlan;
 use anyhow::{Context, Result};
 use inquire::Confirm;
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Write};
 use std::path::Path;
+
+/// Terminal width when stdout is a terminal, else a stable width for pipes.
+pub fn columns() -> usize {
+    std::env::var("COLUMNS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .or_else(|| {
+            crossterm::terminal::size()
+                .ok()
+                .map(|(columns, _)| usize::from(columns))
+        })
+        .filter(|columns| *columns > 40)
+        .unwrap_or(96)
+}
+
+/// Trim to a display width, so wide glyphs cannot overflow a narrow terminal.
+pub fn ellipsize(text: &str, width: usize) -> String {
+    use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+    if text.width() <= width {
+        return text.to_string();
+    }
+    let mut trimmed = String::new();
+    let mut used = 0;
+    for character in text.chars() {
+        let next = used + character.width().unwrap_or(0);
+        if next > width.saturating_sub(1) {
+            break;
+        }
+        trimmed.push(character);
+        used = next;
+    }
+    trimmed.push('…');
+    trimmed
+}
 
 /// The state glyph in front of a row.
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -448,12 +482,24 @@ impl Out {
 
     /// `loom <command>  <context>` then a blank line.
     pub fn title(&self, command: &str, context: impl AsRef<str>) {
-        self.line(format!(
-            "{}  {}",
+        self.write_title(&mut std::io::stdout(), command, context)
+            .expect("failed printing to stdout");
+    }
+
+    /// Render a title to a caller-owned writer, propagating output errors.
+    pub fn write_title(
+        &self,
+        writer: &mut impl Write,
+        command: &str,
+        context: impl AsRef<str>,
+    ) -> std::io::Result<()> {
+        write!(
+            writer,
+            "{}  {}{end}{end}",
             self.accent(format!("loom {command}")),
-            self.muted(context)
-        ));
-        self.blank();
+            self.muted(context),
+            end = self.line_ending()
+        )
     }
 
     pub fn section(&self, title: &str) {
@@ -462,13 +508,26 @@ impl Out {
 
     /// `  ✓ label   detail` with the label padded to one column.
     pub fn row(&self, mark: Mark, label: &str, detail: impl AsRef<str>) {
+        self.write_row(&mut std::io::stdout(), mark, label, detail)
+            .expect("failed printing to stdout");
+    }
+
+    /// Render a row to a caller-owned writer, propagating output errors.
+    pub fn write_row(
+        &self,
+        writer: &mut impl Write,
+        mark: Mark,
+        label: &str,
+        detail: impl AsRef<str>,
+    ) -> std::io::Result<()> {
         let detail = detail.as_ref();
         let padded = format!("{label:<LABEL_WIDTH$}");
-        if detail.is_empty() {
-            self.line(format!("  {} {}", self.mark(mark), padded.trim_end()));
+        let row = if detail.is_empty() {
+            format!("  {} {}", self.mark(mark), padded.trim_end())
         } else {
-            self.line(format!("  {} {padded}  {detail}", self.mark(mark)));
-        }
+            format!("  {} {padded}  {detail}", self.mark(mark))
+        };
+        write!(writer, "{row}{}", self.line_ending())
     }
 
     /// A dim continuation line under a row.
@@ -482,14 +541,46 @@ impl Out {
 
     /// The one-line verdict, after a blank line.
     pub fn verdict(&self, ok: bool, text: impl AsRef<str>) {
-        self.blank();
+        self.write_verdict(&mut std::io::stdout(), ok, text)
+            .expect("failed printing to stdout");
+    }
+
+    /// Render a verdict to a caller-owned writer, propagating output errors.
+    pub fn write_verdict(
+        &self,
+        writer: &mut impl Write,
+        ok: bool,
+        text: impl AsRef<str>,
+    ) -> std::io::Result<()> {
         let mark = if ok { Mark::Ok } else { Mark::Bad };
-        self.line(format!("{} {}", self.mark(mark), self.bold(text)));
+        write!(
+            writer,
+            "{end}{} {}{end}",
+            self.mark(mark),
+            self.bold(text),
+            end = self.line_ending()
+        )
     }
 
     /// What to do now, after the verdict.
     pub fn next(&self, text: impl AsRef<str>) {
-        self.line(format!("  {} {}", self.accent("next"), text.as_ref()));
+        self.write_next(&mut std::io::stdout(), text)
+            .expect("failed printing to stdout");
+    }
+
+    /// Render the next action to a caller-owned writer, propagating output errors.
+    pub fn write_next(
+        &self,
+        writer: &mut impl Write,
+        text: impl AsRef<str>,
+    ) -> std::io::Result<()> {
+        write!(
+            writer,
+            "  {} {}{}",
+            self.accent("next"),
+            text.as_ref(),
+            self.line_ending()
+        )
     }
 
     /// A dim aside after the verdict; information, not an action.

@@ -5,7 +5,7 @@
  * visible as text because a terminal cannot draw their SVGs.
  */
 
-import { Graph, MAX_GROUP_DEPTH, MAX_GROUPS, type PortSide } from '../graph.ts'
+import { Graph, MAX_GROUP_DEPTH, MAX_GROUPS } from '../graph.ts'
 import { cleanLabel } from '../labels.ts'
 import { layoutFlowchart, layoutGrouped } from '../graph-render.ts'
 import type { Diagram } from '../registry.ts'
@@ -23,10 +23,12 @@ export const architecture: Diagram = {
   },
 }
 
-const DECLARATION = /^(group|service)\s+([^\s()[\]:{}]+)\(([^)]*)\)\[([^\]]*)\](?:\s+in\s+([^\s]+))?$/i
+// Icon and title are both optional: the spec's own group-edge example
+// declares `service server[Server] in groupOne`.
+const DECLARATION =
+  /^(group|service)\s+([^\s()[\]:{}]+)\s*(?:\(([^)]*)\))?\s*(?:\[([^\]]*)\])?(?:\s+in\s+([^\s]+))?$/i
 const JUNCTION = /^junction\s+([^\s:{}]+)(?:\s+in\s+([^\s]+))?$/i
 const EDGE = /^([^\s:{}]+)(?:\{group\})?:([TBLR])\s*(<)?--(>)?\s*([TBLR]):([^\s:{}]+)(?:\{group\})?$/i
-const SIDES: Record<string, PortSide> = { T: 'top', B: 'bottom', L: 'left', R: 'right' }
 const ICONS: Record<string, string> = {
   cloud: '☁',
   database: '◉',
@@ -39,10 +41,13 @@ function parseArchitecture(src: string): Graph | null {
   const statements = statementsOf(src)
   if (headerKind(statements) !== 'architecture-beta') return null
 
-  // Architecture has no global direction. LR gives grouped boundary edges the
-  // existing router's more precise inner-node anchors.
+  // Architecture has no global direction; `orientEdges` picks one from the
+  // ports once every edge is known. LR is the default: it gives grouped
+  // boundary edges the existing router's more precise inner-node anchors.
   const graph = new Graph('right')
   const groupIndex = new Map<string, number>()
+  /** Per edge, the port it leaves from (`T|B|L|R`). */
+  const exits: string[] = []
 
   for (const st of statements.slice(1)) {
     const declaration = st.match(DECLARATION)
@@ -75,12 +80,12 @@ function parseArchitecture(src: string): Graph | null {
       if (parentId !== undefined && parent === undefined) graph.drop(st)
       else addNode(graph, id, '•', parent ?? null, 'round')
     } else if (edge) {
-      const [, fromId, fromPort, leftArrow, rightArrow, toPort, toId] = edge
+      const [, fromId, fromPort, leftArrow, rightArrow, , toId] = edge
       const from = graph.index.get(fromId)
       const to = graph.index.get(toId)
       if (from === undefined || to === undefined) {
         graph.drop(st)
-      } else {
+      } else if (
         graph.pushEdge({
           from,
           to,
@@ -88,11 +93,13 @@ function parseArchitecture(src: string): Graph | null {
           headFrom: leftArrow ? 'arrow' : 'none',
           headTo: rightArrow ? 'arrow' : 'none',
           line: 'solid',
-          fromSide: SIDES[fromPort.toUpperCase()],
-          toSide: SIDES[toPort.toUpperCase()],
         })
+      ) {
+        exits.push(fromPort.toUpperCase())
       }
-    } else if (firstWord(st).toLowerCase() !== 'title') {
+      // `align row|column` pins coordinates for Mermaid's force-directed
+      // layout; the layered engine here decides placement itself.
+    } else if (!['title', 'align'].includes(firstWord(st).toLowerCase())) {
       graph.drop(st)
     }
 
@@ -102,13 +109,36 @@ function parseArchitecture(src: string): Graph | null {
     }
   }
 
+  orientEdges(graph, exits)
   return graph.nodes.length === 0 ? null : graph
 }
 
-function iconLabel(icon: string, rawLabel: string): string {
+/**
+ * Mermaid's ports place nodes: `a:B --> T:b` puts `b` below `a`, `a:L --
+ * R:b` puts `b` to its left. The layered engine has one flow axis, so the
+ * diagram runs the way most ports point, and an edge leaving against the
+ * flow is stored reversed so its target still lands on the side the
+ * author asked for. Ports across the flow axis say nothing about order and
+ * are ignored; routing them literally would circle around the target.
+ */
+function orientEdges(graph: Graph, exits: string[]): void {
+  const verticalCount = exits.filter((p) => p === 'T' || p === 'B').length
+  const down = verticalCount > exits.length - verticalCount
+  if (down) graph.dir = 'down'
+  const against = down ? 'T' : 'L'
+  graph.edges.forEach((e, i) => {
+    if (exits[i] !== against) return
+    ;[e.from, e.to] = [e.to, e.from]
+    ;[e.headFrom, e.headTo] = [e.headTo, e.headFrom]
+  })
+}
+
+function iconLabel(icon: string | undefined, rawLabel: string): string {
+  const label = cleanLabel(rawLabel)
+  if (icon === undefined) return label
   const name = cleanLabel(icon)
   const mark = ICONS[name.toLowerCase()] ?? `[${name.split(':').at(-1)}]`
-  return `${mark} ${cleanLabel(rawLabel)}`
+  return `${mark} ${label}`
 }
 
 function addNode(

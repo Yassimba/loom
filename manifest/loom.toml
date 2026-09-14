@@ -18,7 +18,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.21.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v1.10.1", tag_regex = "^loom-v" }
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v1.11.0", tag_regex = "^loom-v" }
 # core:end
 
 # claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
@@ -43,14 +43,17 @@ bun = "1.4.2"
 # manual install instruction and mise skips this entry.
 herdr = { version = "0.9.0", os = ["macos", "linux"] }
 
-# Semantic code MCP server (Pi gateway setup uses sem mcp)
+# semantic Git history, diffs, and change impact
 "github:Ataraxy-Labs/sem[exe=sem]" = "v0.24.0"
 
-# local repository graph and code intelligence for Pi and Zed
-"github:zzet/gortex[exe=gortex]" = "v0.64.1"
+# persistent local repository graph and impact analysis
+"npm:codebase-memory-mcp" = "0.10.8"
 
 # compress command output for coding agents
 "github:rtk-ai/rtk" = "v0.48.0"
+
+# compress AI-agent context before it reaches the model
+"pipx:headroom-ai" = { version = "0.37.0", extras = ["all"], uvx_args = "--python 3.13.7", pipx_args = "--python 3.13.7" }
 
 # local inference server for Apple silicon Macs
 "npm:@magnitudedev/cli" = { version = "0.0.14", os = ["macos"] }
@@ -65,7 +68,7 @@ herdr = { version = "0.9.0", os = ["macos", "linux"] }
 "github:agavra/tuicr" = "v0.25.0"
 
 # browser-based plan and code review for coding agents
-"github:Yassimba/plannotator" = "v0.27.12-loom.1"
+"github:backnotprop/plannotator" = "v0.27.14"
 
 # forges
 gh = "2.100.0"

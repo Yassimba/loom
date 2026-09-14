@@ -15,9 +15,13 @@
       "release-type": "node",
       "component": "pi-fast"
     },
-    "plugins/pi-add-dir": {
+    "plugins/pi-code-intelligence": {
       "release-type": "node",
-      "component": "pi-add-dir"
+      "component": "pi-code-intelligence"
+    },
+    "plugins/pi-guardrails": {
+      "release-type": "node",
+      "component": "pi-guardrails"
     },
     "plugins/skill-autocomplete": {
       "release-type": "node",

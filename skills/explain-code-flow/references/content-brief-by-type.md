@@ -25,7 +25,7 @@ Copy-ready prompt archify emits for architecture:
 
 ## Complexity budget (per figure)
 
-From diagram-design §7; `draw.py` does not enforce these, the author does.
+Mermaid does not enforce these limits; the author does.
 
 | Limit | Rule |
 | --- | --- |
