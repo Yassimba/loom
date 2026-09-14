@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.7.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.6.1...pi-loom-mermaid-v0.7.0) (2026-09-14)
+
+
+### Features
+
+* add contract commands, guardrails, and mermaid layout fixes ([d9cf2ba](https://github.com/Yassimba/loom/commit/d9cf2bacfa3d17560c00236b16158dfbf8e5e114))
+* **pi-loom-mermaid:** align a rank on the edge its arrivals meet ([b0a5c4b](https://github.com/Yassimba/loom/commit/b0a5c4b8af7e286b09654838c0d43d3f98b65402))
+* **pi-loom-mermaid:** align side lanes, pad trunks, keep every label ([0a8c9bd](https://github.com/Yassimba/loom/commit/0a8c9bda4114269cc7392bd62e769fd88f10fc8b))
+* **pi-loom-mermaid:** climb a return on the side its source sits ([676d436](https://github.com/Yassimba/loom/commit/676d436797935d2819173ec27f4db20a20d70b4e))
+* **pi-loom-mermaid:** let the path of boxes run straight past a return ([f1108b7](https://github.com/Yassimba/loom/commit/f1108b71a5ec1923ee5ac81e0b3ad073a73b52c6))
+* **pi-loom-mermaid:** shorten edges and drop dishonest glyphs ([6a6041a](https://github.com/Yassimba/loom/commit/6a6041a264acaa9ac603701fb0201690ada9205d))
+* **pi-loom-mermaid:** split layout into rank, track, and geometry passes ([6cf7c99](https://github.com/Yassimba/loom/commit/6cf7c991610fe79f676ee9c7596850ca03986ce0))
+
+
+### Bug Fixes
+
+* **pi-loom-mermaid:** clear every trunk in the band, not only the edge's own ([481a02f](https://github.com/Yassimba/loom/commit/481a02f649f1e3b47c22d766c14e782020ed55a2))
+* **pi-loom-mermaid:** climb a lane past the boxes under its target ([5820496](https://github.com/Yassimba/loom/commit/58204962216d7b855792b8bb7ec760d39ceaff89))
+* **pi-loom-mermaid:** keep an edge label off its own trunk ([52f5743](https://github.com/Yassimba/loom/commit/52f574348a537262805b4fd817603e07be8f61d5))
+* **pi-loom-mermaid:** meet an even box on the row above its centre ([e1b4bb0](https://github.com/Yassimba/loom/commit/e1b4bb0557857d842ae63e39d8fb635fd9575769))
+* **pi-loom-mermaid:** order and place boxes by their frame anchors, late skip jog ([f287938](https://github.com/Yassimba/loom/commit/f287938316008282465ddb965b42ead047340291))
+* **pi-loom-mermaid:** read a diff marker written inside a label ([335c5b9](https://github.com/Yassimba/loom/commit/335c5b96d8c98a5e7e88c13ff18ba3464e8aa543))
+* **pi-loom-mermaid:** read a misplaced diff marker anywhere it lands ([cb3ef8c](https://github.com/Yassimba/loom/commit/cb3ef8c14b886ed2715ea0f14a49c9b470c1b39c))
+* **pi-loom-mermaid:** reserve no width for a label the leg already holds ([93add25](https://github.com/Yassimba/loom/commit/93add256d8177666e2c537eaeca2fba1e76d9086))
+
+## [0.6.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.6.0...pi-loom-mermaid-v0.6.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **pi-loom-mermaid:** draw fans as honest buses, keep chains straight ([689ddeb](https://github.com/Yassimba/loom/commit/689ddeb75c62c700a8a1158a11afe415a1cba6b2))
+* **pi-loom-mermaid:** render mermaid fences nested in list items ([9d7c4b7](https://github.com/Yassimba/loom/commit/9d7c4b7bc2c34cb234a15f511cb5d4d770449c7f))
+
 ## [0.6.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.5.0...pi-loom-mermaid-v0.6.0) (2026-09-09)
 
 

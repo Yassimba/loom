@@ -103,8 +103,12 @@ async function createCatalogFixture() {
   return repoRoot;
 }
 
-test("Software Engineer installs the Annotate fork with the Mermaid renderer", async () => {
+test("setup offers combinable goals; Build software includes Annotate and Mermaid", async () => {
   const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
+  assert.deepEqual(
+    catalog.profiles.map(({ label }) => label),
+    ["Build software", "Research deeply", "Manage product work", "Knowledgebase", "Present ideas"],
+  );
   const profile = catalog.profiles.find(({ id }) => id === "software-engineer");
   const annotate = catalog.resources.find(({ id }) => id === "herdr-plugin:annotate");
   const mermaid = catalog.resources.find(({ id }) => id === "pi-package:@yassimba/pi-loom-mermaid");
@@ -117,22 +121,52 @@ test("Software Engineer installs the Annotate fork with the Mermaid renderer", a
   assert.ok(profile.resources.includes(bun.id));
 });
 
-test("Pi, Sem, and Context7 select the Pi MCP adapter", async () => {
+test("Blueprint and code review install code contracts, checked by loom itself", async () => {
   const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
-  const sem = catalog.resources.find(({ id }) => id === "mcp-server:sem");
+  const blueprint = catalog.resources.find(({ id }) => id === "skill:blueprint");
+  const codeReview = catalog.resources.find(({ id }) => id === "skill:code-review");
+  const contracts = catalog.resources.find(({ id }) => id === "skill:code-contracts");
+  assert.deepEqual(blueprint.dependencies, ["code-contracts"]);
+  assert.deepEqual(codeReview.dependencies, ["loom", "code-contracts"]);
+  // `loom contracts` replaced the npm checker, and loom is core: no tool dependency.
+  assert.deepEqual(contracts.dependencies, []);
+  assert.equal(
+    catalog.resources.find(({ id }) => id === "tool:cc-check"),
+    undefined,
+  );
+});
+
+test("software profile keeps Sem CLI and adds exact local code MCP dependencies", async () => {
+  const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
+  const profile = catalog.profiles[0];
+  const sem = catalog.resources.find(({ id }) => id === "tool:sem");
   const pi = catalog.resources.find(({ id }) => id === "tool:pi");
-  assert.equal(sem.kind, "mcp-server");
-  assert.equal(sem.version, "0.24.0");
-  assert.equal(sem.source, "https://github.com/Ataraxy-Labs/sem/releases/tag/v0.24.0");
-  assert.deepEqual(sem.dependencies, ["pi-mcp-adapter"]);
+  assert.equal(sem.kind, "tool");
+  assert.equal(sem.installTarget, "github:Ataraxy-Labs/sem[exe=sem]");
+  assert.ok(profile.resources.includes(sem.id));
+  assert.deepEqual(
+    catalog.resources.filter(({ kind }) => kind === "mcp-server").map(({ label }) => label),
+    ["context7", "codebase-memory-mcp"],
+  );
   assert.deepEqual(pi.dependencies, ["pi-mcp-adapter"]);
-  assert.ok(catalog.profiles[0].resources.includes(sem.id));
   const context7 = catalog.resources.find(({ id }) => id === "mcp-server:context7");
-  assert.equal(context7.installTarget, "context7");
   assert.equal(context7.source, "https://mcp.context7.com/mcp");
-  assert.equal(context7.version, undefined); // Hosted service, not a pinned local binary.
+  assert.equal(context7.version, undefined);
   assert.deepEqual(context7.dependencies, ["pi-mcp-adapter"]);
-  assert.ok(!catalog.profiles[0].resources.includes(context7.id)); // Opt-in, not a profile default.
+  assert.ok(!profile.resources.includes(context7.id));
+
+  const routing = catalog.resources.find(
+    ({ id }) => id === "pi-package:@yassimba/pi-code-intelligence",
+  );
+  assert.equal(routing.installTarget, "@yassimba/pi-code-intelligence");
+
+  const [name, version, tool] = ["codebase-memory-mcp", "0.10.8", "npm:codebase-memory-mcp"];
+  const server = catalog.resources.find(({ id }) => id === `mcp-server:${name}`);
+  const binary = catalog.resources.find(({ id }) => id === `tool:${name}`);
+  assert.equal(server.version, version);
+  assert.deepEqual(server.dependencies, ["pi-mcp-adapter", tool, "@yassimba/pi-code-intelligence"]);
+  assert.equal(binary.installTarget, tool);
+  assert.ok(profile.resources.includes(server.id));
 });
 
 test("the setup catalog carries ordered profiles with exact resource ids", async () => {
@@ -277,6 +311,8 @@ test("external Pi packages accept an exact Git commit source", async () => {
           source,
           label: "example",
           description: "Example package",
+          group: "Wiki",
+          dependencies: ["github:AgriciDaniel/claude-obsidian"],
           windowsSupport: "wsl",
         },
       ],
@@ -289,6 +325,8 @@ test("external Pi packages accept an exact Git commit source", async () => {
 
   assert.equal(example.source, source);
   assert.equal(example.version, undefined);
+  assert.equal(example.group, "Wiki");
+  assert.deepEqual(example.dependencies, ["github:AgriciDaniel/claude-obsidian"]);
   assert.equal(example.windowsWsl, true);
 });
 

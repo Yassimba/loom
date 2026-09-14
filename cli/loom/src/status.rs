@@ -3,26 +3,9 @@ use crate::{skills, CommandSpec, System};
 use std::collections::HashSet;
 use std::path::Path;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum Health {
-    Good,
-    Optional,
-    Bad,
-}
-
-impl Health {
-    fn mark(self) -> Mark {
-        match self {
-            Self::Good => Mark::Ok,
-            Self::Optional => Mark::Off,
-            Self::Bad => Mark::Bad,
-        }
-    }
-}
-
 struct RuntimeCheck {
     name: &'static str,
-    health: Health,
+    health: Mark,
     detail: String,
 }
 
@@ -64,26 +47,36 @@ pub fn run_status(system: &(dyn System + Sync)) -> bool {
     // Node is detect-and-instruct only: flag a version below Pi's floor, but
     // never install or update it.
     if let Some(node) = checks.iter_mut().find(|check| check.name == "node") {
-        if node.health == Health::Good {
+        if node.health == Mark::Ok {
             if let Some(warning) = crate::NodeStatus::detect(system).warning() {
-                node.health = Health::Bad;
+                node.health = Mark::Bad;
                 node.detail = format!("{} — {warning}", node.detail);
             }
         }
     }
     for check in &checks {
-        style.row(check.health.mark(), check.name, style.muted(&check.detail));
+        style.row(check.health, check.name, style.muted(&check.detail));
     }
-    let healthy = mcp_healthy
+    style.blank();
+    let wiki_healthy = crate::wiki::status_registered(system);
+    let healthy = wiki_healthy
+        && mcp_healthy
         && resources_healthy
         && skills_healthy
-        && checks.iter().all(|check| check.health != Health::Bad);
+        && checks.iter().all(|check| check.health != Mark::Bad);
     if healthy {
-        style.verdict(true, "Selected resources and runtimes checked");
+        style.verdict(
+            true,
+            "Selected resources, runtimes, and Wiki Vaults checked",
+        );
         style.hint("optional managers are installed on demand by `loom setup`");
     } else {
         style.verdict(false, "Some checks need attention");
-        style.next("repair the failed managers, then run `loom status` again");
+        style.next(if wiki_healthy {
+            "repair the failed managers, then run `loom status` again"
+        } else {
+            "run `loom wiki` to repair the flagged Vaults, then run `loom status` again"
+        });
     }
     healthy
 }
@@ -166,7 +159,7 @@ fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
             .is_some_and(|binary| system.command_exists(binary));
         style.row(
             if present { Mark::Ok } else { Mark::Bad },
-            &resource.label,
+            &status_label(resource, &catalog),
             if present {
                 "selected tool available"
             } else {
@@ -205,10 +198,13 @@ fn print_manager_inventory(
     kind: crate::ResourceKind,
     selected: &HashSet<String>,
 ) -> bool {
-    let selected_for_manager = catalog
+    let resources = catalog
         .resources
         .iter()
-        .any(|resource| resource.kind == kind && selected.contains(&resource.id));
+        .filter(|resource| resource.kind == kind && resource.group != "Wiki");
+    let selected_for_manager = resources
+        .clone()
+        .any(|resource| selected.contains(&resource.id));
     if !system.command_exists(manager) {
         style.row(
             if selected_for_manager {
@@ -227,16 +223,19 @@ fn print_manager_inventory(
     }
     match system.run_probe(&CommandSpec::new(manager, args.iter().copied())) {
         Ok(result) if result.success => {
-            let output = format!("{}\n{}", result.stdout, result.stderr);
+            let output = result.stdout;
             let mut healthy = true;
-            for resource in catalog
-                .resources
-                .iter()
-                .filter(|resource| resource.kind == kind)
-            {
-                let installed = output.contains(&resource.install_target)
-                    || output.contains(resource.id.trim_start_matches("herdr-plugin:"));
+            for resource in resources {
+                let installed = if kind == crate::ResourceKind::PiPackage {
+                    crate::install::pi_package_installed(&output, &resource.install_target, false)
+                } else {
+                    output.contains(&resource.install_target)
+                        || output.contains(resource.id.trim_start_matches("herdr-plugin:"))
+                };
                 let expected = selected.contains(&resource.id);
+                if !installed && !expected {
+                    continue;
+                }
                 healthy &= installed || !expected;
                 style.row(
                     if installed {
@@ -246,7 +245,7 @@ fn print_manager_inventory(
                     } else {
                         Mark::Off
                     },
-                    &resource.label,
+                    &status_label(resource, catalog),
                     if installed {
                         "catalog item installed"
                     } else if expected {
@@ -270,6 +269,21 @@ fn print_manager_inventory(
             style.row(Mark::Bad, manager, error.to_string());
             false
         }
+    }
+}
+
+fn status_label(resource: &crate::Resource, catalog: &crate::Catalog) -> String {
+    let clash = catalog.resources.iter().any(|other| {
+        other.label == resource.label && other.kind != resource.kind && other.group != "Wiki"
+    });
+    if !clash {
+        return resource.label.clone();
+    }
+    match resource.kind {
+        crate::ResourceKind::PiPackage => format!("{} · Pi", resource.label),
+        crate::ResourceKind::HerdrPlugin => format!("{} · Herdr", resource.label),
+        crate::ResourceKind::Tool => resource.label.clone(),
+        crate::ResourceKind::Skill | crate::ResourceKind::McpServer => resource.label.clone(),
     }
 }
 
@@ -345,6 +359,10 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
         .map(|agent| (agent, agent.global_skill_tree(&home)))
         .filter(|(_, tree)| tree.parent().is_some_and(|parent| parent.is_dir()))
         .collect::<Vec<_>>();
+    let global_trees = trees
+        .iter()
+        .map(|(_, tree)| tree.clone())
+        .collect::<HashSet<_>>();
     let mut projects = match skills::prune_registered_skill_projects(&home) {
         Ok(projects) => projects,
         Err(error) => {
@@ -357,7 +375,19 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
     }
     projects.sort();
     projects.dedup();
-    for project in projects {
+    let vaults = crate::wiki::WikiRegistry::load(&home)
+        .map(|registry| {
+            registry
+                .vaults
+                .into_iter()
+                .map(|vault| vault.path.canonicalize().unwrap_or(vault.path))
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default(); // Registry errors are reported in the Wiki section.
+    for project in projects
+        .into_iter()
+        .filter(|project| !vaults.contains(project))
+    {
         trees.extend(
             crate::SkillAgent::ALL
                 .into_iter()
@@ -383,7 +413,9 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
             catalog
                 .resources
                 .into_iter()
-                .filter(|resource| resource.kind == crate::ResourceKind::Skill)
+                .filter(|resource| {
+                    resource.kind == crate::ResourceKind::Skill && resource.group != "Wiki"
+                })
                 .map(|resource| resource.install_target)
                 .collect::<Vec<_>>()
         })
@@ -393,19 +425,22 @@ fn print_skill_trees(system: &dyn System, style: &Out) -> bool {
             .iter()
             .filter(|name| tree.join(name.as_str()).join("SKILL.md").is_file())
             .count();
+        if installed == 0 && !global_trees.contains(&tree) {
+            continue;
+        }
         let health = if installed == catalog_skills.len() {
-            Health::Good
+            Mark::Ok
         } else {
-            Health::Optional
+            Mark::Off
         };
         let coverage = format!("{:<6}", format!("{installed}/{}", catalog_skills.len()));
         let coverage = match health {
-            Health::Good => style.good(coverage),
-            Health::Optional => style.warn(coverage),
-            Health::Bad => unreachable!(),
+            Mark::Ok => style.good(coverage),
+            Mark::Off => style.warn(coverage),
+            Mark::Bad => unreachable!(),
         };
         style.row(
-            health.mark(),
+            health,
             agent.status_label(),
             format!("{}  {}", coverage, style.muted(tidy_path(&tree, &home))),
         );
@@ -417,7 +452,7 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
     if !system.command_exists(name) {
         return RuntimeCheck {
             name,
-            health: Health::Optional,
+            health: Mark::Off,
             detail: "not installed (optional until selected)".into(),
         };
     }
@@ -425,7 +460,7 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
     match system.run_probe(&command) {
         Ok(result) if result.success => RuntimeCheck {
             name,
-            health: Health::Good,
+            health: Mark::Ok,
             detail: result
                 .stdout
                 .lines()
@@ -436,12 +471,12 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
         },
         Ok(result) => RuntimeCheck {
             name,
-            health: Health::Bad,
+            health: Mark::Bad,
             detail: result.stderr.trim().into(),
         },
         Err(error) => RuntimeCheck {
             name,
-            health: Health::Bad,
+            health: Mark::Bad,
             detail: error.to_string(),
         },
     }

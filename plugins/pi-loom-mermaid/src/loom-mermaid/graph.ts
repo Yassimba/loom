@@ -26,7 +26,6 @@ export type Head =
   | 'diamondOpen'
 
 export type LineKind = 'solid' | 'dotted' | 'thick'
-export type PortSide = 'top' | 'bottom' | 'left' | 'right'
 
 type Dir = 'down' | 'up' | 'right' | 'left'
 
@@ -67,9 +66,6 @@ export interface Edge {
   headTo: Head
   headFrom: Head
   line: LineKind
-  /** Exact attachment sides requested by diagrams such as `architecture-beta`. */
-  fromSide?: PortSide
-  toSide?: PortSide
   /**
    * Set on an end that stands for a subgraph frame: the inner node the
    * author actually named, as a box in the frame's sub-canvas coordinates.
@@ -143,13 +139,30 @@ export class Graph {
    * label overwrites the placeholder one an edge created. Returns `null` once
    * `MAX_NODES` is reached, which truncates the parse.
    */
-  nodeIndex(id: string, label: string | null, shape: Shape): number | null {
+  /**
+   * A class marker belongs after the bracket (`A[Added]:::green`), but
+   * written inside a label or an edge's text it renders as part of it and
+   * the box meant to read as added says ":::green" instead. Mermaid keeps
+   * the characters; we take the marker as the class it meant, since no
+   * label ends in one by intent. The name is returned for the callers
+   * that can attach it.
+   */
+  marked(text: string | null, what: string): { text: string | null; name: string | null } {
+    const hit = text === null ? null : /^(.*?)\s*:::([A-Za-z0-9_-]*[A-Za-z0-9_])$/s.exec(text)
+    if (hit === null) return { text, name: null }
+    this.warnings.push(`${what}: \`:::${hit[2]}\` goes after the bracket, not inside the text`)
+    return { text: hit[1], name: hit[2] }
+  }
+
+  nodeIndex(id: string, raw: string | null, shape: Shape): number | null {
+    const { text: label, name } = this.marked(raw, `node "${id}"`)
     const existing = this.index.get(id)
     if (existing !== undefined) {
       if (label !== null) {
         this.nodes[existing].label = label
         this.nodes[existing].shape = shape
       }
+      if (name !== null) this.addClass(existing, name)
       return existing
     }
     if (this.nodes.length >= MAX_NODES) {
@@ -159,14 +172,17 @@ export class Graph {
     this.index.set(id, this.nodes.length)
     this.nodes.push({ label: label ?? id, shape })
     this.nodeGroup.push(this.curGroup)
+    if (name !== null) this.addClass(this.nodes.length - 1, name)
     return this.nodes.length - 1
   }
 
   /** Set a node's label without disturbing its shape, creating it if new. */
-  nodeLabel(id: string, label: string): number | null {
+  nodeLabel(id: string, raw: string): number | null {
+    const { text: label, name } = this.marked(raw, `node "${id}"`)
     const existing = this.index.get(id)
     if (existing !== undefined) {
-      this.nodes[existing].label = label
+      if (label !== null) this.nodes[existing].label = label
+      if (name !== null) this.addClass(existing, name)
       return existing
     }
     return this.nodeIndex(id, label, 'round')
@@ -219,7 +235,8 @@ export class Graph {
       this.truncated ??= `edge cap (${MAX_EDGES}) reached`
       return false
     }
-    this.edges.push(edge)
+    const { text } = this.marked(edge.label ?? null, 'edge label')
+    this.edges.push(text === edge.label ? edge : { ...edge, label: text })
     return true
   }
 }

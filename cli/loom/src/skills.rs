@@ -85,7 +85,7 @@ impl SkillAgent {
     pub fn label(self) -> &'static str {
         match self {
             Self::Claude => "Claude",
-            Self::AgentsStandard => "Agent Skills standard",
+            Self::AgentsStandard => "Shared (.agents)",
             Self::Codex => "Codex",
             Self::Pi => "Pi",
             Self::OpenCode => "OpenCode",
@@ -297,8 +297,7 @@ pub(crate) fn project_opencode_adapter_path(project_root: &Path) -> PathBuf {
 }
 
 /// The selection plus the transitive closure of catalog skill dependencies,
-/// deduplicated, dependencies appended after the explicit selection. Plannotator
-/// includes its review extension when Pi is a selected destination.
+/// deduplicated, dependencies appended after the explicit selection.
 pub fn expand_skill_dependencies(
     all: &[Resource],
     selection: Vec<Resource>,
@@ -320,14 +319,6 @@ pub fn expand_skill_dependencies(
                     .iter()
                     .map(|name| format!("skill:{name}")),
             );
-        }
-        if agents.contains(&SkillAgent::Pi)
-            && matches!(
-                resource.install_target.as_str(),
-                "plannotator" | "github:Yassimba/plannotator"
-            )
-        {
-            dependencies.push("@plannotator/pi-extension".into());
         }
         cursor += 1;
         for name in dependencies {
@@ -359,10 +350,11 @@ pub enum CopyOutcome {
 }
 
 /// Per-tree summary of an install run.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TreeReport {
     pub tree: PathBuf,
     pub installed: usize,
+    pub unchanged: usize,
     pub skipped_existing: usize,
     pub skipped_symlinks: usize,
 }
@@ -406,9 +398,7 @@ pub(crate) fn install_skills(
             // Every skill came with a package: no repo download needed.
             TreeReport {
                 tree,
-                installed: 0,
-                skipped_existing: 0,
-                skipped_symlinks: 0,
+                ..Default::default()
             }
         } else {
             let repo_root = repository.get(system, cancelled)?;
@@ -553,9 +543,8 @@ pub(crate) fn refresh_installed_skills(
             .into_iter()
             .map(|(tree, _, preserved)| TreeReport {
                 tree,
-                installed: 0,
                 skipped_existing: preserved,
-                skipped_symlinks: 0,
+                ..Default::default()
             })
             .collect());
     }
@@ -568,12 +557,17 @@ pub(crate) fn refresh_installed_skills(
             for (tree, names, preserved) in &copies {
                 let mut report = TreeReport {
                     tree: tree.clone(),
-                    installed: 0,
                     skipped_existing: *preserved,
-                    skipped_symlinks: 0,
+                    ..Default::default()
                 };
                 for name in names {
                     let path = tree.join(name);
+                    if crate::ownership::digest_path(&source_root.join(name))?
+                        == crate::ownership::digest_path(&path)?
+                    {
+                        report.unchanged += 1;
+                        continue;
+                    }
                     refresh_skill(&source_root, tree, name)?;
                     state.refresh_path_digest(&path, crate::ownership::digest_path(&path)?);
                     report.installed += 1;
@@ -677,9 +671,7 @@ fn copy_into_tree(
     let mut failures = Vec::new();
     let mut report = TreeReport {
         tree,
-        installed: 0,
-        skipped_existing: 0,
-        skipped_symlinks: 0,
+        ..Default::default()
     };
     let tree = &report.tree;
     for name in skills {
@@ -975,43 +967,6 @@ mod tests {
         assert_eq!(
             SkillAgent::Grok.project_skill_tree(project),
             project.join(".grok").join("skills")
-        );
-    }
-
-    #[test]
-    fn plannotator_adds_pi_extension_only_for_pi_and_only_once() {
-        let catalog = crate::Catalog::embedded().unwrap();
-        let extension = catalog
-            .resources
-            .iter()
-            .find(|r| r.install_target == "@plannotator/pi-extension")
-            .unwrap();
-        for target in ["plannotator", "github:Yassimba/plannotator"] {
-            let selected = catalog
-                .resources
-                .iter()
-                .find(|r| r.install_target == target)
-                .unwrap()
-                .clone();
-            for agents in [vec![], vec![SkillAgent::Claude], vec![SkillAgent::Pi]] {
-                let expanded =
-                    expand_skill_dependencies(&catalog.resources, vec![selected.clone()], &agents);
-                assert_eq!(
-                    expanded.iter().any(|r| r.id == extension.id),
-                    agents.contains(&SkillAgent::Pi)
-                );
-            }
-            let expanded = expand_skill_dependencies(
-                &catalog.resources,
-                vec![selected, extension.clone()],
-                &[SkillAgent::Pi],
-            );
-            assert_eq!(expanded.iter().filter(|r| r.id == extension.id).count(), 1);
-        }
-        let unrelated = skill("unrelated", &[]);
-        assert_eq!(
-            expand_skill_dependencies(&catalog.resources, vec![unrelated], &[SkillAgent::Pi]).len(),
-            1
         );
     }
 

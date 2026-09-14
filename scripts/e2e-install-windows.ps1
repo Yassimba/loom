@@ -89,7 +89,7 @@ if (-not (Test-Path (Join-Path $Project "AGENTS.md"))) { throw "loom init omitte
 if (-not (Test-Path (Join-Path $Project "CLAUDE.md"))) { throw "loom init omitted CLAUDE.md" }
 Invoke-Loom update --yes *> (Join-Path $EvidenceDir "loom-update.txt")
 if ($LASTEXITCODE -ne 0) { throw "loom update failed" }
-if (-not (Select-String -Quiet -Path $StatusLog -Pattern "Selected resources and runtimes checked")) {
+if (-not (Select-String -Quiet -Path $StatusLog -SimpleMatch "Selected resources, runtimes, and Wiki Vaults checked")) {
   throw "status omitted the verified-resource verdict"
 }
 if ($ExpectBeads) {
@@ -234,9 +234,6 @@ if (-not (Select-String -Quiet -Path $RerunLog -SimpleMatch 'Everything selected
 }
 if (-not (Select-String -Quiet -Path $BootstrapLog -SimpleMatch 'next run `loom status` to verify the setup')) {
   throw "setup omitted the status action"
-}
-if (-not (Select-String -Quiet -Path $BootstrapLog -SimpleMatch 'next run `loom init` inside your first project')) {
-  throw "setup omitted the init action"
 }
 if ($ExpectBeads) {
   foreach ($Expected in @("beads_rust", "beads_viewer")) {

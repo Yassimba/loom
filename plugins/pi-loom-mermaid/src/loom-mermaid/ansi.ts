@@ -1,4 +1,4 @@
-import { type ClassStyle, contrastOn, resolveClassStyle } from './class-style.ts'
+import { type ClassStyle, resolveClassStyle } from './class-style.ts'
 import type { MermaidArt, Role } from './types.ts'
 
 const ESC = String.fromCharCode(27)
@@ -25,21 +25,14 @@ const rgb = (hex: string, sgr: 38 | 48): string =>
 /**
  * The truecolor SGR a class style gives a span of the given role, or
  * undefined when the style says nothing about it (fall back to the theme).
- * `stroke` colors borders, `color` text; `fill` backs interior cells only,
- * with a black/white foreground picked for contrast when none was declared.
+ * Only `stroke` colors box borders. Node fills and text colors stay with
+ * the terminal theme instead of overriding it.
  * A style that colors nothing for this role keeps `fallback` (the theme's
  * SGR), so a bold-only class bolds the themed look instead of replacing it.
  */
 export function classSgr(st: ClassStyle, role: Role, fallback?: string): string | undefined {
-  const p: string[] = []
-  const fg = role === 'border' ? (st.stroke ?? st.color) : role === 'edge' ? undefined : st.color
-  // Terminal backgrounds cover whole cells, including the outside half of an outline glyph.
-  const fill = role === 'border' ? undefined : st.fill
-  const backed = fg ?? (fill === undefined ? undefined : contrastOn(fill))
-  if (backed !== undefined) p.push(rgb(backed, 38))
-  if (fill !== undefined) p.push(rgb(fill, 48))
-  if (p.length === 0 && fallback !== undefined) p.push(fallback)
-  if (st.bold === true) p.unshift('1')
+  const color = role === 'border' && st.stroke !== undefined ? rgb(st.stroke, 38) : fallback
+  const p = [...(st.bold === true ? ['1'] : []), ...(color === undefined ? [] : [color])]
   return p.length > 0 ? p.join(';') : undefined
 }
 

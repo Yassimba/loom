@@ -1,21 +1,17 @@
-use crate::settings::{apply_setting, curated_settings, setting_state, SettingSpec, SettingsPaths};
+use crate::session::{InstallOwnership, InstallSession};
+use crate::settings::{curated_settings, setting_state, SettingSpec, SettingsPaths};
 use crate::ui::{confirm_plan, print_plan, Mark, Out};
 use crate::wizard::{run_wizard, Model, WizardOutcome};
 use crate::{
-    build_install_plan, execute_install_plan, expand_skill_dependencies, Catalog, CommandSpec,
-    InstallFailure, InstallReport, Platform, PrerequisiteStatus, Resource, ResourceKind,
-    SkillAgent, SkillDestination, SkillScope, System,
+    build_install_plan, expand_skill_dependencies, Catalog, CommandSpec, InstallFailure,
+    InstallReport, Platform, PrerequisiteStatus, Resource, ResourceKind, SkillAgent,
+    SkillDestination, SkillScope, System,
 };
 use anyhow::{bail, Context, Result};
 use inquire::Confirm;
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
+use std::collections::{BTreeMap, HashSet};
 
-pub(crate) const SETUP_NEXT_ACTIONS: [&str; 3] = [
-    "if a newly installed command is missing, open a new shell",
-    "run `loom status` to verify the setup",
-    "run `loom init` inside your first project",
-];
+pub(crate) const SETUP_NEXT_ACTION: &str = "run `loom status` to verify the setup";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SelectionMode {
@@ -170,18 +166,34 @@ pub fn install_selected(
         return crate::wiki::run_interactive_with_default(system, feynman);
     }
     if resources.is_empty() {
-        println!("Nothing selected; no changes made.");
+        Out::detect().verdict(true, "Nothing selected; no changes made");
         return Ok(true);
     }
     // Preflight before installed filtering: conflicts must not become silent no-ops.
     if resources.iter().any(|r| r.kind == ResourceKind::McpServer) {
         build_install_plan(&resources, status, platform, &destination)?;
     }
+    let configure_rtk_pi = resources
+        .iter()
+        .any(|resource| resource.install_target == crate::manifest::RTK_TOOL_KEY)
+        && (status.pi
+            || resources.iter().any(|resource| {
+                resource.install_target == crate::manifest::PI_TOOL_KEY
+                    || matches!(
+                        resource.kind,
+                        ResourceKind::PiPackage | ResourceKind::McpServer
+                    )
+            }))
+        && !crate::install::rtk_pi_configured(system);
     let installed = detect_installed(&resources, status, system, &destination);
     let resources = resources
         .into_iter()
         .zip(installed)
-        .filter_map(|(resource, installed)| (!installed).then_some(resource))
+        .filter_map(|(resource, installed)| {
+            (!installed
+                || (configure_rtk_pi && resource.install_target == crate::manifest::RTK_TOOL_KEY))
+                .then_some(resource)
+        })
         .collect::<Vec<_>>();
     if resources.is_empty() {
         let out = Out::detect();
@@ -207,37 +219,25 @@ pub fn install_selected(
         out.verdict(true, "Cancelled; no changes made");
         return Ok(true);
     }
-    let setting_before = setting_snapshots(&related_settings, &settings_paths);
-    let adapter_existed = adapter_existed(&destination);
-    let skills_before = existing_skill_paths(&resources, &destination);
-    let mut report = execute_install_plan(&plan, system);
-    apply_related_settings(&related_settings, &settings_paths, &mut report);
-    if let Err(message) = record_install_ownership(
-        system,
+    let ownership = InstallOwnership::capture(
         &resources,
-        &destination,
         &related_settings,
-        &setting_before,
         &settings_paths,
-        adapter_existed,
-        &skills_before,
+        &destination,
         status,
-        &report,
-    ) {
+    );
+    let mut session = InstallSession::new(plan, related_settings, settings_paths);
+    session.ownership = Some(ownership);
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    let mut report = session.run_attempt(system, &cancelled, &mut |_, _| {});
+    if let Err(message) = session.record_ownership(system) {
         report.failures.push(InstallFailure {
             target: "ownership ledger".into(),
             message,
         });
     }
-    print_report(&out, catalog, &report);
-    for action in next_actions(&resources, &report) {
-        out.next(action);
-    }
-    if mode == SelectionMode::Setup && report.failures.is_empty() {
-        for action in SETUP_NEXT_ACTIONS {
-            out.next(action);
-        }
-    }
+    print_report(&out, catalog, &report, true);
+    out.next(install_next_action(mode, &resources, &report));
     Ok(report.failures.is_empty())
 }
 
@@ -288,7 +288,7 @@ fn first_wsl2_distribution(output: &str) -> Option<String> {
 
 fn prepare_wsl(system: &(dyn System + Sync), dry_run: bool) -> Result<bool> {
     if dry_run {
-        println!("\nWould prepare WSL2; no changes made.");
+        Out::detect().verdict(true, "Dry run; would prepare WSL2, no changes made");
         return Ok(true);
     }
     let mut distribution = system
@@ -346,12 +346,6 @@ fn run_interactive(
     // Installed marks arrive from a background probe once the wizard is on
     // screen; starting all-false keeps the first frame instant.
     let installed = vec![false; resources.len()];
-    let ownership_destination = skill_destination.clone();
-    let mut ownership_settings = settings.clone();
-    ownership_settings.push(crate::settings::pi_adhd_setting());
-    let setting_before = setting_snapshots(&ownership_settings, &settings_paths);
-    let adapter_existed = adapter_existed(&ownership_destination);
-    let skills_before = existing_skill_paths(&resources, &ownership_destination);
     let model = Model {
         mode,
         purpose: crate::wizard::WizardPurpose::Install,
@@ -359,10 +353,10 @@ fn run_interactive(
         resources,
         profiles: catalog.profiles.clone(),
         installed,
-        settings: settings.clone(),
+        settings,
         setting_states,
         zed_present,
-        settings_paths: settings_paths.clone(),
+        settings_paths,
         status,
         platform,
         dry_run,
@@ -370,11 +364,11 @@ fn run_interactive(
     };
     match run_wizard(model, system)? {
         WizardOutcome::Cancelled => {
-            println!("Cancelled; no changes made.");
+            Out::detect().verdict(true, "Cancelled; no changes made");
             Ok(true)
         }
         WizardOutcome::NothingSelected => {
-            println!("Nothing selected; no changes made.");
+            Out::detect().verdict(true, "Nothing selected; no changes made");
             Ok(true)
         }
         WizardOutcome::DryRun(plan, setting_changes) => {
@@ -390,51 +384,14 @@ fn run_interactive(
         WizardOutcome::UninstallSelection(_) => {
             anyhow::bail!("install wizard returned an uninstall selection")
         }
-        WizardOutcome::WikiSelection { feynman } => {
-            crate::wiki::run_interactive_with_default(system, feynman)
-        }
-        WizardOutcome::Installed(mut report, actions, selected_resources) => {
-            let wiki_feynman = selected_resources
-                .iter()
-                .any(|resource| resource.install_target == "@companion-ai/feynman");
-            let has_wiki = selected_resources
-                .iter()
-                .any(|resource| resource.group == "Wiki");
-            let generic_resources = selected_resources
-                .into_iter()
-                .filter(|resource| resource.group != "Wiki")
-                .collect::<Vec<_>>();
-            if let Err(message) = record_install_ownership(
-                system,
-                &generic_resources,
-                &ownership_destination,
-                &ownership_settings,
-                &setting_before,
-                &settings_paths,
-                adapter_existed,
-                &skills_before,
-                status,
-                &report,
-            ) {
-                report.failures.push(InstallFailure {
-                    target: "ownership ledger".into(),
-                    message,
-                });
-            }
+        WizardOutcome::Installed {
+            report, resources, ..
+        } => {
             let out = Out::detect();
             out.blank();
-            print_report(&out, catalog, &report);
-            for action in actions {
-                out.next(action);
-            }
-            if mode == SelectionMode::Setup && report.failures.is_empty() {
-                for action in SETUP_NEXT_ACTIONS {
-                    out.next(action);
-                }
-            }
-            if has_wiki && report.failures.is_empty() {
-                return crate::wiki::run_interactive_with_default(system, wiki_feynman);
-            }
+            // The wizard already showed every task; repeat only failures.
+            print_report(&out, catalog, &report, false);
+            out.next(install_next_action(mode, &resources, &report));
             Ok(report.failures.is_empty())
         }
     }
@@ -443,6 +400,78 @@ fn run_interactive(
 /// Which catalog resources are already on this machine. Uses the same
 /// probes as post-install verification: manager list output for plugins and
 /// packages, and the currently selected destination trees for skills.
+fn pi_packages_from_settings(home: &std::path::Path) -> Option<String> {
+    pi_packages_listing(
+        &crate::settings::pi_agent_dir(home).join("settings.json"),
+        "User packages:",
+    )
+}
+
+/// Prefer Herdr's registry file so the wizard probe does not boot `herdr`.
+fn herdr_plugins_from_registry(home: &std::path::Path) -> Option<String> {
+    let content =
+        std::fs::read_to_string(crate::settings::herdr_dir(home).join("plugins.json")).ok()?;
+    let plugins = serde_json::from_str::<serde_json::Value>(&content).ok()?;
+    let plugins = plugins.as_array()?;
+    let mut listed = String::new();
+    for plugin in plugins {
+        if let Some(id) = plugin.get("plugin_id").and_then(serde_json::Value::as_str) {
+            listed.push_str(id);
+            listed.push('\n');
+        }
+    }
+    Some(listed)
+}
+
+/// A `pi list`-shaped listing read straight from a Pi settings file, so the
+/// installed-state probe never has to boot the Node CLI. `None` when the file
+/// cannot be read safely; a missing file lists nothing.
+pub(crate) fn pi_packages_listing(
+    settings_path: &std::path::Path,
+    heading: &str,
+) -> Option<String> {
+    let content = match std::fs::read_to_string(settings_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Some(format!("{heading}\n"));
+        }
+        Err(_) => return None,
+    };
+    let settings: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let mut listed = format!("{heading}\n");
+    let Some(packages) = settings.get("packages") else {
+        return Some(listed);
+    };
+    let packages = packages.as_array()?;
+    for package in packages {
+        if let Some(source) = package
+            .as_str()
+            .or_else(|| package.get("source").and_then(serde_json::Value::as_str))
+        {
+            let path = std::path::Path::new(source);
+            let resolved = path
+                .is_relative()
+                .then(|| {
+                    settings_path
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new(""))
+                        .join(path)
+                })
+                .filter(|path| path.is_dir())
+                .map(|path| path.canonicalize().unwrap_or(path));
+            listed.push_str("  ");
+            listed.push_str(
+                resolved
+                    .as_deref()
+                    .and_then(std::path::Path::to_str)
+                    .unwrap_or(source),
+            );
+            listed.push('\n');
+        }
+    }
+    Some(listed)
+}
+
 pub(crate) fn detect_installed(
     resources: &[Resource],
     status: PrerequisiteStatus,
@@ -457,30 +486,33 @@ pub(crate) fn detect_installed(
             .run_probe(&CommandSpec::new(program, args.iter().copied()))
             .ok()
             .filter(|result| result.success)
-            .map(|result| format!("{}\n{}", result.stdout, result.stderr))
+            .map(|result| result.stdout)
     };
-    // Both list commands shell out to their manager; probe them concurrently.
-    let (herdr_plugins, pi_packages) = std::thread::scope(|scope| {
-        let herdr = scope.spawn(|| list_output(status.herdr, "herdr", &["plugin", "list"]));
-        let pi = scope.spawn(|| list_output(status.pi, "pi", &["list"]));
-        (
-            herdr.join().expect("herdr probe thread"),
-            pi.join().expect("pi probe thread"),
-        )
-    });
+    let home = system.home_dir();
+    // Prefer on-disk registries: `pi list` and `herdr plugin list` boot CLIs.
+    let pi_packages = home
+        .as_deref()
+        .and_then(pi_packages_from_settings)
+        .or_else(|| list_output(status.pi, "pi", &["list"]));
+    let herdr_plugins = home
+        .as_deref()
+        .and_then(herdr_plugins_from_registry)
+        .or_else(|| list_output(status.herdr, "herdr", &["plugin", "list"]));
     let skill_trees = destination.trees();
-    let selected_tools = system
-        .home_dir()
+    let skill_names = skill_trees
+        .iter()
+        .map(|tree| skill_names_in(tree))
+        .collect::<Vec<_>>();
+    let selected_tools = home
         .map(|home| crate::manifest::selected_keys(&home))
         .unwrap_or_default();
 
     resources
         .iter()
         .map(|resource| {
-            // This catalog row means “set up Feynman inside a chosen Vault.”
-            // A user-level package cannot satisfy a destination that has not
-            // been chosen yet, so keep the row actionable in the setup wizard.
-            if resource.id == "pi-package:@companion-ai/feynman" && resource.group == "Wiki" {
+            // Wiki rows are checked only after choosing a Vault, never against
+            // this shell's global or project installation.
+            if resource.group == "Wiki" {
                 return false;
             }
             match resource.kind {
@@ -500,27 +532,12 @@ pub(crate) fn detect_installed(
                     output.contains(resource.id.trim_start_matches("herdr-plugin:"))
                 }),
                 ResourceKind::PiPackage => pi_packages.as_ref().is_some_and(|output| {
-                    // `pi list` prints npm specs for registry installs and
-                    // directory paths for local ones; accept either shape.
-                    let unscoped = resource
-                        .install_target
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or(&resource.install_target);
-                    let plain = unscoped.strip_prefix("pi-").unwrap_or(unscoped);
-                    let last_component_is = |line: &str, name: &str| {
-                        line.ends_with(&format!("/{name}")) || line.ends_with(&format!("\\{name}"))
-                    };
-                    output.lines().map(str::trim).any(|line| {
-                        line.contains(&resource.install_target)
-                            || last_component_is(line, unscoped)
-                            || last_component_is(line, plain)
-                    })
+                    crate::install::pi_package_installed(output, &resource.install_target, false)
                 }),
                 ResourceKind::Skill => {
                     !skill_trees.is_empty()
-                        && skill_trees.iter().all(|tree| {
-                            crate::skills::skill_present_in(tree, &resource.install_target)
+                        && skill_trees.iter().zip(&skill_names).all(|(tree, names)| {
+                            names.contains(&resource.install_target)
                                 || crate::bundled_skills::provided_in_tree(
                                     &destination.home,
                                     tree,
@@ -529,6 +546,20 @@ pub(crate) fn detect_installed(
                         })
                 }
             }
+        })
+        .collect()
+}
+
+fn skill_names_in(tree: &std::path::Path) -> HashSet<String> {
+    let Ok(entries) = std::fs::read_dir(tree) else {
+        return HashSet::new();
+    };
+    entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let name = entry.file_name();
+            let name = name.to_str()?.to_owned();
+            tree.join(&name).join("SKILL.md").is_file().then_some(name)
         })
         .collect()
 }
@@ -560,246 +591,6 @@ fn print_settings_plan(out: &Out, settings: &[SettingSpec], paths: &SettingsPath
     }
 }
 
-fn setting_snapshots(
-    settings: &[SettingSpec],
-    paths: &SettingsPaths,
-) -> BTreeMap<String, Option<String>> {
-    settings
-        .iter()
-        .map(|setting| {
-            (
-                setting.id.clone(),
-                fs::read_to_string(setting.target_path(paths)).ok(),
-            )
-        })
-        .collect()
-}
-
-fn existing_skill_paths(
-    resources: &[Resource],
-    destination: &SkillDestination,
-) -> BTreeSet<std::path::PathBuf> {
-    destination
-        .trees()
-        .into_iter()
-        .flat_map(|tree| {
-            resources
-                .iter()
-                .filter(|resource| resource.kind == ResourceKind::Skill)
-                .map(move |resource| tree.join(&resource.install_target))
-        })
-        .filter(|path| path.symlink_metadata().is_ok())
-        .collect()
-}
-
-fn adapter_existed(destination: &SkillDestination) -> bool {
-    destination.agents.contains(&SkillAgent::OpenCode)
-        && destination
-            .opencode_adapter_path()
-            .symlink_metadata()
-            .is_ok()
-}
-
-#[allow(clippy::too_many_arguments)]
-fn record_install_ownership(
-    system: &dyn System,
-    resources: &[Resource],
-    destination: &SkillDestination,
-    settings: &[SettingSpec],
-    setting_before: &BTreeMap<String, Option<String>>,
-    settings_paths: &SettingsPaths,
-    adapter_existed: bool,
-    skills_before: &BTreeSet<std::path::PathBuf>,
-    prerequisite_status: PrerequisiteStatus,
-    report: &InstallReport,
-) -> Result<(), String> {
-    use crate::ownership::{
-        digest_path, InstallState, OwnedPathKind, OwnedResource, OwnershipScope, Receipt,
-    };
-
-    let home = system
-        .home_dir()
-        .ok_or_else(|| "home directory is unavailable".to_string())?;
-    let scope = match destination.scope {
-        SkillScope::Global => OwnershipScope::Global,
-        SkillScope::Project => OwnershipScope::Project {
-            root: destination
-                .project_root
-                .canonicalize()
-                .unwrap_or_else(|_| destination.project_root.clone()),
-        },
-    };
-    let owned_id = |scope: &OwnershipScope, id: &str| match scope {
-        OwnershipScope::Global => id.to_owned(),
-        OwnershipScope::Project { root } => format!("project:{}:{id}", root.display()),
-    };
-    let succeeded = |resource: &Resource| {
-        report.installed.contains(&resource.id)
-            || (resource.kind == ResourceKind::Skill
-                && report.installed.iter().any(|target| target == "skills"))
-            || (resource.kind == ResourceKind::Tool
-                && report.installed.iter().any(|target| target == "tools"))
-    };
-    let mut state = InstallState::load(&home)?;
-    for resource in resources.iter().filter(|resource| succeeded(resource)) {
-        let resource_scope = if resource.kind == ResourceKind::Skill {
-            scope.clone()
-        } else {
-            OwnershipScope::Global
-        };
-        let id = owned_id(&resource_scope, &resource.id);
-        let mut dependencies = resource
-            .dependencies
-            .iter()
-            .map(|dependency| owned_id(&resource_scope, &format!("skill:{dependency}")))
-            .collect::<Vec<_>>();
-        match resource.kind {
-            ResourceKind::PiPackage => dependencies.push("tool:pi".into()),
-            ResourceKind::HerdrPlugin => dependencies.push("tool:herdr".into()),
-            ResourceKind::Tool => dependencies.push("core:mise".into()),
-            ResourceKind::Skill | ResourceKind::McpServer => {}
-        }
-        dependencies.push("core:loom".into());
-        dependencies.sort();
-        dependencies.dedup();
-        let receipts = match resource.kind {
-            ResourceKind::McpServer => Vec::new(),
-            ResourceKind::Skill => destination
-                .trees()
-                .into_iter()
-                .map(|tree| tree.join(&resource.install_target))
-                .filter(|path| path.is_dir() && !skills_before.contains(path))
-                .map(|path| path.canonicalize().unwrap_or(path))
-                .map(|path| {
-                    Ok(Receipt::Path {
-                        digest: digest_path(&path)?,
-                        path,
-                        path_kind: OwnedPathKind::Tree,
-                        before: None,
-                    })
-                })
-                .collect::<std::result::Result<Vec<_>, String>>()?,
-            ResourceKind::PiPackage => vec![Receipt::Manager {
-                manager: "pi".into(),
-                target: resource.pi_install_spec(),
-            }],
-            ResourceKind::HerdrPlugin => vec![Receipt::Manager {
-                manager: "herdr".into(),
-                target: resource.id.trim_start_matches("herdr-plugin:").into(),
-            }],
-            ResourceKind::Tool => std::iter::once(resource.install_target.clone())
-                .chain(resource.companions.iter().cloned())
-                .map(|key| Receipt::MiseTool { key })
-                .collect(),
-        };
-        if !receipts.is_empty() {
-            state.record(OwnedResource {
-                id,
-                scope: resource_scope,
-                depends_on: dependencies,
-                receipts,
-            });
-        }
-    }
-    if report.installed.iter().any(|target| target == "tools") {
-        for (needed, id, key) in [
-            (
-                !prerequisite_status.pi
-                    && resources
-                        .iter()
-                        .any(|resource| resource.kind == ResourceKind::PiPackage),
-                "tool:pi",
-                crate::manifest::PI_TOOL_KEY,
-            ),
-            (
-                !prerequisite_status.herdr
-                    && resources
-                        .iter()
-                        .any(|resource| resource.kind == ResourceKind::HerdrPlugin),
-                "tool:herdr",
-                "herdr",
-            ),
-        ] {
-            if needed {
-                state.record(OwnedResource {
-                    id: id.into(),
-                    scope: OwnershipScope::Global,
-                    depends_on: vec!["core:loom".into(), "core:mise".into()],
-                    receipts: vec![Receipt::MiseTool { key: key.into() }],
-                });
-            }
-        }
-    }
-    for setting in settings
-        .iter()
-        .filter(|setting| report.installed.contains(&setting.id))
-    {
-        let path = setting.target_path(settings_paths).to_path_buf();
-        if !path.is_file() {
-            continue;
-        }
-        state.record(OwnedResource {
-            id: owned_id(&OwnershipScope::Global, &format!("setting:{}", setting.id)),
-            scope: OwnershipScope::Global,
-            depends_on: setting
-                .related_resource
-                .iter()
-                .map(|id| id.to_owned())
-                .collect(),
-            receipts: vec![Receipt::Path {
-                digest: digest_path(&path)?,
-                path,
-                path_kind: OwnedPathKind::File,
-                before: setting_before.get(&setting.id).cloned().flatten(),
-            }],
-        });
-    }
-    if !adapter_existed
-        && destination.agents.contains(&SkillAgent::OpenCode)
-        && report.installed.iter().any(|target| target == "skills")
-    {
-        let path = destination.opencode_adapter_path();
-        if path.is_file() {
-            let path = path.canonicalize().unwrap_or(path);
-            state.record(OwnedResource {
-                id: owned_id(&scope, "adapter:opencode"),
-                scope: scope.clone(),
-                depends_on: vec!["core:loom".into()],
-                receipts: vec![Receipt::Path {
-                    digest: digest_path(&path)?,
-                    path,
-                    path_kind: OwnedPathKind::File,
-                    before: None,
-                }],
-            });
-        }
-    }
-    state.save(&home)
-}
-
-fn apply_related_settings(
-    settings: &[SettingSpec],
-    paths: &SettingsPaths,
-    report: &mut InstallReport,
-) {
-    for setting in settings {
-        if !setting
-            .related_resource
-            .as_ref()
-            .is_some_and(|resource| report.installed.contains(resource))
-        {
-            continue;
-        }
-        match apply_setting(setting, paths) {
-            Ok(_) => report.installed.push(setting.id.clone()),
-            Err(error) => report.failures.push(crate::InstallFailure {
-                target: setting.id.clone(),
-                message: error.to_string(),
-            }),
-        }
-    }
-}
-
 pub(crate) fn next_actions(resources: &[Resource], report: &InstallReport) -> Vec<String> {
     let mut actions = Vec::new();
     for resource in resources {
@@ -813,7 +604,27 @@ pub(crate) fn next_actions(resources: &[Resource], report: &InstallReport) -> Ve
     actions
 }
 
-fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
+pub(crate) fn install_next_action(
+    mode: SelectionMode,
+    resources: &[Resource],
+    report: &InstallReport,
+) -> String {
+    if !report.failures.is_empty() {
+        format!(
+            "run `loom {}` to retry; completed work stays installed",
+            mode.command()
+        )
+    } else if mode == SelectionMode::Setup {
+        SETUP_NEXT_ACTION.into()
+    } else {
+        next_actions(resources, report)
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| SETUP_NEXT_ACTION.into())
+    }
+}
+
+fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport, list_installed: bool) {
     let settings = curated_settings();
     let label = |target: &str| {
         catalog
@@ -829,7 +640,7 @@ fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
             })
             .unwrap_or_else(|| target.to_owned())
     };
-    for target in &report.installed {
+    for target in report.installed.iter().filter(|_| list_installed) {
         out.row(
             Mark::Ok,
             &label(target),
@@ -841,7 +652,11 @@ fn print_report(out: &Out, catalog: &Catalog, report: &InstallReport) {
         );
     }
     for failure in &report.failures {
-        out.row(Mark::Bad, &label(&failure.target), &failure.message);
+        out.row(
+            Mark::Bad,
+            &label(&failure.target),
+            crate::ui::failure_text(&failure.message),
+        );
     }
     let installed = report.installed.len();
     let failed = report.failures.len();
@@ -862,26 +677,21 @@ pub fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec
         (ResourceKind::McpServer, &selectors.mcp_servers),
     ] {
         for value in values {
-            let matches = catalog
-                .resources
-                .iter()
-                .filter(|resource| {
-                    resource.kind == kind
-                        && (resource.id == *value
-                            || resource.install_target == *value
-                            || resource.label.eq_ignore_ascii_case(value)
-                            || resource.id.ends_with(&format!(":{value}"))
-                            || resource.install_target.ends_with(&format!("/{value}")))
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-            match matches.as_slice() {
-                [resource] => {
+            let mut matches = catalog.resources.iter().filter(|resource| {
+                resource.kind == kind
+                    && (resource.id == *value
+                        || resource.install_target == *value
+                        || resource.label.eq_ignore_ascii_case(value)
+                        || resource.id.ends_with(&format!(":{value}"))
+                        || resource.install_target.ends_with(&format!("/{value}")))
+            });
+            match (matches.next(), matches.next()) {
+                (Some(resource), None) => {
                     if !selected.contains(resource) {
                         selected.push(resource.clone());
                     }
                 }
-                [] => bail!("unknown {kind}: {value}"),
+                (None, _) => bail!("unknown {kind}: {value}"),
                 _ => bail!("ambiguous {kind}: {value}"),
             }
         }
@@ -892,6 +702,7 @@ pub fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::session::adapter_existed;
 
     fn temp_root(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
@@ -902,6 +713,27 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+
+    #[test]
+    fn pi_package_paths_are_relative_to_the_settings_file() {
+        let root = temp_root("relative-pi-package");
+        let settings = root.join("home/projects/wiki/.pi/settings.json");
+        let package = root.join("home/.local/package");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(&settings, r#"{"packages":["../../../.local/package"]}"#).unwrap();
+
+        let listed = pi_packages_listing(&settings, "Project packages:").unwrap();
+        let listed_path = listed
+            .lines()
+            .find_map(|line| line.strip_prefix("  "))
+            .expect("listing includes a package path");
+        assert_eq!(
+            std::path::Path::new(listed_path).canonicalize().unwrap(),
+            package.canonicalize().unwrap()
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     struct NoCommands;
@@ -1049,7 +881,7 @@ mod tests {
             Ok(crate::CommandResult {
                 success: command.program == "pi",
                 stdout: if command.program == "pi" {
-                    "@example/already-there\n".into()
+                    "User packages:\n  npm:@example/already-there\n".into()
                 } else {
                     String::new()
                 },
@@ -1064,6 +896,151 @@ mod tests {
         fn current_dir(&self) -> Option<std::path::PathBuf> {
             Some(self.home.clone())
         }
+    }
+
+    struct SettingsOnlySystem {
+        home: std::path::PathBuf,
+    }
+
+    impl System for SettingsOnlySystem {
+        fn command_exists(&self, name: &str) -> bool {
+            name == "pi"
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
+            panic!(
+                "installed-state detection shelled out to {}",
+                command.display()
+            )
+        }
+
+        fn home_dir(&self) -> Option<std::path::PathBuf> {
+            Some(self.home.clone())
+        }
+    }
+
+    #[test]
+    fn installed_pi_packages_are_read_directly_from_settings() {
+        let root = temp_root("direct-pi-settings");
+        std::fs::create_dir_all(root.join(".pi/agent")).unwrap();
+        std::fs::create_dir_all(root.join(".pi/agent/plugins/skill-autocomplete")).unwrap();
+        std::fs::write(
+            root.join(".pi/agent/plugins/skill-autocomplete/package.json"),
+            r#"{"name":"@yassimba/pi-skill-autocomplete"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".pi/agent/settings.json"),
+            r#"{"packages":["npm:pi-subagents@0.66.0",{"source":"git:github.com/ayghri/i-have-adhd@abc"},"plugins/skill-autocomplete"]}"#,
+        )
+        .unwrap();
+        let catalog = Catalog::embedded().unwrap();
+        let resources = [
+            "pi-subagents",
+            "i-have-adhd",
+            "@yassimba/pi-skill-autocomplete",
+            "pi-web-access",
+        ]
+        .into_iter()
+        .map(|target| {
+            catalog
+                .resources
+                .iter()
+                .find(|resource| resource.install_target == target)
+                .unwrap()
+                .clone()
+        })
+        .collect::<Vec<_>>();
+        let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
+
+        assert_eq!(
+            detect_installed(
+                &resources,
+                PrerequisiteStatus {
+                    pi: true,
+                    herdr: false,
+                    mise: true,
+                },
+                &SettingsOnlySystem { home: root.clone() },
+                &destination,
+            ),
+            [true, true, true, false]
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn installed_herdr_plugins_are_read_directly_from_the_registry() {
+        const MARKER: &str = "LOOM_TEST_HERDR_REGISTRY";
+        let Some(root) = std::env::var_os(MARKER) else {
+            let root = temp_root("direct-herdr-registry");
+            std::fs::create_dir_all(&root).unwrap();
+            // Isolate XDG in the child; never mutate the parallel test harness's environment.
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "app::tests::installed_herdr_plugins_are_read_directly_from_the_registry",
+                ])
+                .env(MARKER, &root)
+                .env("HOME", &root)
+                .env("USERPROFILE", &root)
+                .env("XDG_CONFIG_HOME", root.join(".config"))
+                .status()
+                .unwrap();
+            std::fs::remove_dir_all(root).unwrap();
+            assert!(status.success());
+            return;
+        };
+        let root = std::path::PathBuf::from(root);
+        let registry = crate::settings::herdr_dir(&root);
+        assert!(registry.starts_with(&root), "registry escaped fixture home");
+        std::fs::create_dir_all(&registry).unwrap();
+        std::fs::write(
+            registry.join("plugins.json"),
+            r#"[{"plugin_id":"annotate","name":"Annotate"}]"#,
+        )
+        .unwrap();
+        let catalog = Catalog::embedded().unwrap();
+        let annotate = catalog
+            .resources
+            .iter()
+            .find(|resource| resource.id == "herdr-plugin:annotate")
+            .unwrap()
+            .clone();
+        let other = Resource {
+            id: "herdr-plugin:other".into(),
+            kind: ResourceKind::HerdrPlugin,
+            group: annotate.group.clone(),
+            label: "other".into(),
+            description: String::new(),
+            install_target: "other".into(),
+            next_action: String::new(),
+            dependencies: Vec::new(),
+            bin: None,
+            version: None,
+            source: None,
+            windows_wsl: false,
+            companions: Vec::new(),
+            bundled_skills: Vec::new(),
+        };
+        let resources = vec![annotate, other];
+        let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
+
+        assert_eq!(
+            detect_installed(
+                &resources,
+                PrerequisiteStatus {
+                    pi: false,
+                    herdr: true,
+                    mise: false,
+                },
+                &SettingsOnlySystem { home: root.clone() },
+                &destination,
+            ),
+            [true, false]
+        );
     }
 
     struct GlobalFeynmanSystem;
@@ -1162,12 +1139,9 @@ mod tests {
             failures: Vec::new(),
         };
 
-        record_install_ownership(
-            &system,
+        InstallOwnership::capture(
             &resources,
-            &destination,
             &[],
-            &BTreeMap::new(),
             &SettingsPaths {
                 herdr_config: root.join("herdr.toml"),
                 zed_settings: root.join("zed.json"),
@@ -1175,15 +1149,14 @@ mod tests {
                 pi_fff_config: root.join("fff.json"),
                 pi_adhd_flag: root.join(".i-have-adhd-always"),
             },
-            false,
-            &BTreeSet::new(),
+            &destination,
             PrerequisiteStatus {
                 pi: false,
                 herdr: true,
                 mise: true,
             },
-            &report,
         )
+        .record(&system, &report.installed)
         .unwrap();
 
         let state = crate::ownership::InstallState::load(&root).unwrap();
@@ -1195,6 +1168,12 @@ mod tests {
     #[test]
     fn no_op_package_selection_does_not_claim_preexisting_ownership() {
         let root = temp_root("record-noop");
+        std::fs::create_dir_all(root.join(".pi/agent")).unwrap();
+        std::fs::write(
+            root.join(".pi/agent/settings.json"),
+            r#"{"packages":["npm:@example/already-there"]}"#,
+        )
+        .unwrap();
         let package = Resource {
             id: "pi-package:already-there".into(),
             kind: ResourceKind::PiPackage,
@@ -1281,21 +1260,14 @@ mod tests {
             &root,
             &root,
         );
-        let skills_before = existing_skill_paths(std::slice::from_ref(&resource), &destination);
         let report = InstallReport {
             installed: vec!["skills".into()],
             failures: Vec::new(),
         };
 
-        record_install_ownership(
-            &InstalledSkillSystem {
-                home: root.clone(),
-                commands: std::sync::Mutex::new(Vec::new()),
-            },
+        InstallOwnership::capture(
             &[resource],
-            &destination,
             &[],
-            &BTreeMap::new(),
             &SettingsPaths {
                 herdr_config: root.join("herdr.toml"),
                 zed_settings: root.join("zed.json"),
@@ -1303,14 +1275,19 @@ mod tests {
                 pi_fff_config: root.join("fff.json"),
                 pi_adhd_flag: root.join(".i-have-adhd-always"),
             },
-            false,
-            &skills_before,
+            &destination,
             PrerequisiteStatus {
                 pi: false,
                 herdr: false,
                 mise: false,
             },
-            &report,
+        )
+        .record(
+            &InstalledSkillSystem {
+                home: root.clone(),
+                commands: std::sync::Mutex::new(Vec::new()),
+            },
+            &report.installed,
         )
         .unwrap();
 

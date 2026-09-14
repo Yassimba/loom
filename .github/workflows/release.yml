@@ -114,13 +114,14 @@ jobs:
       - run: npm publish ./${{ matrix.path }} --access public --provenance
 
   # Only after every asset is up: point the published manifest at the new
-  # tags, so `loom update` and fresh installs never see a release without
-  # binaries.
+  # tags, so `loom update` and fresh installs never see a partial release.
   pin:
     outputs:
       sha: ${{ steps.pin.outputs.sha }}
-    needs: [release-please, binaries]
-    if: needs.binaries.result == 'success'
+    needs: [release-please, binaries, npm]
+    # !cancelled() is required: without a status function, a skipped `npm`
+    # (no plugin released) would skip `pin` and `full-install` too.
+    if: "!cancelled() && needs.binaries.result == 'success' && (needs.npm.result == 'success' || needs.npm.result == 'skipped')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

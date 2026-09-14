@@ -49,6 +49,9 @@ export class Canvas {
   style: Uint8Array
   occupied: Uint8Array
   pass: Uint8Array
+  /** Direction each edge cell's flow travels in (drawing order), so a
+   * junction can point a head at the arm that feeds it. */
+  flow: Uint8Array
   /** Edge labels queued by the layout, written after every line. */
   labels: { label: string; row: number; x: number }[] = []
   curStyle: number = STY_SOLID
@@ -69,6 +72,7 @@ export class Canvas {
     this.style = new Uint8Array(n)
     this.occupied = new Uint8Array(n)
     this.pass = new Uint8Array(n)
+    this.flow = new Uint8Array(n)
   }
 
   idx(x: number, y: number): number {
@@ -150,6 +154,7 @@ export class Canvas {
       if (y > a) bits |= U
       if (y < b) bits |= D
       this.addBits(x, y, bits)
+      if (y > a && y < b) this.flow[this.idx(x, y)] |= y1 > y0 ? D : U
     }
   }
 
@@ -161,6 +166,7 @@ export class Canvas {
       if (x > a) bits |= L
       if (x < b) bits |= R
       this.addBits(x, y, bits)
+      if (x > a && x < b) this.flow[this.idx(x, y)] |= x1 > x0 ? R : L
     }
   }
 

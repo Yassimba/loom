@@ -41,11 +41,11 @@ Installing a command-line tool does not connect it to an account. Run its login 
 
 ## 3. Connect MCP servers
 
-Context7 is a hosted server at `https://mcp.context7.com/mcp`. It needs no local install or API key for basic use. Sem runs locally, so install the `sem` command before you configure it.
+Loom reviews two Pi servers: local Codebase Memory for repository graph/impact analysis, and hosted Context7 for library documentation. Context7 needs no local install or API key for basic use.
 
 ### OpenCode
 
-Add the servers to global `~/.config/opencode/opencode.json` or project `opencode.json`:
+Add Context7 to global `~/.config/opencode/opencode.json` or project `opencode.json`:
 
 ```json
 {
@@ -54,11 +54,6 @@ Add the servers to global `~/.config/opencode/opencode.json` or project `opencod
     "context7": {
       "type": "remote",
       "url": "https://mcp.context7.com/mcp",
-      "enabled": true
-    },
-    "sem": {
-      "type": "local",
-      "command": ["sem", "mcp"],
       "enabled": true
     }
   }
@@ -75,11 +70,10 @@ See the [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) for authenti
 
 ### Claude Code
 
-Add both servers for your user account:
+Add Context7 for your user account:
 
 ```bash
 claude mcp add --scope user --transport http context7 https://mcp.context7.com/mcp
-claude mcp add --scope user sem -- sem mcp
 claude mcp list
 ```
 
@@ -87,11 +81,10 @@ Use `--scope project` to write shared project configuration instead. See the [Cl
 
 ### Codex
 
-Add both servers to Codex's shared MCP configuration:
+Add Context7 to Codex's shared MCP configuration:
 
 ```bash
 codex mcp add context7 --url https://mcp.context7.com/mcp
-codex mcp add sem -- sem mcp
 codex mcp list
 ```
 
@@ -99,35 +92,19 @@ Codex stores user configuration in `~/.codex/config.toml`. See the [Codex MCP gu
 
 ### Cursor
 
-Open **Settings > Cursor Settings > Tools & MCP**, then add Context7 as a remote server and `sem mcp` as a command server. See the [Cursor MCP guide](https://docs.cursor.com/context/model-context-protocol) for global and project configuration.
+Open **Settings > Cursor Settings > Tools & MCP**, then add Context7 as a remote server. See the [Cursor MCP guide](https://docs.cursor.com/context/model-context-protocol) for global and project configuration.
 
 ### Pi
 
-Install the shared MCP adapter:
+Let Loom install the local binaries, shared adapter, and reviewed entries:
 
 ```bash
-pi install npm:pi-mcp-adapter
+loom add --mcp-server codebase-memory-mcp --agent pi
 ```
 
-Add both entries under `mcpServers` in `~/.pi/agent/mcp.json`:
+Use `--scope project` for project-only server configuration. Codebase Memory runs locally over stdio with gateway-only exposure and its read-only analysis profile. Restart Pi and open `/mcp` to check the connections.
 
-```json
-{
-  "mcpServers": {
-    "context7": {
-      "url": "https://mcp.context7.com/mcp",
-      "directTools": false
-    },
-    "sem": {
-      "command": "sem",
-      "args": ["mcp"],
-      "directTools": false
-    }
-  }
-}
-```
-
-Restart Pi and open `/mcp` to check both connections.
+Install Context7 separately with `loom add --mcp-server context7 --agent pi`.
 
 ## 4. Install agent-specific packages
 
@@ -135,7 +112,7 @@ Pi packages run only in Pi. Install the package you need:
 
 ```bash
 pi install npm:@yassimba/pi-fast
-pi install npm:@yassimba/pi-add-dir
+pi install npm:@yassimba/pi-guardrails
 pi install npm:@yassimba/pi-skill-autocomplete
 pi install npm:@yassimba/pi-loom-mermaid
 ```

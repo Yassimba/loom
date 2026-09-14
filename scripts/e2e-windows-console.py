@@ -54,7 +54,7 @@ def main() -> None:
 
     use_wsl = drive([args.loom, "setup", "--dry-run"], [(1, "y\r")])
     (args.evidence / "native-use-wsl-dry-run.txt").write_text(use_wsl, encoding="utf-8")
-    if "Would prepare WSL2; no changes made." not in use_wsl:
+    if "Dry run; would prepare WSL2, no changes made" not in use_wsl:
         raise AssertionError("WSL dry-run did not stop before mutation")
 
 

@@ -17,10 +17,14 @@
  * its endpoint's centre rather than the centre itself.
  */
 
+import { half } from './layout-geom.ts'
+
 export interface LayeredGraph {
   layers: number[][]
   up: number[][]
   down: number[][]
+  /** Virtual nodes of returns, drawn as columns beside the boxes. */
+  lanes?: Set<number>
 }
 
 export function brandesKoepf(
@@ -50,12 +54,13 @@ export function brandesKoepf(
         layers: fromRight ? layers.map((row) => [...row].reverse()) : layers,
         up: fromBottom ? g.down : g.up,
         down: fromBottom ? g.up : g.down,
+        lanes: g.lanes,
       }
       const vpos = new Array<number>(n).fill(0)
       for (const row of view.layers) row.forEach((v, i) => (vpos[v] = i))
       // Mirrored runs see the pair the other way round.
       const gap = fromRight ? (l: number, r: number) => sep(r, l) : sep
-      const alignment = alignVertically(view, vpos, conflicts)
+      const alignment = alignVertically(view, vpos, conflicts, realCount)
       const x = compact(view, vpos, size, gap, alignment)
       runs.push(fromRight ? x.map((c) => -c) : x)
       roots.push(alignment.root)
@@ -64,24 +69,34 @@ export function brandesKoepf(
   const chosen = straightest(runs, g, size, realCount)
   const centers = runs[chosen].map((c, v) => c + offset(v))
   const root = roots[chosen]
-
-  // Rounding, offsets and the class shifts of the compaction can shave a
-  // cell off a separation; sweeping each layer left to right restores it,
-  // moving a whole aligned block so the run's straight segments stay
-  // straight, until every layer holds. Then pin the origin at 0.
   const members = new Map<number, number[]>()
   for (let v = 0; v < n; v++) {
     const list = members.get(root[v])
     if (list) list.push(v)
     else members.set(root[v], [v])
   }
+  // An offset is measured from the sources' row, not from wherever the
+  // compaction left the node after a sibling took the alignment: a node
+  // on its own goes to the sources' mean plus its offset, and the sweep
+  // below moves it on only where that collides.
+  for (let v = 0; v < realCount; v++) {
+    const ups = g.up[v].filter((u) => u < realCount)
+    if (offset(v) === 0 || ups.length === 0 || (members.get(root[v])?.length ?? 1) > 1) continue
+    centers[v] = ups.reduce((a, u) => a + centers[u], 0) / ups.length + offset(v)
+  }
+
+  // Rounding, offsets and the class shifts of the compaction can shave a
+  // cell off a separation; sweeping each layer left to right restores it,
+  // moving a whole aligned block so the run's straight segments stay
+  // straight, until every layer holds. Then pin the origin at 0.
+  /** Centre distance that keeps `sep(l, r)` cells between the two boxes. */
+  const gap = (l: number, r: number): number => size[l] / 2 + sep(l, r) + size[r] / 2
   for (let pass = 0; pass < n; pass++) {
     let moved = false
     for (const row of g.layers) {
       for (let i = 1; i < row.length; i++) {
         const [u, w] = [row[i - 1], row[i]]
-        const gap = size[u] / 2 + sep(u, w) + size[w] / 2
-        const deficit = centers[u] + gap - centers[w]
+        const deficit = centers[u] + gap(u, w) - centers[w]
         if (deficit <= 0) continue
         for (const m of members.get(root[w]) ?? [w]) centers[m] += deficit
         moved = true
@@ -89,10 +104,98 @@ export function brandesKoepf(
     }
     if (!moved) break
   }
+  // A block a cell or two off a neighbour it was not aligned with (its
+  // median was taken) nudges onto it when the separations allow, so the
+  // edge runs straight instead of jogging one row.
+  const fits = (block: number[], d: number): boolean =>
+    block.every((v) => {
+      const row = g.layers[layerOf[v]]
+      const i = pos[v]
+      const at = (u: number): number => centers[u] + (block.includes(u) ? d : 0)
+      const ok = (l: number, r: number): boolean => at(l) + gap(l, r) <= at(r)
+      return (i === 0 || ok(row[i - 1], v)) && (i === row.length - 1 || ok(v, row[i + 1]))
+    })
+  for (const row of g.layers) {
+    for (const v of row) {
+      if (v >= realCount) continue
+      const block = members.get(root[v]) ?? [v]
+      if (block.length > 1) continue
+      const near = [...g.up[v], ...g.down[v]]
+        .filter((u) => u < realCount)
+        .map((u) => centers[u] - centers[v])
+        .filter((d) => d !== 0 && Math.abs(d) <= 2)
+        .sort((a, b) => Math.abs(a) - Math.abs(b))
+      const d = near.find((d) => fits(block, d))
+      if (d !== undefined) for (const m of block) centers[m] += d
+    }
+  }
+  snapLanes(g, centers, size, gap, root, members, layerOf, pos, realCount)
   let min = Number.POSITIVE_INFINITY
   for (const row of g.layers) for (const v of row) min = Math.min(min, centers[v] - size[v] / 2)
   if (!Number.isFinite(min)) min = 0
-  return centers.map((c) => Math.max(0, Math.round(c - min)))
+  const cells = centers.map((c) => Math.max(0, Math.round(c - min)))
+  // A one-wide chain node has a half-cell centre; rounded apart from a
+  // box beside it, the one blank cell between them can vanish. Push the
+  // block over where it did. Lanes are placed again later, with their
+  // label room, so they may touch here.
+  const edgeR = (v: number): number => cells[v] - half(size[v]) + size[v] - 1
+  const edgeL = (v: number): number => cells[v] - half(size[v])
+  for (const row of g.layers) {
+    for (let i = 1; i < row.length; i++) {
+      const [u, w] = [row[i - 1], row[i]]
+      if ((u >= realCount) === (w >= realCount) || g.lanes?.has(u) || g.lanes?.has(w)) continue
+      const push = edgeR(u) + 2 - edgeL(w)
+      if (push <= 0) continue
+      for (const m of members.get(root[w]) ?? [w]) cells[m] += push
+    }
+  }
+  return cells
+}
+
+/**
+ * Side lanes: leaves hanging off the same aligned block on the same side,
+ * one per layer, line up their outer edge. Compaction packs each against its
+ * own neighbour, so the column wanders with that neighbour's width. Moving
+ * outward only, to an edge that already exists, neither widens the drawing
+ * nor crosses anything; a row neighbour on the far side still caps the move.
+ */
+function snapLanes(
+  g: LayeredGraph,
+  centers: number[],
+  size: number[],
+  gap: (left: number, right: number) => number,
+  root: number[],
+  members: Map<number, number[]>,
+  layerOf: number[],
+  pos: number[],
+  realCount: number,
+): void {
+  const lanes = new Map<string, { left: boolean; lane: number[] }>()
+  for (let v = 0; v < realCount; v++) {
+    if ((members.get(root[v])?.length ?? 1) > 1) continue
+    const near = [...g.up[v], ...g.down[v]]
+    if (near.length !== 1 || near[0] >= realCount) continue
+    const side = Math.sign(centers[v] - centers[near[0]])
+    if (side === 0) continue
+    const key = `${root[near[0]]}:${side}`
+    const entry = lanes.get(key) ?? { left: side < 0, lane: [] }
+    entry.lane.push(v)
+    lanes.set(key, entry)
+  }
+  for (const { left, lane } of lanes.values()) {
+    if (lane.length < 2 || new Set(lane.map((v) => layerOf[v])).size < lane.length) continue
+    // Edges as drawn: a box starts `half(size)` left of its rounded centre.
+    const edge = (v: number): number => centers[v] + (left ? -half(size[v]) : size[v] - half(size[v]))
+    const target = left ? Math.min(...lane.map(edge)) : Math.max(...lane.map(edge))
+    for (const v of lane) {
+      const row = g.layers[layerOf[v]]
+      const i = pos[v]
+      let c = target + (left ? half(size[v]) : half(size[v]) - size[v])
+      if (left && i > 0) c = Math.max(c, centers[row[i - 1]] + gap(row[i - 1], v))
+      else if (!left && i < row.length - 1) c = Math.min(c, centers[row[i + 1]] - gap(v, row[i + 1]))
+      centers[v] = c
+    }
+  }
 }
 
 /**
@@ -139,16 +242,29 @@ interface Alignment {
 }
 
 /** Align each node with a median upper neighbour, left to right, no crossings. */
-function alignVertically(g: LayeredGraph, pos: number[], conflicts: Set<number>): Alignment {
+function alignVertically(g: LayeredGraph, pos: number[], conflicts: Set<number>, realCount: number): Alignment {
   const n = g.up.length
   const root = Array.from({ length: n }, (_, v) => v)
   const align = [...root]
   for (let i = 1; i < g.layers.length; i++) {
     let r = -1
     for (const v of g.layers[i]) {
-      const ups = [...g.up[v]].sort((a, b) => pos[a] - pos[b])
+      const all = [...g.up[v]].sort((a, b) => pos[a] - pos[b])
+      // A real node lines up with a real neighbour before a long edge's
+      // chain: a path of boxes read straight matters more than a straight
+      // skip (Ware et al. 2002, continuity). Chains still align with each
+      // other, so a long edge stays straight between its bends.
+      const real = v < realCount ? all.filter((u) => u < realCount) : []
+      const ups = real.length > 0 ? real : all
       const d = ups.length
       if (d === 0) continue
+      // A return's column ordered before the boxes would claim their
+      // parent first and, once claimed, the monotonic sweep denies every
+      // box behind it: the path of boxes bends around a line drawn beside
+      // them. It gives way where a box wants the same parent. A forward
+      // skip keeps its claim, since it runs among the boxes and reads
+      // worse bent than they do.
+      if (g.lanes?.has(v) && ups.some((u) => u < realCount && g.down[u].some((w) => w < realCount))) continue
       const medians = d % 2 === 1 ? [ups[(d - 1) / 2]] : [ups[d / 2 - 1], ups[d / 2]]
       for (const u of medians) {
         if (align[v] !== v) break

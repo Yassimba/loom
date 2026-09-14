@@ -80,16 +80,14 @@ pub fn restore_project(
             (Some(content), Some(_)) => fs::write(&path, content)
                 .map_err(|error| format!("could not restore {}: {error}", path.display())),
             (Some(content), None) => crate::fs_tx::atomic_write(&path, &content),
-            (None, Some(target)) => match fs::remove_file(&target) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(format!("could not remove {}: {error}", target.display())),
-            },
-            (None, None) => match fs::remove_file(&path) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(format!("could not remove {}: {error}", path.display())),
-            },
+            (None, target) => {
+                let target = target.as_deref().unwrap_or(&path);
+                match fs::remove_file(target) {
+                    Ok(()) => Ok(()),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                    Err(error) => Err(format!("could not remove {}: {error}", target.display())),
+                }
+            }
         };
         if let Err(error) = result {
             failures.push(error);
@@ -252,7 +250,20 @@ pub fn digest_path(path: &Path) -> Result<String, String> {
     } else {
         return Err(format!("{} is not a file or directory", path.display()));
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hex(&hasher.finalize()))
+}
+
+/// Lowercase hex of a digest.
+///
+/// Formatting through `{:x}` binds us to the digest crate's output type
+/// implementing `LowerHex`, which sha2 0.11 no longer does.
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+
+    bytes.iter().fold(String::new(), |mut out, byte| {
+        let _ = write!(out, "{byte:02x}");
+        out
+    })
 }
 
 fn digest_tree(root: &Path, directory: &Path, hasher: &mut Sha256) -> Result<(), String> {
@@ -475,27 +486,6 @@ fn same_contribution(left: &Receipt, right: &Receipt) -> bool {
             },
         ) => same_path(a, b) && x == y,
         (
-            Receipt::Manager {
-                manager: a,
-                target: x,
-            },
-            Receipt::Manager {
-                manager: b,
-                target: y,
-            },
-        ) => a == b && x == y,
-        (
-            Receipt::Command {
-                program: a,
-                args: x,
-            },
-            Receipt::Command {
-                program: b,
-                args: y,
-            },
-        ) => a == b && x == y,
-        (Receipt::MiseTool { key: a }, Receipt::MiseTool { key: b }) => a == b,
-        (
             Receipt::PiSkillExclusion { path: a, entry: x },
             Receipt::PiSkillExclusion { path: b, entry: y },
         ) => same_path(a, b) && x == y,
@@ -507,7 +497,7 @@ fn same_contribution(left: &Receipt, right: &Receipt) -> bool {
         (Receipt::MiseInstallation { root: a, .. }, Receipt::MiseInstallation { root: b, .. }) => {
             same_path(a, b)
         }
-        _ => false,
+        _ => left == right,
     }
 }
 
