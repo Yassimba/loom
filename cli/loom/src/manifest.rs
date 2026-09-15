@@ -380,8 +380,15 @@ gh = \"2.97.0\"
 
     #[test]
     fn newly_requested_key_falls_back_to_the_bundled_exact_pin() {
+        // The fixture has no python key, so the pin comes from the bundled
+        // manifest. Read it from there: hardcoding the version makes every
+        // python bump fail this test instead of a real regression.
+        let pin = BUNDLED_MANIFEST
+            .lines()
+            .find_map(|line| line.strip_prefix("python = "))
+            .expect("the bundled manifest pins python");
         let rendered = render_selection(MANIFEST, "", &["python".into()]).unwrap();
-        assert!(rendered.contains("python = \"3.13.7\""));
+        assert!(rendered.contains(&format!("python = {pin}")));
     }
 
     #[test]
