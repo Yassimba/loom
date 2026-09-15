@@ -49,14 +49,6 @@
       "nextAction": "Loom configures RTK for Pi automatically. For other agents, run the matching `rtk init --global --agent <agent>` command, then restart the agent."
     },
     {
-      "key": "pipx:headroom-ai",
-      "label": "headroom",
-      "bin": "headroom",
-      "description": "Local proxy that compresses AI-agent context before it reaches the model.",
-      "nextAction": "Run `headroom doctor`, then launch an agent with `headroom wrap <agent>`. Set `HEADROOM_BEACON=off` to disable anonymous telemetry.",
-      "companions": ["python", "uv"]
-    },
-    {
       "key": "npm:@magnitudedev/cli",
       "label": "magnitude",
       "bin": "magnitude",

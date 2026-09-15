@@ -52,9 +52,6 @@ herdr = { version = "0.9.0", os = ["macos", "linux"] }
 # compress command output for coding agents
 "github:rtk-ai/rtk" = "v0.48.0"
 
-# compress AI-agent context before it reaches the model
-"pipx:headroom-ai" = { version = "0.37.0", extras = ["all"], uvx_args = "--python 3.13.7", pipx_args = "--python 3.13.7" }
-
 # local inference server for Apple silicon Macs
 "npm:@magnitudedev/cli" = { version = "0.0.14", os = ["macos"] }
 
