@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.12.0](https://github.com/Yassimba/loom/compare/loom-v1.11.0...loom-v1.12.0) (2026-09-15)
+
+
+### Features
+
+* improve install recovery and agent safety ([469cf02](https://github.com/Yassimba/loom/commit/469cf02fbdd75f233e85d3e02f1fd7e9b93860d1))
+* **pi-guardrails:** add session safety modes ([6ddb8a3](https://github.com/Yassimba/loom/commit/6ddb8a37b7f821a1bcd23c2c1fcb9e659b83e32c))
+
+
+### Bug Fixes
+
+* **loom:** keep headroom out of setup catalog ([#274](https://github.com/Yassimba/loom/issues/274)) ([67b22af](https://github.com/Yassimba/loom/commit/67b22afc7bbc881986f210b6840471bfe7ab9c18))
+* **loom:** recover requested tool installs ([cd1a9db](https://github.com/Yassimba/loom/commit/cd1a9db3b4b5bcf02221fc83ca64279dccb4ef9b))
+
 ## [1.11.0](https://github.com/Yassimba/loom/compare/loom-v1.10.1...loom-v1.11.0) (2026-09-14)
 
 
