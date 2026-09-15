@@ -933,12 +933,12 @@ mod tests {
         .unwrap();
         std::fs::write(
             root.join(".pi/agent/settings.json"),
-            r#"{"packages":["npm:pi-subagents@0.66.0",{"source":"git:github.com/ayghri/i-have-adhd@abc"},"plugins/skill-autocomplete"]}"#,
+            r#"{"packages":["npm:@tintinweb/pi-subagents@0.19.0",{"source":"git:github.com/ayghri/i-have-adhd@abc"},"plugins/skill-autocomplete"]}"#,
         )
         .unwrap();
         let catalog = Catalog::embedded().unwrap();
         let resources = [
-            "pi-subagents",
+            "@tintinweb/pi-subagents",
             "i-have-adhd",
             "@yassimba/pi-skill-autocomplete",
             "pi-web-access",
