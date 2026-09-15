@@ -59,7 +59,7 @@ herdr = { version = "0.9.0", os = ["macos", "linux"] }
 "npm:@magnitudedev/cli" = { version = "0.0.14", os = ["macos"] }
 
 # hardware-aware local model TUI for Linux and Windows
-"ubi:AlexsJones/llmfit" = { version = "v1.1.14", os = ["linux", "windows"] }
+"ubi:AlexsJones/llmfit" = { version = "v1.1.15", os = ["linux", "windows"] }
 
 # local hybrid search for Markdown knowledge bases
 "npm:@tobilu/qmd" = "2.8.3"
