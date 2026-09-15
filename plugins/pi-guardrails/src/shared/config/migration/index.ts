@@ -10,7 +10,6 @@ import * as stripCommandExplainerFields from "./003-strip-command-explainer-fiel
 import * as envFilesToPolicies from "./004-env-files-to-policies";
 import * as normalizeAllowedPaths from "./005-normalize-allowed-paths";
 import * as applyBuiltinDefaults from "./006-apply-builtin-defaults";
-import * as markOnboardingDone from "./007-mark-onboarding-done";
 import * as normalizeStringBooleans from "./008-normalize-string-booleans";
 import * as allowDevNull from "./009-allow-dev-null";
 import * as allowedPathsObjects from "./010-allowed-paths-objects";
@@ -106,4 +105,4 @@ export const migrations: Migration<GuardrailsConfig>[] = [
   },
 ];
 
-export const globalConfigMigrations = [applyBuiltinDefaults, markOnboardingDone] as const;
+export const globalConfigMigrations = [applyBuiltinDefaults] as const;

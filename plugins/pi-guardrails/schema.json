@@ -29,24 +29,10 @@
           "type": "boolean",
           "description": "When true, include Guardrails built-in policy rules before user rules are merged."
         },
-        "onboarding": {
-          "type": "object",
-          "properties": {
-            "completed": {
-              "type": "boolean",
-              "description": "Whether onboarding is complete."
-            },
-            "completedAt": {
-              "type": "string",
-              "description": "ISO timestamp for when onboarding completed."
-            },
-            "version": {
-              "type": "string",
-              "description": "Package semver marker stored when onboarding completed."
-            }
-          },
-          "additionalProperties": false,
-          "description": "Tracks whether the setup wizard has been completed. Usually managed by Guardrails."
+        "modeShortcut": {
+          "type": "string",
+          "enum": ["ctrl+alt+g", "ctrl+alt+y", "alt+g", "disabled"],
+          "description": "Keyboard shortcut that cycles Ask, Free, and Yolo for the current session."
         },
         "features": {
           "type": "object",

@@ -228,7 +228,7 @@
       "label": "Pi Guardrails",
       "description": "Protect sensitive paths, add trusted workspace roots, and gate dangerous commands in Pi.",
       "installTarget": "@yassimba/pi-guardrails",
-      "nextAction": "Start Pi and run /guardrails:onboarding or /add-dir."
+      "nextAction": "Start Pi; Guardrails begins in Ask mode. Use /guardrails:mode to cycle modes."
     },
     {
       "id": "pi-package:@plannotator/pi-extension",

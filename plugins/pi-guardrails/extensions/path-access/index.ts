@@ -14,6 +14,7 @@ import {
   GUARDRAILS_PROMPT_CLOSED_EVENT,
   GUARDRAILS_PROMPT_OPENED_EVENT,
 } from "../../src/shared/events";
+import { getSessionMode } from "../../src/shared/session-mode";
 import type { WorkspaceRootControl } from "../guardrails/commands/add-dir";
 import {
   BLOCKED_TOOLS,
@@ -85,9 +86,10 @@ export function registerPathAccess(pi: ExtensionAPI, workspace: WorkspaceRootCon
   });
 
   pi.on("tool_call", async (event, ctx) => {
-    const config = configLoader.getConfig();
-    if (!config.enabled) return;
+    const sessionMode = getSessionMode();
+    if (sessionMode === "yolo") return;
 
+    const config = configLoader.getConfig();
     const input = event.input as Record<string, unknown>;
     const targets = await targetsForTool(event.toolName, input, ctx.cwd);
 
@@ -99,7 +101,8 @@ export function registerPathAccess(pi: ExtensionAPI, workspace: WorkspaceRootCon
     });
     if (policyBlock) return policyBlock;
 
-    if (!config.features.pathAccess || config.pathAccess.mode === "allow") return;
+    if (sessionMode === "free") return;
+    const pathAccessMode = config.pathAccess.mode === "block" ? "block" : "ask";
 
     const bashCommand = event.toolName === "bash" ? String(input.command ?? "") : undefined;
     const canonicalCwd = await canonicalizeFromCwd(ctx.cwd, ctx.cwd);
@@ -119,7 +122,7 @@ export function registerPathAccess(pi: ExtensionAPI, workspace: WorkspaceRootCon
       };
       const state: PathAccessState = {
         cwd: canonicalCwd,
-        mode: config.pathAccess.mode,
+        mode: pathAccessMode,
         allowedPaths: [
           ...resolveAllowedPaths(config.pathAccess.allowedPaths, canonicalCwd),
           ...builtInAllowedPaths,
@@ -132,7 +135,7 @@ export function registerPathAccess(pi: ExtensionAPI, workspace: WorkspaceRootCon
       const safety = await checkAction(action, [createPathAccessRule(state)]);
       if (safety.kind === "safe") continue;
 
-      if (config.pathAccess.mode === "block" || !ctx.hasUI) {
+      if (pathAccessMode === "block" || !ctx.hasUI) {
         return { block: true, reason: safety.reason };
       }
 
