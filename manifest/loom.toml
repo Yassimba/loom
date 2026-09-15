@@ -25,7 +25,7 @@ node = "24.21.0"
 # canvas, autoresearch skills + their Python core). The release zip is the
 # whole product, so `mise where github:AgriciDaniel/claude-obsidian` is the
 # product root its skills resolve scripts from.
-"github:AgriciDaniel/claude-obsidian" = "v2.1.1"
+"github:AgriciDaniel/claude-obsidian" = "v2.2.0"
 python = "3.14.7"
 
 # teams calendar CLI (export meetings as JSON, find slots). Same GitHub
