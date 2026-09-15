@@ -1083,20 +1083,6 @@
       "companions": []
     },
     {
-      "id": "tool:headroom",
-      "kind": "tool",
-      "group": "Tools",
-      "label": "headroom",
-      "description": "Local proxy that compresses AI-agent context before it reaches the model.",
-      "installTarget": "pipx:headroom-ai",
-      "nextAction": "Run `headroom doctor`, then launch an agent with `headroom wrap <agent>`. Set `HEADROOM_BEACON=off` to disable anonymous telemetry.",
-      "bin": "headroom",
-      "companions": [
-        "python",
-        "uv"
-      ]
-    },
-    {
       "id": "tool:magnitude",
       "kind": "tool",
       "group": "Local models",
