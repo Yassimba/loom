@@ -8,8 +8,9 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   features: {
     policies: true,
     permissionGate: true,
-    pathAccess: false,
+    pathAccess: true,
   },
+  modeShortcut: "ctrl+alt+g",
   pathAccess: {
     mode: "ask",
     allowedPaths: [{ kind: "file", path: "/dev/null" }],

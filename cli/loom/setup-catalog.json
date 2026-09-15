@@ -36,7 +36,7 @@
         "tool:zoxide",
         "tool:plannotator",
         "pi-package:@ff-labs/pi-fff",
-        "pi-package:pi-subagents",
+        "pi-package:@tintinweb/pi-subagents",
         "pi-package:pi-web-access",
         "pi-package:@yassimba/pi-guardrails",
         "pi-package:@yassimba/pi-skill-autocomplete",
@@ -228,7 +228,7 @@
       "label": "Pi Guardrails",
       "description": "Protect sensitive paths, add trusted workspace roots, and gate dangerous commands in Pi.",
       "installTarget": "@yassimba/pi-guardrails",
-      "nextAction": "Start Pi and run /guardrails:onboarding or /add-dir."
+      "nextAction": "Start Pi; Guardrails begins in Ask mode. Use /guardrails:mode to cycle modes."
     },
     {
       "id": "pi-package:@plannotator/pi-extension",
@@ -267,14 +267,14 @@
       "nextAction": "Branch to an earlier Pi message to see files rewind."
     },
     {
-      "id": "pi-package:pi-subagents",
+      "id": "pi-package:@tintinweb/pi-subagents",
       "kind": "pi-package",
       "group": "Pi packages",
       "label": "subagents",
-      "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
-      "installTarget": "pi-subagents",
-      "version": "0.67.0",
-      "nextAction": "Ask Pi to delegate a task to a subagent."
+      "description": "Run Claude Code-style subagents asynchronously, steer them while they work, and inspect their live conversations. By tintinweb.",
+      "installTarget": "@tintinweb/pi-subagents",
+      "version": "0.19.0",
+      "nextAction": "Ask Pi to run an Explore subagent in the background."
     },
     {
       "id": "pi-package:pi-web-access",

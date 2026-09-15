@@ -168,7 +168,8 @@ fn with_tool_companions(mut keys: Vec<String>) -> Result<Vec<String>, String> {
 }
 
 /// Fetch the manifest, rebuild the selection (previous keys + `extra`),
-/// write it to conf.d, and `mise install` the result.
+/// write it to conf.d, and install it. If an unrelated old selection is broken,
+/// install only the newly requested tools so their dependent setup can continue.
 pub fn sync_selected(system: &dyn System, extra: &[String]) -> Result<PathBuf, String> {
     sync_selected_from(
         system,
@@ -189,12 +190,13 @@ pub(crate) fn sync_selected_from(
         .ok_or_else(|| "home directory is unavailable".to_string())?;
     let target = conf_d_target(&home);
     crate::fs_tx::recover(&target)?;
+    let requested = with_tool_companions(extra.to_vec())?;
     let target = repository.get(system, cancelled).and_then(|repo_root| {
         let source = repo_root.join(MANIFEST_IN_REPO);
         let manifest = fs::read_to_string(&source)
             .map_err(|error| format!("downloaded repo has no {MANIFEST_IN_REPO}: {error}"))?;
         let mut keys = selected_keys(&home);
-        for key in extra {
+        for key in &requested {
             if !keys.contains(key) {
                 keys.push(key.clone());
             }
@@ -205,7 +207,8 @@ pub(crate) fn sync_selected_from(
         crate::fs_tx::atomic_write(&target, content.as_bytes())?;
         Ok(target)
     })?;
-    mise_install(system, cancelled).map_err(|error| format!("mise install failed: {error}"))?;
+    mise_install(system, cancelled, &requested)
+        .map_err(|error| format!("mise install failed: {error}"))?;
     // Moved pins leave their old versions in the store; prune is best-effort
     // cleanup and only removes versions no config references anymore.
     let _ = system.run_controlled(
@@ -265,9 +268,23 @@ fn mise_install_command(token: Option<String>) -> CommandSpec {
 fn mise_install(
     system: &dyn System,
     cancelled: &std::sync::atomic::AtomicBool,
+    requested: &[String],
 ) -> Result<(), String> {
-    let spec = mise_install_command(github_token(system));
-    match system.run_controlled(&spec, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
+    let token = github_token(system);
+    let spec = mise_install_command(token.clone());
+    let failure =
+        match system.run_controlled(&spec, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
+            Ok(result) if result.success => return Ok(()),
+            Ok(result) => crate::install::command_failure_message(&result),
+            Err(error) => error.to_string(),
+        };
+    if requested.is_empty() {
+        return Err(failure);
+    }
+    // A stale selected tool must not block installation of an unrelated new one.
+    let mut retry = mise_install_command(token);
+    retry.args.extend(requested.iter().cloned());
+    match system.run_controlled(&retry, crate::system::MANAGER_COMMAND_TIMEOUT, cancelled) {
         Ok(result) if result.success => Ok(()),
         Ok(result) => Err(crate::install::command_failure_message(&result)),
         Err(error) => Err(error.to_string()),
@@ -407,6 +424,47 @@ gh = \"2.97.0\"
         assert!(rendered.contains("gone = \"1.0.0\""));
         let rendered = render_selection(MANIFEST, "", &["gone".into()]).unwrap();
         assert!(!rendered.contains("gone"));
+    }
+
+    struct TargetedInstallSystem {
+        commands: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl System for TargetedInstallSystem {
+        fn command_exists(&self, _name: &str) -> bool {
+            true
+        }
+
+        fn refresh_path(&self) {}
+
+        fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
+            self.commands.lock().unwrap().push(command.display());
+            Ok(crate::CommandResult {
+                success: command.args.len() > 2,
+                stdout: String::new(),
+                stderr: "unrelated selected tool failed".into(),
+            })
+        }
+    }
+
+    #[test]
+    fn mise_install_retries_only_requested_tools() {
+        let system = TargetedInstallSystem {
+            commands: std::sync::Mutex::new(Vec::new()),
+        };
+        let requested = vec![RTK_TOOL_KEY.to_string()];
+
+        mise_install(
+            &system,
+            &std::sync::atomic::AtomicBool::new(false),
+            &requested,
+        )
+        .unwrap();
+
+        assert_eq!(
+            *system.commands.lock().unwrap(),
+            ["mise install --yes", "mise install --yes github:rtk-ai/rtk"]
+        );
     }
 
     #[test]

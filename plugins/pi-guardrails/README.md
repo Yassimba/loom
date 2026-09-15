@@ -4,7 +4,7 @@ Guardrails adds safety checks to Pi so agents are less likely to read secrets, w
 
 This package installs three Pi extensions:
 
-- **guardrails** for file policies, workspace roots, outside-workspace access, settings, onboarding, and examples.
+- **guardrails** for file policies, workspace roots, outside-workspace access, session modes, settings, and examples.
 - **permission-gate** for confirming or blocking risky shell commands.
 - **herdr** for reporting Guardrails approval prompts to Herdr.
 
@@ -16,19 +16,15 @@ pi install npm:@yassimba/pi-guardrails
 
 ## First run
 
-After installing, run the onboarding command to choose a starting setup:
+Guardrails starts in **Ask** mode. Path Access prompts before tools reach outside the workspace, protected-file policies remain enforced, and dangerous commands require confirmation.
 
-```text
-/guardrails:onboarding
-```
+Use `/guardrails:mode` or `Ctrl+Alt+G` to cycle the current session through:
 
-[![Guardrails onboarding walkthrough](https://assets.aliou.me/github/aliou/pi-guardrails/v0.12.0/onboarding.gif)](https://assets.aliou.me/github/aliou/pi-guardrails/v0.12.0/onboarding.mp4)
+- **Ask** — prompt before outside-workspace access.
+- **Free** — allow outside-workspace access while keeping policies and dangerous-command confirmation.
+- **Yolo** — disable all Guardrails checks after a one-time confirmation for the session.
 
-You can change everything later with:
-
-```text
-/guardrails:settings
-```
+The active mode appears as plain `Ask`, `Free`, or `Yolo` text in Pi's footer. Change the shortcut or permanent defaults with `/guardrails:settings`; shortcut changes apply after `/reload`.
 
 ## Included extensions
 
@@ -51,8 +47,8 @@ Use it to protect files like `.env`, private keys, local credentials, generated 
 Useful commands:
 
 ```text
+/guardrails:mode
 /guardrails:settings
-/guardrails:onboarding
 /guardrails:examples
 ```
 
@@ -64,7 +60,7 @@ The adapter has no configuration or direct Herdr dependency. Its emitted events 
 
 ### path-access
 
-The `path-access` extension checks tool calls that target paths outside the current working directory.
+The `path-access` extension checks tool calls that target paths outside the current working directory. It starts enabled in Ask mode.
 
 It can allow, block, or ask before Pi accesses files elsewhere on your machine. In ask mode, file grants remain access-only, while directory grants can add the directory to the session or project workspace so future agents also receive its orientation and instruction-file hints.
 

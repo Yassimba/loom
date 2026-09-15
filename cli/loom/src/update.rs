@@ -571,15 +571,15 @@ mod tests {
 
     #[test]
     fn package_verification_requires_the_exact_identity_and_destination() {
-        let listed = "User packages:\n npm:pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:pi-subagents@0.66.0\n npm:@example/foo@1";
+        let listed = "User packages:\n npm:@tintinweb/pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:@tintinweb/pi-subagents@0.19.0\n npm:@example/foo@1";
         assert!(!crate::install::pi_package_installed(
             listed,
-            "pi-subagents",
+            "@tintinweb/pi-subagents",
             false
         ));
         assert!(crate::install::pi_package_installed(
             listed,
-            "npm:pi-subagents@latest",
+            "npm:@tintinweb/pi-subagents@latest",
             true
         ));
         assert!(!crate::install::pi_package_installed(
@@ -593,8 +593,8 @@ mod tests {
             true
         ));
         assert!(!crate::install::pi_package_installed(
-            "npm:pi-subagents",
-            "pi-subagents",
+            "npm:@tintinweb/pi-subagents",
+            "@tintinweb/pi-subagents",
             false
         ));
         let root = std::env::temp_dir().join(format!(
@@ -790,17 +790,17 @@ mod tests {
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
         // Read the pin from the catalog: hardcoding it here makes every
-        // dependency bump of pi-subagents fail this test.
+        // dependency bump of @tintinweb/pi-subagents fail this test.
         let subagents = catalog
             .resources
             .iter()
-            .find(|resource| resource.install_target == "pi-subagents")
-            .expect("pi-subagents is in the catalog");
+            .find(|resource| resource.install_target == "@tintinweb/pi-subagents")
+            .expect("@tintinweb/pi-subagents is in the catalog");
         let pinned = subagents
             .version
             .as_deref()
             .expect("external Pi packages carry an exact version");
-        let listed = "User packages:\n  npm:pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
+        let listed = "User packages:\n  npm:@tintinweb/pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:@tintinweb/pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
             .map(|command| command.display())
@@ -808,13 +808,13 @@ mod tests {
 
         assert!(commands
             .iter()
-            .any(|command| command == &format!("pi install npm:pi-subagents@{pinned}")));
+            .any(|command| command == &format!("pi install npm:@tintinweb/pi-subagents@{pinned}")));
         assert!(commands
             .iter()
             .any(|command| command == "pi install npm:@yassimba/pi-guardrails@latest"));
-        assert!(commands
-            .iter()
-            .any(|command| command == &format!("pi install -l npm:pi-subagents@{pinned}")));
+        assert!(commands.iter().any(
+            |command| command == &format!("pi install -l npm:@tintinweb/pi-subagents@{pinned}")
+        ));
         assert!(
             !commands.iter().any(|command| command.contains("feynman")),
             "Wiki packages are updated only in registered Vaults"
