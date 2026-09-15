@@ -7,16 +7,26 @@ import {
   GUARDRAILS_PROMPT_CLOSED_EVENT,
   GUARDRAILS_PROMPT_OPENED_EVENT,
 } from "../../src/shared/events";
+import {
+  GUARDRAILS_MODE_CHANGED_EVENT,
+  type GuardrailsModeChangedPayload,
+  type GuardrailsSessionMode,
+} from "../../src/shared/session-mode";
 import { isCommandAllowed, saveCommandSessionGrant } from "./grants";
 import { createPermissionGateConfirmComponent } from "./prompt";
 import { createPermissionGateRule, formatAutoDenyReason, matchCommandPattern } from "./rules";
 
 export default async function permissionGate(pi: ExtensionAPI) {
   await configLoader.load();
+  let sessionMode: GuardrailsSessionMode = "ask";
+  pi.events.on(GUARDRAILS_MODE_CHANGED_EVENT, (event: unknown) => {
+    const mode = (event as Partial<GuardrailsModeChangedPayload> | null)?.mode;
+    if (mode === "ask" || mode === "free" || mode === "yolo") sessionMode = mode;
+  });
 
   pi.on("tool_call", async (event, ctx) => {
     const config = configLoader.getConfig();
-    if (!config.enabled || !config.features.permissionGate) return;
+    if (sessionMode === "yolo" || !config.features.permissionGate) return;
     if (!isToolCallEventType("bash", event)) return;
 
     const command = event.input.command;

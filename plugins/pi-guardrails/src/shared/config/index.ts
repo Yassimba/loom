@@ -5,6 +5,7 @@ export type {
   AllowedPath,
   DangerousPattern,
   GuardrailsConfig,
+  GuardrailsModeShortcut,
   PathAccessConfig,
   PathAccessMode,
   PatternConfig,
