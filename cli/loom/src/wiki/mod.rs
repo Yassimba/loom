@@ -738,7 +738,7 @@ mod tests {
         assert!(setup_qmd(&failing, &first)
             .unwrap_err()
             .to_string()
-            .contains("The operation did not complete"));
+            .contains("embedding failed"));
         fs::remove_dir_all(root).unwrap();
     }
 

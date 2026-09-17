@@ -703,7 +703,7 @@ mod tests {
                 Some("2.0.0"),
                 false,
                 true,
-                "Installation could not be verified",
+                "verification did not find the selected package",
             ),
         ]
         .into_iter()
@@ -750,7 +750,11 @@ mod tests {
             assert_eq!(lane.ok, !fail_next && !wrong_scope);
             let text = format!("{}\n{}", lane.detail, lane.notes.join("\n"));
             assert!(text.contains(expected), "{text}");
-            assert!(!text.contains("SECRET"), "{text}");
+            assert_eq!(
+                text.contains("Authorization: Bearer SECRET"),
+                fail_next,
+                "{text}"
+            );
             assert!(text.contains("this project"), "{text}");
             assert!(progress
                 .borrow()

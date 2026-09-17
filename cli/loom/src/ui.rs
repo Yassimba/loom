@@ -82,8 +82,7 @@ impl Mark {
     }
 }
 
-/// Only fixed, recognized causes reach compact reports. Tool output may contain
-/// credentials or private document text, so it is never the details view.
+/// Map known diagnostics to a short cause and recovery action.
 pub(crate) fn failure_advice(message: &str) -> (&'static str, &'static str) {
     let message = message.to_ascii_lowercase();
     for (signals, cause, next) in [
@@ -141,13 +140,17 @@ pub(crate) fn failure_advice(message: &str) -> (&'static str, &'static str) {
     }
     (
         "The operation did not complete",
-        "Retry the failed item. Raw tool output is hidden to protect secrets.",
+        "Review the error, then retry the failed item.",
     )
 }
 
 pub(crate) fn failure_text(message: &str) -> String {
-    let (cause, next) = failure_advice(message);
-    format!("{cause}. {next}")
+    message
+        .chars()
+        .filter(|character| matches!(character, '\n' | '\t') || !character.is_control())
+        .collect::<String>()
+        .trim()
+        .to_owned()
 }
 
 /// One palette for every TUI screen (wizard, Wiki, progress).
@@ -726,33 +729,24 @@ mod tests {
     }
 
     #[test]
-    fn command_failures_keep_causes_but_never_echo_private_output() {
-        for (diagnostic, expected) in [
-            ("ETIMEDOUT", "timed out"),
-            ("EACCES", "Permission was denied"),
-            ("ENOSPC", "disk space"),
-            ("ENOTFOUND", "could not be reached"),
-            ("cancelled while running command", "Cancelled"),
-            ("unrecognized failure", "did not complete"),
-        ] {
-            for stderr in [true, false] {
-                let private = format!("{diagnostic}\nAuthorization: Bearer SECRET\nhttps://user:password@host/private\nprivate note\x1b]0;title\x07");
-                let result = crate::CommandResult {
-                    success: false,
-                    stdout: if stderr {
-                        String::new()
-                    } else {
-                        private.clone()
-                    },
-                    stderr: if stderr { private } else { String::new() },
-                };
-                let message = crate::install::command_failure_message(&result);
-                assert!(message.contains(expected), "{message}");
-                for secret in ["SECRET", "password", "private note", "\x1b"] {
-                    assert!(!message.contains(secret), "{message}");
-                }
-                assert_eq!(failure_text(&message), message);
+    fn command_failures_show_tool_output_without_terminal_controls() {
+        for stderr in [true, false] {
+            let diagnostic = "ETIMEDOUT\nAuthorization: Bearer SECRET\nhttps://user:password@host/private\nprivate note\x1b]0;title\x07".to_string();
+            let result = crate::CommandResult {
+                success: false,
+                stdout: if stderr {
+                    String::new()
+                } else {
+                    diagnostic.clone()
+                },
+                stderr: if stderr { diagnostic } else { String::new() },
+            };
+            let message = crate::install::command_failure_message(&result);
+            for text in ["ETIMEDOUT", "SECRET", "password", "private note"] {
+                assert!(message.contains(text), "{message}");
             }
+            assert!(!message.contains(['\x1b', '\x07']), "{message}");
+            assert_eq!(failure_text(&message), message);
         }
         let empty = crate::CommandResult {
             success: false,
