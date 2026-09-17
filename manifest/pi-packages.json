@@ -11,7 +11,7 @@
     },
     {
       "name": "@dietrichgebert/ponytail",
-      "version": "4.9.0",
+      "version": "4.10.0",
       "label": "ponytail",
       "bundledSkills": ["ponytail"],
       "description": "Ponytail modes and skills for Pi: prefer simple solutions and inject the active mode's instructions each turn. By Dietrich Gebert.",
