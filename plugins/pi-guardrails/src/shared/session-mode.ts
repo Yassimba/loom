@@ -27,14 +27,21 @@ export function resetSessionMode(next: GuardrailsSessionMode): void {
   yoloConfirmed = next === "yolo";
 }
 
+export async function enableYoloMode(
+  confirmYolo: () => Promise<boolean>,
+): Promise<GuardrailsSessionMode> {
+  if (mode === "yolo") return mode;
+  if (!yoloConfirmed && !(await confirmYolo())) return mode;
+  yoloConfirmed = true;
+  mode = "yolo";
+  return mode;
+}
+
 export async function cycleSessionMode(
   confirmYolo: () => Promise<boolean>,
 ): Promise<GuardrailsSessionMode> {
   const next = MODES[(MODES.indexOf(mode) + 1) % MODES.length];
-  if (next === "yolo" && !yoloConfirmed) {
-    if (!(await confirmYolo())) return mode;
-    yoloConfirmed = true;
-  }
+  if (next === "yolo") return enableYoloMode(confirmYolo);
   mode = next;
   return mode;
 }

@@ -3,6 +3,7 @@ import { configLoader } from "../../src/shared/config";
 import {
   configuredSessionMode,
   cycleSessionMode,
+  enableYoloMode,
   GUARDRAILS_MODE_CHANGED_EVENT,
   getSessionMode,
   resetSessionMode,
@@ -21,15 +22,22 @@ function publishMode(pi: ExtensionAPI, ctx: ExtensionContext): void {
   pi.events.emit(GUARDRAILS_MODE_CHANGED_EVENT, { mode });
 }
 
+function confirmYolo(ctx: ExtensionContext): Promise<boolean> {
+  return ctx.hasUI
+    ? ctx.ui.confirm(
+        "Enable Yolo mode?",
+        "All Guardrails checks will be disabled for this Pi session.",
+      )
+    : Promise.resolve(false);
+}
+
 async function cycleMode(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
-  await cycleSessionMode(() =>
-    ctx.hasUI
-      ? ctx.ui.confirm(
-          "Enable Yolo mode?",
-          "All Guardrails checks will be disabled for this Pi session.",
-        )
-      : Promise.resolve(false),
-  );
+  await cycleSessionMode(() => confirmYolo(ctx));
+  publishMode(pi, ctx);
+}
+
+async function enableYolo(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
+  await enableYoloMode(() => confirmYolo(ctx));
   publishMode(pi, ctx);
 }
 
@@ -43,6 +51,10 @@ export default async function guardrails(pi: ExtensionAPI) {
   pi.registerCommand("guardrails:mode", {
     description: "Cycle Guardrails session mode: Ask, Free, Yolo",
     handler: async (_args, ctx) => cycleMode(pi, ctx),
+  });
+  pi.registerCommand("yolo", {
+    description: "Disable all Guardrails checks for this session",
+    handler: async (_args, ctx) => enableYolo(pi, ctx),
   });
 
   const shortcut = configLoader.getConfig().modeShortcut;

@@ -24,6 +24,8 @@ Use `/guardrails:mode` or `Ctrl+Alt+G` to cycle the current session through:
 - **Free** — allow outside-workspace access while keeping policies and dangerous-command confirmation.
 - **Yolo** — disable all Guardrails checks after a one-time confirmation for the session.
 
+Use `/yolo` to switch directly to Yolo without cycling through Free.
+
 The active mode appears as plain `Ask`, `Free`, or `Yolo` text in Pi's footer. Change the shortcut or permanent defaults with `/guardrails:settings`; shortcut changes apply after `/reload`.
 
 ## Included extensions
@@ -47,6 +49,7 @@ Use it to protect files like `.env`, private keys, local credentials, generated 
 Useful commands:
 
 ```text
+/yolo
 /guardrails:mode
 /guardrails:settings
 /guardrails:examples
