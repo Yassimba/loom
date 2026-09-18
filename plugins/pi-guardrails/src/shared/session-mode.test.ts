@@ -3,6 +3,7 @@ import type { ResolvedConfig } from "./config";
 import {
   configuredSessionMode,
   cycleSessionMode,
+  enableYoloMode,
   getSessionMode,
   resetSessionMode,
 } from "./session-mode";
@@ -38,6 +39,19 @@ describe("Guardrails session mode", () => {
       ),
     ).toBe("free");
     expect(configuredSessionMode(config({ enabled: false }))).toBe("yolo");
+  });
+
+  it("enables Yolo directly after confirmation", async () => {
+    const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+
+    await enableYoloMode(confirm);
+    expect(getSessionMode()).toBe("ask");
+
+    await enableYoloMode(confirm);
+    expect(getSessionMode()).toBe("yolo");
+
+    await enableYoloMode(confirm);
+    expect(confirm).toHaveBeenCalledTimes(2);
   });
 
   it("cycles modes and confirms Yolo once per session", async () => {

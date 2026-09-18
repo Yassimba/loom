@@ -231,6 +231,7 @@ impl Wizard {
                 let (cause, recovery) = crate::ui::failure_advice(message);
                 lines.push(field("cause", cause.into(), ERR));
                 lines.push(Line::from(recovery));
+                lines.push(field("error", crate::ui::failure_text(message), ERR));
             }
             if stage.show_details {
                 lines.push(field("details", item.detail.clone(), ACCENT));

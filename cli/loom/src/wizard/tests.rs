@@ -1032,6 +1032,7 @@ fn retry_keeps_the_reviewed_plan_destination_and_completed_items() {
     let rendered = screen(&mut wizard, 100, 28);
     assert!(rendered.contains("Retry"), "{rendered}");
     assert!(rendered.contains("Completed work stays"), "{rendered}");
+    assert!(rendered.contains("timed out after 30s"), "{rendered}");
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
         Some(Action::StartInstall)
@@ -1107,7 +1108,7 @@ fn retry_rechecks_completed_packages_and_reinstalls_only_missing_or_failed_work(
         }
         let rendered = screen(&mut wizard, 100, 28);
         assert!(rendered.contains("timed out"), "{rendered}");
-        assert!(!rendered.contains("PRIVATE-TOKEN"));
+        assert!(rendered.contains("PRIVATE-TOKEN"), "{rendered}");
         assert!(wizard.can_retry());
         if removed_after_success {
             system.installed.lock().unwrap().clear();

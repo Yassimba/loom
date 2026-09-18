@@ -893,8 +893,7 @@ pub(crate) fn rtk_pi_configured(system: &dyn System) -> bool {
     })
 }
 
-/// Reduce tool diagnostics to a safe cause and recovery action. Never echo
-/// arbitrary stderr/stdout: installers can include credentials or private text.
+/// Return the tool diagnostic, stripping only terminal control characters.
 pub(crate) fn command_failure_message(result: &crate::CommandResult) -> String {
     let message = if result.stderr.trim().is_empty() {
         result.stdout.trim()
