@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/Yassimba/loom/compare/loom-v1.12.0...loom-v1.13.0) (2026-09-18)
+
+
+### Features
+
+* expose tool errors and add direct yolo mode ([#283](https://github.com/Yassimba/loom/issues/283)) ([88db242](https://github.com/Yassimba/loom/commit/88db242a8087af6d47f16745027214e359fcdff3))
+
 ## [1.12.0](https://github.com/Yassimba/loom/compare/loom-v1.11.0...loom-v1.12.0) (2026-09-15)
 
 

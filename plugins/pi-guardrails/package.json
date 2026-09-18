@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-guardrails",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "Security guardrails for Pi: protected paths, workspace boundaries, and dangerous-command gates.",
   "license": "MIT",
   "type": "module",
