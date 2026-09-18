@@ -1,9 +1,9 @@
 {
-  "cli/loom": "1.12.0",
+  "cli/loom": "1.13.0",
   "cli/loom-teams": "0.2.3",
   "plugins/pi-fast": "2.0.0",
   "plugins/pi-code-intelligence": "0.2.0",
-  "plugins/pi-guardrails": "0.19.0",
+  "plugins/pi-guardrails": "0.20.0",
   "plugins/skill-autocomplete": "0.2.0",
   "plugins/pi-loom": "0.2.2",
   "plugins/pi-loom-mermaid": "0.7.0"

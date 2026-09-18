@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/Yassimba/loom/compare/pi-guardrails-v0.19.0...pi-guardrails-v0.20.0) (2026-09-18)
+
+
+### Features
+
+* expose tool errors and add direct yolo mode ([#283](https://github.com/Yassimba/loom/issues/283)) ([88db242](https://github.com/Yassimba/loom/commit/88db242a8087af6d47f16745027214e359fcdff3))
+
 ## [0.19.0](https://github.com/Yassimba/loom/compare/pi-guardrails-v0.18.0...pi-guardrails-v0.19.0) (2026-09-15)
 
 
