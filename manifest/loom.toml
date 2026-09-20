@@ -53,7 +53,7 @@ herdr = { version = "0.9.0", os = ["macos", "linux"] }
 "github:rtk-ai/rtk" = "v0.49.0"
 
 # local inference server for Apple silicon Macs
-"npm:@magnitudedev/cli" = { version = "0.0.14", os = ["macos"] }
+"npm:@magnitudedev/cli" = { version = "0.0.15", os = ["macos"] }
 
 # hardware-aware local model TUI for Linux and Windows
 "ubi:AlexsJones/llmfit" = { version = "v1.1.15", os = ["linux", "windows"] }
