@@ -125,7 +125,7 @@
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "installTarget": "@gotgenes/pi-anthropic-auth",
-      "version": "2.0.9",
+      "version": "2.0.10",
       "nextAction": "Run /model in Pi and pick a Claude model."
     },
     {
