@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@golevelup/ts-vitest": "4.0.0",
-    "memfs": "4.78.0",
+    "memfs": "4.78.1",
     "vitest": "4.1.11"
   },
   "scripts": {
