@@ -29,7 +29,7 @@
     "@biomejs/biome": "2.5.14",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "fallow": "3.26.0",
     "typescript": "7.0.2",
     "yaml": "2.9.1"
