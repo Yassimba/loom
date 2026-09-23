@@ -121,6 +121,60 @@ test("release smoke selects published binaries at the pin commit", async () => {
   }
 });
 
+test("WSL provisioning uses web download and retains bounded failure evidence", async () => {
+  const smoke = parse(await readFile(join(repoRoot, ".github/workflows/full-install.yml"), "utf8"));
+  const steps = smoke.jobs["windows-wsl"].steps;
+  const diagnostics = steps.find((step) => step.name === "Inspect WSL before installation");
+  const discovery = steps.find((step) => step.id === "wsl-discovery");
+  const install = steps.find((step) => step.name === "Install Ubuntu in WSL if absent");
+  assert.ok(diagnostics, "capture WSL diagnostics before installation can hang");
+  assert.ok(steps.indexOf(diagnostics) < steps.indexOf(discovery));
+  assert.equal(diagnostics["timeout-minutes"], 1);
+  assert.match(diagnostics.run, /"version", "status"/);
+  assert.equal(discovery["timeout-minutes"], 1);
+  assert.equal(install["timeout-minutes"], 5);
+  assert.match(install.run, /wsl --install --web-download -d Ubuntu --no-launch/);
+  for (const step of [diagnostics, discovery, install]) {
+    const initialize = step.run.indexOf("New-Item -ItemType File");
+    assert.ok(initialize >= 0 && initialize < step.run.indexOf("wsl "));
+    assert.match(step.run, /\$code = \$LASTEXITCODE/);
+    assert.match(step.run, /if \(\$code -ne 0\) \{ exit \$code \}/);
+    assert.equal(step["continue-on-error"], undefined);
+  }
+  assert.equal(steps.find((step) => step.name === "Upload Windows E2E evidence").if, "always()");
+});
+
+test("WSL install failure collects bounded service, event, and network evidence", async () => {
+  const smoke = parse(await readFile(join(repoRoot, ".github/workflows/full-install.yml"), "utf8"));
+  const steps = smoke.jobs["windows-wsl"].steps;
+  const install = steps.find((step) => step.id === "wsl-install");
+  const diagnostics = steps.find((step) => step.name === "Diagnose WSL installation failure");
+  assert.ok(install && diagnostics, "retain diagnostics after the install step times out");
+  assert.equal(install["timeout-minutes"], 5);
+  assert.equal(diagnostics.if, "always() && steps.wsl-install.outcome == 'failure'");
+  assert.equal(diagnostics["timeout-minutes"], 1);
+  assert.equal(diagnostics["continue-on-error"], undefined);
+  assert.ok(steps.indexOf(diagnostics) > steps.indexOf(install));
+  assert.ok(
+    steps.indexOf(diagnostics) <
+      steps.findIndex((step) => step.name === "Upload Windows E2E evidence"),
+  );
+  assert.match(diagnostics.run, /Get-Service/);
+  assert.match(diagnostics.run, /Get-WinEvent[\s\S]*-MaxEvents 20/);
+  assert.match(diagnostics.run, /AddMinutes\(-10\)/);
+  assert.match(diagnostics.run, /--connect-timeout 5 --max-time 15/);
+  assert.match(
+    diagnostics.run,
+    /raw\.githubusercontent\.com\/microsoft\/WSL\/master\/distributions\/DistributionInfo\.json/,
+  );
+  assert.match(
+    diagnostics.run,
+    /Select-Object TimeCreated, LogName, ProviderName, Id, LevelDisplayName/,
+  );
+  assert.doesNotMatch(diagnostics.run, /Select-Object[^\n]*(?:Message|Properties|\*)/);
+  assert.match(diagnostics.run, /if \(\$networkCode -ne 0\) \{ exit \$networkCode \}/);
+});
+
 test("Unix smoke checks the published pin rather than an unreleased Cargo version", {
   skip: process.platform === "win32",
 }, async () => {
