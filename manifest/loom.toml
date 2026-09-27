@@ -68,7 +68,7 @@ herdr = { version = "0.9.1", os = ["macos", "linux"] }
 "github:backnotprop/plannotator" = "v0.27.17"
 
 # forges
-gh = "2.100.0"
+gh = "2.101.0"
 "github:ankitpokhrel/jira-cli[exe=jira]" = "v1.7.0"
 glab = "1.117.0"
 "github:rcieri/glab-tui" = "v0.9.1"
