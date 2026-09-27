@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.7.0...pi-loom-mermaid-v0.7.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **loom:** update Pi and preserve MCP setup ([#317](https://github.com/Yassimba/loom/issues/317)) ([6839b2a](https://github.com/Yassimba/loom/commit/6839b2a0a62361f75b4012e23966e13bcae088ac))
+
 ## [0.7.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.6.1...pi-loom-mermaid-v0.7.0) (2026-09-14)
 
 
