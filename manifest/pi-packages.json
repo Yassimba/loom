@@ -3,7 +3,7 @@
   "packages": [
     {
       "name": "i-have-adhd",
-      "source": "git:github.com/ayghri/i-have-adhd@58494af57962b2d7a996b4d419474380a299af5e",
+      "source": "git:github.com/ayghri/i-have-adhd@839872f9d1cd634fed642b4589ce7226199cc15f",
       "label": "i-have-adhd",
       "bundledSkills": ["i-have-adhd"],
       "description": "ADHD-friendly output for Pi with a session mode toggle, status indicator, and restoration after compaction. By Ayoub G.",
@@ -19,7 +19,7 @@
     },
     {
       "name": "@plannotator/pi-extension",
-      "version": "0.27.18",
+      "version": "0.27.21",
       "label": "plannotator",
       "bundledSkills": ["plannotator"],
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
@@ -27,7 +27,7 @@
     },
     {
       "name": "@companion-ai/feynman",
-      "version": "0.3.47",
+      "version": "0.5.9",
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
@@ -51,7 +51,7 @@
     },
     {
       "name": "pi-mcp-adapter",
-      "version": "2.32.1",
+      "version": "3.0.0",
       "label": "mcp-adapter",
       "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
@@ -65,7 +65,7 @@
     },
     {
       "name": "pi-web-access",
-      "version": "0.29.0",
+      "version": "0.32.0",
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "nextAction": "Ask Pi to search the web."
@@ -79,7 +79,7 @@
     },
     {
       "name": "@gotgenes/pi-anthropic-auth",
-      "version": "2.0.10",
+      "version": "3.3.2",
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "nextAction": "Run /model in Pi and pick a Claude model."

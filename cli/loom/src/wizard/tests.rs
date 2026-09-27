@@ -197,7 +197,7 @@ fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
         assert!(rendered.contains("directTools=false"), "{rendered}");
         assert!(rendered.contains("mcp-adapter"), "{rendered}");
         assert!(
-            rendered.contains(".pi/mcp.json") || rendered.contains(r".pi\mcp.json"),
+            rendered.contains(".pi/mcp-adapter.json") || rendered.contains(r".pi\mcp-adapter.json"),
             "{rendered}"
         );
         assert!(!rendered.contains("blocked"), "{rendered}");
