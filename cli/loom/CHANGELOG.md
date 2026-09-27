@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.2](https://github.com/Yassimba/loom/compare/loom-v1.13.1...loom-v1.13.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **loom:** update Pi packages after optional tool failures ([#325](https://github.com/Yassimba/loom/issues/325)) ([ef704d5](https://github.com/Yassimba/loom/commit/ef704d5a9b91130a6942f94f45ec1c2d0f921a10))
+
 ## [1.13.1](https://github.com/Yassimba/loom/compare/loom-v1.13.0...loom-v1.13.1) (2026-09-27)
 
 
