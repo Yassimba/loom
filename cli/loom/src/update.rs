@@ -221,7 +221,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
             "mise is not on PATH; rerun the installer from the README",
         )
     };
-    let tools_ready = tools_lane.ok;
+    let pi_ready = pi_runtime_ready(system, tools_lane.ok);
     let active_details = &std::sync::Mutex::new(std::collections::BTreeMap::new());
     type Job<'a> = Box<dyn FnOnce() -> Lane + Send + 'a>;
     let mut jobs: Vec<(&'static str, Job<'_>)> = vec![
@@ -236,7 +236,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
     ];
     jobs.push(("Tools", Box::new(move || tools_lane)));
     for task in tasks {
-        if !tools_ready && task.label == "Pi packages" {
+        if !pi_ready && task.label == "Pi packages" {
             jobs.push((
                 "Pi packages",
                 Box::new(|| {
@@ -384,6 +384,24 @@ fn sync_tool_manifest(system: &dyn System, repository: &skills::Repository) -> L
         }
         Err(message) => Lane::failed("Tools", message),
     }
+}
+
+// An unrelated selected tool can fail the bulk mise install. Retry only Pi
+// before running packages that may depend on its newly pinned runtime.
+fn pi_runtime_ready(system: &dyn System, tools_ready: bool) -> bool {
+    if tools_ready {
+        return true;
+    }
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    let spec = CommandSpec::new("mise", ["install", "--yes", crate::manifest::PI_TOOL_KEY]);
+    if !system
+        .run_controlled(&spec, crate::system::MANAGER_COMMAND_TIMEOUT, &cancelled)
+        .is_ok_and(|result| result.success)
+    {
+        return false;
+    }
+    system.refresh_path();
+    system.command_exists("pi")
 }
 
 fn reconcile_pi_compat(system: &dyn System, targets: &[String]) -> Lane {
@@ -797,6 +815,48 @@ mod tests {
             }
             std::fs::remove_dir_all(root).unwrap();
         }
+    }
+
+    #[test]
+    fn optional_tool_failure_only_blocks_packages_if_pi_cannot_be_updated() {
+        struct ToolSystem {
+            pi_install_ok: bool,
+            calls: std::sync::Mutex<Vec<String>>,
+        }
+        impl System for ToolSystem {
+            fn command_exists(&self, _: &str) -> bool {
+                true
+            }
+            fn refresh_path(&self) {}
+            fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
+                self.calls.lock().unwrap().push(command.display());
+                Ok(crate::CommandResult {
+                    success: self.pi_install_ok,
+                    stdout: String::new(),
+                    stderr: "Pi installation failed".into(),
+                })
+            }
+        }
+        for pi_install_ok in [true, false] {
+            let system = ToolSystem {
+                pi_install_ok,
+                calls: std::sync::Mutex::new(Vec::new()),
+            };
+            assert_eq!(pi_runtime_ready(&system, false), pi_install_ok);
+            assert_eq!(
+                *system.calls.lock().unwrap(),
+                vec![format!(
+                    "mise install --yes {}",
+                    crate::manifest::PI_TOOL_KEY
+                )]
+            );
+        }
+        let system = ToolSystem {
+            pi_install_ok: false,
+            calls: std::sync::Mutex::new(Vec::new()),
+        };
+        assert!(pi_runtime_ready(&system, true));
+        assert!(system.calls.lock().unwrap().is_empty());
     }
 
     #[test]
