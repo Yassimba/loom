@@ -152,6 +152,9 @@ jobs:
   # published binaries and pins.
   full-install:
     needs: pin
+    # A skipped npm job is expected for CLI-only releases; do not let its
+    # implicit success() condition skip published install checks through pin.
+    if: "!cancelled() && needs.pin.result == 'success'"
     uses: ./.github/workflows/full-install.yml
     with:
       checkout_ref: ${{ needs.pin.outputs.sha }}
