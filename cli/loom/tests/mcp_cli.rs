@@ -81,11 +81,11 @@ impl System for Stub {
             assert_eq!(command.args, ["install", mcp::ADAPTER_SPEC]);
             success = !self.fail_adapter;
             if success {
-                adapter(&self.home, "2.32.1");
+                adapter(&self.home, "3.0.0");
             }
         }
         if command.program == "pi" && command.args.first().map(String::as_str) == Some("list") {
-            stdout = "User packages:\n  npm:pi-mcp-adapter@2.32.1\n".into();
+            stdout = "User packages:\n  npm:pi-mcp-adapter@3.0.0\n".into();
         }
         Ok(CommandResult {
             success,
@@ -183,7 +183,7 @@ fn codebase_memory_writes_exact_entry_and_records_tool_dependency() {
         "tool:codebase-memory-mcp",
     );
     let destination = destination(name, SkillScope::Global);
-    adapter(&destination.home, "2.33.0");
+    adapter(&destination.home, "3.0.0");
     let stub = Stub::new(&destination.home);
 
     mcp::install(server, &destination, &stub).unwrap();
@@ -205,7 +205,7 @@ fn codebase_memory_accepts_absolute_binary_and_requires_it() {
         json!(["--tool-profile=analysis"]),
     );
     let destination = destination(&format!("{name}-absolute"), SkillScope::Global);
-    adapter(&destination.home, "2.33.0");
+    adapter(&destination.home, "3.0.0");
     let path = mcp::config_path(&destination);
     let binary = destination.home.join("bin").join(name);
     assert!(binary.is_absolute());
@@ -248,7 +248,7 @@ fn codebase_memory_conflicts_fail_before_mutation() {
         json!({"command": format!("bin/{name}"), "args": valid_args.clone(), "directTools": false}),
     ] {
         let destination = destination(&format!("{name}-conflict"), SkillScope::Global);
-        adapter(&destination.home, "2.33.0");
+        adapter(&destination.home, "3.0.0");
         let path = mcp::config_path(&destination);
         write_json(&path, json!({"mcpServers": {(name): entry}}));
         let before = fs::read(&path).unwrap();
@@ -281,7 +281,7 @@ fn context7_upgrades_an_older_official_adapter() {
 fn context7_rejects_disabled_unverified_and_project_adapter_sources() {
     for package in [
         json!({"source":mcp::ADAPTER_SPEC,"extensions":[]}),
-        json!("npm:pi-mcp-adapter@3.0.0"),
+        json!("npm:pi-mcp-adapter@4.0.0"),
         json!("/some/private/pi-mcp-adapter"),
         json!({"source":mcp::ADAPTER_SPEC,"autoload":false}),
     ] {
@@ -305,6 +305,70 @@ fn context7_rejects_disabled_unverified_and_project_adapter_sources() {
     fs::remove_dir_all(destination.home).unwrap();
 }
 
+#[test]
+fn update_migrates_legacy_mcp_config_and_owned_receipt() {
+    let destination = destination("mcp-v3-migration", SkillScope::Global);
+    adapter(&destination.home, "2.32.1");
+    let old = destination.home.join(".pi/agent/mcp.json");
+    write_json(
+        &old,
+        json!({"mcpServers":{"context7":{"url":"https://mcp.context7.com/mcp","directTools":false},"custom":{"command":"keep"}}}),
+    );
+    let stub = Stub::new(&destination.home);
+    // v2 configuration was recorded at the old path.
+    let mut state = ownership::InstallState::load(&destination.home).unwrap();
+    state.record(ownership::OwnedResource {
+        id: "mcp-server:context7".into(),
+        scope: ownership::OwnershipScope::Global,
+        depends_on: vec![],
+        receipts: vec![ownership::Receipt::McpEntry {
+            path: old.clone(),
+            name: "context7".into(),
+            digest: "previous-digest".into(),
+        }],
+    });
+    state.save(&destination.home).unwrap();
+    assert!(mcp::preflight(mcp::Server::Context7, &destination).is_err());
+    assert_eq!(
+        mcp::migrate_legacy_configs(&destination.home, &destination.project_root).unwrap(),
+        1
+    );
+    let new = mcp::config_path(&destination);
+    assert!(!old.exists());
+    assert_eq!(
+        read_generated_jsonc(&new)["mcpServers"]["custom"]["command"],
+        "keep"
+    );
+    let state = ownership::InstallState::load(&destination.home).unwrap();
+    assert!(
+        matches!(&state.resources["mcp-server:context7"].receipts[0], ownership::Receipt::McpEntry {path, ..} if path == &new)
+    );
+    assert!(
+        mcp::migrate_legacy_configs(&destination.home, &destination.project_root).unwrap() == 0
+    );
+    assert!(!mcp::configured(mcp::Server::Context7, &destination, &stub));
+    fs::remove_dir_all(destination.home).unwrap();
+}
+
+#[test]
+fn update_preserves_legacy_config_on_collision() {
+    let destination = destination("mcp-v3-collision", SkillScope::Project);
+    let old = destination.project_root.join(".pi/mcp.json");
+    let new = mcp::config_path(&destination);
+    write_json(&old, json!({"mcpServers":{"custom":{"command":"old"}}}));
+    write_json(&new, json!({"mcpServers":{"custom":{"command":"new"}}}));
+    assert!(mcp::migrate_legacy_configs(&destination.home, &destination.project_root).is_err());
+    assert_eq!(
+        read_generated_jsonc(&old)["mcpServers"]["custom"]["command"],
+        "old"
+    );
+    assert_eq!(
+        read_generated_jsonc(&new)["mcpServers"]["custom"]["command"],
+        "new"
+    );
+    fs::remove_dir_all(destination.home).unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn context7_never_follows_config_symlinks() {
@@ -325,9 +389,9 @@ fn context7_never_follows_config_symlinks() {
 #[test]
 fn context7_recovers_interrupted_config_before_merge_and_removal() {
     let destination = destination("mcp-recovery", SkillScope::Project);
-    adapter(&destination.home, "2.33.0");
+    adapter(&destination.home, "3.0.0");
     let path = mcp::config_path(&destination);
-    let pending = path.with_file_name(".mcp.json.loom-old");
+    let pending = path.with_file_name(".mcp-adapter.json.loom-old");
     write_json(&pending, json!({"mcpServers":{"other":{"command":"keep"}}}));
     let before = fs::read(&pending).unwrap();
     plan(&destination);
@@ -449,7 +513,7 @@ fn context7_conflicts_stop_before_commands_and_preserve_secrets() {
 #[test]
 fn context7_preserves_user_auth_and_modified_owned_config() {
     let destination = destination("context7-auth", SkillScope::Global);
-    adapter(&destination.home, "2.33.0");
+    adapter(&destination.home, "3.0.0");
     let path = mcp::config_path(&destination);
     let entry = json!({"url":"https://mcp.context7.com/mcp","directTools":false,"headers":{"Authorization":"Bearer private-sentinel"},"lifecycle":"lazy"});
     write_json(&path, json!({"mcpServers":{"context7":entry}}));
@@ -484,17 +548,17 @@ fn context7_cli_add_and_status_use_context7_identity() {
     use std::process::{Command, Stdio};
 
     let destination = destination("context7-cli", SkillScope::Global);
-    adapter(&destination.home, "2.33.0");
+    adapter(&destination.home, "3.0.0");
     write_json(
         &destination.home.join(".pi/agent/settings.json"),
-        json!({"theme":"keep", "packages":["npm:pi-mcp-adapter@2.33.0", "npm:@yassimba/pi-loom@latest"]}),
+        json!({"theme":"keep", "packages":["npm:pi-mcp-adapter@3.0.0", "npm:@yassimba/pi-loom@latest"]}),
     );
     let bin = destination.home.join("bin");
     fs::create_dir_all(&bin).unwrap();
     let pi = bin.join("pi");
     fs::write(
         &pi,
-        "#!/bin/sh\n[ \"$1\" = list ] || exit 91\nprintf 'User packages:\\n  npm:pi-mcp-adapter@2.33.0\\n  npm:@yassimba/pi-loom@latest\\n'\n",
+        "#!/bin/sh\n[ \"$1\" = list ] || exit 91\nprintf 'User packages:\\n  npm:pi-mcp-adapter@3.0.0\\n  npm:@yassimba/pi-loom@latest\\n'\n",
     )
     .unwrap();
     fs::set_permissions(&pi, fs::Permissions::from_mode(0o755)).unwrap();
@@ -587,7 +651,7 @@ fn context7_and_skills_serialize_shared_ownership_transactions() {
     }
     std::env::set_var("LOOM_REPO_DIR", common::repo_root());
     let d = destination("mcp-ledger-order", SkillScope::Global);
-    adapter(&d.home, "2.33.0");
+    adapter(&d.home, "3.0.0");
     let bundled = loom::Catalog::embedded()
         .unwrap()
         .find(&["pi-package:i-have-adhd".into()])
@@ -595,7 +659,7 @@ fn context7_and_skills_serialize_shared_ownership_transactions() {
         .remove(0);
     write_json(
         &d.home.join(".pi/agent/settings.json"),
-        json!({"packages":["npm:pi-mcp-adapter@2.33.0", bundled.pi_install_spec()]}),
+        json!({"packages":["npm:pi-mcp-adapter@3.0.0", bundled.pi_install_spec()]}),
     );
     let package = d.home.join(".pi/agent/git/github.com/ayghri/i-have-adhd");
     write_json(

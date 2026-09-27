@@ -765,7 +765,7 @@ mod tests {
         assert_eq!(commands[0].cwd.as_deref(), Some(vault.as_path()));
         assert!(commands[1]
             .display()
-            .contains("npm:@companion-ai/feynman@0.3.47"));
+            .contains("npm:@companion-ai/feynman@0.5.9"));
         assert!(commands
             .iter()
             .all(|command| command.cwd.as_deref() == Some(vault.as_path())));

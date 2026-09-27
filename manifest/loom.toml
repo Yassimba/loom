@@ -36,7 +36,7 @@ python = "3.14.7"
 "ubi:Yassimba/loom" = { version = "loom-teams-v0.2.3", exe = "loom-teams", tag_regex = "^loom-teams-v" }
 
 # agents & multiplexer
-"npm:@earendil-works/pi-coding-agent" = "0.85.1"
+"npm:@earendil-works/pi-coding-agent" = "0.87.1"
 # Herdr Annotate actions and the Mermaid document CLI run on Bun.
 bun = "1.4.2"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its

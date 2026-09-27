@@ -134,6 +134,22 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
 
     let mut tasks = Vec::new();
     let mut inventory_error = None;
+    if system.command_exists("pi") {
+        if let (Some(home), Some(project)) = (system.home_dir(), system.current_dir()) {
+            match crate::mcp::migrate_legacy_configs(&home, &project) {
+                Ok(count) if count > 0 => out.row(
+                    Mark::Ok,
+                    "MCP migration",
+                    format!("{count} config files moved to mcp-adapter.json"),
+                ),
+                Err(error) => {
+                    out.row(Mark::Bad, "MCP migration", error.to_string());
+                    return false;
+                }
+                _ => {}
+            }
+        }
+    }
     let mut pi_compat_targets = Vec::new();
     if system.command_exists("pi") {
         // Cataloged reinstalls instead of `pi update --all`: external packages
@@ -151,7 +167,13 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
                 String::new()
             }
         };
-        let commands = pi_package_commands(catalog, &listed, cfg!(windows));
+        let mut commands = pi_package_commands(catalog, &listed, cfg!(windows));
+        if crate::install::pi_package_installed(&listed, "pi-mcp-adapter", false) {
+            let adapter = CommandSpec::new("pi", ["install", crate::mcp::ADAPTER_SPEC]);
+            if package_version(system, &adapter).is_some_and(|version| version.starts_with("2.")) {
+                commands.push(adapter);
+            }
+        }
         pi_compat_targets = catalog
             .resources
             .iter()
@@ -188,9 +210,18 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
     // bootstrap was undone; point back at it instead of self-updating.
     let mise = system.command_exists("mise");
 
-    // Skills, projects, tools, Pi, and Herdr touch disjoint state, so every
-    // lane runs at once; rows print in a fixed order once all are done.
     let repository = &skills::Repository::default();
+    // Updated Pi packages may require the newly pinned Pi version.
+    // Install tools first; the remaining lanes can still run concurrently.
+    let tools_lane = if mise {
+        sync_tool_manifest(system, repository)
+    } else {
+        Lane::failed(
+            "Tools",
+            "mise is not on PATH; rerun the installer from the README",
+        )
+    };
+    let tools_ready = tools_lane.ok;
     let active_details = &std::sync::Mutex::new(std::collections::BTreeMap::new());
     type Job<'a> = Box<dyn FnOnce() -> Lane + Send + 'a>;
     let mut jobs: Vec<(&'static str, Job<'_>)> = vec![
@@ -203,23 +234,20 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
             Box::new(move || sync_projects_lane(system, repository)),
         ),
     ];
-    if mise {
-        jobs.push((
-            "Tools",
-            Box::new(move || sync_tool_manifest(system, repository)),
-        ));
-    } else {
-        jobs.push((
-            "Tools",
-            Box::new(|| {
-                Lane::failed(
-                    "Tools",
-                    "mise is not on PATH; rerun the installer from the README",
-                )
-            }),
-        ));
-    }
+    jobs.push(("Tools", Box::new(move || tools_lane)));
     for task in tasks {
+        if !tools_ready && task.label == "Pi packages" {
+            jobs.push((
+                "Pi packages",
+                Box::new(|| {
+                    Lane::failed(
+                        "Pi packages",
+                        "Pi tool update failed; packages left unchanged",
+                    )
+                }),
+            ));
+            continue;
+        }
         let label = task.label;
         jobs.push((
             label,

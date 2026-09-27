@@ -7,9 +7,10 @@ loom add --mcp-server codebase-memory-mcp --agent pi --scope project --dry-run
 loom add --mcp-server codebase-memory-mcp --agent pi --scope project --yes
 ```
 
-`--scope global` configures `~/.pi/agent/mcp.json`; project scope configures
-`<repository>/.pi/mcp.json`. Loom installs selected local binaries and
-`pi-mcp-adapter` before writing the MCP entries. Pi and these prerequisites are
+`--scope global` configures `~/.pi/agent/mcp-adapter.json`; project scope configures
+`<repository>/.pi/mcp-adapter.json`. `loom update` migrates old `mcp.json`
+files before upgrading the adapter to 3.x (and refuses to overwrite a new file).
+Loom installs selected local binaries and `pi-mcp-adapter` before writing the MCP entries. Pi and these prerequisites are
 machine-wide; only server configuration follows scope.
 
 ## Reviewed servers

@@ -7,7 +7,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-pub const ADAPTER_SPEC: &str = "npm:pi-mcp-adapter@2.32.1";
+pub const ADAPTER_SPEC: &str = "npm:pi-mcp-adapter@3.0.0";
 pub const EXPOSURE_NOTE: &str = "Pi gateway only (directTools=false); lifecycle unchanged. First launch may discover server metadata. Restart Pi and use /mcp to check live health.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,9 +89,77 @@ impl Server {
 
 pub fn config_path(destination: &SkillDestination) -> PathBuf {
     match destination.scope {
-        SkillScope::Global => destination.home.join(".pi/agent/mcp.json"),
-        SkillScope::Project => destination.project_root.join(".pi/mcp.json"),
+        SkillScope::Global => destination.home.join(".pi/agent/mcp-adapter.json"),
+        SkillScope::Project => destination.project_root.join(".pi/mcp-adapter.json"),
     }
+}
+
+/// Move v2 adapter configs before Pi reinstalls v3, including owned project entries.
+/// Refuse a collision rather than merge user configuration or lose ownership.
+pub fn migrate_legacy_configs(home: &Path, project: &Path) -> Result<usize> {
+    use crate::ownership::{InstallState, Receipt};
+    let mut state = InstallState::load(home).map_err(anyhow::Error::msg)?;
+    let mut paths = std::collections::BTreeSet::from([
+        home.join(".pi/agent/mcp.json"),
+        project.join(".pi/mcp.json"),
+    ]);
+    for resource in state.resources.values() {
+        for receipt in &resource.receipts {
+            if let Receipt::McpEntry { path, .. } = receipt {
+                if path.file_name() == Some("mcp.json".as_ref()) {
+                    paths.insert(path.clone());
+                }
+            }
+        }
+    }
+    let moves = paths
+        .into_iter()
+        .filter(|path| path.exists() || path.symlink_metadata().is_ok())
+        .map(|path| {
+            let next = path.with_file_name("mcp-adapter.json");
+            safe_path(&path)?;
+            safe_path(&next)?;
+            ensure!(
+                !next.exists(),
+                "{} already exists; merge the old MCP config manually before updating",
+                next.display()
+            );
+            read_object(&path)?;
+            Ok((path, next))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if moves.is_empty() {
+        return Ok(0);
+    }
+    let original = state.clone();
+    for resource in state.resources.values_mut() {
+        for receipt in &mut resource.receipts {
+            if let Receipt::McpEntry { path, .. } = receipt {
+                if let Some((_, next)) = moves.iter().find(|(old, _)| old == path) {
+                    *path = next.clone();
+                }
+            }
+        }
+    }
+    let mut moved = Vec::new();
+    for (old, next) in &moves {
+        if let Err(error) = fs::rename(old, next) {
+            for (from, to) in moved.into_iter().rev() {
+                let _ = fs::rename(to, from);
+            }
+            return Err(error).with_context(|| format!("cannot migrate {}", old.display()));
+        }
+        moved.push((old, next));
+    }
+    if state != original {
+        if let Err(error) = state.save(home) {
+            for (old, next) in moved.into_iter().rev() {
+                let _ = fs::rename(next, old);
+            }
+            bail!("cannot save MCP ownership after migration: {error}");
+        }
+    }
+    Ok(moves.len())
 }
 
 fn safe_path(path: &Path) -> Result<()> {
@@ -199,9 +267,9 @@ fn config_paths(destination: &SkillDestination) -> [PathBuf; 6] {
         destination.home.join(".config/mcp/mcp.json"),
         destination.home.join(".agents/mcp.json"),
         destination.home.join(".agents/mcp/mcp.json"),
-        global.join("mcp.json"),
+        global.join("mcp-adapter.json"),
         destination.project_root.join(".mcp.json"),
-        destination.project_root.join(".pi/mcp.json"),
+        destination.project_root.join(".pi/mcp-adapter.json"),
     ]
 }
 
@@ -238,6 +306,16 @@ pub fn preflight(server: Server, destination: &SkillDestination) -> Result<()> {
     ensure!(std::env::var_os("PI_CODING_AGENT_DIR").is_none_or(|value| value.is_empty() || Path::new(&value) == global),
         "custom PI_CODING_AGENT_DIR is not yet supported for MCP setup; use the default Pi agent directory");
     let target = config_path(destination);
+    for legacy in [
+        destination.home.join(".pi/agent/mcp.json"),
+        destination.project_root.join(".pi/mcp.json"),
+    ] {
+        ensure!(
+            legacy.symlink_metadata().is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound),
+            "{} is no longer read by pi-mcp-adapter 3; run `loom update` to migrate it before setup",
+            legacy.display()
+        );
+    }
     validate_entries(server, destination, &target)?;
     adapter_needed(destination)?;
     crate::ownership::InstallState::inspect(&destination.home).map_err(anyhow::Error::msg)?;
@@ -253,7 +331,11 @@ fn v2_version(version: &str) -> Option<(u32, u32)> {
 }
 
 fn supported_version(version: &str) -> bool {
-    v2_version(version).is_some_and(|version| version >= (32, 1))
+    let mut parts = version.split('.').map(str::parse::<u32>);
+    matches!(
+        (parts.next(), parts.next(), parts.next(), parts.next()),
+        (Some(Ok(3)), Some(Ok(_)), Some(Ok(_)), None)
+    )
 }
 
 /// Missing and older official registry installs may be added or upgraded;
@@ -298,7 +380,9 @@ pub fn adapter_needed(destination: &SkillDestination) -> Result<bool> {
             let configured_version = source.strip_prefix("npm:pi-mcp-adapter@");
             ensure!(
                 source == "npm:pi-mcp-adapter"
-                    || configured_version.is_some_and(|v| v == "latest" || v2_version(v).is_some()),
+                    || configured_version.is_some_and(|v| v == "latest"
+                        || v2_version(v).is_some()
+                        || supported_version(v)),
                 "{} has an unverified MCP adapter source/version; no replacement made",
                 path.display()
             );
@@ -312,7 +396,7 @@ pub fn adapter_needed(destination: &SkillDestination) -> Result<bool> {
             let (_, manifest) = read_object(&package.join("package.json"))?;
             let installed_version = manifest.get("version").and_then(Value::as_str);
             ensure!(manifest.get("name") == Some(&json!("pi-mcp-adapter"))
-                && installed_version.is_some_and(|v| v2_version(v).is_some())
+                && installed_version.is_some_and(|v| v2_version(v).is_some() || supported_version(v))
                 && manifest.pointer("/pi/extensions").and_then(Value::as_array).is_some_and(|paths| !paths.is_empty() && paths.iter().all(|p| p.as_str().is_some_and(|s| package.join(s).is_file()))),
                 "MCP adapter files are missing or unverified; repair with pi install {ADAPTER_SPEC} before retrying");
             upgrade_needed |= configured_version
@@ -373,10 +457,10 @@ fn write_config(path: &Path, before: &str, after: &str) -> Result<()> {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     );
-    let staged = path.with_file_name(format!(".mcp.json.loom-new-{suffix}"));
+    let staged = path.with_file_name(format!(".mcp-adapter.json.loom-new-{suffix}"));
     if path.exists() {
         private_file(
-            &path.with_file_name(format!(".mcp.json.loom-backup-{suffix}")),
+            &path.with_file_name(format!(".mcp-adapter.json.loom-backup-{suffix}")),
             before.as_bytes(),
         )?;
     }

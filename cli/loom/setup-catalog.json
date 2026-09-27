@@ -125,7 +125,7 @@
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "installTarget": "@gotgenes/pi-anthropic-auth",
-      "version": "2.0.10",
+      "version": "3.3.2",
       "nextAction": "Run /model in Pi and pick a Claude model."
     },
     {
@@ -172,7 +172,7 @@
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "installTarget": "@companion-ai/feynman",
-      "version": "0.3.47",
+      "version": "0.5.9",
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
       "dependencies": [
         "github:AgriciDaniel/claude-obsidian"
@@ -196,7 +196,7 @@
       "label": "i-have-adhd",
       "description": "ADHD-friendly output for Pi with a session mode toggle, status indicator, and restoration after compaction. By Ayoub G.",
       "installTarget": "i-have-adhd",
-      "source": "git:github.com/ayghri/i-have-adhd@58494af57962b2d7a996b4d419474380a299af5e",
+      "source": "git:github.com/ayghri/i-have-adhd@839872f9d1cd634fed642b4589ce7226199cc15f",
       "bundledSkills": [
         "i-have-adhd"
       ],
@@ -218,7 +218,7 @@
       "label": "mcp-adapter",
       "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
       "installTarget": "pi-mcp-adapter",
-      "version": "2.32.1",
+      "version": "3.0.0",
       "nextAction": "Run /mcp setup in Pi to configure an MCP server."
     },
     {
@@ -237,7 +237,7 @@
       "label": "plannotator",
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
       "installTarget": "@plannotator/pi-extension",
-      "version": "0.27.18",
+      "version": "0.27.21",
       "bundledSkills": [
         "plannotator"
       ],
@@ -283,7 +283,7 @@
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "installTarget": "pi-web-access",
-      "version": "0.29.0",
+      "version": "0.32.0",
       "nextAction": "Ask Pi to search the web."
     },
     {
