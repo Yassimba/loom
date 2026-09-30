@@ -58,8 +58,8 @@
 
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {
-    "description": "CVE fixes skip the 5-day cooldown but still require manual review, so a malicious release disguised as a security patch cannot automerge",
-    "automerge": false,
+    "description": "CVE fixes skip the 5-day cooldown and automerge once the required checks (tests, osv-scan, skill-scan) pass; changes under .github/ still need owner review",
+    "automerge": true,
     "labels": ["security-fastlane"]
   }
 }
