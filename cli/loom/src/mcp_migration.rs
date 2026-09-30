@@ -249,11 +249,16 @@ mod tests {
 
     #[test]
     fn adapter_entries_become_built_in_settings() {
+        // Absolute on every platform, so the mise-path unpinning applies on Windows too.
+        let tmp = std::env::temp_dir();
+        let pinned =
+            tmp.join("mise/installs/npm-codebase-memory-mcp/0.10.8/bin/codebase-memory-mcp");
+        let own = tmp.join("bin/tool");
         let mut value = json!({"mcp-servers": {
-            "memory": {"command": "/home/u/.local/share/mise/installs/npm-codebase-memory-mcp/0.10.8/node_modules/.bin/codebase-memory-mcp", "directTools": ["trace_path"]},
+            "memory": {"command": pinned, "directTools": ["trace_path"]},
             "docs": {"url": "https://mcp.context7.com/mcp", "directTools": false},
             "all": {"url": "https://x.invalid/mcp", "directTools": true, "disabled": true},
-            "own": {"command": "/opt/bin/tool"}
+            "own": {"command": own}
         }});
         assert!(normalize(&mut value, &mut Vec::new()));
         assert_eq!(
@@ -262,7 +267,7 @@ mod tests {
                 "memory": {"command": "codebase-memory-mcp", "toolExposure": {"trace_path": "direct"}},
                 "docs": {"url": "https://mcp.context7.com/mcp"},
                 "all": {"url": "https://x.invalid/mcp", "exposure": "direct", "enabled": false},
-                "own": {"command": "/opt/bin/tool"}
+                "own": {"command": own}
             }})
         );
         assert!(!normalize(&mut value, &mut Vec::new()));
