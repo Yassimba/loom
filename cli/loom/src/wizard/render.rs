@@ -1021,7 +1021,7 @@ impl Wizard {
             ResourceKind::McpServer => {
                 lines.push(field(
                     "via",
-                    "Pi MCP gateway · tools discovered on request".into(),
+                    "Pi built-in MCP · tools reached through codemode".into(),
                     ACCENT,
                 ));
                 lines.push(field(

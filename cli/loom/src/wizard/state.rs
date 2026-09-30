@@ -442,16 +442,7 @@ impl Wizard {
             .collect();
         let skill_scope = model.skill_destination.scope;
         let uninstalling = model.purpose == WizardPurpose::Uninstall;
-        let mut selected = vec![uninstalling; model.resources.len()];
-        if !uninstalling && model.status.pi {
-            if let Some(index) = model
-                .resources
-                .iter()
-                .position(|resource| resource.install_target == "pi-mcp-adapter")
-            {
-                selected[index] = true;
-            }
-        }
+        let selected = vec![uninstalling; model.resources.len()];
         let installed_marks = model.installed.clone();
         let mut wizard = Self {
             wiki,
@@ -923,9 +914,6 @@ impl Wizard {
     pub(crate) fn setup_requirement(&self, index: usize) -> bool {
         let resource = &self.model.resources[index];
         resource.is_automatic_pi_package()
-            || (resource.install_target == "pi-mcp-adapter"
-                && self.model.status.pi
-                && !self.custom_picks.contains_key(&index))
     }
 
     pub(crate) fn selection_reason(&self, index: usize) -> String {

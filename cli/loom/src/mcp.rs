@@ -1,4 +1,4 @@
-//! Pi's gateway defers tool exposure, not necessarily server startup.
+//! Pi's built-in MCP support reads `mcp.json`; servers use its default codemode exposure.
 use crate::{SkillAgent, SkillDestination, SkillScope, System};
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::{json, Value};
@@ -7,8 +7,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-pub const ADAPTER_SPEC: &str = "npm:pi-mcp-adapter@3.0.0";
-pub const EXPOSURE_NOTE: &str = "Pi gateway only (directTools=false); lifecycle unchanged. First launch may discover server metadata. Restart Pi and use /mcp to check live health.";
+pub const EXPOSURE_NOTE: &str = "Pi built-in MCP, codemode exposure: tools are reached through the codemode tool. Run /reload in Pi and use /mcp to check live health.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Server {
@@ -48,11 +47,10 @@ impl Server {
 
     fn entry(self) -> Value {
         match self {
-            Self::Context7 => json!({"url": "https://mcp.context7.com/mcp", "directTools": false}),
+            Self::Context7 => json!({"url": "https://mcp.context7.com/mcp"}),
             Self::CodebaseMemory => json!({
                 "command": "codebase-memory-mcp",
-                "args": ["--tool-profile=analysis"],
-                "directTools": false
+                "args": ["--tool-profile=analysis"]
             }),
         }
     }
@@ -71,8 +69,8 @@ impl Server {
                                 path.is_absolute() && path.file_name() == Some(binary.as_ref())
                             })
                     }))
-        }) && entry.get("disabled").is_none_or(|v| v == false)
-            && entry.get("socket").is_none()
+        }) && entry.get("enabled").is_none_or(|v| v == true)
+            && entry.get("exposure").is_none_or(|v| v != "hidden")
             && match self.executable() {
                 Some(_) => entry.get("url").is_none(),
                 None => entry.get("command").is_none() && entry.get("args").is_none(),
@@ -89,77 +87,9 @@ impl Server {
 
 pub fn config_path(destination: &SkillDestination) -> PathBuf {
     match destination.scope {
-        SkillScope::Global => destination.home.join(".pi/agent/mcp-adapter.json"),
-        SkillScope::Project => destination.project_root.join(".pi/mcp-adapter.json"),
+        SkillScope::Global => destination.home.join(".pi/agent/mcp.json"),
+        SkillScope::Project => destination.project_root.join(".pi/mcp.json"),
     }
-}
-
-/// Move v2 adapter configs before Pi reinstalls v3, including owned project entries.
-/// Refuse a collision rather than merge user configuration or lose ownership.
-pub fn migrate_legacy_configs(home: &Path, project: &Path) -> Result<usize> {
-    use crate::ownership::{InstallState, Receipt};
-    let mut state = InstallState::load(home).map_err(anyhow::Error::msg)?;
-    let mut paths = std::collections::BTreeSet::from([
-        home.join(".pi/agent/mcp.json"),
-        project.join(".pi/mcp.json"),
-    ]);
-    for resource in state.resources.values() {
-        for receipt in &resource.receipts {
-            if let Receipt::McpEntry { path, .. } = receipt {
-                if path.file_name() == Some("mcp.json".as_ref()) {
-                    paths.insert(path.clone());
-                }
-            }
-        }
-    }
-    let moves = paths
-        .into_iter()
-        .filter(|path| path.exists() || path.symlink_metadata().is_ok())
-        .map(|path| {
-            let next = path.with_file_name("mcp-adapter.json");
-            safe_path(&path)?;
-            safe_path(&next)?;
-            ensure!(
-                !next.exists(),
-                "{} already exists; merge the old MCP config manually before updating",
-                next.display()
-            );
-            read_object(&path)?;
-            Ok((path, next))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    if moves.is_empty() {
-        return Ok(0);
-    }
-    let original = state.clone();
-    for resource in state.resources.values_mut() {
-        for receipt in &mut resource.receipts {
-            if let Receipt::McpEntry { path, .. } = receipt {
-                if let Some((_, next)) = moves.iter().find(|(old, _)| old == path) {
-                    *path = next.clone();
-                }
-            }
-        }
-    }
-    let mut moved = Vec::new();
-    for (old, next) in &moves {
-        if let Err(error) = fs::rename(old, next) {
-            for (from, to) in moved.into_iter().rev() {
-                let _ = fs::rename(to, from);
-            }
-            return Err(error).with_context(|| format!("cannot migrate {}", old.display()));
-        }
-        moved.push((old, next));
-    }
-    if state != original {
-        if let Err(error) = state.save(home) {
-            for (old, next) in moved.into_iter().rev() {
-                let _ = fs::rename(next, old);
-            }
-            bail!("cannot save MCP ownership after migration: {error}");
-        }
-    }
-    Ok(moves.len())
 }
 
 fn safe_path(path: &Path) -> Result<()> {
@@ -191,7 +121,7 @@ fn recover_config(path: &Path) -> Result<()> {
     crate::fs_tx::recover(path).map_err(anyhow::Error::msg)
 }
 
-fn read_object(path: &Path) -> Result<(String, Value)> {
+pub(crate) fn read_object(path: &Path) -> Result<(String, Value)> {
     safe_path(path)?;
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
@@ -220,56 +150,28 @@ fn read_object(path: &Path) -> Result<(String, Value)> {
     Ok((text, value))
 }
 
-// Match the adapter's `mcpServers ?? raw["mcp-servers"]` precedence.
-fn servers_key(value: &Value) -> &'static str {
-    if value.get("mcpServers").is_none_or(Value::is_null)
-        && value.get("mcp-servers").is_some_and(|v| !v.is_null())
-    {
-        "mcp-servers"
-    } else {
-        "mcpServers"
-    }
-}
+const SERVERS_KEY: &str = "mcpServers";
 
 fn validate_config(value: &Value, path: &Path) -> Result<()> {
-    let key = servers_key(value);
-    ensure!(
-        value.get(key).is_none_or(|v| v.is_null() || v.is_object()),
-        "{}: {key} must be an object",
-        path.display()
-    );
-    ensure!(
-        value.get("settings").is_none_or(Value::is_object),
-        "{}: settings must be an object",
-        path.display()
-    );
-    ensure!(
-        value.pointer("/settings/disableProxyTool") != Some(&json!(true)),
-        "{} disables the MCP gateway; enable the proxy before installing an MCP server",
-        path.display()
-    );
     ensure!(
         value
-            .get("imports")
-            .is_none_or(|v| v.as_array().is_some_and(Vec::is_empty))
-            && value
-                .pointer("/settings/hostConfigDiscovery")
-                .is_none_or(|v| v == "off"),
-        "{} uses host imports/discovery; resolve MCP servers manually in /mcp setup before using Loom",
+            .get(SERVERS_KEY)
+            .is_none_or(|v| v.is_null() || v.is_object()),
+        "{}: {SERVERS_KEY} must be an object",
+        path.display()
+    );
+    ensure!(
+        value.get("autoEnableCodemode") != Some(&json!(false)),
+        "{} sets autoEnableCodemode to false, so codemode MCP tools cannot be called; remove it before installing an MCP server",
         path.display()
     );
     Ok(())
 }
 
-fn config_paths(destination: &SkillDestination) -> [PathBuf; 6] {
-    let global = destination.home.join(".pi/agent");
+fn config_paths(destination: &SkillDestination) -> [PathBuf; 2] {
     [
-        destination.home.join(".config/mcp/mcp.json"),
-        destination.home.join(".agents/mcp.json"),
-        destination.home.join(".agents/mcp/mcp.json"),
-        global.join("mcp-adapter.json"),
-        destination.project_root.join(".mcp.json"),
-        destination.project_root.join(".pi/mcp-adapter.json"),
+        destination.home.join(".pi/agent/mcp.json"),
+        destination.project_root.join(".pi/mcp.json"),
     ]
 }
 
@@ -278,8 +180,8 @@ fn validate_entries(server: Server, destination: &SkillDestination, target: &Pat
     for path in config_paths(destination) {
         let (_, value) = read_object(&path)?;
         validate_config(&value, &path)?;
-        if let Some(entry) = value.get(servers_key(&value)).and_then(|v| v.get(name)) {
-            ensure!(server.compatible_entry(entry), "{} has a conflicting or disabled {name} entry; preserve it and configure gateway exposure manually in /mcp", path.display());
+        if let Some(entry) = value.get(SERVERS_KEY).and_then(|v| v.get(name)) {
+            ensure!(server.compatible_entry(entry), "{} has a conflicting, disabled, or hidden {name} entry; preserve it and fix it in /mcp", path.display());
             ensure!(
                 path.is_file() || path == target,
                 "{} has a pending MCP recovery; repair that file before adding another scope",
@@ -296,55 +198,23 @@ pub fn preflight(server: Server, destination: &SkillDestination) -> Result<()> {
         destination.agents.contains(&SkillAgent::Pi),
         "MCP setup needs Pi selected; other agent adapters are not yet verified (use --agent pi)"
     );
-    ensure!(
-        destination.scope != SkillScope::Project
-            || !std::env::var("PI_MCP_CONFIG_MODE")
-                .is_ok_and(|mode| mode.trim().eq_ignore_ascii_case("exclusive")),
-        "PI_MCP_CONFIG_MODE=exclusive ignores project MCP configuration; unset it or use --scope global"
-    );
     let global = destination.home.join(".pi/agent");
     ensure!(std::env::var_os("PI_CODING_AGENT_DIR").is_none_or(|value| value.is_empty() || Path::new(&value) == global),
         "custom PI_CODING_AGENT_DIR is not yet supported for MCP setup; use the default Pi agent directory");
     let target = config_path(destination);
-    for legacy in [
-        destination.home.join(".pi/agent/mcp.json"),
-        destination.project_root.join(".pi/mcp.json"),
-    ] {
-        ensure!(
-            legacy.symlink_metadata().is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound),
-            "{} is no longer read by pi-mcp-adapter 3; run `loom update` to migrate it before setup",
-            legacy.display()
-        );
-    }
     validate_entries(server, destination, &target)?;
-    adapter_needed(destination)?;
+    builtin_mcp_enabled(destination)?;
     crate::ownership::InstallState::inspect(&destination.home).map_err(anyhow::Error::msg)?;
     Ok(())
 }
 
-fn v2_version(version: &str) -> Option<(u32, u32)> {
-    let mut parts = version.split('.').map(str::parse::<u32>);
-    match (parts.next()?, parts.next()?, parts.next()?, parts.next()) {
-        (Ok(2), Ok(minor), Ok(patch), None) => Some((minor, patch)),
-        _ => None,
-    }
-}
-
-fn supported_version(version: &str) -> bool {
-    let mut parts = version.split('.').map(str::parse::<u32>);
-    matches!(
-        (parts.next(), parts.next(), parts.next(), parts.next()),
-        (Some(Ok(3)), Some(Ok(_)), Some(Ok(_)), None)
-    )
-}
-
-/// Missing and older official registry installs may be added or upgraded;
-/// filtered, local, or unknown adapter installations are never replaced.
-pub fn adapter_needed(destination: &SkillDestination) -> Result<bool> {
-    let global = destination.home.join(".pi/agent");
-    let mut found = false;
-    let mut upgrade_needed = false;
-    for root in [global.clone(), destination.project_root.join(".pi")] {
+/// Pi's built-in MCP support is off when an extension such as pi-mcp-adapter
+/// registers `/mcp`, or when settings disable `builtin:mcp`.
+pub fn builtin_mcp_enabled(destination: &SkillDestination) -> Result<()> {
+    for root in [
+        destination.home.join(".pi/agent"),
+        destination.project_root.join(".pi"),
+    ] {
         let path = root.join("settings.json");
         let (_, value) = read_object(&path)?;
         ensure!(
@@ -352,75 +222,46 @@ pub fn adapter_needed(destination: &SkillDestination) -> Result<bool> {
             "{}: packages must be an array",
             path.display()
         );
-        ensure!(
+        let strings = |key: &str| {
             value
-                .get("extensions")
-                .is_none_or(|v| v.as_array().is_some_and(|entries| entries
-                    .iter()
-                    .all(|entry| entry.as_str().is_some_and(|s| !s.contains("mcp-adapter"))))),
-            "{} has an unverified MCP extension path/filter; use pi config to resolve it",
+                .get(key)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|entry| {
+                    entry
+                        .as_str()
+                        .or_else(|| entry.get("source").and_then(Value::as_str))
+                })
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        ensure!(
+            !strings("packages")
+                .iter()
+                .chain(&strings("extensions"))
+                .any(|s| s.contains("mcp-adapter")),
+            "{} installs pi-mcp-adapter, which replaces Pi's built-in MCP support; run `loom update` to migrate to it",
             path.display()
         );
-        for entry in value
-            .get("packages")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-        {
-            let source = entry
-                .as_str()
-                .or_else(|| entry.get("source").and_then(Value::as_str));
-            let Some(source) = source else {
-                bail!("{} has an invalid Pi package entry", path.display())
-            };
-            if !source.contains("mcp-adapter") {
-                continue;
-            }
-            ensure!(root == global && !found, "{} has a project or duplicate MCP adapter; preserve it and resolve the shared prerequisite with pi config", path.display());
-            let configured_version = source.strip_prefix("npm:pi-mcp-adapter@");
-            ensure!(
-                source == "npm:pi-mcp-adapter"
-                    || configured_version.is_some_and(|v| v == "latest"
-                        || v2_version(v).is_some()
-                        || supported_version(v)),
-                "{} has an unverified MCP adapter source/version; no replacement made",
-                path.display()
-            );
-            ensure!(
-                entry.get("extensions").is_none()
-                    && entry.get("autoload").is_none_or(|v| v == true),
-                "{} filters or disables the MCP adapter; enable it with pi config",
-                path.display()
-            );
-            let package = global.join("npm/node_modules/pi-mcp-adapter");
-            let (_, manifest) = read_object(&package.join("package.json"))?;
-            let installed_version = manifest.get("version").and_then(Value::as_str);
-            ensure!(manifest.get("name") == Some(&json!("pi-mcp-adapter"))
-                && installed_version.is_some_and(|v| v2_version(v).is_some() || supported_version(v))
-                && manifest.pointer("/pi/extensions").and_then(Value::as_array).is_some_and(|paths| !paths.is_empty() && paths.iter().all(|p| p.as_str().is_some_and(|s| package.join(s).is_file()))),
-                "MCP adapter files are missing or unverified; repair with pi install {ADAPTER_SPEC} before retrying");
-            upgrade_needed |= configured_version
-                .is_some_and(|v| v != "latest" && !supported_version(v))
-                || installed_version.is_some_and(|v| !supported_version(v));
-            found = true;
-        }
+        ensure!(
+            !strings("extensions").iter().any(|s| s == "-builtin:mcp"),
+            "{} disables Pi's built-in MCP support (-builtin:mcp); enable it with pi config",
+            path.display()
+        );
     }
-    if !found {
-        ensure!(!global.join("npm/node_modules/pi-mcp-adapter").exists(), "unregistered MCP adapter files exist; register the existing package with Pi instead of replacing it");
-    }
-    Ok(!found || upgrade_needed)
+    Ok(())
 }
 
 /// Configuration presence is not live health. No MCP processes are launched.
 pub fn configured(server: Server, destination: &SkillDestination, system: &dyn System) -> bool {
     let path = config_path(destination);
     preflight(server, destination).is_ok()
-        && adapter_needed(destination).is_ok_and(|needed| !needed)
         && server.prerequisites_present(system)
         && path.is_file()
         && read_object(&path).is_ok_and(|(_, value)| {
             value
-                .get(servers_key(&value))
+                .get(SERVERS_KEY)
                 .and_then(|servers| servers.get(server.name()))
                 .is_some_and(|entry| server.compatible_entry(entry))
         })
@@ -442,7 +283,7 @@ fn private_file(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn write_config(path: &Path, before: &str, after: &str) -> Result<()> {
+pub(crate) fn write_config(path: &Path, before: &str, after: &str) -> Result<()> {
     recover_config(path)?;
     ensure!(
         read_object(path)?.0 == before,
@@ -457,10 +298,10 @@ fn write_config(path: &Path, before: &str, after: &str) -> Result<()> {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     );
-    let staged = path.with_file_name(format!(".mcp-adapter.json.loom-new-{suffix}"));
+    let staged = path.with_file_name(format!(".mcp.json.loom-new-{suffix}"));
     if path.exists() {
         private_file(
-            &path.with_file_name(format!(".mcp-adapter.json.loom-backup-{suffix}")),
+            &path.with_file_name(format!(".mcp.json.loom-backup-{suffix}")),
             before.as_bytes(),
         )?;
     }
@@ -477,7 +318,16 @@ fn write_config(path: &Path, before: &str, after: &str) -> Result<()> {
     result
 }
 
-fn entry_digest(value: &Value) -> String {
+/// Pi parses mcp.json as strict JSON: splice an existing `mcpServers` value in
+/// place, otherwise rewrite the whole object (jsonc insertion leaves a trailing comma).
+fn render_config(before: &str, value: &Value) -> Result<String> {
+    if crate::jsonc::get(before, SERVERS_KEY).is_some() {
+        return crate::jsonc::set(before, SERVERS_KEY, &value[SERVERS_KEY]);
+    }
+    Ok(format!("{}\n", serde_json::to_string_pretty(value)?))
+}
+
+pub fn entry_digest(value: &Value) -> String {
     crate::ownership::hex(&Sha256::digest(
         serde_json::to_vec(value).expect("JSON serializes"),
     ))
@@ -487,13 +337,13 @@ pub fn install(server: Server, destination: &SkillDestination, system: &dyn Syst
     preflight(server, destination)?;
     let name = server.name();
     ensure!(
-        !adapter_needed(destination)? && server.prerequisites_present(system),
-        "{name} MCP prerequisites missing; retry setup to install its prerequisites and the Pi adapter"
+        server.prerequisites_present(system),
+        "{name} MCP prerequisites missing; retry setup to install Pi and the server's prerequisites"
     );
     let path = config_path(destination);
     recover_config(&path)?;
     let (before, mut value) = read_object(&path)?;
-    let key = servers_key(&value);
+    let key = SERVERS_KEY;
     if value
         .get(key)
         .and_then(|servers| servers.get(name))
@@ -506,7 +356,7 @@ pub fn install(server: Server, destination: &SkillDestination, system: &dyn Syst
         value[key] = json!({});
     }
     value[key][name] = entry.clone();
-    let after = crate::jsonc::set(&before, key, &value[key])?;
+    let after = render_config(&before, &value)?;
     let mut state =
         crate::ownership::InstallState::load(&destination.home).map_err(anyhow::Error::msg)?;
     let scope = match destination.scope {
@@ -524,12 +374,7 @@ pub fn install(server: Server, destination: &SkillDestination, system: &dyn Syst
             format!("project:{}:mcp-server:{name}", root.display())
         }
     };
-    let mut depends_on = vec![
-        "core:loom".into(),
-        "core:mise".into(),
-        "tool:pi".into(),
-        "pi-package:pi-mcp-adapter".into(),
-    ];
+    let mut depends_on = vec!["core:loom".into(), "core:mise".into(), "tool:pi".into()];
     if let Some(tool) = server.tool_dependency() {
         depends_on.push(tool.into());
     }
@@ -557,12 +402,12 @@ pub fn entry_status(path: &Path, name: &str, digest: &str) -> crate::uninstall::
     match read_object(path) {
         Ok((_, value))
             if value
-                .get(servers_key(&value))
+                .get(SERVERS_KEY)
                 .is_some_and(|v| !v.is_null() && !v.is_object()) =>
         {
             ReceiptStatus::Modified
         }
-        Ok((_, value)) => match value.get(servers_key(&value)).and_then(|v| v.get(name)) {
+        Ok((_, value)) => match value.get(SERVERS_KEY).and_then(|v| v.get(name)) {
             None => ReceiptStatus::Missing,
             Some(entry) if entry_digest(entry) == digest => ReceiptStatus::Clean,
             Some(_) => ReceiptStatus::Modified,
@@ -574,7 +419,7 @@ pub fn entry_status(path: &Path, name: &str, digest: &str) -> crate::uninstall::
 pub fn remove_entry(path: &Path, name: &str, digest: &str) -> Result<()> {
     recover_config(path)?;
     let (before, mut value) = read_object(path)?;
-    let key = servers_key(&value);
+    let key = SERVERS_KEY;
     ensure!(
         value.get(key).is_none_or(|v| v.is_null() || v.is_object()),
         "{key} must be an object; preserved"
@@ -590,6 +435,6 @@ pub fn remove_entry(path: &Path, name: &str, digest: &str) -> Result<()> {
         .as_object_mut()
         .context("MCP servers must be an object")?
         .remove(name);
-    let after = crate::jsonc::set(&before, key, &value[key])?;
+    let after = render_config(&before, &value)?;
     write_config(path, &before, &after)
 }

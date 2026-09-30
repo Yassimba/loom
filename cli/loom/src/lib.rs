@@ -9,6 +9,7 @@ mod jsonc;
 pub mod lsp;
 pub mod manifest;
 pub mod mcp;
+pub mod mcp_migration;
 pub mod ownership;
 mod pi_compat;
 pub(crate) mod session;

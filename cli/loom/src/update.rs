@@ -46,9 +46,6 @@ fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) ->
         .resources
         .iter()
         .filter(|resource| resource.kind == ResourceKind::PiPackage && resource.group != "Wiki")
-        // MCP setup preserves the shared gateway; a catalog reinstall would
-        // downgrade compatible newer installs to the setup prerequisite pin.
-        .filter(|resource| resource.install_target != "pi-mcp-adapter")
         .filter(|resource| !native_windows || !resource.windows_wsl)
         .flat_map(|resource| {
             let spec = resource.pi_install_spec();
@@ -134,22 +131,6 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
 
     let mut tasks = Vec::new();
     let mut inventory_error = None;
-    if system.command_exists("pi") {
-        if let (Some(home), Some(project)) = (system.home_dir(), system.current_dir()) {
-            match crate::mcp::migrate_legacy_configs(&home, &project) {
-                Ok(count) if count > 0 => out.row(
-                    Mark::Ok,
-                    "MCP migration",
-                    format!("{count} config files moved to mcp-adapter.json"),
-                ),
-                Err(error) => {
-                    out.row(Mark::Bad, "MCP migration", error.to_string());
-                    return false;
-                }
-                _ => {}
-            }
-        }
-    }
     let mut pi_compat_targets = Vec::new();
     if system.command_exists("pi") {
         // Cataloged reinstalls instead of `pi update --all`: external packages
@@ -167,13 +148,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
                 String::new()
             }
         };
-        let mut commands = pi_package_commands(catalog, &listed, cfg!(windows));
-        if crate::install::pi_package_installed(&listed, "pi-mcp-adapter", false) {
-            let adapter = CommandSpec::new("pi", ["install", crate::mcp::ADAPTER_SPEC]);
-            if package_version(system, &adapter).is_some_and(|version| version.starts_with("2.")) {
-                commands.push(adapter);
-            }
-        }
+        let commands = pi_package_commands(catalog, &listed, cfg!(windows));
         pi_compat_targets = catalog
             .resources
             .iter()
@@ -320,6 +295,14 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
     out.progress_done();
     if let Some(reason) = skipped_herdr {
         lanes.push((labels.len() + 4, Lane::ok("Herdr", reason)));
+    }
+    // After the tools lane: the migration needs the Pi it just installed.
+    if let (Some(home), Some(project)) = (system.home_dir(), system.current_dir()) {
+        match crate::mcp_migration::migrate_adapter(system, &home, &project) {
+            Ok(Some(detail)) => lanes.push((labels.len() + 3, Lane::ok("MCP", detail))),
+            Ok(None) => {}
+            Err(error) => lanes.push((labels.len() + 3, Lane::failed("MCP", error.to_string()))),
+        }
     }
     if !pi_compat_targets.is_empty() {
         lanes.push((
@@ -865,17 +848,6 @@ mod tests {
             progress_status(2, 5, &["Tools", "Pi packages", "Herdr"], 12),
             "2/5 complete · Tools + Pi packages + Herdr · 12s"
         );
-    }
-
-    #[test]
-    fn mcp_gateway_is_not_reinstalled_or_downgraded_by_updates() {
-        let catalog = Catalog::embedded().unwrap();
-        for version in ["2.32.1", "2.33.0"] {
-            let listed = format!(
-                "User packages:\n  npm:pi-mcp-adapter@{version}\nProject packages:\n  npm:pi-mcp-adapter@{version}\n"
-            );
-            assert!(pi_package_commands(&catalog, &listed, false).is_empty());
-        }
     }
 
     #[test]
