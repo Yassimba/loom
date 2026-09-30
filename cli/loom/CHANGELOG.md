@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/Yassimba/loom/compare/loom-v1.13.2...loom-v1.14.0) (2026-09-30)
+
+
+### Features
+
+* **loom:** move MCP to Pi's built-in support and migrate from pi-mcp-adapter ([#329](https://github.com/Yassimba/loom/issues/329)) ([2d664ad](https://github.com/Yassimba/loom/commit/2d664ad18f268b25d5778f676bb2341a1e3ef066))
+
 ## [1.13.2](https://github.com/Yassimba/loom/compare/loom-v1.13.1...loom-v1.13.2) (2026-09-27)
 
 
