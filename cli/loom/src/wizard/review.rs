@@ -248,25 +248,6 @@ impl Wizard {
                 ));
                 required.push(Line::from(step.operation.display()));
             }
-            let destination = self.skill_destination();
-            let upgrade_adapter = plan
-                .resources()
-                .any(|step| step.target == "pi-package:pi-mcp-adapter")
-                && destination
-                    .home
-                    .join(".pi/agent/npm/node_modules/pi-mcp-adapter/package.json")
-                    .is_file()
-                && crate::mcp::adapter_needed(&destination).is_ok_and(|needed| needed);
-            if upgrade_adapter {
-                notes.push(Line::styled(
-                    format!(
-                        "Repair: upgrade the official MCP adapter to {}",
-                        crate::mcp::ADAPTER_SPEC
-                    ),
-                    Style::new().fg(Color::Green),
-                ));
-                notes.push(Line::from(""));
-            }
         }
         let settings = self.selected_settings();
         if !settings.is_empty() {

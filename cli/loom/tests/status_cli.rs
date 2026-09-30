@@ -38,7 +38,7 @@ fn general_status_excludes_vault_scoped_packages() {
         fs::write(
             &pi,
             format!(
-                "#!/bin/sh\nif [ \"$1\" = list ]; then\nprintf '%s\\n' 'User packages:\n  npm:pi-subagents@0.66.0\n{project_packages}'\nelse\nprintf '0.85.1\\n'\nfi\n"
+                "#!/bin/sh\nif [ \"$1\" = list ]; then\nprintf '%s\\n' 'User packages:\n  npm:@tintinweb/pi-subagents@0.19.0\n{project_packages}'\nelse\nprintf '0.85.1\\n'\nfi\n"
             ),
         )
         .unwrap();

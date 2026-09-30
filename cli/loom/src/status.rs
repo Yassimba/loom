@@ -109,7 +109,7 @@ fn print_mcp(system: &dyn System, style: &Out) -> bool {
                         .is_ok_and(|server| crate::mcp::configured(server, &destination, system));
                 healthy &= configured;
                 style.row(if configured { Mark::Ok } else { Mark::Bad }, name,
-                    format!("{} — {}", tidy_path(path, &home), if configured { "gateway configured; live health not checked (use /mcp in Pi)".into() } else { format!("config changed/missing or prerequisite unavailable; inspect /mcp or retry loom add --mcp-server {name} --agent pi") }));
+                    format!("{} — {}", tidy_path(path, &home), if configured { "configured; live health not checked (use /mcp in Pi)".into() } else { format!("config changed/missing or prerequisite unavailable; inspect /mcp or retry loom add --mcp-server {name} --agent pi") }));
             }
         }
     }

@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-loom-mermaid",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Loom's advanced Mermaid renderer for Pi, with better routing and color.",
   "license": "MIT",
   "type": "module",
@@ -46,7 +46,7 @@
     }
   },
   "dependencies": {
-    "@earendil-works/pi-tui": "0.85.1"
+    "@earendil-works/pi-tui": "0.99.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"

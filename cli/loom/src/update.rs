@@ -46,9 +46,6 @@ fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) ->
         .resources
         .iter()
         .filter(|resource| resource.kind == ResourceKind::PiPackage && resource.group != "Wiki")
-        // MCP setup preserves the shared gateway; a catalog reinstall would
-        // downgrade compatible newer installs to the setup prerequisite pin.
-        .filter(|resource| resource.install_target != "pi-mcp-adapter")
         .filter(|resource| !native_windows || !resource.windows_wsl)
         .flat_map(|resource| {
             let spec = resource.pi_install_spec();
@@ -188,9 +185,18 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
     // bootstrap was undone; point back at it instead of self-updating.
     let mise = system.command_exists("mise");
 
-    // Skills, projects, tools, Pi, and Herdr touch disjoint state, so every
-    // lane runs at once; rows print in a fixed order once all are done.
     let repository = &skills::Repository::default();
+    // Updated Pi packages may require the newly pinned Pi version.
+    // Install tools first; the remaining lanes can still run concurrently.
+    let tools_lane = if mise {
+        sync_tool_manifest(system, repository)
+    } else {
+        Lane::failed(
+            "Tools",
+            "mise is not on PATH; rerun the installer from the README",
+        )
+    };
+    let pi_ready = pi_runtime_ready(system, tools_lane.ok);
     let active_details = &std::sync::Mutex::new(std::collections::BTreeMap::new());
     type Job<'a> = Box<dyn FnOnce() -> Lane + Send + 'a>;
     let mut jobs: Vec<(&'static str, Job<'_>)> = vec![
@@ -203,23 +209,20 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
             Box::new(move || sync_projects_lane(system, repository)),
         ),
     ];
-    if mise {
-        jobs.push((
-            "Tools",
-            Box::new(move || sync_tool_manifest(system, repository)),
-        ));
-    } else {
-        jobs.push((
-            "Tools",
-            Box::new(|| {
-                Lane::failed(
-                    "Tools",
-                    "mise is not on PATH; rerun the installer from the README",
-                )
-            }),
-        ));
-    }
+    jobs.push(("Tools", Box::new(move || tools_lane)));
     for task in tasks {
+        if !pi_ready && task.label == "Pi packages" {
+            jobs.push((
+                "Pi packages",
+                Box::new(|| {
+                    Lane::failed(
+                        "Pi packages",
+                        "Pi tool update failed; packages left unchanged",
+                    )
+                }),
+            ));
+            continue;
+        }
         let label = task.label;
         jobs.push((
             label,
@@ -293,6 +296,14 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
     if let Some(reason) = skipped_herdr {
         lanes.push((labels.len() + 4, Lane::ok("Herdr", reason)));
     }
+    // After the tools lane: the migration needs the Pi it just installed.
+    if let (Some(home), Some(project)) = (system.home_dir(), system.current_dir()) {
+        match crate::mcp_migration::migrate_adapter(system, &home, &project) {
+            Ok(Some(detail)) => lanes.push((labels.len() + 3, Lane::ok("MCP", detail))),
+            Ok(None) => {}
+            Err(error) => lanes.push((labels.len() + 3, Lane::failed("MCP", error.to_string()))),
+        }
+    }
     if !pi_compat_targets.is_empty() {
         lanes.push((
             labels.len(),
@@ -356,6 +367,24 @@ fn sync_tool_manifest(system: &dyn System, repository: &skills::Repository) -> L
         }
         Err(message) => Lane::failed("Tools", message),
     }
+}
+
+// An unrelated selected tool can fail the bulk mise install. Retry only Pi
+// before running packages that may depend on its newly pinned runtime.
+fn pi_runtime_ready(system: &dyn System, tools_ready: bool) -> bool {
+    if tools_ready {
+        return true;
+    }
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    let spec = CommandSpec::new("mise", ["install", "--yes", crate::manifest::PI_TOOL_KEY]);
+    if !system
+        .run_controlled(&spec, crate::system::MANAGER_COMMAND_TIMEOUT, &cancelled)
+        .is_ok_and(|result| result.success)
+    {
+        return false;
+    }
+    system.refresh_path();
+    system.command_exists("pi")
 }
 
 fn reconcile_pi_compat(system: &dyn System, targets: &[String]) -> Lane {
@@ -571,15 +600,15 @@ mod tests {
 
     #[test]
     fn package_verification_requires_the_exact_identity_and_destination() {
-        let listed = "User packages:\n npm:pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:pi-subagents@0.66.0\n npm:@example/foo@1";
+        let listed = "User packages:\n npm:@tintinweb/pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:@tintinweb/pi-subagents@0.19.0\n npm:@example/foo@1";
         assert!(!crate::install::pi_package_installed(
             listed,
-            "pi-subagents",
+            "@tintinweb/pi-subagents",
             false
         ));
         assert!(crate::install::pi_package_installed(
             listed,
-            "npm:pi-subagents@latest",
+            "npm:@tintinweb/pi-subagents@latest",
             true
         ));
         assert!(!crate::install::pi_package_installed(
@@ -593,8 +622,8 @@ mod tests {
             true
         ));
         assert!(!crate::install::pi_package_installed(
-            "npm:pi-subagents",
-            "pi-subagents",
+            "npm:@tintinweb/pi-subagents",
+            "@tintinweb/pi-subagents",
             false
         ));
         let root = std::env::temp_dir().join(format!(
@@ -703,7 +732,7 @@ mod tests {
                 Some("2.0.0"),
                 false,
                 true,
-                "Installation could not be verified",
+                "verification did not find the selected package",
             ),
         ]
         .into_iter()
@@ -750,7 +779,11 @@ mod tests {
             assert_eq!(lane.ok, !fail_next && !wrong_scope);
             let text = format!("{}\n{}", lane.detail, lane.notes.join("\n"));
             assert!(text.contains(expected), "{text}");
-            assert!(!text.contains("SECRET"), "{text}");
+            assert_eq!(
+                text.contains("Authorization: Bearer SECRET"),
+                fail_next,
+                "{text}"
+            );
             assert!(text.contains("this project"), "{text}");
             assert!(progress
                 .borrow()
@@ -768,6 +801,48 @@ mod tests {
     }
 
     #[test]
+    fn optional_tool_failure_only_blocks_packages_if_pi_cannot_be_updated() {
+        struct ToolSystem {
+            pi_install_ok: bool,
+            calls: std::sync::Mutex<Vec<String>>,
+        }
+        impl System for ToolSystem {
+            fn command_exists(&self, _: &str) -> bool {
+                true
+            }
+            fn refresh_path(&self) {}
+            fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
+                self.calls.lock().unwrap().push(command.display());
+                Ok(crate::CommandResult {
+                    success: self.pi_install_ok,
+                    stdout: String::new(),
+                    stderr: "Pi installation failed".into(),
+                })
+            }
+        }
+        for pi_install_ok in [true, false] {
+            let system = ToolSystem {
+                pi_install_ok,
+                calls: std::sync::Mutex::new(Vec::new()),
+            };
+            assert_eq!(pi_runtime_ready(&system, false), pi_install_ok);
+            assert_eq!(
+                *system.calls.lock().unwrap(),
+                vec![format!(
+                    "mise install --yes {}",
+                    crate::manifest::PI_TOOL_KEY
+                )]
+            );
+        }
+        let system = ToolSystem {
+            pi_install_ok: false,
+            calls: std::sync::Mutex::new(Vec::new()),
+        };
+        assert!(pi_runtime_ready(&system, true));
+        assert!(system.calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
     fn progress_shows_measurable_completion_and_active_lanes() {
         assert_eq!(
             progress_status(2, 5, &["Tools", "Pi packages", "Herdr"], 12),
@@ -776,31 +851,20 @@ mod tests {
     }
 
     #[test]
-    fn mcp_gateway_is_not_reinstalled_or_downgraded_by_updates() {
-        let catalog = Catalog::embedded().unwrap();
-        for version in ["2.32.1", "2.33.0"] {
-            let listed = format!(
-                "User packages:\n  npm:pi-mcp-adapter@{version}\nProject packages:\n  npm:pi-mcp-adapter@{version}\n"
-            );
-            assert!(pi_package_commands(&catalog, &listed, false).is_empty());
-        }
-    }
-
-    #[test]
     fn pi_package_updates_preserve_user_and_project_scope() {
         let catalog = Catalog::embedded().unwrap();
         // Read the pin from the catalog: hardcoding it here makes every
-        // dependency bump of pi-subagents fail this test.
+        // dependency bump of @tintinweb/pi-subagents fail this test.
         let subagents = catalog
             .resources
             .iter()
-            .find(|resource| resource.install_target == "pi-subagents")
-            .expect("pi-subagents is in the catalog");
+            .find(|resource| resource.install_target == "@tintinweb/pi-subagents")
+            .expect("@tintinweb/pi-subagents is in the catalog");
         let pinned = subagents
             .version
             .as_deref()
             .expect("external Pi packages carry an exact version");
-        let listed = "User packages:\n  npm:pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
+        let listed = "User packages:\n  npm:@tintinweb/pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:@tintinweb/pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
             .map(|command| command.display())
@@ -808,13 +872,13 @@ mod tests {
 
         assert!(commands
             .iter()
-            .any(|command| command == &format!("pi install npm:pi-subagents@{pinned}")));
+            .any(|command| command == &format!("pi install npm:@tintinweb/pi-subagents@{pinned}")));
         assert!(commands
             .iter()
             .any(|command| command == "pi install npm:@yassimba/pi-guardrails@latest"));
-        assert!(commands
-            .iter()
-            .any(|command| command == &format!("pi install -l npm:pi-subagents@{pinned}")));
+        assert!(commands.iter().any(
+            |command| command == &format!("pi install -l npm:@tintinweb/pi-subagents@{pinned}")
+        ));
         assert!(
             !commands.iter().any(|command| command.contains("feynman")),
             "Wiki packages are updated only in registered Vaults"

@@ -18,15 +18,15 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.21.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v1.11.0", tag_regex = "^loom-v" }
+"github:Yassimba/loom[exe=loom]" = { version = "loom-v1.14.0", tag_regex = "^loom-v" }
 # core:end
 
 # claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
 # canvas, autoresearch skills + their Python core). The release zip is the
 # whole product, so `mise where github:AgriciDaniel/claude-obsidian` is the
 # product root its skills resolve scripts from.
-"github:AgriciDaniel/claude-obsidian" = "v2.1.1"
-python = "3.13.7"
+"github:AgriciDaniel/claude-obsidian" = "v2.2.0"
+python = "3.14.7"
 
 # teams calendar CLI (export meetings as JSON, find slots). Same GitHub
 # releases as loom, but through the ubi backend: mise keys an install by
@@ -36,45 +36,42 @@ python = "3.13.7"
 "ubi:Yassimba/loom" = { version = "loom-teams-v0.2.3", exe = "loom-teams", tag_regex = "^loom-teams-v" }
 
 # agents & multiplexer
-"npm:@earendil-works/pi-coding-agent" = "0.85.1"
+"npm:@earendil-works/pi-coding-agent" = "0.99.1"
 # Herdr Annotate actions and the Mermaid document CLI run on Bun.
 bun = "1.4.2"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its
 # manual install instruction and mise skips this entry.
-herdr = { version = "0.9.0", os = ["macos", "linux"] }
+herdr = { version = "0.9.1", os = ["macos", "linux"] }
 
 # semantic Git history, diffs, and change impact
-"github:Ataraxy-Labs/sem[exe=sem]" = "v0.24.0"
+"github:Ataraxy-Labs/sem[exe=sem]" = "v0.25.0"
 
 # persistent local repository graph and impact analysis
-"npm:codebase-memory-mcp" = "0.10.8"
+"npm:codebase-memory-mcp" = "0.11.0"
 
 # compress command output for coding agents
-"github:rtk-ai/rtk" = "v0.48.0"
-
-# compress AI-agent context before it reaches the model
-"pipx:headroom-ai" = { version = "0.37.0", extras = ["all"], uvx_args = "--python 3.13.7", pipx_args = "--python 3.13.7" }
+"github:rtk-ai/rtk" = "v0.50.0"
 
 # local inference server for Apple silicon Macs
-"npm:@magnitudedev/cli" = { version = "0.0.14", os = ["macos"] }
+"npm:@magnitudedev/cli" = { version = "0.0.15", os = ["macos"] }
 
 # hardware-aware local model TUI for Linux and Windows
-"ubi:AlexsJones/llmfit" = { version = "v1.1.14", os = ["linux", "windows"] }
+"ubi:AlexsJones/llmfit" = { version = "v1.1.16", os = ["linux", "windows"] }
 
 # local hybrid search for Markdown knowledge bases
 "npm:@tobilu/qmd" = "2.8.3"
 
 # code review TUI (annotate diffs, export to GitHub or clipboard)
-"github:agavra/tuicr" = "v0.25.0"
+"github:agavra/tuicr" = "v0.27.0"
 
 # browser-based plan and code review for coding agents
-"github:backnotprop/plannotator" = "v0.27.14"
+"github:backnotprop/plannotator" = "v0.27.22"
 
 # forges
-gh = "2.100.0"
+gh = "2.102.0"
 "github:ankitpokhrel/jira-cli[exe=jira]" = "v1.7.0"
-glab = "1.112.0"
-"github:rcieri/glab-tui" = "v0.9.1"
+glab = "1.119.0"
+"github:rcieri/glab-tui" = "v0.9.2"
 
 # hygiene & navigation
 gitleaks = "8.30.1"
@@ -89,24 +86,24 @@ zoxide = "0.10.0"
 rust = { version = "1.98.1", os = ["macos"] }
 
 # observability
-"github:DataDog/pup" = "v1.18.3"
+"github:DataDog/pup" = "v1.23.5"
 
 # export Confluence pages and spaces to Markdown
-"pipx:confluence-markdown-exporter" = "5.4.0"
+"pipx:confluence-markdown-exporter" = "5.5.0"
 
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
 # release with assets). macOS arm64 has no asset, so it builds via cargo.
 "aqua:XAMPPRocky/tokei" = { version = "12.1.2", os = ["linux", "windows"] }
-"cargo:tokei" = { version = "14.0.0", os = ["macos"] }
+"cargo:tokei" = { version = "15.0.0", os = ["macos"] }
 "github:zdyxry/tokui" = "0.12.0"
 
 # issue tracking for agents (beads: br is the tracker, bv the TUI viewer)
-"github:Dicklesworthstone/beads_rust" = "v0.5.12"
-"github:Dicklesworthstone/beads_viewer" = "v0.24.1"
+"github:Dicklesworthstone/beads_rust" = "v0.7.3"
+"github:Dicklesworthstone/beads_viewer" = "v0.25.1"
 
 # python toolchain
-uv = "0.12.11"
+uv = "0.12.20"
 
 # skill tooling (browser automation, diagram/slide export)
-"npm:agent-browser" = "0.37.1"
-"npm:@mermaid-js/mermaid-cli" = "11.17.0"
+"npm:agent-browser" = "0.38.1"
+"npm:@mermaid-js/mermaid-cli" = "12.0.0"

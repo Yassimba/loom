@@ -14,6 +14,10 @@ test("release workflow publishes every released plugin before pinning", async ()
   assert.doesNotMatch(workflow, /npm publish \.\/plugins\/pi-fast/);
   assert.match(workflow, /needs: \[release-please, binaries, npm\]/);
   assert.match(workflow, /needs\.npm\.result == 'success' \|\| needs\.npm\.result == 'skipped'/);
-  // Without a status function, a skipped npm job skips pin and full-install.
+  // A CLI-only release skips npm; both pin and the published install must still run.
   assert.match(workflow, /!cancelled\(\) && needs\.binaries\.result == 'success'/);
+  assert.match(
+    workflow,
+    /full-install:\n    needs: pin\n(?:    #.*\n)*    if: "!cancelled\(\) && needs\.pin\.result == 'success'"/,
+  );
 });

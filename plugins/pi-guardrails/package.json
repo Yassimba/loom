@@ -1,6 +1,6 @@
 {
   "name": "@yassimba/pi-guardrails",
-  "version": "0.18.0",
+  "version": "0.20.0",
   "description": "Security guardrails for Pi: protected paths, workspace boundaries, and dangerous-command gates.",
   "license": "MIT",
   "type": "module",
@@ -43,7 +43,7 @@
     "catalog": {
       "label": "Pi Guardrails",
       "description": "Protect sensitive paths, add trusted workspace roots, and gate dangerous commands in Pi.",
-      "nextAction": "Start Pi and run /guardrails:onboarding or /add-dir."
+      "nextAction": "Start Pi; Guardrails begins in Ask mode. Use /guardrails:mode to cycle modes."
     }
   },
   "dependencies": {
@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@golevelup/ts-vitest": "4.0.0",
-    "memfs": "4.78.0",
+    "memfs": "4.79.0",
     "vitest": "4.1.11"
   },
   "scripts": {

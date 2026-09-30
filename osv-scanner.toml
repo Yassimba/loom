@@ -20,6 +20,18 @@ id = "CVE-2026-69152"
 reason = "brace-expansion 5.0.6 shrinkwrapped in pi-coding-agent; dev-tool DoS only (2026-08-29)"
 
 [[IgnoredVulns]]
+id = "CVE-2026-102276"
+reason = "brace-expansion 5.0.9 shrinkwrapped in pi-coding-agent 0.99.1; dev-tool DoS only (2026-09-30)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-102277"
+reason = "brace-expansion 5.0.9 shrinkwrapped in pi-coding-agent 0.99.1; dev-tool DoS only (2026-09-30)"
+
+[[IgnoredVulns]]
+id = "CVE-2026-102278"
+reason = "brace-expansion 5.0.9 shrinkwrapped in pi-coding-agent 0.99.1; dev-tool DoS only (2026-09-30)"
+
+[[IgnoredVulns]]
 id = "CVE-2026-13697"
 reason = "undici 8.5.0 shrinkwrapped in pi-coding-agent (2026-08-29)"
 

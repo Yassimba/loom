@@ -5,13 +5,14 @@ import type {
   ReadToolCallEvent,
 } from "@earendil-works/pi-coding-agent";
 import { createMock, type DeepMocked } from "@golevelup/ts-vitest";
-import { assert, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { configLoader } from "../../src/shared/config";
 import {
   GUARDRAILS_PROMPT_CLOSED_EVENT,
   GUARDRAILS_PROMPT_OPENED_EVENT,
   type GuardrailsPromptOpenedPayload,
 } from "../../src/shared/events";
+import { resetSessionMode } from "../../src/shared/session-mode";
 import type { WorkspaceRootControl } from "../guardrails/commands/add-dir";
 import { registerPathAccess } from "./index";
 import type { createPathAccessPromptComponent } from "./prompt";
@@ -88,6 +89,8 @@ function registeredExtensionHandler(pi: DeepMocked<ExtensionAPI>, event: string)
 }
 
 describe("pathAccess extension hook", () => {
+  beforeEach(() => resetSessionMode("ask"));
+
   it("emits a correlated lifecycle around an outside-path prompt", async () => {
     const pi = createMock<ExtensionAPI>();
     const ctx = createMock<ExtensionContext>({
@@ -159,6 +162,7 @@ describe("pathAccess extension hook", () => {
       },
       version: "0.17.1",
       applyBuiltinDefaults: true,
+      modeShortcut: "ctrl+alt+g",
     });
     const pi = createMock<ExtensionAPI>();
     const ctx = createMock<ExtensionContext>({ cwd: "/workspace", hasUI: true, mode: "tui" });
@@ -167,6 +171,19 @@ describe("pathAccess extension hook", () => {
     const toolCallHandler = registeredExtensionHandler(pi, "tool_call");
     assert(typeof toolCallHandler === "function", "tool_call handler should be registered");
     await expect(toolCallHandler(toolCall, ctx)).resolves.toMatchObject({ block: true });
+    expect(ctx.ui.custom).not.toHaveBeenCalled();
+  });
+
+  it("skips outside-path prompts in Free mode", async () => {
+    resetSessionMode("free");
+    const pi = createMock<ExtensionAPI>();
+    const ctx = createMock<ExtensionContext>({ cwd: "/workspace", hasUI: true, mode: "tui" });
+    registerPathAccess(pi, workspace());
+
+    const toolCallHandler = registeredExtensionHandler(pi, "tool_call");
+    assert(typeof toolCallHandler === "function", "tool_call handler should be registered");
+    await toolCallHandler(toolCall, ctx);
+
     expect(ctx.ui.custom).not.toHaveBeenCalled();
   });
 
