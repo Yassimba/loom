@@ -75,7 +75,7 @@ test("code-intelligence use clears the reminder and permits a later nudge", () =
   }
   assert.deepEqual(call("context", { messages: [reminder] }), undefined);
 
-  call("tool_call", { toolName: "mcp__codebase_memory_mcp", input: {} });
+  call("tool_call", { toolName: "mcp__codebase-memory-mcp__search_code", input: {} });
   assert.deepEqual(call("context", { messages: [reminder, { role: "user", content: "task" }] }), {
     messages: [{ role: "user", content: "task" }],
   });
@@ -86,11 +86,10 @@ test("code-intelligence use clears the reminder and permits a later nudge", () =
   assert.equal(messages.length, 2);
 });
 
-test("gateway calls detect Codebase Memory", () => {
+test("built-in MCP calls detect Codebase Memory", () => {
   for (const event of [
-    { toolName: "mcp", input: { server: "codebase-memory-mcp" } },
-    { toolName: "mcp", input: { tool: "codebase-memory-mcp/query" } },
-    { toolName: "mcpScript", input: { code: 'tools.call("codebase_memory_mcp/search", {})' } },
+    { toolName: "mcp__codebase-memory-mcp__search_graph", input: {} },
+    { toolName: "codemode", input: { code: "await mcp__codebase_memory_mcp__trace_path({})" } },
   ]) {
     const { call, messages } = harness();
     for (let index = 1; index < NATIVE_TOOL_LIMIT; index += 1) {
@@ -104,9 +103,9 @@ test("gateway calls detect Codebase Memory", () => {
 
 test("unrelated MCP calls do not reset native exploration", () => {
   for (const event of [
-    { toolName: "mcp__other", input: {} },
-    { toolName: "mcp", input: { server: "context7" } },
-    { toolName: "mcpScript", input: { code: 'tools.call("other/search", {})' } },
+    { toolName: "mcp__other__search", input: {} },
+    { toolName: "mcp__context7__query-docs", input: {} },
+    { toolName: "codemode", input: { code: "await mcp__context7__resolve({})" } },
   ]) {
     const { call, messages } = harness();
     for (let index = 1; index < NATIVE_TOOL_LIMIT; index += 1) {

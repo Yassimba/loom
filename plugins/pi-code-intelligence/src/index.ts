@@ -9,8 +9,9 @@ export const EXPLORATION_REMINDER =
   "Pause native exploration. Unless the user requested native-only work, query Codebase Memory for architecture and impact before another read or grep. Then verify the result with native tools.";
 
 function isCodeIntelligenceCall(toolName: string, input: unknown): boolean {
-  if (toolName === "mcp__codebase_memory_mcp") return true;
-  if (toolName !== "mcp" && toolName !== "mcpScript") return false;
+  // Pi's built-in MCP names tools mcp__<server>__<tool>; codemode scripts call them by that name.
+  if (/^mcp__codebase[-_]memory[-_]mcp__/.test(toolName)) return true;
+  if (toolName !== "codemode") return false;
   const call = JSON.stringify(input)?.toLowerCase() ?? "";
   return call.includes("codebase-memory") || call.includes("codebase_memory");
 }
