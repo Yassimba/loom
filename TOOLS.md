@@ -72,8 +72,8 @@ This page covers every tool in [Loom’s tool manifest](manifest/loom.toml), plu
 
 ## MCP servers for Pi
 
-Loom connects Pi through [pi-mcp-adapter](https://www.npmjs.com/package/pi-mcp-adapter). Reviewed servers are local [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) repository graph/impact analysis, and hosted [Context7](https://github.com/upstash/context7) library documentation. See the [MCP setup instructions](README.md#mcp-servers).
+Loom configures Pi's built-in MCP support. Reviewed servers are local [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp) repository graph/impact analysis, and hosted [Context7](https://github.com/upstash/context7) library documentation. See the [MCP setup instructions](README.md#mcp-servers).
 
-All use gateway-only exposure. Loom uses Codebase Memory’s read-only analysis profile.
+All use Pi's default `codemode` exposure: tools are reached through the `codemode` tool, not declared one by one. Loom uses Codebase Memory’s read-only analysis profile.
 
 Installing a tool does not sign you into its service or connect it to an agent. Follow its setup instructions after installation. For example, GitHub CLI uses `gh auth login` and GitLab CLI uses `glab auth login`.

@@ -267,7 +267,7 @@ export function registerGuardrailsSettings(pi: ExtensionAPI): void {
     buildSections: (
       tabConfig: GuardrailsConfig | null,
       resolved: ResolvedConfig,
-      { setDraft, theme, scope },
+      { setDraft, theme },
     ): SettingsSection[] => {
       const settingsTheme = theme;
       let scopedConfig = structuredClone(tabConfig ?? {}) as GuardrailsConfig;
@@ -403,15 +403,25 @@ export function registerGuardrailsSettings(pi: ExtensionAPI): void {
           };
         });
 
-      if (scope === "global") {
-        featureItems.push({
-          id: "onboarding.completed",
-          label: "Onboarding status",
-          description: "Reset to pending to re-run onboarding (takes effect after reload)",
-          currentValue: scopedConfig.onboarding?.completed === true ? "completed" : "pending",
-          values: ["completed", "pending"],
-        });
-      }
+      featureItems.unshift({
+        id: "enabled",
+        label: "Guardrails",
+        description: "Default all Guardrails checks on or off (takes effect next session)",
+        currentValue:
+          scopedConfig.enabled === undefined
+            ? `inherited: ${resolved.enabled ? "enabled" : "disabled"}`
+            : scopedConfig.enabled
+              ? "enabled"
+              : "disabled",
+        values: ["enabled", "disabled"],
+      });
+      featureItems.push({
+        id: "modeShortcut",
+        label: "Mode shortcut",
+        description: "Cycle Ask, Free, and Yolo (takes effect after reload)",
+        currentValue: scopedConfig.modeShortcut ?? `inherited: ${resolved.modeShortcut}`,
+        values: ["ctrl+alt+g", "ctrl+alt+y", "alt+g", "disabled"],
+      });
 
       const policyRules = getPolicyRules();
 
@@ -545,6 +555,11 @@ export function registerGuardrailsSettings(pi: ExtensionAPI): void {
     onSettingChange: (id, newValue, config) => {
       const updated = structuredClone(config);
 
+      if (id === "enabled") {
+        updated.enabled = newValue === "enabled";
+        return updated;
+      }
+
       if (id.startsWith("features.")) {
         const featureKey = id.slice("features.".length);
         updated.features = {
@@ -562,20 +577,7 @@ export function registerGuardrailsSettings(pi: ExtensionAPI): void {
         return updated;
       }
 
-      if (id === "onboarding.completed") {
-        updated.onboarding = {
-          ...updated.onboarding,
-          completed: newValue === "completed",
-          completedAt:
-            newValue === "completed"
-              ? (updated.onboarding?.completedAt ?? new Date().toISOString())
-              : undefined,
-          version: newValue === "completed" ? updated.onboarding?.version : undefined,
-        };
-        return updated;
-      }
-
-      // Fall through to default string storage for enums (pathAccess.mode, etc.)
+      // Fall through to default string storage for enums (modeShortcut, pathAccess.mode, etc.)
       return null;
     },
   });

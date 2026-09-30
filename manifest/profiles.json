@@ -35,7 +35,7 @@
         "tool:zoxide",
         "tool:plannotator",
         "pi-package:@ff-labs/pi-fff",
-        "pi-package:pi-subagents",
+        "pi-package:@tintinweb/pi-subagents",
         "pi-package:pi-web-access",
         "pi-package:@yassimba/pi-guardrails",
         "pi-package:@yassimba/pi-skill-autocomplete",

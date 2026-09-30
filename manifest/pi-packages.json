@@ -3,7 +3,7 @@
   "packages": [
     {
       "name": "i-have-adhd",
-      "source": "git:github.com/ayghri/i-have-adhd@58494af57962b2d7a996b4d419474380a299af5e",
+      "source": "git:github.com/ayghri/i-have-adhd@839872f9d1cd634fed642b4589ce7226199cc15f",
       "label": "i-have-adhd",
       "bundledSkills": ["i-have-adhd"],
       "description": "ADHD-friendly output for Pi with a session mode toggle, status indicator, and restoration after compaction. By Ayoub G.",
@@ -11,7 +11,7 @@
     },
     {
       "name": "@dietrichgebert/ponytail",
-      "version": "4.9.0",
+      "version": "4.10.0",
       "label": "ponytail",
       "bundledSkills": ["ponytail"],
       "description": "Ponytail modes and skills for Pi: prefer simple solutions and inject the active mode's instructions each turn. By Dietrich Gebert.",
@@ -19,7 +19,7 @@
     },
     {
       "name": "@plannotator/pi-extension",
-      "version": "0.27.14",
+      "version": "0.27.22",
       "label": "plannotator",
       "bundledSkills": ["plannotator"],
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
@@ -27,7 +27,7 @@
     },
     {
       "name": "@companion-ai/feynman",
-      "version": "0.3.47",
+      "version": "0.5.15",
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
@@ -37,7 +37,7 @@
     },
     {
       "name": "@ff-labs/pi-fff",
-      "version": "0.10.6",
+      "version": "0.11.0",
       "label": "fff",
       "description": "FFF-powered fuzzy file and content search with frecency ranking, git-aware results, and fast @-mention autocomplete. By dmtrKovalenko.",
       "nextAction": "Run /reload in Pi, then /fff-health to inspect the index."
@@ -50,36 +50,29 @@
       "nextAction": "Run /autoresearch with an optimization target in Pi."
     },
     {
-      "name": "pi-mcp-adapter",
-      "version": "2.32.1",
-      "label": "mcp-adapter",
-      "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
-      "nextAction": "Run /mcp setup in Pi to configure an MCP server."
-    },
-    {
-      "name": "pi-subagents",
-      "version": "0.66.0",
+      "name": "@tintinweb/pi-subagents",
+      "version": "0.19.0",
       "label": "subagents",
-      "description": "Delegate tasks to subagents: chain them, run them in parallel, let them ask you questions mid-run. By nicobailon.",
-      "nextAction": "Ask Pi to delegate a task to a subagent."
+      "description": "Run Claude Code-style subagents asynchronously, steer them while they work, and inspect their live conversations. By tintinweb.",
+      "nextAction": "Ask Pi to run an Explore subagent in the background."
     },
     {
       "name": "pi-web-access",
-      "version": "0.29.0",
+      "version": "0.33.0",
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "nextAction": "Ask Pi to search the web."
     },
     {
       "name": "pi-rewind-hook",
-      "version": "1.8.6",
+      "version": "1.8.7",
       "label": "rewind",
       "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
       "nextAction": "Branch to an earlier Pi message to see files rewind."
     },
     {
       "name": "@gotgenes/pi-anthropic-auth",
-      "version": "2.0.8",
+      "version": "3.4.0",
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "nextAction": "Run /model in Pi and pick a Claude model."

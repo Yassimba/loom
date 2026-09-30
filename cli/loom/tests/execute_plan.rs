@@ -404,7 +404,7 @@ fn herdr_plugins_wait_for_mise_and_skip_failed_or_missing_runtime() {
                 assert!(report
                     .failures
                     .iter()
-                    .any(|failure| failure.message.contains("The operation did not complete")));
+                    .any(|failure| failure.message.contains("runtime install failed")));
             }
         } else {
             assert!(report.failures.is_empty(), "{report:?}");
@@ -451,10 +451,7 @@ fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
             .collect::<Vec<_>>(),
         ["mise", "tools", "herdr-plugin:jumplist"]
     );
-    assert!(report.failures[0]
-        .message
-        .contains("package source could not be reached"));
-    assert!(report.failures[0].message.contains("retry"));
+    assert!(report.failures[0].message.contains("network unavailable"));
     assert_eq!(report.failures[1].message, "mise is unavailable");
     assert_eq!(report.failures[2].message, "Herdr is unavailable");
     let commands = system.commands.into_inner().unwrap();

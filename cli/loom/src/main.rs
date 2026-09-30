@@ -237,7 +237,7 @@ struct SelectionArgs {
     /// Install a tool from the pinned manifest; repeat for multiple tools
     #[arg(long = "tool")]
     tools: Vec<String>,
-    /// Select a reviewed MCP server through Pi's gateway (use --agent pi)
+    /// Select a reviewed MCP server through Pi's built-in MCP support (use --agent pi)
     #[arg(long = "mcp-server")]
     mcp_servers: Vec<String>,
     /// Install skills for this agent; repeat for multiple agents

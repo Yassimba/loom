@@ -143,4 +143,14 @@ mod tests {
             .contains(&"tool:pi".to_string()));
         assert_eq!(catalog.profiles[3].id, "knowledge-wiki");
     }
+
+    #[test]
+    fn embedded_catalog_excludes_headroom() {
+        let catalog = Catalog::embedded().unwrap();
+
+        assert!(!catalog
+            .resources
+            .iter()
+            .any(|resource| resource.id == "tool:headroom"));
+    }
 }

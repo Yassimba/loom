@@ -356,7 +356,7 @@ fn rtk_configures_pi_when_pi_is_present_or_selected() {
 }
 
 #[test]
-fn codebase_memory_pulls_exact_tool_and_pi_gateway() {
+fn codebase_memory_pulls_exact_tool_and_code_intelligence() {
     let root = std::env::temp_dir().join(format!(
         "loom-local-mcp-plan-{}-{}",
         std::process::id(),
@@ -380,9 +380,6 @@ fn codebase_memory_pulls_exact_tool_and_pi_gateway() {
     let selected = catalog.find(&[format!("mcp-server:{name}")]).unwrap();
     let expanded = expand_skill_dependencies(&catalog.resources, selected, &[SkillAgent::Pi]);
     assert!(expanded.iter().any(|resource| resource.id == tool_id));
-    assert!(expanded
-        .iter()
-        .any(|resource| resource.id == "pi-package:pi-mcp-adapter"));
     assert!(expanded
         .iter()
         .any(|resource| { resource.id == "pi-package:@yassimba/pi-code-intelligence" }));

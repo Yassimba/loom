@@ -22,7 +22,6 @@ function includesDevNull(allowedPaths: unknown[] | undefined): boolean {
 
 export function shouldRun(config: GuardrailsConfig): boolean {
   return (
-    config.onboarding?.completed === true &&
     config.features?.pathAccess === true &&
     config.pathAccess?.mode === "ask" &&
     !includesDevNull(config.pathAccess?.allowedPaths)

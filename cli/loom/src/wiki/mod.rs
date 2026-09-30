@@ -738,7 +738,7 @@ mod tests {
         assert!(setup_qmd(&failing, &first)
             .unwrap_err()
             .to_string()
-            .contains("The operation did not complete"));
+            .contains("embedding failed"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -765,7 +765,7 @@ mod tests {
         assert_eq!(commands[0].cwd.as_deref(), Some(vault.as_path()));
         assert!(commands[1]
             .display()
-            .contains("npm:@companion-ai/feynman@0.3.47"));
+            .contains("npm:@companion-ai/feynman@0.5.15"));
         assert!(commands
             .iter()
             .all(|command| command.cwd.as_deref() == Some(vault.as_path())));

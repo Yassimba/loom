@@ -65,6 +65,7 @@ export interface PolicyRule {
 }
 
 export type PathAccessMode = "allow" | "ask" | "block";
+export type GuardrailsModeShortcut = "ctrl+alt+g" | "ctrl+alt+y" | "alt+g" | "disabled";
 
 export interface WorkspaceRoot {
   path: string;
@@ -92,15 +93,8 @@ export interface GuardrailsConfig {
   enabled?: boolean;
   /** When true, include Guardrails built-in policy rules before user rules are merged. */
   applyBuiltinDefaults?: boolean;
-  /** Tracks whether the setup wizard has been completed. Usually managed by Guardrails. */
-  onboarding?: {
-    /** Whether onboarding is complete. */
-    completed?: boolean;
-    /** ISO timestamp for when onboarding completed. */
-    completedAt?: string;
-    /** Package semver marker stored when onboarding completed. */
-    version?: string;
-  };
+  /** Keyboard shortcut that cycles Ask, Free, and Yolo for the current session. */
+  modeShortcut?: GuardrailsModeShortcut;
   /** Enable or disable individual Guardrails feature extensions. */
   features?: Partial<Record<GuardrailsFeatureId, boolean>> & {
     // Deprecated. Kept only for migration.
@@ -141,6 +135,7 @@ export interface ResolvedConfig {
   version: string;
   enabled: boolean;
   applyBuiltinDefaults: boolean;
+  modeShortcut: GuardrailsModeShortcut;
   features: Record<GuardrailsFeatureId, boolean>;
   policies: {
     rules: PolicyRule[];
