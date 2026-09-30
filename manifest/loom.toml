@@ -36,7 +36,7 @@ python = "3.14.7"
 "ubi:Yassimba/loom" = { version = "loom-teams-v0.2.3", exe = "loom-teams", tag_regex = "^loom-teams-v" }
 
 # agents & multiplexer
-"npm:@earendil-works/pi-coding-agent" = "0.87.1"
+"npm:@earendil-works/pi-coding-agent" = "0.99.1"
 # Herdr Annotate actions and the Mermaid document CLI run on Bun.
 bun = "1.4.2"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its
@@ -44,13 +44,13 @@ bun = "1.4.2"
 herdr = { version = "0.9.1", os = ["macos", "linux"] }
 
 # semantic Git history, diffs, and change impact
-"github:Ataraxy-Labs/sem[exe=sem]" = "v0.24.0"
+"github:Ataraxy-Labs/sem[exe=sem]" = "v0.25.0"
 
 # persistent local repository graph and impact analysis
-"npm:codebase-memory-mcp" = "0.10.8"
+"npm:codebase-memory-mcp" = "0.11.0"
 
 # compress command output for coding agents
-"github:rtk-ai/rtk" = "v0.49.0"
+"github:rtk-ai/rtk" = "v0.50.0"
 
 # local inference server for Apple silicon Macs
 "npm:@magnitudedev/cli" = { version = "0.0.15", os = ["macos"] }
@@ -62,16 +62,16 @@ herdr = { version = "0.9.1", os = ["macos", "linux"] }
 "npm:@tobilu/qmd" = "2.8.3"
 
 # code review TUI (annotate diffs, export to GitHub or clipboard)
-"github:agavra/tuicr" = "v0.26.0"
+"github:agavra/tuicr" = "v0.27.0"
 
 # browser-based plan and code review for coding agents
-"github:backnotprop/plannotator" = "v0.27.17"
+"github:backnotprop/plannotator" = "v0.27.22"
 
 # forges
-gh = "2.101.0"
+gh = "2.102.0"
 "github:ankitpokhrel/jira-cli[exe=jira]" = "v1.7.0"
 glab = "1.119.0"
-"github:rcieri/glab-tui" = "v0.9.1"
+"github:rcieri/glab-tui" = "v0.9.2"
 
 # hygiene & navigation
 gitleaks = "8.30.1"
@@ -86,24 +86,24 @@ zoxide = "0.10.0"
 rust = { version = "1.98.1", os = ["macos"] }
 
 # observability
-"github:DataDog/pup" = "v1.23.1"
+"github:DataDog/pup" = "v1.23.5"
 
 # export Confluence pages and spaces to Markdown
-"pipx:confluence-markdown-exporter" = "5.4.0"
+"pipx:confluence-markdown-exporter" = "5.5.0"
 
 # code stats (tokei 13+ publishes no prebuilt binaries; 12.1.2 is the last
 # release with assets). macOS arm64 has no asset, so it builds via cargo.
 "aqua:XAMPPRocky/tokei" = { version = "12.1.2", os = ["linux", "windows"] }
-"cargo:tokei" = { version = "14.0.0", os = ["macos"] }
+"cargo:tokei" = { version = "15.0.0", os = ["macos"] }
 "github:zdyxry/tokui" = "0.12.0"
 
 # issue tracking for agents (beads: br is the tracker, bv the TUI viewer)
-"github:Dicklesworthstone/beads_rust" = "v0.6.0"
-"github:Dicklesworthstone/beads_viewer" = "v0.25.0"
+"github:Dicklesworthstone/beads_rust" = "v0.7.3"
+"github:Dicklesworthstone/beads_viewer" = "v0.25.1"
 
 # python toolchain
-uv = "0.12.17"
+uv = "0.12.20"
 
 # skill tooling (browser automation, diagram/slide export)
 "npm:agent-browser" = "0.38.1"
-"npm:@mermaid-js/mermaid-cli" = "11.17.0"
+"npm:@mermaid-js/mermaid-cli" = "12.0.0"

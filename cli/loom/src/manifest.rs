@@ -319,7 +319,7 @@ mod tests {
             &["github:Ataraxy-Labs/sem[exe=sem]".into()],
         )
         .unwrap();
-        assert!(rendered.contains("\"github:Ataraxy-Labs/sem[exe=sem]\" = \"v0.24.0\""));
+        assert!(rendered.contains("\"github:Ataraxy-Labs/sem[exe=sem]\" = \"v0.25.0\""));
         let empty = render_selection(BUNDLED_MANIFEST, "", &[]).unwrap();
         assert!(!empty.contains("Ataraxy-Labs"));
     }
@@ -328,7 +328,7 @@ mod tests {
     fn local_code_intelligence_tools_keep_reviewed_exact_pins() {
         let rendered =
             render_selection(BUNDLED_MANIFEST, "", &["npm:codebase-memory-mcp".into()]).unwrap();
-        assert!(rendered.contains("\"npm:codebase-memory-mcp\" = \"0.10.8\""));
+        assert!(rendered.contains("\"npm:codebase-memory-mcp\" = \"0.11.0\""));
     }
 
     #[test]

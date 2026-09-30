@@ -25,8 +25,7 @@
       "key": "npm:@earendil-works/pi-coding-agent",
       "label": "pi",
       "description": "The Pi coding agent. Required by Pi packages — selecting any of them pulls Pi in automatically.",
-      "nextAction": "Run `pi` in a project to start the agent.",
-      "dependencies": ["pi-mcp-adapter"]
+      "nextAction": "Run `pi` in a project to start the agent."
     },
     {
       "key": "bun",

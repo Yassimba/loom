@@ -125,7 +125,7 @@
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "installTarget": "@gotgenes/pi-anthropic-auth",
-      "version": "3.3.2",
+      "version": "3.4.0",
       "nextAction": "Run /model in Pi and pick a Claude model."
     },
     {
@@ -172,7 +172,7 @@
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "installTarget": "@companion-ai/feynman",
-      "version": "0.5.9",
+      "version": "0.5.15",
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
       "dependencies": [
         "github:AgriciDaniel/claude-obsidian"
@@ -212,16 +212,6 @@
       "nextAction": "Start Pi to see the Loom header and available Loom updates."
     },
     {
-      "id": "pi-package:pi-mcp-adapter",
-      "kind": "pi-package",
-      "group": "Pi packages",
-      "label": "mcp-adapter",
-      "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
-      "installTarget": "pi-mcp-adapter",
-      "version": "3.0.0",
-      "nextAction": "Run /mcp setup in Pi to configure an MCP server."
-    },
-    {
       "id": "pi-package:@yassimba/pi-guardrails",
       "kind": "pi-package",
       "group": "Pi packages",
@@ -237,7 +227,7 @@
       "label": "plannotator",
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
       "installTarget": "@plannotator/pi-extension",
-      "version": "0.27.21",
+      "version": "0.27.22",
       "bundledSkills": [
         "plannotator"
       ],
@@ -263,7 +253,7 @@
       "label": "rewind",
       "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
       "installTarget": "pi-rewind-hook",
-      "version": "1.8.6",
+      "version": "1.8.7",
       "nextAction": "Branch to an earlier Pi message to see files rewind."
     },
     {
@@ -283,7 +273,7 @@
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "installTarget": "pi-web-access",
-      "version": "0.32.0",
+      "version": "0.33.0",
       "nextAction": "Ask Pi to search the web."
     },
     {
@@ -1043,10 +1033,7 @@
       "installTarget": "npm:@earendil-works/pi-coding-agent",
       "nextAction": "Run `pi` in a project to start the agent.",
       "bin": "pi",
-      "companions": [],
-      "dependencies": [
-        "pi-mcp-adapter"
-      ]
+      "companions": []
     },
     {
       "id": "tool:bun",
@@ -1366,26 +1353,22 @@
       "description": "Look up current library documentation and code examples through Context7’s hosted MCP server. Queries are sent to Context7; no local server or API key is required for basic use.",
       "installTarget": "context7",
       "source": "https://mcp.context7.com/mcp",
-      "dependencies": [
-        "pi-mcp-adapter"
-      ],
-      "nextAction": "Restart Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
+      "nextAction": "Run /reload in Pi and open /mcp to check Context7. Ask for library docs using Context7. An optional Context7 API key provides higher rate limits."
     },
     {
       "id": "mcp-server:codebase-memory-mcp",
       "kind": "mcp-server",
       "group": "MCP servers",
       "label": "codebase-memory-mcp",
-      "description": "Persistent local repository graph and change-impact analysis through Pi’s MCP gateway.",
+      "description": "Persistent local repository graph and change-impact analysis through Pi’s built-in MCP support.",
       "installTarget": "codebase-memory-mcp",
-      "version": "0.10.8",
-      "source": "https://github.com/DeusData/codebase-memory-mcp/releases/tag/v0.10.8",
+      "version": "0.11.0",
+      "source": "https://github.com/DeusData/codebase-memory-mcp/releases/tag/v0.11.0",
       "dependencies": [
-        "pi-mcp-adapter",
         "npm:codebase-memory-mcp",
         "@yassimba/pi-code-intelligence"
       ],
-      "nextAction": "Run `loom init` in the repository to create a fast initial index, then restart Pi and open /mcp. Loom uses Codebase Memory’s read-only analysis profile."
+      "nextAction": "Run `loom init` in the repository to create a fast initial index, then run /reload in Pi and open /mcp. Loom uses Codebase Memory’s read-only analysis profile."
     }
   ]
 }

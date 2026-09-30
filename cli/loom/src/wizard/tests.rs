@@ -158,16 +158,13 @@ fn wizard() -> Wizard {
 }
 
 #[test]
-fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
+fn mcp_servers_flow_through_choose_where_review_with_codemode_exposure() {
     for name in ["context7", "codebase-memory-mcp"] {
         let root =
             std::env::temp_dir().join(format!("loom-mcp-wizard-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let root = root.canonicalize().unwrap();
-        let mut ids = vec![
-            format!("mcp-server:{name}"),
-            "pi-package:pi-mcp-adapter".into(),
-        ];
+        let mut ids = vec![format!("mcp-server:{name}")];
         if name != "context7" {
             ids.push(format!("tool:{name}"));
         }
@@ -181,7 +178,6 @@ fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
             SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &root, &root);
         let mut wizard = Wizard::new(model, crate::wizard::wiki::WikiBrowser::default());
         assert_eq!(wizard.item_state(Item::Resource(0)), ItemState::Available);
-        assert_eq!(wizard.item_state(Item::Resource(1)), ItemState::Picked);
         wizard.selected[0] = true;
         press(&mut wizard, &[KeyCode::Enter]);
         assert!(wizard.screen == Screen::Where);
@@ -194,10 +190,10 @@ fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
         );
         assert_eq!(wizard.skill_scope, SkillScope::Project);
         let rendered = screen(&mut wizard, 120, 40);
-        assert!(rendered.contains("directTools=false"), "{rendered}");
-        assert!(rendered.contains("mcp-adapter"), "{rendered}");
+        assert!(rendered.contains("codemode"), "{rendered}");
+        assert!(!rendered.contains("mcp-adapter"), "{rendered}");
         assert!(
-            rendered.contains(".pi/mcp-adapter.json") || rendered.contains(r".pi\mcp-adapter.json"),
+            rendered.contains(".pi/mcp.json") || rendered.contains(r".pi\mcp.json"),
             "{rendered}"
         );
         assert!(!rendered.contains("blocked"), "{rendered}");

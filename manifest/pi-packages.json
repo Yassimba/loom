@@ -19,7 +19,7 @@
     },
     {
       "name": "@plannotator/pi-extension",
-      "version": "0.27.21",
+      "version": "0.27.22",
       "label": "plannotator",
       "bundledSkills": ["plannotator"],
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
@@ -27,7 +27,7 @@
     },
     {
       "name": "@companion-ai/feynman",
-      "version": "0.5.9",
+      "version": "0.5.15",
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
@@ -50,13 +50,6 @@
       "nextAction": "Run /autoresearch with an optimization target in Pi."
     },
     {
-      "name": "pi-mcp-adapter",
-      "version": "3.0.0",
-      "label": "mcp-adapter",
-      "description": "Connect Pi to MCP servers with lazy connections, cached metadata, and a compact proxy tool to limit context use. By nicobailon.",
-      "nextAction": "Run /mcp setup in Pi to configure an MCP server."
-    },
-    {
       "name": "@tintinweb/pi-subagents",
       "version": "0.19.0",
       "label": "subagents",
@@ -65,21 +58,21 @@
     },
     {
       "name": "pi-web-access",
-      "version": "0.32.0",
+      "version": "0.33.0",
       "label": "web-access",
       "description": "web_search and fetch_content tools for pages, PDFs, and GitHub repos. By nicobailon.",
       "nextAction": "Ask Pi to search the web."
     },
     {
       "name": "pi-rewind-hook",
-      "version": "1.8.6",
+      "version": "1.8.7",
       "label": "rewind",
       "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
       "nextAction": "Branch to an earlier Pi message to see files rewind."
     },
     {
       "name": "@gotgenes/pi-anthropic-auth",
-      "version": "3.3.2",
+      "version": "3.4.0",
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "nextAction": "Run /model in Pi and pick a Claude model."

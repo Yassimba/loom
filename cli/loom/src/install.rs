@@ -23,7 +23,7 @@ pub enum NodeStatus {
 impl NodeStatus {
     pub fn detect(system: &dyn System) -> Self {
         match system.run_probe(&CommandSpec::new("node", ["--version"])) {
-            Ok(result) if result.success => match parse_node_version(result.stdout.trim()) {
+            Ok(result) if result.success => match parse_version(result.stdout.trim()) {
                 Some(version) if version < PI_MIN_NODE => {
                     Self::TooOld(version.0, version.1, version.2)
                 }
@@ -53,7 +53,7 @@ impl NodeStatus {
 }
 
 /// Parse `v20.6.0` (or `20.6.0`) into a comparable triple.
-fn parse_node_version(raw: &str) -> Option<(u32, u32, u32)> {
+pub(crate) fn parse_version(raw: &str) -> Option<(u32, u32, u32)> {
     let mut parts = raw.trim_start_matches('v').split('.');
     let mut next = || parts.next()?.parse::<u32>().ok();
     Some((next()?, next()?, next().unwrap_or(0)))
