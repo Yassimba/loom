@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.7.1...pi-loom-mermaid-v0.8.0) (2026-09-30)
+
+
+### Features
+
+* **loom:** move MCP to Pi's built-in support and migrate from pi-mcp-adapter ([#329](https://github.com/Yassimba/loom/issues/329)) ([2d664ad](https://github.com/Yassimba/loom/commit/2d664ad18f268b25d5778f676bb2341a1e3ef066))
+
 ## [0.7.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.7.0...pi-loom-mermaid-v0.7.1) (2026-09-27)
 
 
