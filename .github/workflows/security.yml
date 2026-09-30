@@ -43,7 +43,7 @@ jobs:
           key: skillspector-${{ hashFiles('.github/workflows/security.yml') }}
       - name: Install SkillSpector
         if: steps.spector-cache.outputs.cache-hit != 'true'
-        run: pipx install "git+https://github.com/NVIDIA/skillspector.git@b7241089d7ec15d8b30df980dacbb428214732b9" # v2.11.0
+        run: pipx install "git+https://github.com/NVIDIA/skillspector.git@704bc9544260c2f41222dc0f92982521709496ab" # v2.11.1
       - name: Raise SkillSpector's 60s scan deadline
         # state.py hardcodes MAX_WORKFLOW_SECONDS = 60.0 with no env or
         # flag override; CI runners can't finish the largest skills in
