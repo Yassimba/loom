@@ -4,11 +4,12 @@
 //! is installed it replaces Pi's built-in MCP. `loom update` migrates each
 //! config directory, rewrites Loom's ownership receipts to match, then removes
 //! the adapter package. Every rewritten file keeps a backup.
-use crate::mcp::{entry_digest, read_object, write_config};
+use crate::mcp::{entry_digest, lists_adapter, read_object, write_config};
 use crate::ownership::{InstallState, Receipt};
 use crate::{CommandSpec, System};
 use anyhow::{bail, ensure, Result};
 use serde_json::{json, Map, Value};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 const MIN_PI: (u32, u32, u32) = (0, 99, 0);
@@ -19,17 +20,16 @@ const LEGACY_FILE: &str = "mcp-adapter.json";
 pub fn migrate_adapter(system: &dyn System, home: &Path, project: &Path) -> Result<Option<String>> {
     let global = home.join(".pi/agent");
     let mut state = InstallState::load(home).map_err(anyhow::Error::msg)?;
-    let mut dirs = vec![global.clone(), project.join(".pi")];
+    let mut dirs = BTreeSet::from([global.clone(), project.join(".pi")]);
     for receipt in state.resources.values().flat_map(|r| &r.receipts) {
         if let Receipt::McpEntry { path, .. } = receipt {
-            if let Some(dir) = path.parent().filter(|dir| !dirs.iter().any(|d| d == dir)) {
-                dirs.push(dir.into());
-            }
+            dirs.extend(path.parent().map(Path::to_path_buf));
         }
     }
-    let installed: Vec<(PathBuf, bool)> = [(global, false), (project.join(".pi"), true)]
+    let installed: Vec<bool> = [(global, false), (project.join(".pi"), true)]
         .into_iter()
         .filter(|(dir, _)| adapter_listed(dir))
+        .map(|(_, local)| local)
         .collect();
     let pending: Vec<&PathBuf> = dirs.iter().filter(|dir| needs_migration(dir)).collect();
     if installed.is_empty() && pending.is_empty() {
@@ -37,8 +37,7 @@ pub fn migrate_adapter(system: &dyn System, home: &Path, project: &Path) -> Resu
     }
 
     system.refresh_path();
-    let version = pi_version(system);
-    let Some(version) = version.filter(|v| *v >= MIN_PI) else {
+    let Some(version) = pi_version(system).filter(|v| *v >= MIN_PI) else {
         bail!("Pi 0.99 or newer is needed for built-in MCP; pi-mcp-adapter kept. Rerun `loom update` after Pi updates");
     };
 
@@ -57,12 +56,12 @@ pub fn migrate_adapter(system: &dyn System, home: &Path, project: &Path) -> Resu
     }
     state.save(home).map_err(anyhow::Error::msg)?;
 
-    for (_, local) in &installed {
-        let mut args = vec!["remove"];
-        if *local {
-            args.push("-l");
-        }
-        args.push(ADAPTER);
+    for local in installed {
+        let args = if local {
+            vec!["remove", "-l", ADAPTER]
+        } else {
+            vec!["remove", ADAPTER]
+        };
         let command = CommandSpec::new("pi", args).in_dir(project);
         let result = system.run(&command)?;
         ensure!(
@@ -84,27 +83,11 @@ fn pi_version(system: &dyn System) -> Option<(u32, u32, u32)> {
     let result = system
         .run_probe(&CommandSpec::new("pi", ["--version"]))
         .ok()?;
-    result
-        .success
-        .then(|| crate::install::parse_node_version(result.stdout.trim()))?
+    crate::install::parse_version(result.stdout.trim()).filter(|_| result.success)
 }
 
 fn adapter_listed(dir: &Path) -> bool {
-    read_object(&dir.join("settings.json")).is_ok_and(|(_, value)| {
-        ["packages", "extensions"].iter().any(|key| {
-            value
-                .get(key)
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|entry| {
-                    entry
-                        .as_str()
-                        .or_else(|| entry.get("source").and_then(Value::as_str))
-                })
-                .any(|source| source.contains("pi-mcp-adapter"))
-        })
-    })
+    read_object(&dir.join("settings.json")).is_ok_and(|(_, value)| lists_adapter(&value))
 }
 
 fn needs_migration(dir: &Path) -> bool {
@@ -115,7 +98,7 @@ fn needs_migration(dir: &Path) -> bool {
 
 /// Rewrites adapter-only settings into built-in MCP settings. Returns whether
 /// anything changed; unknown keys stay, since Pi ignores them.
-pub(crate) fn normalize(value: &mut Value, notes: &mut Vec<String>) -> bool {
+fn normalize(value: &mut Value, notes: &mut Vec<String>) -> bool {
     let Some(root) = value.as_object_mut() else {
         return false;
     };
@@ -199,10 +182,15 @@ fn migrate_dir(dir: &Path, state: &mut InstallState, notes: &mut Vec<String>) ->
         let (_, legacy_value) = read_object(&legacy)?;
         let mut incoming = legacy_value.clone();
         normalize(&mut incoming, notes);
-        if value.get("mcpServers").is_none_or(|v| !v.is_object()) {
+        if value.get("mcpServers").is_none_or(Value::is_null) {
             value["mcpServers"] = json!({});
         }
-        let servers = value["mcpServers"].as_object_mut().expect("object");
+        let Some(servers) = value["mcpServers"].as_object_mut() else {
+            bail!(
+                "{}: mcpServers must be an object; no changes made",
+                target.display()
+            );
+        };
         for (name, entry) in incoming["mcpServers"].as_object().into_iter().flatten() {
             if servers.contains_key(name) {
                 notes.push(format!("kept the {name} entry from mcp.json; {LEGACY_FILE}'s copy is in {LEGACY_FILE}.loom-migrated"));

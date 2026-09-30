@@ -208,6 +208,26 @@ pub fn preflight(server: Server, destination: &SkillDestination) -> Result<()> {
     Ok(())
 }
 
+/// Package and extension sources in a Pi settings.json, as strings or `{source}` objects.
+fn settings_sources<'a>(settings: &'a Value, key: &str) -> impl Iterator<Item = &'a str> {
+    settings
+        .get(key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            entry
+                .as_str()
+                .or_else(|| entry.get("source").and_then(Value::as_str))
+        })
+}
+
+pub(crate) fn lists_adapter(settings: &Value) -> bool {
+    settings_sources(settings, "packages")
+        .chain(settings_sources(settings, "extensions"))
+        .any(|source| source.contains("mcp-adapter"))
+}
+
 /// Pi's built-in MCP support is off when an extension such as pi-mcp-adapter
 /// registers `/mcp`, or when settings disable `builtin:mcp`.
 pub fn builtin_mcp_enabled(destination: &SkillDestination) -> Result<()> {
@@ -222,30 +242,13 @@ pub fn builtin_mcp_enabled(destination: &SkillDestination) -> Result<()> {
             "{}: packages must be an array",
             path.display()
         );
-        let strings = |key: &str| {
-            value
-                .get(key)
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|entry| {
-                    entry
-                        .as_str()
-                        .or_else(|| entry.get("source").and_then(Value::as_str))
-                })
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        };
         ensure!(
-            !strings("packages")
-                .iter()
-                .chain(&strings("extensions"))
-                .any(|s| s.contains("mcp-adapter")),
+            !lists_adapter(&value),
             "{} installs pi-mcp-adapter, which replaces Pi's built-in MCP support; run `loom update` to migrate to it",
             path.display()
         );
         ensure!(
-            !strings("extensions").iter().any(|s| s == "-builtin:mcp"),
+            !settings_sources(&value, "extensions").any(|s| s == "-builtin:mcp"),
             "{} disables Pi's built-in MCP support (-builtin:mcp); enable it with pi config",
             path.display()
         );
