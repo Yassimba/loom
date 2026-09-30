@@ -65,10 +65,10 @@ architecture-beta
 
 Built-in icons: `cloud`, `database`, `disk`, `internet`, `server`.
 
-Any Iconify pack works if registered at compile time — pass `--iconPacks` to `mmdc` (downloads from unpkg on demand, so it needs network):
+Any Iconify pack works if registered at compile time. Pass `--iconPacksNamesAndUrls prefix#url` to `mmdc` (fetches the pack JSON, so it needs network), or `--iconPacks` for a pack installed with npm:
 
 ```bash
-mmdc -i arch.mmd -o arch.png -w 2048 --iconPacks @iconify-json/logos
+mmdc -i arch.mmd -o arch.png --size 2048 --iconPacksNamesAndUrls 'logos#https://unpkg.com/@iconify-json/logos/icons.json'
 ```
 
 ### Example: AWS Icons

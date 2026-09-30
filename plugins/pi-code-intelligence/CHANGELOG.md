@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Yassimba/loom/compare/pi-code-intelligence-v0.2.0...pi-code-intelligence-v0.3.0) (2026-09-30)
+
+
+### Features
+
+* **loom:** move MCP to Pi's built-in support and migrate from pi-mcp-adapter ([#329](https://github.com/Yassimba/loom/issues/329)) ([2d664ad](https://github.com/Yassimba/loom/commit/2d664ad18f268b25d5778f676bb2341a1e3ef066))
+
 ## [0.2.0](https://github.com/Yassimba/loom/compare/pi-code-intelligence-v0.1.0...pi-code-intelligence-v0.2.0) (2026-09-14)
 
 

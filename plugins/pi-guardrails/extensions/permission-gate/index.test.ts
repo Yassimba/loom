@@ -14,6 +14,10 @@ import {
   GUARDRAILS_PROMPT_OPENED_EVENT,
   type GuardrailsPromptOpenedPayload,
 } from "../../src/shared/events";
+import {
+  GUARDRAILS_MODE_CHANGED_EVENT,
+  type GuardrailsModeChangedPayload,
+} from "../../src/shared/session-mode";
 import permissionGate from "./index";
 
 // Control the config the hook sees without touching the real config loader.
@@ -46,6 +50,13 @@ type ToolCallHandler = ExtensionHandler<ToolCallEvent, ToolCallEventResult>;
 function registeredToolCallHandler(pi: DeepMocked<ExtensionAPI>) {
   const calls: unknown[][] = pi.on.mock.calls;
   return calls.find(([event]) => event === "tool_call")?.[1] as ToolCallHandler | undefined;
+}
+
+function setMode(pi: DeepMocked<ExtensionAPI>, mode: GuardrailsModeChangedPayload["mode"]): void {
+  const calls: unknown[][] = pi.events.on.mock.calls;
+  const handler = calls.find(([event]) => event === GUARDRAILS_MODE_CHANGED_EVENT)?.[1];
+  assert(typeof handler === "function", "mode change handler should be registered");
+  handler({ mode });
 }
 
 function createCtx(overrides: PartialFuncReturn<ExtensionContext> = {}) {
@@ -107,6 +118,15 @@ describe("permissionGate extension hook", () => {
       createCtx(),
     );
     expect(result).toBeUndefined();
+  });
+
+  it("bypasses dangerous-command checks in Yolo mode", async () => {
+    assert(toolCallHandler, "tool_call handler should be registered");
+    setMode(pi, "yolo");
+    const ctx = createCtx();
+
+    expect(await toolCallHandler(DANGEROUS_EVENT, ctx)).toBeUndefined();
+    expect(ctx.ui.custom).not.toHaveBeenCalled();
   });
 
   it("deny returns { block: true } without aborting the turn", async () => {

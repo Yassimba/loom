@@ -42,7 +42,7 @@ npx puppeteer browsers install chrome-headless-shell   # mmdc has no bundled bro
 2. **Compile** — the compile is the syntax check; a parse error is a bug in the `.mmd`, fix and re-compile until it renders:
 
    ```bash
-   mmdc -i diagram.mmd -o diagram.png -w 2048
+   mmdc -i diagram.mmd -o diagram.png --size 2048
    ```
 
    Themes: `-t default|dark|neutral|forest` (`base` works only inside a `%%{init: {'theme':'base'}}%%` directive). SVG/PDF: same command with `.svg`/`.pdf` output.
@@ -73,4 +73,4 @@ npx puppeteer browsers install chrome-headless-shell   # mmdc has no bundled bro
 | `Maximum text size in diagram exceeded`              | Split the diagram; last resort `-c config.json` `{"maxTextSize": 200000}`             |
 | Chrome crashes in CI / as root                       | `-p puppeteer.json` with `{"args": ["--no-sandbox"]}`                                 |
 | Architecture icons missing / `logos:` name not found | Register the pack at compile time — [ARCHITECTURE § Icons](reference/ARCHITECTURE.md) |
-| Blank or tiny PNG                                    | Add `-w 2048`                                                                         |
+| Blank or tiny PNG                                    | Add `--size 2048`                                                                     |

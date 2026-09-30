@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.14.0](https://github.com/Yassimba/loom/compare/loom-v1.13.2...loom-v1.14.0) (2026-09-30)
+
+
+### Features
+
+* **loom:** move MCP to Pi's built-in support and migrate from pi-mcp-adapter ([#329](https://github.com/Yassimba/loom/issues/329)) ([2d664ad](https://github.com/Yassimba/loom/commit/2d664ad18f268b25d5778f676bb2341a1e3ef066))
+
+## [1.13.2](https://github.com/Yassimba/loom/compare/loom-v1.13.1...loom-v1.13.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **loom:** update Pi packages after optional tool failures ([#325](https://github.com/Yassimba/loom/issues/325)) ([ef704d5](https://github.com/Yassimba/loom/commit/ef704d5a9b91130a6942f94f45ec1c2d0f921a10))
+
+## [1.13.1](https://github.com/Yassimba/loom/compare/loom-v1.13.0...loom-v1.13.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **loom:** update Pi and preserve MCP setup ([#317](https://github.com/Yassimba/loom/issues/317)) ([6839b2a](https://github.com/Yassimba/loom/commit/6839b2a0a62361f75b4012e23966e13bcae088ac))
+
+## [1.13.0](https://github.com/Yassimba/loom/compare/loom-v1.12.0...loom-v1.13.0) (2026-09-18)
+
+
+### Features
+
+* expose tool errors and add direct yolo mode ([#283](https://github.com/Yassimba/loom/issues/283)) ([88db242](https://github.com/Yassimba/loom/commit/88db242a8087af6d47f16745027214e359fcdff3))
+
+## [1.12.0](https://github.com/Yassimba/loom/compare/loom-v1.11.0...loom-v1.12.0) (2026-09-15)
+
+
+### Features
+
+* improve install recovery and agent safety ([469cf02](https://github.com/Yassimba/loom/commit/469cf02fbdd75f233e85d3e02f1fd7e9b93860d1))
+* **pi-guardrails:** add session safety modes ([6ddb8a3](https://github.com/Yassimba/loom/commit/6ddb8a37b7f821a1bcd23c2c1fcb9e659b83e32c))
+
+
+### Bug Fixes
+
+* **loom:** keep headroom out of setup catalog ([#274](https://github.com/Yassimba/loom/issues/274)) ([67b22af](https://github.com/Yassimba/loom/commit/67b22afc7bbc881986f210b6840471bfe7ab9c18))
+* **loom:** recover requested tool installs ([cd1a9db](https://github.com/Yassimba/loom/commit/cd1a9db3b4b5bcf02221fc83ca64279dccb4ef9b))
+
 ## [1.11.0](https://github.com/Yassimba/loom/compare/loom-v1.10.1...loom-v1.11.0) (2026-09-14)
 
 

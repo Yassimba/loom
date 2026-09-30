@@ -158,16 +158,13 @@ fn wizard() -> Wizard {
 }
 
 #[test]
-fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
+fn mcp_servers_flow_through_choose_where_review_with_codemode_exposure() {
     for name in ["context7", "codebase-memory-mcp"] {
         let root =
             std::env::temp_dir().join(format!("loom-mcp-wizard-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let root = root.canonicalize().unwrap();
-        let mut ids = vec![
-            format!("mcp-server:{name}"),
-            "pi-package:pi-mcp-adapter".into(),
-        ];
+        let mut ids = vec![format!("mcp-server:{name}")];
         if name != "context7" {
             ids.push(format!("tool:{name}"));
         }
@@ -181,7 +178,6 @@ fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
             SkillDestination::new(vec![SkillAgent::Pi], SkillScope::Global, &root, &root);
         let mut wizard = Wizard::new(model, crate::wizard::wiki::WikiBrowser::default());
         assert_eq!(wizard.item_state(Item::Resource(0)), ItemState::Available);
-        assert_eq!(wizard.item_state(Item::Resource(1)), ItemState::Picked);
         wizard.selected[0] = true;
         press(&mut wizard, &[KeyCode::Enter]);
         assert!(wizard.screen == Screen::Where);
@@ -194,8 +190,8 @@ fn mcp_servers_flow_through_choose_where_review_with_gateway_exposure() {
         );
         assert_eq!(wizard.skill_scope, SkillScope::Project);
         let rendered = screen(&mut wizard, 120, 40);
-        assert!(rendered.contains("directTools=false"), "{rendered}");
-        assert!(rendered.contains("mcp-adapter"), "{rendered}");
+        assert!(rendered.contains("codemode"), "{rendered}");
+        assert!(!rendered.contains("mcp-adapter"), "{rendered}");
         assert!(
             rendered.contains(".pi/mcp.json") || rendered.contains(r".pi\mcp.json"),
             "{rendered}"
@@ -1032,6 +1028,7 @@ fn retry_keeps_the_reviewed_plan_destination_and_completed_items() {
     let rendered = screen(&mut wizard, 100, 28);
     assert!(rendered.contains("Retry"), "{rendered}");
     assert!(rendered.contains("Completed work stays"), "{rendered}");
+    assert!(rendered.contains("timed out after 30s"), "{rendered}");
     assert!(matches!(
         press(&mut wizard, &[KeyCode::Enter]),
         Some(Action::StartInstall)
@@ -1107,7 +1104,7 @@ fn retry_rechecks_completed_packages_and_reinstalls_only_missing_or_failed_work(
         }
         let rendered = screen(&mut wizard, 100, 28);
         assert!(rendered.contains("timed out"), "{rendered}");
-        assert!(!rendered.contains("PRIVATE-TOKEN"));
+        assert!(rendered.contains("PRIVATE-TOKEN"), "{rendered}");
         assert!(wizard.can_retry());
         if removed_after_success {
             system.installed.lock().unwrap().clear();

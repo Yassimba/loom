@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.0](https://github.com/Yassimba/loom/compare/pi-guardrails-v0.19.0...pi-guardrails-v0.20.0) (2026-09-18)
+
+
+### Features
+
+* expose tool errors and add direct yolo mode ([#283](https://github.com/Yassimba/loom/issues/283)) ([88db242](https://github.com/Yassimba/loom/commit/88db242a8087af6d47f16745027214e359fcdff3))
+
+## [0.19.0](https://github.com/Yassimba/loom/compare/pi-guardrails-v0.18.0...pi-guardrails-v0.19.0) (2026-09-15)
+
+
+### Features
+
+* improve install recovery and agent safety ([469cf02](https://github.com/Yassimba/loom/commit/469cf02fbdd75f233e85d3e02f1fd7e9b93860d1))
+* **pi-guardrails:** add session safety modes ([6ddb8a3](https://github.com/Yassimba/loom/commit/6ddb8a37b7f821a1bcd23c2c1fcb9e659b83e32c))
+
 ## [0.18.0](https://github.com/Yassimba/loom/compare/pi-guardrails-v0.17.1...pi-guardrails-v0.18.0) (2026-09-14)
 
 
