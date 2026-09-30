@@ -1,6 +1,6 @@
 {
-  "cli/loom": "1.14.0",
-  "cli/loom-teams": "0.2.3",
+  "cli/loom": "1.14.1",
+  "cli/loom-teams": "0.2.4",
   "plugins/pi-fast": "2.0.0",
   "plugins/pi-code-intelligence": "0.3.0",
   "plugins/pi-guardrails": "0.20.0",

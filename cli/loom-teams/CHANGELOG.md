@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.3...loom-teams-v0.2.4) (2026-09-30)
+
+
+### Bug Fixes
+
+* **deps:** update rust crate dirs to v7 ([#222](https://github.com/Yassimba/loom/issues/222)) ([ec0361f](https://github.com/Yassimba/loom/commit/ec0361f92b0d4ff38463008415d1c54bc09cb099))
+
 ## [0.2.3](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.2...loom-teams-v0.2.3) (2026-09-14)
 
 
