@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.1](https://github.com/Yassimba/loom/compare/loom-v1.14.0...loom-v1.14.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **deps:** update rust crate dirs to v7 ([#222](https://github.com/Yassimba/loom/issues/222)) ([ec0361f](https://github.com/Yassimba/loom/commit/ec0361f92b0d4ff38463008415d1c54bc09cb099))
+* **deps:** update rust crate sha2 to 0.11 ([#175](https://github.com/Yassimba/loom/issues/175)) ([f18f2f3](https://github.com/Yassimba/loom/commit/f18f2f32f4731f3e18f61655d926ffc9cc141cd1))
+
 ## [1.14.0](https://github.com/Yassimba/loom/compare/loom-v1.13.2...loom-v1.14.0) (2026-09-30)
 
 
