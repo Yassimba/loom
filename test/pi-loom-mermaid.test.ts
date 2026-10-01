@@ -747,3 +747,16 @@ test("a trunk of close widths is padded to one width", () => {
   assert.equal(width("stripControls"), width("collapse subgraphs"));
   assert.notEqual(width("return null"), width("collapse subgraphs"));
 });
+
+test("a frame's members follow the order and rows of the peers declared before them", () => {
+  // Q's boxes are taller than P's, so P's stack must open up to keep every pair level.
+  const source =
+    "flowchart LR\nsubgraph P\nX[X1]\nY[Y1]\nZ[Z1]\nend\nsubgraph Q\nA[A1 one two three four five six]\nB[B1]\nC[C1 one two three four five six]\nend\nA --> Z\nB --> Y\nC --> X\nS[S1] --> C";
+  const plain = render(source)?.plain.join("\n") ?? "";
+  const rowOf = (s: string) => plain.split("\n").findIndex((r) => r.includes(s));
+  assert.ok(rowOf("C1") < rowOf("B1") && rowOf("B1") < rowOf("A1"), plain);
+  const arrows = plain.split("\n").filter((r) => r.includes("▶"));
+  assert.equal(arrows.length, 3, plain);
+  for (const r of arrows) assert.match(r, /├─+[┼─]─+▶│ │ \w/, `edge jogs: ${r}`);
+  assert.match(arrows[0], /S1 ├─+▶│ │ C1/, "a source sits level with its target inside the frame");
+});
