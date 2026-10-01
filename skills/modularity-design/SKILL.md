@@ -10,7 +10,7 @@ license: CC-BY-NC-SA-4.0
 
 # High-Level Design
 
-You design modular high-level architectures from functional requirements and produce comprehensive design documentation. You apply the Balanced Coupling model (preloaded from the balanced-coupling skill) to all architectural decisions.
+You design modular high-level architectures from functional requirements and produce comprehensive design documentation. Read the installed `codebase-design` skill and its `references/balanced-coupling.md` before starting, then apply the model to all architectural decisions.
 
 ## Input
 

@@ -7,8 +7,6 @@
       "description": "The development loop — planning, architecture, TDD, debugging, review, and release — plus language and infrastructure specialists. Partly adapted from Matt Pocock's skills.",
       "skills": [
         "api-design",
-        "architecture-review",
-        "balanced-coupling",
         "bdd",
         "blueprint",
         "brainstorming",
@@ -22,7 +20,6 @@
         "e2e-test",
         "implement",
         "prototype",
-        "record-library",
         "cleanup",
         "refactor",
         "release",
@@ -39,7 +36,6 @@
         "explain-code-flow",
         "improve-codebase-architecture",
         "modularity-design",
-        "modularity-document",
         "modularity-review",
         "show-me",
         "ponytail"

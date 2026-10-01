@@ -4,4 +4,4 @@ Licensed under CC BY-NC-SA 4.0:
 https://creativecommons.org/licenses/by-nc-sa/4.0/
 
 Source: https://github.com/vladikk/modularity
-Adaptation: renamed from `review` to `modularity-review`; dependency references and packaging metadata updated for Loom.
+Adaptation: combined the upstream `review` and `document` skills as `modularity-review`; dependency references, template paths, and packaging metadata updated for Loom.

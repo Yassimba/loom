@@ -287,26 +287,6 @@
       "dependencies": []
     },
     {
-      "id": "skill:architecture-review",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "architecture-review",
-      "description": "Review an existing codebase's architecture with parallel subagents, combining Balanced Coupling diagnosis with deep-module improvement candidates. Use for architecture audits, modularity reviews, coupling analysis, deepening opportunities, or when changes are unexpectedly expensive.",
-      "installTarget": "architecture-review",
-      "nextAction": "Ask your coding agent to use the architecture-review skill.",
-      "dependencies": []
-    },
-    {
-      "id": "skill:balanced-coupling",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "balanced-coupling",
-      "description": "The Balanced Coupling model for software design. Use when: designing modular architectures, evaluating coupling between components, reviewing code modularity, deciding whether to split or merge modules/services, assessing integration patterns, classifying coupling as balanced or unbalanced, applying DDD strategic and tactical patterns, reasoning about cohesion vs coupling trade-offs, identifying distributed monolith risks, or explaining why a system is hard to change. Provides the three-dimensional framework (integration strength, distance, volatility) and the balance rule for making coupling decisions.\n",
-      "installTarget": "balanced-coupling",
-      "nextAction": "Ask your coding agent to use the balanced-coupling skill.",
-      "dependencies": []
-    },
-    {
       "id": "skill:bdd",
       "kind": "skill",
       "group": "Coding",
@@ -466,16 +446,6 @@
       "dependencies": []
     },
     {
-      "id": "skill:record-library",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "record-library",
-      "description": "Record a library in the refactor catalog — the package plus the hand-roll it retires — so future OSS reviews hunt with it.",
-      "installTarget": "record-library",
-      "nextAction": "Ask your coding agent to use the record-library skill.",
-      "dependencies": []
-    },
-    {
       "id": "skill:cleanup",
       "kind": "skill",
       "group": "Coding",
@@ -623,7 +593,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "codebase-design",
-      "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
+      "description": "Shared vocabulary for designing deep modules and balancing coupling. Use when the user wants to design or improve a module's interface, evaluate coupling, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
       "installTarget": "codebase-design",
       "nextAction": "Ask your coding agent to use the codebase-design skill.",
       "dependencies": []
@@ -660,18 +630,8 @@
       "installTarget": "modularity-design",
       "nextAction": "Ask your coding agent to use the modularity-design skill.",
       "dependencies": [
-        "balanced-coupling"
+        "codebase-design"
       ]
-    },
-    {
-      "id": "skill:modularity-document",
-      "kind": "skill",
-      "group": "Coding",
-      "label": "modularity-document",
-      "description": "Produces modularity review documents in both Markdown and HTML formats. Use when writing the final review output from a modularity analysis.\n",
-      "installTarget": "modularity-document",
-      "nextAction": "Ask your coding agent to use the modularity-document skill.",
-      "dependencies": []
     },
     {
       "id": "skill:modularity-review",
@@ -682,8 +642,7 @@
       "installTarget": "modularity-review",
       "nextAction": "Ask your coding agent to use the modularity-review skill.",
       "dependencies": [
-        "balanced-coupling",
-        "modularity-document"
+        "codebase-design"
       ]
     },
     {

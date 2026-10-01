@@ -1,6 +1,6 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
-  - balanced-coupling
+  - codebase-design
 
 upstream:
   repository: https://github.com/vladikk/modularity

@@ -1,17 +1,3 @@
----
-name: balanced-coupling
-description: >
-  The Balanced Coupling model for software design. Use when: designing modular architectures,
-  evaluating coupling between components, reviewing code modularity, deciding whether to split
-  or merge modules/services, assessing integration patterns, classifying coupling as balanced
-  or unbalanced, applying DDD strategic and tactical patterns, reasoning about cohesion vs
-  coupling trade-offs, identifying distributed monolith risks, or explaining why a system
-  is hard to change. Provides the three-dimensional framework (integration strength, distance,
-  volatility) and the balance rule for making coupling decisions.
-user-invocable: false
-license: CC-BY-NC-SA-4.0
----
-
 # The Balanced Coupling Model
 
 A comprehensive reference for understanding the Balanced Coupling model as described by Vlad Khononov. This document synthesizes the full model from the companion blog at coupling.dev, covering its foundations, dimensions, balancing mechanics, relationship to prior coupling models, and connections to domain-driven design.

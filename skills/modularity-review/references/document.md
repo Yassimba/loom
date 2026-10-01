@@ -1,13 +1,4 @@
----
-name: modularity-document
-description: >
-  Produces modularity review documents in both Markdown and HTML formats.
-  Use when writing the final review output from a modularity analysis.
-user-invocable: false
-license: CC-BY-NC-SA-4.0
----
-
-# Document
+# Document contract
 
 You produce the final modularity review document in two formats: Markdown (`.md`) and HTML (`.html`). Both files contain identical content.
 
