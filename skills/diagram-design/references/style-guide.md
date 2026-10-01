@@ -16,18 +16,18 @@ Every token is referred to by **semantic role**, not by its hex value. Type refe
 
 | Role | Purpose | Default (light) | Default (dark) |
 |---|---|---|---|
-| `paper` | Page background, default node fill | `#f5f5f5` (white-smoke) | `#2d3142` (jet-black) |
-| `paper-2` | Diagram container bg, secondary fill | `#ececec` | `#393e53` |
-| `ink` | Primary text, primary stroke | `#2d3142` (jet-black) | `#f5f5f5` (white-smoke) |
-| `muted` | Secondary text, default arrow stroke | `#4f5d75` (blue-slate) | `#bfc0c0` (silver) |
-| `soft` | Sublabels, boundary labels | `#7a8399` | `#8e98ac` |
-| `rule` | Hairline borders | `rgba(45,49,66,0.12)` | `rgba(245,245,245,0.12)` |
-| `rule-solid` | Stronger borders, baselines | `#bfc0c0` (silver) | `rgba(191,192,192,0.25)` |
-| `accent` | Focal / 1–2 max per diagram | `#eb6c36` (atomic-tangerine) | `#f08a59` |
-| `accent-tint` | Fill for accent-bordered boxes | `rgba(235,108,54,0.08)` | `rgba(240,138,89,0.10)` |
-| `link` | HTTP/API calls, external arrows | `#2e5aa8` | `#6a95d8` |
+| `paper` | Page background, default node fill | `#f5f5f5` (enexis light grey) | `#363636` (enexis dark grey) |
+| `paper-2` | Diagram container bg, secondary fill | `#f0f0f0` | `#424242` |
+| `ink` | Primary text, primary stroke | `#363636` (enexis dark grey) | `#f5f5f5` |
+| `muted` | Secondary text, default arrow stroke | `#6c6c6c` | `#bdbdbd` |
+| `soft` | Sublabels, boundary labels | `#8c8c8c` | `#a0a0a0` |
+| `rule` | Hairline borders | `rgba(54,54,54,0.12)` | `rgba(245,245,245,0.12)` |
+| `rule-solid` | Stronger borders, baselines | `#aeaeae` | `rgba(174,174,174,0.25)` |
+| `accent` | Focal / 1–2 max per diagram | `#df0073` (enexis magenta) | `#ff4d9e` |
+| `accent-tint` | Fill for accent-bordered boxes | `rgba(223,0,115,0.08)` | `rgba(255,77,158,0.10)` |
+| `link` | HTTP/API calls, external arrows | `#156ec7` (enexis blue) | `#4d90fe` |
 
-> **Brand palette source:** this skin maps to a five-color brand palette — `jet-black #2d3142`, `silver #bfc0c0`, `white-smoke #f5f5f5`, `atomic-tangerine #eb6c36`, `blue-slate #4f5d75`. The `soft`, `rule`, and `link` tokens are derived (lighter slate, ink-at-opacity, and a saturated variant in the blue-slate hue family) to cover roles the brand palette doesn't name directly.
+> **Brand palette source:** Enexis (enexis.nl) — `blue #156ec7`, `magenta #df0073`, `lime #bddb00` (unused, tertiary), `dark grey #363636`, `light grey #f0f0f0`. Typography keeps the schematic defaults: the site font Agenda is custom-hosted and not embeddable.
 
 > **Note:** The pre-baked example HTML files in `assets/` were built under an earlier skin. Regenerating them against the current `style-guide.md` is a v5.1 task. New diagrams the skill produces will use the tokens above.
 
