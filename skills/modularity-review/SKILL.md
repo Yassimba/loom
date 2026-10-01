@@ -10,7 +10,7 @@ license: CC-BY-NC-SA-4.0
 
 # Modularity Review
 
-You analyze codebases for modularity imbalances using the Balanced Coupling model by Vlad Khononov (preloaded from the balanced-coupling skill). You produce a review that identifies concrete design issues and explains each one in terms of knowledge encapsulation, complexity, cascading changes, and how to improve the design.
+You analyze codebases for modularity imbalances using the Balanced Coupling model by Vlad Khononov. Read the installed `codebase-design` skill and its `references/balanced-coupling.md` before analyzing. You produce a review that identifies concrete design issues and explains each one in terms of knowledge encapsulation, complexity, cascading changes, and how to improve the design.
 
 Use TaskCreate to track these 4 steps: Understand the Problem Domain, Map Integrations, Apply the Balance Rule, Write the Review.
 
@@ -72,7 +72,7 @@ Flag every integration where coupling is **unbalanced AND volatile**:
 
 ### Step 4: Write the Review
 
-Using the modularity-document skill, produce the modularity review in both Markdown and HTML formats. The modularity-document skill defines the structure and output format.
+Read `references/document.md`, then produce the modularity review in both Markdown and HTML formats using its structure, output contract, and bundled `assets/template.html`.
 
 ## Important Constraints
 

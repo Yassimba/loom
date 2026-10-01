@@ -249,7 +249,7 @@ Run `npm run check:js` or `npm run check:rust` for a narrower check. See [AGENTS
 
 ## Credits
 
-Skills in this repository draw from work by [Matt Pocock](https://github.com/mattpocock/skills), [DataDog/pup](https://github.com/DataDog/pup), [pbakaus/impeccable](https://github.com/pbakaus/impeccable), [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd), [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail), and [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design). Their licenses and pinned source versions are recorded beside the imported skills.
+Skills in this repository draw from work by [Matt Pocock](https://github.com/mattpocock/skills), [DataDog/pup](https://github.com/DataDog/pup), [pbakaus/impeccable](https://github.com/pbakaus/impeccable), [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd), [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail), and [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design). The modularity skills and Balanced Coupling reference are adapted from [Vlad Khononov's modularity project](https://github.com/vladikk/modularity). Licenses and pinned source versions for imported skills are recorded in their `deps.yml` files.
 
 Pi subagents, web access, and rewind draw from [nicobailon's Pi packages](https://github.com/nicobailon). Anthropic sign-in draws from [gotgenes/pi-anthropic-auth](https://github.com/gotgenes/pi-anthropic-auth). `pi-loom-mermaid` draws from `pi-lovely-mermaid`.
 
