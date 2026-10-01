@@ -135,7 +135,7 @@ function padTrunks(graph: Graph, extras: NodeExtra[], ranks: number[], centers: 
 
 /** What to draw inside a node box. */
 export type NodeExtra =
-  | { kind: 'plain' }
+  | { kind: 'plain'; /** Cross-axis centre a peer in a sibling frame sits on; the box moves down to it when it can. */ row?: number }
   | { kind: 'frame'; sub: Canvas }
   | { kind: 'compartments'; sections: string[][] }
 
@@ -199,7 +199,7 @@ function framePort(
   const ax = a.x + ox
   const ay = a.y + oy
   const vertical = side === 'bottom' || side === 'top'
-  const anchorC = vertical ? ax + half(a.w) : ay + half(a.h)
+  const anchorC = vertical ? ax + half(a.w) : ay + mid(a.h)
   // The top border carries the title; no port lands on it.
   const nearest = (lo: number, hi: number): number[] => {
     const out: number[] = []
@@ -245,7 +245,7 @@ function framePort(
     const through = stub(c)
     if (through === null) continue
     used.add(`${side}:${c}`)
-    const box = { x: ax, y: ay, w: a.w, h: a.h, cx: ax + half(a.w), cy: ay + half(a.h) }
+    const box = { x: ax, y: ay, w: a.w, h: a.h, cx: ax + half(a.w), cy: ay + mid(a.h) }
     if (vertical) box.cx = c
     else box.cy = c
     return { box, through, wanted: anchorC }
@@ -1070,18 +1070,41 @@ function placeLr(
     const node = end === 0 ? graph.edges[i].from : graph.edges[i].to
     return p === null ? 0 : p.box.cy - mid(sizes.boxH[node])
   }
+  // Offsets are measured from the aligned run, so a node's carries its
+  // sources' along: rank by rank, a chain of frames stays level end to end.
   const align = new Map<number, number>()
-  graph.nodes.forEach((_, v) => {
+  for (const v of graph.nodes.map((_, v) => v).sort((a, b) => ranks[a] - ranks[b])) {
     const wants = graph.edges.flatMap((e, i) =>
-      e.to === v && e.from !== v && ranks[e.from] + 1 === ranks[v] ? [delta(i, 0) - delta(i, 1)] : [],
+      e.to === v && e.from !== v && ranks[e.from] + 1 === ranks[v] ? [delta(i, 0) - delta(i, 1) + (align.get(e.from) ?? 0)] : [],
     )
     if (wants.length > 0 && wants[0] !== 0 && wants.every((w) => w === wants[0])) align.set(v, wants[0])
-  })
+    // A source sits at the mean of the rows its targets' inner ends take.
+    if (wants.length > 0 || graph.edges.some((e) => e.to === v)) continue
+    const outs = graph.edges.flatMap((e, i) =>
+      e.from === v && e.to !== v && ranks[e.to] === ranks[v] + 1 && ends[i][1] !== null ? [delta(i, 1) - delta(i, 0)] : [],
+    )
+    const mean = Math.round(outs.reduce((s, w) => s + w, 0) / outs.length)
+    if (outs.length > 0 && mean !== 0) align.set(v, mean)
+  }
   // A self-loop's stub hangs two rows below its box; room on both sides
   // keeps the box centred on its row.
   const loops = new Set(graph.edges.filter((e) => e.from === e.to).map((e) => e.from))
   const layH = sizes.layH.map((h, i) => (loops.has(i) ? h + 4 : h))
   const centers = assignPositions(layered, layH, 1, undefined, (v) => align.get(v) ?? 0)
+  // A box whose peer across a sibling frame sits lower moves down to its
+  // row, pushing what follows it in the rank; the frames then line up
+  // pair by pair and the edges between them run straight.
+  for (const row of byRank) {
+    const order = [...row].sort((a, b) => centers[a] - centers[b])
+    order.forEach((v, i) => {
+      const extra = extras[v]
+      if (extra.kind === 'plain' && extra.row !== undefined) centers[v] = Math.max(centers[v], extra.row)
+      if (i > 0) {
+        const u = order[i - 1]
+        centers[v] = Math.max(centers[v], centers[u] - mid(layH[u]) + layH[u] + 1 + mid(layH[v]))
+      }
+    })
+  }
 
   // A skip whose target entry row crosses no box on any intermediate rank
   // runs straight through the diagram into the target's left side, exiting
@@ -1476,15 +1499,23 @@ export function layout(graph: Graph, extras: NodeExtra[], limits: Limits): Layou
   // sit in across the frame: the crossing count sees one frame node, and
   // with none counted the ordering keeps the declaration order.
   const vertical = graph.dir === 'down' || graph.dir === 'up'
-  const anchorOrder = (v: number): number | null => {
-    const ins = graph.edges.filter((e) => e.to === v && e.from !== v)
-    const a = ins[0]?.fromAnchor
-    if (ins.length !== 1 || a === undefined || graph.edges.some((e) => e.from === v && e.to !== v)) return null
-    return vertical ? a.x + a.w / 2 : a.y + a.h / 2
+  // A source fanning into one frame likewise keeps the mean of its
+  // targets' inner rows, so it sits level with them rather than where the
+  // declaration put it and crosses its siblings' buses on the way.
+  const anchorOrder = (v: number): { peer: number; at: number } | null => {
+    const touching = graph.edges.filter((e) => e.from === v || e.to === v).filter((e) => e.from !== e.to)
+    const ins = touching.filter((e) => e.to === v)
+    const edges = ins.length > 0 ? ins : touching
+    if (edges.length === 0 || (ins.length > 0 && ins.length !== touching.length)) return null
+    const peer = ins.length > 0 ? edges[0].from : edges[0].to
+    const anchors = edges.map((e) => (ins.length > 0 ? e.fromAnchor : e.toAnchor))
+    if (anchors.some((a) => a === undefined) || edges.some((e) => (ins.length > 0 ? e.from : e.to) !== peer)) return null
+    const at = anchors.map((a) => (vertical ? a!.x + a!.w / 2 : a!.y + a!.h / 2))
+    return { peer, at: at.reduce((s, c) => s + c, 0) / at.length }
   }
   for (const row of byRank) {
-    const key = row.map((v) => ({ v, from: graph.edges.find((e) => e.to === v)?.from, at: anchorOrder(v) }))
-    key.sort((p, q) => (p.at === null || q.at === null || p.from !== q.from ? 0 : p.at - q.at))
+    const key = row.map((v) => ({ v, ...(anchorOrder(v) ?? { peer: null, at: null }) }))
+    key.sort((p, q) => (p.at === null || q.at === null || p.peer !== q.peer ? 0 : p.at - q.at))
     key.forEach((k, i) => {
       row[i] = k.v
     })

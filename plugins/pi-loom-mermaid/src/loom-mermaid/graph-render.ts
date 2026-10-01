@@ -200,6 +200,8 @@ function buildScope(
   directNodes: Map<number | null, number[]>,
   keep: boolean[],
   limits: Limits,
+  /** Rows (frame-local, left-to-right) nodes in earlier sibling frames landed on. */
+  wants: Map<number, number> = new Map(),
 ): Scope | null {
   const items: ScopeItem[] = (directNodes.get(scope) ?? []).map((i) => ({ group: false, i }))
   const childGroups = graph.groups
@@ -217,7 +219,25 @@ function buildScope(
     })
     return first
   }
-  const order = (item: ScopeItem): number => (item.group ? firstIn(item.i) : item.i)
+  // A member whose edges reach nodes declared before this scope follows
+  // those peers' order (their mean index) instead of its own: the frame
+  // laid out on its own would otherwise keep declaration order and cross
+  // every edge the peers fan into it. Peers declared later are not yet
+  // ordered, so the first scope named stays the reference.
+  // Only a member with no edge inside the scope follows its peers: the
+  // inner layout already orders and aligns the others by their own edges.
+  const outside = (ni: number): boolean => {
+    for (let g = graph.nodeGroup[ni]; g !== null; g = graph.groups[g].parent) if (g === scope) return false
+    return true
+  }
+  const peersOf = (ni: number): number[] => graph.edges.flatMap((e) => (e.from === ni ? [e.to] : e.to === ni ? [e.from] : []))
+  const loose = (ni: number): boolean => peersOf(ni).every(outside)
+  const first = Math.min(...items.filter((it) => !it.group).map((it) => it.i))
+  const byPeers = (ni: number): number => {
+    const peers = loose(ni) ? peersOf(ni).filter((p) => p < first) : []
+    return peers.length === 0 ? ni : peers.reduce((s, p) => s + p, 0) / peers.length
+  }
+  const order = (item: ScopeItem): number => (item.group ? firstIn(item.i) : byPeers(item.i))
   items.sort((a, b) => order(a) - order(b))
 
   if (items.length === 0) return { canvas: new Canvas(1, 1), anchors: new Map() }
@@ -227,6 +247,21 @@ function buildScope(
   const nodes: Node[] = []
   const extras: NodeExtra[] = []
   const subScopes = new Map<number, Scope>()
+  // A member's peers in sibling frames, once laid out, say which row it
+  // should sit on; the mean of their rows is the want.
+  // Rows only match when every loose member faces the same sibling frame;
+  // peers spread over several frames sit on rows of different frames.
+  const framed = (p: number): boolean => graph.nodeGroup[p] !== null
+  const facing = new Set(items.filter((it) => !it.group && loose(it.i)).flatMap((it) => peersOf(it.i).filter(framed).map((p) => graph.nodeGroup[p])))
+  // Only a pair that have each other alone can share a row: a fan's
+  // mean row would move on every pass and the frames chase each other down.
+  const peerRow = (ni: number): number | undefined => {
+    if (!loose(ni) || facing.size !== 1) return undefined
+    const peers = peersOf(ni).filter(framed)
+    const p = peers[0]
+    if (peers.length !== 1 || peersOf(p).filter(framed).length !== 1) return undefined
+    return wants.get(p)
+  }
   for (const item of items) {
     ;(item.group ? groupAt : nodeAt).set(item.i, nodes.length)
     if (!item.group) {
@@ -238,13 +273,28 @@ function buildScope(
       })
       extras.push({ kind: 'plain' })
     } else {
-      const sub = buildScope(graph, item.i, scopeEdges, directNodes, keep, limits)
-      if (sub === null) return null
-      subScopes.set(nodes.length, sub)
       nodes.push({ label: graph.groups[item.i].label, shape: 'rect' })
-      extras.push({ kind: 'frame', sub: sub.canvas })
+      extras.push({ kind: 'frame', sub: new Canvas(1, 1) })
     }
   }
+  // Frames are built until their rows settle: the first pass lays each
+  // out on its own, later ones move boxes down to the rows their peers
+  // took, and a box only ever moves down, so three passes suffice.
+  for (let pass = 0; pass < 3; pass++) {
+    const before = new Map(wants)
+    for (const item of items) {
+      if (!item.group) continue
+      const sub = buildScope(graph, item.i, scopeEdges, directNodes, keep, limits, wants)
+      if (sub === null) return null
+      const li = groupAt.get(item.i) as number
+      subScopes.set(li, sub)
+      extras[li] = { kind: 'frame', sub: sub.canvas }
+    }
+    if ([...wants].every(([k, v]) => before.get(k) === v)) break
+  }
+  items.forEach((item) => {
+    if (!item.group) extras[nodeAt.get(item.i) as number] = { kind: 'plain', row: peerRow(item.i) }
+  })
 
   // An end standing for a frame remembers the inner node it really joins.
   const anchorOf = (item: ScopeItem, node: number): Anchor | undefined =>
@@ -295,6 +345,7 @@ function buildScope(
     const p = lay.placed[li]
     if (!item.group) {
       anchors.set(item.i, { node: item.i, x: p.x, y: p.y, w: p.w, h: p.h })
+      wants.set(item.i, p.cy)
       continue
     }
     const sub = subScopes.get(li) as Scope
