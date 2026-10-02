@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Marked, type Token } from "@earendil-works/pi-tui";
+import { Marked, type Token } from "marked";
 import { diagramKind, render, toAnsi } from "./loom-mermaid/index.ts";
 import { isClosedFence, streamingPrefixes } from "./streaming.ts";
 
