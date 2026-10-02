@@ -4,7 +4,7 @@ Loom's woven logo in Pi's header, with a startup notice when a newer Loom CLI is
 
 ## Try it
 
-From a checkout of this repository, with Pi 0.99.1 or newer:
+From a checkout of this repository, with Pi 1.0.0 or newer:
 
 ```sh
 pi -e ./plugins/pi-loom/index.ts
