@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.4](https://github.com/Yassimba/loom/compare/loom-v1.14.3...loom-v1.14.4) (2026-10-02)
+
+
+### Bug Fixes
+
+* **loom:** update pi-web-access to 0.35.0 ([48b28ac](https://github.com/Yassimba/loom/commit/48b28ac12970af4b328ab9fe71bd2093c5ae065e))
+
 ## [1.14.3](https://github.com/Yassimba/loom/compare/loom-v1.14.2...loom-v1.14.3) (2026-10-02)
 
 
