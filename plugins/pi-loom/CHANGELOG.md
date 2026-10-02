@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Yassimba/loom/compare/pi-loom-v0.3.0...pi-loom-v0.4.0) (2026-10-02)
+
+
+### Features
+
+* **pi:** update Pi to 1.0.0 ([2c0def8](https://github.com/Yassimba/loom/commit/2c0def8adb7b5074ec4f708104d8bdfcedcd56ff))
+
 ## [0.3.0](https://github.com/Yassimba/loom/compare/pi-loom-v0.2.2...pi-loom-v0.3.0) (2026-09-30)
 
 
