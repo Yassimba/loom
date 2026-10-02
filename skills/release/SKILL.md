@@ -48,6 +48,7 @@ Confirm the chosen CLI exists (`command -v gh` / `command -v glab`) and is authe
    - **TypeScript** — `package.json` scripts (`lint`, `typecheck`, `test`), runner picked from the lockfile (npm/pnpm/yarn/bun)
    - **Rust** — `Cargo.toml`: `cargo clippy`, `cargo test` (`cargo check` covers types)
    - `Makefile` or `justfile` targets override the defaults above when present
+   - **Turborepo** — a `turbo.json` overrides all of the above: run each phase as `turbo run <task>` with the lint, type-check, and test task names it defines, so unchanged tasks replay from the cache. Follow the repo's instructions for how to call the installed `turbo`; its flags differ between versions
 3. CI config (`.github/workflows/`, `.gitlab-ci.yml`) as a tiebreaker when the above conflict.
 
 Map what you find onto the three check phases. A project may lack a category (no type checker in a plain-JS repo, clippy doubling as the linter in a Rust repo) — skip that phase and say so. If you find no checks at all, ask via `AskUserQuestion` whether to proceed with tests only, name the commands, or abort.
