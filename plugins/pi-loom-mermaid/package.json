@@ -46,7 +46,7 @@
     }
   },
   "dependencies": {
-    "marked": "18.0.11"
+    "marked": "18.0.14"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
