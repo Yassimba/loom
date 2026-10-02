@@ -33,7 +33,7 @@ pub fn migrate_adapter(system: &dyn System, home: &Path, project: &Path) -> Resu
         .collect();
     let pending: Vec<&PathBuf> = dirs.iter().filter(|dir| needs_migration(dir)).collect();
     if installed.is_empty() && pending.is_empty() {
-        return Ok(None);
+        return repoint_stranded(home, &mut state);
     }
 
     system.refresh_path();
@@ -76,6 +76,50 @@ pub fn migrate_adapter(system: &dyn System, home: &Path, project: &Path) -> Resu
         0,
         format!("moved to Pi {major}.{minor}.{patch} built-in MCP · {} config(s) migrated · pi-mcp-adapter removed", pending.len()),
     );
+    Ok(Some(notes.join("; ")))
+}
+
+/// Loom 1.14.2 and older migrated edited entries but left their receipts on
+/// the renamed-away legacy file; point those at the `mcp.json` beside it, and
+/// drop records of servers Loom retired.
+fn repoint_stranded(home: &Path, state: &mut InstallState) -> Result<Option<String>> {
+    let mut moved = 0;
+    for receipt in state.resources.values_mut().flat_map(|r| &mut r.receipts) {
+        if let Receipt::McpEntry { path, .. } = receipt {
+            if path.file_name().is_some_and(|f| f == LEGACY_FILE) && !path.exists() {
+                *path = path.with_file_name("mcp.json");
+                moved += 1;
+            }
+        }
+    }
+    // A server Loom no longer offers, whose entry is gone, has nothing left
+    // to own; its record would otherwise fail `loom status` forever.
+    let before = state.resources.len();
+    state.resources.retain(|id, resource| {
+        !(id.starts_with("mcp-server:")
+            && resource.receipts.iter().all(|receipt| match receipt {
+                Receipt::McpEntry { path, name, digest } => {
+                    crate::mcp::Server::from_name(name).is_err()
+                        && crate::mcp::entry_status(path, name, digest)
+                            == crate::uninstall::ReceiptStatus::Missing
+                }
+                _ => false,
+            }))
+    });
+    let dropped = before - state.resources.len();
+    if moved + dropped == 0 {
+        return Ok(None);
+    }
+    state.save(home).map_err(anyhow::Error::msg)?;
+    let mut notes = Vec::new();
+    if moved > 0 {
+        notes.push(format!(
+            "{moved} MCP receipt(s) moved from {LEGACY_FILE} to mcp.json"
+        ));
+    }
+    if dropped > 0 {
+        notes.push(format!("{dropped} retired MCP server record(s) dropped"));
+    }
     Ok(Some(notes.join("; ")))
 }
 
@@ -227,8 +271,10 @@ fn migrate_dir(dir: &Path, state: &mut InstallState, notes: &mut Vec<String>) ->
         if let (Some(old), Some(new)) = (old, new) {
             if entry_digest(old) == *digest {
                 *digest = entry_digest(new);
-                *path = target.clone();
             }
+            // The legacy file is renamed away below, so even a modified
+            // receipt must follow its entry or it points at nothing.
+            *path = target.clone();
         }
     }
 

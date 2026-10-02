@@ -695,3 +695,53 @@ fn update_migrates_adapter_configs_receipts_and_package() {
         .is_none());
     fs::remove_dir_all(home).unwrap();
 }
+
+#[test]
+fn update_repoints_receipts_stranded_on_the_migrated_adapter_file() {
+    let destination = destination("mcp-stranded", SkillScope::Global);
+    let (home, agent) = (&destination.home, destination.home.join(".pi/agent"));
+    // An older migration renamed mcp-adapter.json but kept an edited entry's receipt on it.
+    write_json(
+        &agent.join("mcp.json"),
+        json!({"mcpServers":{"context7":{"url":"https://mcp.context7.com/mcp"}}}),
+    );
+    let mut state = ownership::InstallState::load(home).unwrap();
+    state.record(ownership::OwnedResource {
+        id: "mcp-server:context7".into(),
+        scope: ownership::OwnershipScope::Global,
+        depends_on: vec!["tool:pi".into()],
+        receipts: vec![ownership::Receipt::McpEntry {
+            path: agent.join("mcp-adapter.json"),
+            name: "context7".into(),
+            digest: "edited".into(),
+        }],
+    });
+    // Serena left the catalog and its entry is gone: nothing left to own.
+    state.record(ownership::OwnedResource {
+        id: "mcp-server:serena".into(),
+        scope: ownership::OwnershipScope::Global,
+        depends_on: vec!["tool:pi".into()],
+        receipts: vec![ownership::Receipt::McpEntry {
+            path: agent.join("mcp-adapter.json"),
+            name: "serena".into(),
+            digest: "old".into(),
+        }],
+    });
+    state.save(home).unwrap();
+
+    let project = destination.project_root.clone();
+    let detail = loom::mcp_migration::migrate_adapter(&Stub::new(home), home, &project)
+        .unwrap()
+        .unwrap();
+    assert!(detail.contains("2 MCP receipt"), "{detail}");
+    assert!(detail.contains("1 retired MCP server"), "{detail}");
+    let state = ownership::InstallState::load(home).unwrap();
+    assert!(!state.resources.contains_key("mcp-server:serena"));
+    let ownership::Receipt::McpEntry { path, .. } =
+        &state.resources["mcp-server:context7"].receipts[0]
+    else {
+        panic!("expected an MCP receipt");
+    };
+    assert_eq!(path, &agent.join("mcp.json"));
+    fs::remove_dir_all(home).unwrap();
+}
