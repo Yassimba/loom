@@ -2008,10 +2008,13 @@ fn adhd_wizard() -> Wizard {
     model.installed.push(false);
     model.settings.clear();
     model.setting_states.clear();
+    // macOS clocks tick in microseconds, so parallel tests need the counter.
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     model.settings_paths.pi_adhd_flag = std::env::temp_dir()
         .join(format!(
-            "loom-adhd-{}-{}",
+            "loom-adhd-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
