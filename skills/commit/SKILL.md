@@ -43,7 +43,9 @@ Done when exactly one concern is staged.
 
 ## 1. Test gate
 
-Run the project's test suite (`uv run pytest`, `npm test` — whatever the project defines) and read the summary, not just the exit code. The gate is binary: green proceeds; red stops here — the pre-commit hook fails on the same issues, so catching them now saves a wasted commit:
+Run the project's checks and test suite (`uv run pytest`, `npm test` — whatever the project defines) and read the summary, not just the exit code. When the repo has a `turbo.json`, run them through Turborepo: `turbo run <tasks>` with the check and test task names that `turbo.json` defines. Unchanged tasks replay from the cache, so the gate stays fast. Follow the repo's instructions for how to call the installed `turbo`; its flags differ between versions.
+
+The gate is binary: green proceeds; red stops here — the pre-commit hook fails on the same issues, so catching them now saves a wasted commit:
 
 ```yaml
 question: "Tests red — commit blocked. How to proceed?"
@@ -58,6 +60,13 @@ options:
 
 Load `write-simply` and write the subject and body in its register. Draft from the _why_ of the staged diff: what motivated the change, where a line-by-line list would only restate `git diff`.
 
+**Changelog projects.** When the repo keeps a hand-written `CHANGELOG.md` (a release tool such as release-please or git-cliff does not generate it from commits), a commit with a user-facing change carries its changelog entry, so `git log --grep` finds the commit that added a feature:
+
+- The staged diff adds the entry under `## [Unreleased]`, written by the project's changelog rules (`AGENTS.md`, `CONTRIBUTING.md`). If it is missing, write it and stage it before you draft the message.
+- The subject names the change from the user's side, as the entry does.
+- The body starts with the entry, word for word, under its section name (`Added:`, `Fixed:`, ...). The why and internal details follow.
+- A commit with no user-facing change (refactor, test, CI) adds no entry.
+
 Conventional Commits format:
 
 ```
@@ -70,7 +79,7 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`. `chore`
 
 **Subject:** 20–72 chars after the prefix · lowercase after the colon (`feat: add X`) · imperative ("add") · ends on the object, no punctuation · concrete verb + object.
 
-**Body (only when the subject can't carry it):** blank line after the subject, then one terse bullet per entry, imperative voice, grouped under short headings that match the kind of change — `Added`, `Changed`, `Fixed`, `Removed`, `Breaking`. Skip headings when there's only one bullet.
+**Body (only when the subject can't carry it, or a changelog entry opens it):** blank line after the subject, then one terse bullet per entry, imperative voice, grouped under short headings that match the kind of change — `Added`, `Changed`, `Fixed`, `Removed`, `Breaking`. Skip headings when there's only one bullet.
 
 ```
 feat(installer): add gateway runtime extraction
