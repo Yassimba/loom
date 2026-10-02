@@ -28,7 +28,9 @@ jobs:
   skill-scan:
     runs-on: ubuntu-latest
     env:
-      SPECTOR_DEADLINE: "600.0"
+      # CI runners can't finish the largest skills in SkillSpector's 60s
+      # default, which fail-closes the scan (exit 2, coverage 0%).
+      SKILLSPECTOR_MAX_WORKFLOW_SECONDS: "600"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,18 +46,9 @@ jobs:
       - name: Install SkillSpector
         if: steps.spector-cache.outputs.cache-hit != 'true'
         run: pipx install "git+https://github.com/NVIDIA/skillspector.git@c7958a3268d9498644b22edb75d0f051bbc8cbfc" # v2.12.0
-      - name: Raise SkillSpector's 60s scan deadline
-        # state.py hardcodes MAX_WORKFLOW_SECONDS = 60.0 with no env or
-        # flag override; CI runners can't finish the largest skills in
-        # 60s, which fail-closes the scan (exit 2, coverage 0%). Safe to
-        # patch: the install is commit-pinned. Drop when upstream makes
-        # the deadline configurable.
-        run: |
-          state=$(echo "$(pipx environment --value PIPX_LOCAL_VENVS)"/skillspector/lib/python*/site-packages/skillspector/state.py)
-          sed -i "s/^MAX_WORKFLOW_SECONDS = .*/MAX_WORKFLOW_SECONDS = $SPECTOR_DEADLINE/" "$state"
-          grep -q "MAX_WORKFLOW_SECONDS = $SPECTOR_DEADLINE" "$state"
-          # cache restores the venv but not the pipx shim; use the venv bin
-          echo "$(pipx environment --value PIPX_LOCAL_VENVS)/skillspector/bin" >> "$GITHUB_PATH"
+      - name: Put the cached SkillSpector venv on PATH
+        # cache restores the venv but not the pipx shim; use the venv bin
+        run: echo "$(pipx environment --value PIPX_LOCAL_VENVS)/skillspector/bin" >> "$GITHUB_PATH"
       - name: Scan public skills (static analysis)
         # Exit 1 when any skill scores >50 (DO_NOT_INSTALL). drafts/ and
         # personal/ are not install surfaces, so they don't gate CI. A skill
