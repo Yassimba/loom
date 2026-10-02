@@ -39,7 +39,7 @@ impl Stub {
             home: home.into(),
             commands: Mutex::new(Vec::new()),
             missing_binary: None,
-            pi_version: "0.99.1",
+            pi_version: "1.0.0",
         }
     }
 }
