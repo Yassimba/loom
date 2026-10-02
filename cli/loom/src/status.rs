@@ -92,8 +92,10 @@ fn print_mcp(system: &dyn System, style: &Out) -> bool {
     for owned in state.resources.values() {
         for receipt in &owned.receipts {
             if let crate::ownership::Receipt::McpEntry { path, name, digest } = receipt {
+                // An edited entry still counts while it stays compatible:
+                // `loom add` accepts it as set up, so status must agree.
                 let present = crate::mcp::entry_status(path, name, digest)
-                    == crate::uninstall::ReceiptStatus::Clean;
+                    != crate::uninstall::ReceiptStatus::Missing;
                 let (scope, root) = match &owned.scope {
                     crate::ownership::OwnershipScope::Global => {
                         (crate::SkillScope::Global, home.as_path())
