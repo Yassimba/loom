@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.8.0...pi-loom-mermaid-v0.9.0) (2026-10-02)
+
+
+### Features
+
+* **pi:** update Pi to 1.0.0 ([2c0def8](https://github.com/Yassimba/loom/commit/2c0def8adb7b5074ec4f708104d8bdfcedcd56ff))
+
+
+### Bug Fixes
+
+* **deps:** update dependency marked to v18.0.14 ([#337](https://github.com/Yassimba/loom/issues/337)) ([843bcb1](https://github.com/Yassimba/loom/commit/843bcb19b5e299e6f8d448daa41027c7bc224359))
+* **pi-loom-mermaid:** line up frame members with their peers' rows ([146c9e8](https://github.com/Yassimba/loom/commit/146c9e870ea653fb57eb4283d5b6997e20440d01))
+
 ## [0.8.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.7.1...pi-loom-mermaid-v0.8.0) (2026-09-30)
 
 

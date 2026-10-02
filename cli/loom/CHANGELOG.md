@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.2](https://github.com/Yassimba/loom/compare/loom-v1.14.1...loom-v1.14.2) (2026-10-02)
+
+
+### Bug Fixes
+
+* **loom:** ship the Pi 1.0 pin and merged skills catalog ([cd0f0bb](https://github.com/Yassimba/loom/commit/cd0f0bbb50e057a5f63b2be52b78df357366f543))
+
 ## [1.14.1](https://github.com/Yassimba/loom/compare/loom-v1.14.0...loom-v1.14.1) (2026-09-30)
 
 
