@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.3](https://github.com/Yassimba/loom/compare/loom-v1.14.2...loom-v1.14.3) (2026-10-02)
+
+
+### Bug Fixes
+
+* **loom:** repair MCP status after the adapter migration ([c0200aa](https://github.com/Yassimba/loom/commit/c0200aa45f601b0d899b2f0ea03abcf55d59babd))
+
 ## [1.14.2](https://github.com/Yassimba/loom/compare/loom-v1.14.1...loom-v1.14.2) (2026-10-02)
 
 
