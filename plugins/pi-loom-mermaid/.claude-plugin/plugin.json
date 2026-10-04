@@ -1,0 +1,12 @@
+{
+  "name": "loom-mermaid",
+  "version": "0.9.0",
+  "description": "Draw Mermaid diagrams in replies as colored character art.",
+  "author": {
+    "name": "Yassimba"
+  },
+  "homepage": "https://github.com/Yassimba/loom/tree/main/plugins/pi-loom-mermaid",
+  "repository": "https://github.com/Yassimba/loom",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

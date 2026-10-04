@@ -24,6 +24,23 @@
         "observability",
         "productivity"
       ]
+    },
+    {
+      "name": "loom-mermaid",
+      "source": "./plugins/pi-loom-mermaid",
+      "description": "Draw Mermaid diagrams in replies as colored character art.",
+      "author": {
+        "name": "Yassimba"
+      },
+      "homepage": "https://github.com/Yassimba/loom/tree/main/plugins/pi-loom-mermaid",
+      "repository": "https://github.com/Yassimba/loom",
+      "license": "MIT",
+      "category": "development",
+      "tags": [
+        "mermaid",
+        "diagrams",
+        "terminal"
+      ]
     }
   ]
 }

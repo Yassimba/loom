@@ -33,7 +33,14 @@
     },
     "plugins/pi-loom-mermaid": {
       "release-type": "node",
-      "component": "pi-loom-mermaid"
+      "component": "pi-loom-mermaid",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }

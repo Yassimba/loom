@@ -1,14 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Marked, type Token } from "marked";
-import { diagramKind, render, toAnsi } from "./loom-mermaid/index.ts";
-import { isClosedFence, streamingPrefixes } from "./streaming.ts";
-
-const markdownParser = new Marked();
-const diffClasses = {
-  red: { definition: "classDef red stroke:#9f5555", sgr: "38;2;159;85;85" },
-  orange: { definition: "classDef orange stroke:#9a7438", sgr: "38;2;154;116;56" },
-  green: { definition: "classDef green stroke:#4f8560", sgr: "38;2;79;133;96" },
-};
+import { ansiLines, drawMessage, fenced, GUIDANCE } from "./shared.ts";
 
 type TransformContext = {
   messageType: "user" | "assistant" | "assistant-thinking";
@@ -16,63 +7,6 @@ type TransformContext = {
   /** Draw completed statements while the message is still arriving. */
   isStreaming?: boolean;
 };
-
-/**
- * Rendered blocks by source and width. Pi runs the transformer on the whole
- * message for every streamed chunk and every redraw, so a diagram would be
- * laid out again for each token after it. Layout is deterministic, so the
- * first render is the only one needed.
- */
-const rendered = new Map<string, string | null>();
-const CACHE_SIZE = 64;
-
-function renderBlock(text: string, availableWidth: number): string | null {
-  const key = `${availableWidth}\0${text.trimEnd()}`;
-  const hit = rendered.get(key);
-  if (hit !== undefined) {
-    rendered.delete(key);
-    rendered.set(key, hit);
-    return hit;
-  }
-  const styledSource = withDiffClasses(text);
-  const art = render(styledSource.source, { maxWidth: availableWidth });
-  const out =
-    !art || art.width > availableWidth
-      ? null
-      : `${dimDefaultBorders(toAnsi(art), styledSource.dimSgr).map(codeSpan).join("  \n")}\n`;
-  rendered.set(key, out);
-  if (rendered.size > CACHE_SIZE) rendered.delete(rendered.keys().next().value as string);
-  return out;
-}
-
-function isMermaid(token: Token): token is Token & { type: "code"; text: string; lang?: string } {
-  return (
-    token.type === "code" && token.lang?.trim().split(/\s+/, 1)[0]?.toLowerCase() === "mermaid"
-  );
-}
-
-function withDiffClasses(source: string): { source: string; dimSgr: string[] } {
-  const defaults = Object.entries(diffClasses).filter(([name]) => {
-    const used = new RegExp(`:::\\s*${name}\\b|\\bclass\\s+[^\\n]+\\s+${name}\\b`).test(source);
-    return used && !new RegExp(`\\bclassDef\\s+${name}\\b`).test(source);
-  });
-  return {
-    source:
-      defaults.length > 0
-        ? `${source}\n${defaults.map(([, style]) => style.definition).join("\n")}`
-        : source,
-    dimSgr: defaults.map(([, style]) => style.sgr),
-  };
-}
-
-function dimDefaultBorders(lines: string[], sgrValues: string[]): string[] {
-  return lines.map((line) =>
-    sgrValues.reduce(
-      (result, sgr) => result.replaceAll(`\u001b[${sgr}m`, `\u001b[2;${sgr}m`),
-      line,
-    ),
-  );
-}
 
 function codeSpan(line: string): string {
   const content = line || "\u00a0";
@@ -85,46 +19,17 @@ function codeSpan(line: string): string {
   return `${fence}${padding}${content}${padding}${fence}`;
 }
 
-function renderListMermaid(markdown: string, availableWidth: number): string {
-  return markdown.replace(
-    /^([ \t]+)(`{3,}|~{3,})[ \t]*mermaid[^\n]*\n([\s\S]*?)^\1\2[ \t]*(?=\n|$)/gim,
-    (raw, indent: string, _fence: string, body: string) => {
-      const source = body
-        .split("\n")
-        .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
-        .join("\n");
-      const rendered = renderBlock(source, availableWidth);
-      return rendered === null
-        ? raw
-        : rendered
-            .trimEnd()
-            .split("\n")
-            .map((line) => indent + line)
-            .join("\n");
-    },
-  );
-}
-
 export function transformMermaidForDocument(markdown: string, availableWidth = 100): string {
-  return markdownParser
-    .lexer(markdown)
-    .map((token) => {
-      if (!isMermaid(token)) return token.raw;
-      const styledSource = withDiffClasses(token.text);
-      const art = render(styledSource.source, { maxWidth: availableWidth });
-      if (!art || art.width > availableWidth) return token.raw;
+  return drawMessage(markdown, availableWidth, false)
+    .map(({ raw, indent, drawing }) => {
+      // A document fence has no indented form, so a list item's diagram stays source.
+      if (drawing === null || drawing === "pending" || indent !== "") return raw;
       // The document viewer accepts SGR styling only, not terminal hyperlinks.
-      const withoutLinks = {
-        ...art,
-        styled: art.styled.map((row) => row.map((span) => ({ ...span, href: undefined }))),
-      };
-      const text = dimDefaultBorders(toAnsi(withoutLinks), styledSource.dimSgr).join("\n");
-      const longestRun = Math.max(
-        0,
-        ...Array.from(text.matchAll(/`+/g), (match) => match[0].length),
+      const styled = drawing.art.styled.map((row) =>
+        row.map((span) => ({ ...span, href: undefined })),
       );
-      const fence = "`".repeat(Math.max(3, longestRun + 1));
-      return `${fence}loom-mermaid\n${text}\n${fence}\n`;
+      const text = ansiLines({ ...drawing, art: { ...drawing.art, styled } }).join("\n");
+      return fenced(text, "loom-mermaid");
     })
     .join("");
 }
@@ -132,25 +37,12 @@ export function transformMermaidForDocument(markdown: string, availableWidth = 1
 export function transformMermaidMarkdown(markdown: string, context: TransformContext): string {
   if (context.messageType === "assistant-thinking") return markdown;
 
-  return markdownParser
-    .lexer(markdown)
-    .map((token) => {
-      if (!isMermaid(token)) {
-        return token.type === "list"
-          ? renderListMermaid(token.raw, context.availableWidth)
-          : token.raw;
-      }
-      if (context.isStreaming === true && !isClosedFence(token.raw)) {
-        if (diagramKind(token.text) === null) return token.raw;
-        // Marked removes the last newline from unclosed code tokens.
-        const source = token.text + (token.raw.endsWith("\n") ? "\n" : "");
-        for (const prefix of streamingPrefixes(source)) {
-          const out = renderBlock(prefix, context.availableWidth);
-          if (out !== null) return out;
-        }
-        return "_Drawing Mermaid…_\n";
-      }
-      return renderBlock(token.text, context.availableWidth) ?? token.raw;
+  return drawMessage(markdown, context.availableWidth, context.isStreaming === true)
+    .map(({ raw, indent, drawing }) => {
+      if (drawing === null) return raw;
+      if (drawing === "pending") return "_Drawing Mermaid…_\n";
+      const lines = ansiLines(drawing).map((line) => indent + codeSpan(line));
+      return lines.join("  \n") + (indent === "" || raw.endsWith("\n") ? "\n" : "");
     })
     .join("");
 }
@@ -158,6 +50,6 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
 export default function piLovelyMermaid(pi: ExtensionAPI): void {
   pi.registerMarkdownTransformer(transformMermaidMarkdown);
   pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\nUse fenced \`mermaid\` blocks; they render automatically in the user’s session. Always use Mermaid when it is easier to read than prose. Choose by subject: architecture for deployed services, flowchart for dependencies/decisions, sequence for interactions, state for lifecycles, ER/class for models, mindmap for hierarchies, timeline/git graph for history, pie for proportions. Use complementary diagrams when explaining multiple aspects. Keep diagram labels short. Mark changes by appending :::red (removed), :::green (added), or :::orange (changed) after the node, outside its label brackets (A[Added]:::green, never A[Added :::green]); their default colors are automatic—do not add classDef for these diff markers. In general prefer colored outlines to logically group things (if there are no changes involved).`,
+    systemPrompt: `${event.systemPrompt}\n\n${GUIDANCE}`,
   }));
 }

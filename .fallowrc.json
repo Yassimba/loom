@@ -3,6 +3,8 @@
   "entry": [
     "plugins/*/src/index.ts",
     "plugins/*/src/*/index.ts",
+    "plugins/*/hooks/register.tsx",
+    "plugins/*/tests/*.test.tsx",
     "manifest/opencode/plugins/*.js",
     "test/pi-skill-discovery.mjs",
     "scripts/mermaid-compare.ts"
@@ -13,7 +15,7 @@
     "**/*.generated.*",
     "plugins/pi-loom-mermaid/src/loom-mermaid/**"
   ],
-  "ignoreDependencies": [],
+  "ignoreDependencies": ["claude-code"],
   "ignoreExportsUsedInFile": true,
   "health": {
     "maxCyclomatic": 15,

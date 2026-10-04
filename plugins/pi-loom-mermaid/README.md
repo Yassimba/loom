@@ -28,6 +28,17 @@ Requires Pi and Node.js 22.6 or newer.
 
 3. Run `/reload` in Pi.
 
+### Claude Code
+
+The same renderer ships as a Claude Code plugin named `loom-mermaid`. In Claude Code, run:
+
+```
+/plugin marketplace add Yassimba/loom
+/plugin install loom-mermaid@loom
+```
+
+Diagrams then draw in replies on every surface, and the system prompt gains the same note about when to use Mermaid. While a reply streams, a band above the prompt shows the diagram growing; the diagram lands in the transcript when its block closes.
+
 ## Usage
 
 Ask Pi: “Explain this code with a Mermaid diagram.” Pi draws the diagram in the conversation.

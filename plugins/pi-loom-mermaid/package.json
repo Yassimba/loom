@@ -45,9 +45,6 @@
       "nextAction": "Set markdown.mermaid to off in Pi settings, run /reload, then use classDef styles in a Mermaid block."
     }
   },
-  "dependencies": {
-    "marked": "18.0.14"
-  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { scanFences } from "../plugins/pi-loom-mermaid/src/fences.ts";
 import piLovelyMermaid, { transformMermaidMarkdown } from "../plugins/pi-loom-mermaid/src/index.ts";
 import { Graph } from "../plugins/pi-loom-mermaid/src/loom-mermaid/graph.ts";
 import { render, toAnsi } from "../plugins/pi-loom-mermaid/src/loom-mermaid/index.ts";
@@ -759,4 +760,30 @@ test("a frame's members follow the order and rows of the peers declared before t
   assert.equal(arrows.length, 3, plain);
   for (const r of arrows) assert.match(r, /├─+[┼─]─+▶│ │ \w/, `edge jogs: ${r}`);
   assert.match(arrows[0], /S1 ├─+▶│ │ C1/, "a source sits level with its target inside the frame");
+});
+
+test("fence scanner round-trips and leaves quoted or indented-code Mermaid as text", () => {
+  const quoted = "````markdown\n```mermaid\nflowchart LR\n A --> B\n```\n````\n";
+  const indentedCode = "Text\n\n    ```mermaid\n    flowchart LR\n    ```\n";
+  const mixed = `Intro\n\n~~~Mermaid extra\nflowchart LR\n A --> B\n~~~~\n\n- item\n\n  \`\`\`mermaid\n  flowchart LR\n   C --> D\n  \`\`\`\n\n\`\`\`mermaid\nflowchart LR\n E --> F`;
+  for (const markdown of [quoted, indentedCode, mixed]) {
+    assert.equal(
+      scanFences(markdown)
+        .map((segment) => segment.raw)
+        .join(""),
+      markdown,
+    );
+  }
+  assert.deepEqual(
+    [quoted, indentedCode].flatMap((markdown) => scanFences(markdown).filter((s) => s.mermaid)),
+    [],
+  );
+  assert.deepEqual(
+    scanFences(mixed).flatMap((segment) => (segment.mermaid ? [segment.mermaid] : [])),
+    [
+      { source: "flowchart LR\n A --> B", indent: "", closed: true, nested: false },
+      { source: "flowchart LR\n C --> D", indent: "  ", closed: true, nested: true },
+      { source: "flowchart LR\n E --> F", indent: "", closed: false, nested: false },
+    ],
+  );
 });

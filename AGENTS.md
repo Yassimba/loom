@@ -12,6 +12,12 @@ plus auto-discovered `skills/`, listed by `.claude-plugin/marketplace.json`
 (`source: "./"`).
 `plugins/<name>/` — one flat directory per plugin package: npm workspaces
 (Pi extensions, discovered by their `package.json`).
+A package folder may also be a Claude Code mod: `.claude-plugin/plugin.json`
+plus `hooks/`, listed as its own plugin in `.claude-plugin/marketplace.json`
+(`loom-mermaid` → `./plugins/pi-loom-mermaid`). A hooks module may import only
+files inside its own folder — no npm packages — so code a mod shares with the
+Pi package stays in that folder's `src/`. See
+`ai-docs/adr/0005-ship-claude-code-mods-beside-pi-packages.md`.
 `cli/loom/` — the Rust onboarding CLI installed by the root bootstrap
 scripts. `cli/loom/setup-catalog.json` is generated from reviewed skills and opted-in
 plugin metadata; the CLI embeds it, copies skills into user-selected agent
@@ -75,7 +81,9 @@ After finishing code changes (plugins/, scripts/, test/), run
 `npm run audit` — it gates on dead code, complexity, and duplication that the
 changeset introduced (config in `.fallowrc.json`; `npm run audit:brief` gives
 a non-gating orientation report). `npm run check` covers the rest: tests,
-tsc, biome lint, catalog, and packaging.
+tsc, biome lint, catalog, packaging, and the mods (`check:mods` runs
+`claude plugin validate` and `claude plugin test`, which need the `claude`
+binary but no login).
 
 ## Rule
 
