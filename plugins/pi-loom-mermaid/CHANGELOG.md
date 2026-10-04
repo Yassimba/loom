@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.9.0...pi-loom-mermaid-v0.10.0) (2026-10-04)
+
+
+### Features
+
+* **pi-loom-mermaid:** ship the renderer as the loom-mermaid Claude Code mod ([#354](https://github.com/Yassimba/loom/issues/354)) ([77e786e](https://github.com/Yassimba/loom/commit/77e786edd54c252aacce7b76f06c91f010341993))
+
 ## [0.9.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.8.0...pi-loom-mermaid-v0.9.0) (2026-10-02)
 
 
