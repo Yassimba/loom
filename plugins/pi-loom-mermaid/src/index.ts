@@ -1,9 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Marked, type Token } from "marked";
+import { scanFences } from "./fences.ts";
 import { diagramKind, render, toAnsi } from "./loom-mermaid/index.ts";
-import { isClosedFence, streamingPrefixes } from "./streaming.ts";
+import { streamingPrefixes } from "./streaming.ts";
 
-const markdownParser = new Marked();
 const diffClasses = {
   red: { definition: "classDef red stroke:#9f5555", sgr: "38;2;159;85;85" },
   orange: { definition: "classDef orange stroke:#9a7438", sgr: "38;2;154;116;56" },
@@ -45,12 +44,6 @@ function renderBlock(text: string, availableWidth: number): string | null {
   return out;
 }
 
-function isMermaid(token: Token): token is Token & { type: "code"; text: string; lang?: string } {
-  return (
-    token.type === "code" && token.lang?.trim().split(/\s+/, 1)[0]?.toLowerCase() === "mermaid"
-  );
-}
-
 function withDiffClasses(source: string): { source: string; dimSgr: string[] } {
   const defaults = Object.entries(diffClasses).filter(([name]) => {
     const used = new RegExp(`:::\\s*${name}\\b|\\bclass\\s+[^\\n]+\\s+${name}\\b`).test(source);
@@ -85,34 +78,13 @@ function codeSpan(line: string): string {
   return `${fence}${padding}${content}${padding}${fence}`;
 }
 
-function renderListMermaid(markdown: string, availableWidth: number): string {
-  return markdown.replace(
-    /^([ \t]+)(`{3,}|~{3,})[ \t]*mermaid[^\n]*\n([\s\S]*?)^\1\2[ \t]*(?=\n|$)/gim,
-    (raw, indent: string, _fence: string, body: string) => {
-      const source = body
-        .split("\n")
-        .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
-        .join("\n");
-      const rendered = renderBlock(source, availableWidth);
-      return rendered === null
-        ? raw
-        : rendered
-            .trimEnd()
-            .split("\n")
-            .map((line) => indent + line)
-            .join("\n");
-    },
-  );
-}
-
 export function transformMermaidForDocument(markdown: string, availableWidth = 100): string {
-  return markdownParser
-    .lexer(markdown)
-    .map((token) => {
-      if (!isMermaid(token)) return token.raw;
-      const styledSource = withDiffClasses(token.text);
+  return scanFences(markdown)
+    .map(({ raw, mermaid }) => {
+      if (!mermaid || mermaid.nested) return raw;
+      const styledSource = withDiffClasses(mermaid.source);
       const art = render(styledSource.source, { maxWidth: availableWidth });
-      if (!art || art.width > availableWidth) return token.raw;
+      if (!art || art.width > availableWidth) return raw;
       // The document viewer accepts SGR styling only, not terminal hyperlinks.
       const withoutLinks = {
         ...art,
@@ -132,25 +104,26 @@ export function transformMermaidForDocument(markdown: string, availableWidth = 1
 export function transformMermaidMarkdown(markdown: string, context: TransformContext): string {
   if (context.messageType === "assistant-thinking") return markdown;
 
-  return markdownParser
-    .lexer(markdown)
-    .map((token) => {
-      if (!isMermaid(token)) {
-        return token.type === "list"
-          ? renderListMermaid(token.raw, context.availableWidth)
-          : token.raw;
+  return scanFences(markdown)
+    .map(({ raw, mermaid }) => {
+      if (!mermaid) return raw;
+      if (mermaid.nested) {
+        const out = mermaid.closed ? renderBlock(mermaid.source, context.availableWidth) : null;
+        if (out === null) return raw;
+        const lines = out.trimEnd().split("\n");
+        return (
+          lines.map((line) => mermaid.indent + line).join("\n") + (raw.endsWith("\n") ? "\n" : "")
+        );
       }
-      if (context.isStreaming === true && !isClosedFence(token.raw)) {
-        if (diagramKind(token.text) === null) return token.raw;
-        // Marked removes the last newline from unclosed code tokens.
-        const source = token.text + (token.raw.endsWith("\n") ? "\n" : "");
-        for (const prefix of streamingPrefixes(source)) {
+      if (context.isStreaming === true && !mermaid.closed) {
+        if (diagramKind(mermaid.source) === null) return raw;
+        for (const prefix of streamingPrefixes(mermaid.source)) {
           const out = renderBlock(prefix, context.availableWidth);
           if (out !== null) return out;
         }
         return "_Drawing Mermaid…_\n";
       }
-      return renderBlock(token.text, context.availableWidth) ?? token.raw;
+      return renderBlock(mermaid.source, context.availableWidth) ?? raw;
     })
     .join("");
 }

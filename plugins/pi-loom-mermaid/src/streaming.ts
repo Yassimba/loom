@@ -1,12 +1,3 @@
-/** A closer must match the opener's character and be at least as long. */
-export function isClosedFence(raw: string): boolean {
-  const fence = raw.match(/^ {0,3}(`{3,}|~{3,})/)?.[1];
-  return (
-    fence !== undefined &&
-    new RegExp(`\\n {0,3}${fence[0]}{${fence.length},}[ \\t]*(?:\\n)?$`).test(raw)
-  );
-}
-
 /** Newest complete prefix first; never expose a half-written label or comment. */
 export function* streamingPrefixes(text: string): Generator<string> {
   const ends: number[] = [];
