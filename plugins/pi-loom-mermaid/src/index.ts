@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { toAnsi } from "./loom-mermaid/index.ts";
-import { type Drawn, drawMessage, GUIDANCE } from "./shared.ts";
+import { type Drawn, drawMessage, fenced, GUIDANCE } from "./shared.ts";
 
 type TransformContext = {
   messageType: "user" | "assistant" | "assistant-thinking";
@@ -43,12 +43,7 @@ export function transformMermaidForDocument(markdown: string, availableWidth = 1
         row.map((span) => ({ ...span, href: undefined })),
       );
       const text = ansiLines({ ...drawing, art: { ...drawing.art, styled } }).join("\n");
-      const longestRun = Math.max(
-        0,
-        ...Array.from(text.matchAll(/`+/g), (match) => match[0].length),
-      );
-      const fence = "`".repeat(Math.max(3, longestRun + 1));
-      return `${fence}loom-mermaid\n${text}\n${fence}\n`;
+      return fenced(text, "loom-mermaid");
     })
     .join("");
 }

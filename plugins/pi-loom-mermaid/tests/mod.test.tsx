@@ -69,3 +69,28 @@ test("the system prompt gains the Mermaid note after the engine's sections", asy
   expect(sections.map((section) => section.id)).toEqual(["intro", "loom-mermaid:guidance"]);
   expect(sections[1]?.text).toContain(":::green");
 });
+
+test("a streaming reply shows a diagram when its fence closes and withholds the source until then", async ($, on) => {
+  on("classic.MessageDisplay", () => ({}));
+  const batches = [
+    "Before\n\n",
+    "```mermaid\nflowchart LR\n",
+    " A[Start] --> B[End]\n",
+    "```\n\nAfter\n",
+  ];
+  const displayed = [];
+  for (const [index, delta] of batches.entries()) {
+    const result = await $.classic.MessageDisplay({
+      turn_id: "turn",
+      message_id: "message",
+      index,
+      final: index === batches.length - 1,
+      delta,
+    });
+    displayed.push(result.displayContent ?? delta);
+  }
+  expect(displayed.slice(0, 3)).toEqual(["Before\n\n", "", ""]);
+  expect(displayed[3]).toContain("Start");
+  expect(displayed[3]).not.toContain("flowchart");
+  expect(displayed[3]?.endsWith("\nAfter\n")).toBe(true);
+});

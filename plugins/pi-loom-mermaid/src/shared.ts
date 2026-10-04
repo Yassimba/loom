@@ -58,7 +58,13 @@ function drawDiagram(source: string, columns: number): Drawn | null {
  * or "pending" for a fence that has arrived too little to draw. A fence in a
  * list item carries the item's `indent`.
  */
-export type Part = { raw: string; indent: string; drawing: Drawn | "pending" | null };
+export type Part = {
+  raw: string;
+  indent: string;
+  drawing: Drawn | "pending" | null;
+  /** A Mermaid fence whose closing line has not arrived. */
+  open: boolean;
+};
 
 function draw(fence: Fence, columns: number, arriving: boolean): Part["drawing"] {
   if (fence.closed || !(arriving || fence.nested)) return drawDiagram(fence.source, columns);
@@ -77,5 +83,13 @@ export function drawMessage(markdown: string, columns: number, arriving: boolean
     raw,
     indent: mermaid?.indent ?? "",
     drawing: mermaid ? draw(mermaid, columns - mermaid.indent.length, arriving) : null,
+    open: mermaid?.closed === false,
   }));
+}
+
+/** `text` as a code fence long enough to hold any backtick run inside it. */
+export function fenced(text: string, info = ""): string {
+  const longestRun = Math.max(0, ...Array.from(text.matchAll(/`+/g), (match) => match[0].length));
+  const fence = "`".repeat(Math.max(3, longestRun + 1));
+  return `${fence}${info}\n${text}\n${fence}\n`;
 }
