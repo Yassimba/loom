@@ -492,22 +492,25 @@ mod tests {
         let home = temp("registry-format");
         let path = WikiRegistry::path(&home);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // An absolute path on every platform, as it is spelled in JSON.
+        let vault = home.join("vault");
+        let quoted = serde_json::to_string(&vault).unwrap();
         // Written before Confluence and QMD existed: only `feynman` is present.
         fs::write(
             &path,
-            r#"{"schemaVersion":1,"vaults":[{"path":"/old/vault","feynman":true}]}"#,
+            format!(r#"{{"schemaVersion":1,"vaults":[{{"path":{quoted},"feynman":true}}]}}"#),
         )
         .unwrap();
         let mut registry = WikiRegistry::load(&home).unwrap();
         assert_eq!(
             registry.vaults,
             [VaultRecord {
-                path: PathBuf::from("/old/vault"),
+                path: vault.clone(),
                 capabilities: Capabilities::default().with(Capability::Feynman),
             }]
         );
         registry.register(
-            PathBuf::from("/old/vault"),
+            vault,
             registry.vaults[0]
                 .capabilities
                 .union(Capabilities::default().with(Capability::Qmd)),
@@ -515,21 +518,23 @@ mod tests {
         registry.save(&home).unwrap();
         assert_eq!(
             fs::read_to_string(&path).unwrap(),
-            r#"{
+            format!(
+                r#"{{
   "schemaVersion": 1,
   "vaults": [
-    {
-      "path": "/old/vault",
+    {{
+      "path": {quoted},
       "feynman": true,
       "confluence": false,
       "qmd": true
-    }
+    }}
   ]
-}"#
+}}"#
+            )
         );
         fs::write(
             &path,
-            r#"{"schemaVersion":1,"vaults":[{"path":"/old/vault"}]}"#,
+            format!(r#"{{"schemaVersion":1,"vaults":[{{"path":{quoted}}}]}}"#),
         )
         .unwrap();
         assert!(WikiRegistry::load(&home).is_err());
