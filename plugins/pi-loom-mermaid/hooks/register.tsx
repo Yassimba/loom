@@ -6,6 +6,8 @@ import { ansiLines, type Drawn, drawMessage, fenced, GUIDANCE } from "../src/sha
 
 /** A surface that has not measured draws at the document transformer's width. */
 const DEFAULT_COLUMNS = 100;
+/** The columns the transcript keeps for a reply's bullet. */
+const GUTTER = 2;
 
 /** Dim frame, plain labels, cyan connectors: the renderer's ANSI theme as Text props. */
 const THEME: Partial<Record<Role, TextProps>> = {
@@ -62,20 +64,18 @@ function diagram(
 }
 
 /**
- * A streaming reply as its lines are shown: a note where each Mermaid fence
- * opens, then its uncolored drawing once it closes. Lines only ever add to the
- * end of it, so what a new batch shows is what it adds; the band above the
- * prompt shows the fence still open, and the finished reply is drawn in color
- * by the `AssistantMessage` site.
+ * A streaming reply as its lines are shown: a Mermaid fence is withheld while
+ * open and shows as its drawing once it closes. Lines only ever add to the end
+ * of it, so what a new batch shows is what it adds; the band above the prompt
+ * shows the fence still open, and the finished reply is drawn again by the
+ * `AssistantMessage` site.
  */
 function shown(text: string, columns: number): string {
   return drawMessage(text, columns, false)
     .map(({ raw, indent, drawing, fence }) => {
-      if (fence === null) return raw;
-      const note = `${indent}_${PENDING}_\n\n`;
-      if (fence === "open") return note;
-      if (drawing === null || drawing === "pending") return note + raw;
-      return note + fenced(ansiLines(drawing).join("\n")).replace(/^(?=.)/gm, indent);
+      if (fence === "open") return "";
+      if (drawing === null || drawing === "pending") return raw;
+      return fenced(ansiLines(drawing).join("\n")).replace(/^(?=.)/gm, indent);
     })
     .join("");
 }
@@ -99,7 +99,8 @@ export const register: Register = (on) => {
     const open = !e.final && last?.fence === "open" ? last.raw : null;
     if ((await read($, arrivingFence)) !== open) await update($, arrivingFence, () => open);
 
-    const displayContent = shown(text, columns).slice(shown(before, columns).length);
+    const width = columns - GUTTER;
+    const displayContent = shown(text, width).slice(shown(before, width).length);
     return displayContent === e.delta ? result : { ...result, displayContent };
   });
 
@@ -128,12 +129,13 @@ export const register: Register = (on) => {
   on("ui.render", { component: "AssistantMessage" }, ($, e, next) => {
     // The site carries no streaming flag, so an unclosed fence is one still arriving.
     columns = e.viewport?.columns ?? DEFAULT_COLUMNS;
-    const parts = drawMessage(e.props.text, columns, true);
+    const gutter = e.surface === "terminal" ? GUTTER : 0;
+    const parts = drawMessage(e.props.text, columns - gutter, true);
     if (parts.every((part) => part.drawing === null)) return next(e);
 
     const ui = $.ui.resolve(e);
     const { Box, Markdown, Text } = ui;
-    return (
+    const body = (
       <Box flexDirection="column" gap={1}>
         {parts.map(({ raw, indent, drawing }, at) => {
           if (drawing === null) {
@@ -148,6 +150,15 @@ export const register: Register = (on) => {
           }
           return diagram(ui, drawing, indent, `diagram-${at}`);
         })}
+      </Box>
+    );
+    if (e.surface !== "terminal") return body;
+    // On the terminal a hook that draws the reply draws its chrome too: the
+    // blank row above it, the bullet and the gutter.
+    return (
+      <Box flexDirection="row" marginTop={1}>
+        <Text>{e.props.isFirstOfReply ? "⏺ " : "  "}</Text>
+        {body}
       </Box>
     );
   });

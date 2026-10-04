@@ -13,6 +13,7 @@ test("a Mermaid fence in a reply draws as a diagram on every surface", async ($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...mounted(text), surface });
     await ui.drawn();
+    expect(Boolean(await ui.find({ type: "Text", text: /^⏺ $/ }))).toBe(surface === "terminal");
     expect(await ui.find({ type: "Markdown", text: /Before/ })).toBeDefined();
     expect(await ui.find({ type: "Markdown", text: /After/ })).toBeDefined();
     expect(await ui.find({ type: "Markdown", text: /flowchart/ })).toBeUndefined();
@@ -85,7 +86,7 @@ const stream = async ($: Parameters<TestBody>[0], batches: string[]) => {
   return displayed;
 };
 
-test("a streaming reply notes a fence when it opens and draws it when it closes", async ($, on) => {
+test("a streaming reply withholds an open fence and draws it when it closes", async ($, on) => {
   on("classic.MessageDisplay", () => ({}));
   const displayed = await stream($, [
     "Before\n\n",
@@ -93,7 +94,7 @@ test("a streaming reply notes a fence when it opens and draws it when it closes"
     " A[Start] --> B[End]\n",
     "```\n\nAfter\n",
   ]);
-  expect(displayed.slice(0, 3)).toEqual(["Before\n\n", "_Drawing Mermaid…_\n\n", ""]);
+  expect(displayed.slice(0, 3)).toEqual(["Before\n\n", "", ""]);
   expect(displayed[3]).toContain("Start");
   expect(displayed[3]).not.toContain("flowchart");
   expect(displayed[3]?.endsWith("\nAfter\n")).toBe(true);
