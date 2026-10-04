@@ -22,7 +22,8 @@
     "audit": "fallow audit",
     "audit:brief": "fallow review --brief",
     "pack:check": "npm pack --dry-run --workspaces",
-    "check:js": "npm test && npm run typecheck && npm run lint && npm run catalog:check && npm run pack:check",
+    "check:mods": "claude plugin validate plugins/pi-loom-mermaid && claude plugin test plugins/pi-loom-mermaid",
+    "check:js": "npm test && npm run typecheck && npm run lint && npm run catalog:check && npm run pack:check && npm run check:mods",
     "check": "npm run check:js && npm run check:rust"
   },
   "devDependencies": {
