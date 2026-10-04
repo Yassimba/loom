@@ -1,20 +1,18 @@
-/** A run of a markdown document: text passed through as written, or one Mermaid fence. */
-export type Segment = {
-  raw: string;
-  mermaid?: {
-    /** The diagram source, the fence's own indentation removed. */
-    source: string;
-    indent: string;
-    closed: boolean;
-    /** Inside a list item, where the drawing keeps the item's indentation. */
-    nested: boolean;
-  };
+export type Fence = {
+  /** The diagram source, the fence's own indentation removed. */
+  source: string;
+  indent: string;
+  closed: boolean;
+  /** Inside a list item, where the drawing keeps the item's indentation. */
+  nested: boolean;
 };
+
+/** A run of a markdown document: text passed through as written, or one Mermaid fence. */
+export type Segment = { raw: string; mermaid?: Fence };
 
 const OPENER = /^([ \t]*)(`{3,}|~{3,})[ \t]*(.*)$/;
 const LIST_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
 
-type Fence = NonNullable<Segment["mermaid"]>;
 type Opener = { indent: string; fence: string; info: string; nested: boolean };
 
 /**

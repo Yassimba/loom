@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { scanFences } from "./fences.ts";
-import { diagramKind, render, toAnsi } from "./loom-mermaid/index.ts";
-import { GUIDANCE, withDiffClasses } from "./shared.ts";
-import { streamingPrefixes } from "./streaming.ts";
+import { toAnsi } from "./loom-mermaid/index.ts";
+import { type Drawn, drawDiagram, GUIDANCE } from "./shared.ts";
+import { drawArriving } from "./streaming.ts";
 
 type TransformContext = {
   messageType: "user" | "assistant" | "assistant-thinking";
@@ -11,36 +11,17 @@ type TransformContext = {
   isStreaming?: boolean;
 };
 
-/**
- * Rendered blocks by source and width. Pi runs the transformer on the whole
- * message for every streamed chunk and every redraw, so a diagram would be
- * laid out again for each token after it. Layout is deterministic, so the
- * first render is the only one needed.
- */
-const rendered = new Map<string, string | null>();
-const CACHE_SIZE = 64;
-
 function renderBlock(text: string, availableWidth: number): string | null {
-  const key = `${availableWidth}\0${text.trimEnd()}`;
-  const hit = rendered.get(key);
-  if (hit !== undefined) {
-    rendered.delete(key);
-    rendered.set(key, hit);
-    return hit;
-  }
-  const styledSource = withDiffClasses(text);
-  const art = render(styledSource.source, { maxWidth: availableWidth });
-  const out =
-    !art || art.width > availableWidth
-      ? null
-      : `${dimDefaultBorders(toAnsi(art), styledSource.dimSgr).map(codeSpan).join("  \n")}\n`;
-  rendered.set(key, out);
-  if (rendered.size > CACHE_SIZE) rendered.delete(rendered.keys().next().value as string);
-  return out;
+  const drawn = drawDiagram(text, availableWidth);
+  return drawn && `${ansiLines(drawn).map(codeSpan).join("  \n")}\n`;
 }
 
-function dimDefaultBorders(lines: string[], sgrValues: string[]): string[] {
-  return lines.map((line) =>
+/** The art as ANSI lines, its default diff borders dim. */
+function ansiLines({ art, dimStrokes }: Drawn): string[] {
+  const sgrValues = dimStrokes.map(
+    (hex) => `38;2;${[1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)).join(";")}`,
+  );
+  return toAnsi(art).map((line) =>
     sgrValues.reduce(
       (result, sgr) => result.replaceAll(`\u001b[${sgr}m`, `\u001b[2;${sgr}m`),
       line,
@@ -63,15 +44,13 @@ export function transformMermaidForDocument(markdown: string, availableWidth = 1
   return scanFences(markdown)
     .map(({ raw, mermaid }) => {
       if (!mermaid || mermaid.nested) return raw;
-      const styledSource = withDiffClasses(mermaid.source);
-      const art = render(styledSource.source, { maxWidth: availableWidth });
-      if (!art || art.width > availableWidth) return raw;
+      const drawn = drawDiagram(mermaid.source, availableWidth);
+      if (drawn === null) return raw;
       // The document viewer accepts SGR styling only, not terminal hyperlinks.
-      const withoutLinks = {
-        ...art,
-        styled: art.styled.map((row) => row.map((span) => ({ ...span, href: undefined }))),
-      };
-      const text = dimDefaultBorders(toAnsi(withoutLinks), styledSource.dimSgr).join("\n");
+      const styled = drawn.art.styled.map((row) =>
+        row.map((span) => ({ ...span, href: undefined })),
+      );
+      const text = ansiLines({ ...drawn, art: { ...drawn.art, styled } }).join("\n");
       const longestRun = Math.max(
         0,
         ...Array.from(text.matchAll(/`+/g), (match) => match[0].length),
@@ -97,12 +76,10 @@ export function transformMermaidMarkdown(markdown: string, context: TransformCon
         );
       }
       if (context.isStreaming === true && !mermaid.closed) {
-        if (diagramKind(mermaid.source) === null) return raw;
-        for (const prefix of streamingPrefixes(mermaid.source)) {
-          const out = renderBlock(prefix, context.availableWidth);
-          if (out !== null) return out;
-        }
-        return "_Drawing Mermaid…_\n";
+        const out = drawArriving(mermaid.source, (source) =>
+          renderBlock(source, context.availableWidth),
+        );
+        return out === "pending" ? "_Drawing Mermaid…_\n" : (out ?? raw);
       }
       return renderBlock(mermaid.source, context.availableWidth) ?? raw;
     })
