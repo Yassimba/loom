@@ -1,3 +1,4 @@
+use crate::presence::{Listing, Manager, ToolRule};
 use crate::session::{InstallOwnership, InstallSession};
 use crate::settings::{curated_settings, setting_state, SettingSpec, SettingsPaths};
 use crate::ui::{confirm_plan, print_plan, Mark, Out};
@@ -400,104 +401,15 @@ fn run_interactive(
 /// Which catalog resources are already on this machine. Uses the same
 /// probes as post-install verification: manager list output for plugins and
 /// packages, and the currently selected destination trees for skills.
-fn pi_packages_from_settings(home: &std::path::Path) -> Option<String> {
-    pi_packages_listing(
-        &crate::settings::pi_agent_dir(home).join("settings.json"),
-        "User packages:",
-    )
-}
-
-/// Prefer Herdr's registry file so the wizard probe does not boot `herdr`.
-fn herdr_plugins_from_registry(home: &std::path::Path) -> Option<String> {
-    let content =
-        std::fs::read_to_string(crate::settings::herdr_dir(home).join("plugins.json")).ok()?;
-    let plugins = serde_json::from_str::<serde_json::Value>(&content).ok()?;
-    let plugins = plugins.as_array()?;
-    let mut listed = String::new();
-    for plugin in plugins {
-        if let Some(id) = plugin.get("plugin_id").and_then(serde_json::Value::as_str) {
-            listed.push_str(id);
-            listed.push('\n');
-        }
-    }
-    Some(listed)
-}
-
-/// A `pi list`-shaped listing read straight from a Pi settings file, so the
-/// installed-state probe never has to boot the Node CLI. `None` when the file
-/// cannot be read safely; a missing file lists nothing.
-pub(crate) fn pi_packages_listing(
-    settings_path: &std::path::Path,
-    heading: &str,
-) -> Option<String> {
-    let content = match std::fs::read_to_string(settings_path) {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Some(format!("{heading}\n"));
-        }
-        Err(_) => return None,
-    };
-    let settings: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let mut listed = format!("{heading}\n");
-    let Some(packages) = settings.get("packages") else {
-        return Some(listed);
-    };
-    let packages = packages.as_array()?;
-    for package in packages {
-        if let Some(source) = package
-            .as_str()
-            .or_else(|| package.get("source").and_then(serde_json::Value::as_str))
-        {
-            let path = std::path::Path::new(source);
-            let resolved = path
-                .is_relative()
-                .then(|| {
-                    settings_path
-                        .parent()
-                        .unwrap_or_else(|| std::path::Path::new(""))
-                        .join(path)
-                })
-                .filter(|path| path.is_dir())
-                .map(|path| path.canonicalize().unwrap_or(path));
-            listed.push_str("  ");
-            listed.push_str(
-                resolved
-                    .as_deref()
-                    .and_then(std::path::Path::to_str)
-                    .unwrap_or(source),
-            );
-            listed.push('\n');
-        }
-    }
-    Some(listed)
-}
-
 pub(crate) fn detect_installed(
     resources: &[Resource],
     status: PrerequisiteStatus,
     system: &(dyn System + Sync),
     destination: &SkillDestination,
 ) -> Vec<bool> {
-    let list_output = |present: bool, program: &str, args: &[&str]| {
-        if !present {
-            return None;
-        }
-        system
-            .run_probe(&CommandSpec::new(program, args.iter().copied()))
-            .ok()
-            .filter(|result| result.success)
-            .map(|result| result.stdout)
-    };
     let home = system.home_dir();
-    // Prefer on-disk registries: `pi list` and `herdr plugin list` boot CLIs.
-    let pi_packages = home
-        .as_deref()
-        .and_then(pi_packages_from_settings)
-        .or_else(|| list_output(status.pi, "pi", &["list"]));
-    let herdr_plugins = home
-        .as_deref()
-        .and_then(herdr_plugins_from_registry)
-        .or_else(|| list_output(status.herdr, "herdr", &["plugin", "list"]));
+    let pi_packages = Listing::quick(system, Manager::Pi, status.pi);
+    let herdr_plugins = Listing::quick(system, Manager::Herdr, status.herdr);
     let skill_trees = destination.trees();
     let skill_names = skill_trees
         .iter()
@@ -518,22 +430,18 @@ pub(crate) fn detect_installed(
             match resource.kind {
                 ResourceKind::McpServer => crate::mcp::Server::from_name(&resource.install_target)
                     .is_ok_and(|server| crate::mcp::configured(server, destination, system)),
-                // A tool is installed when mise manages it (it is in the
-                // selection) or its binary is on PATH from any other installer
-                // (brew, cargo, ...): both are honestly "installed".
-                ResourceKind::Tool => {
-                    selected_tools.contains(&resource.install_target)
-                        || resource
-                            .bin
-                            .as_deref()
-                            .is_some_and(|bin| system.command_exists(bin))
-                }
-                ResourceKind::HerdrPlugin => herdr_plugins.as_ref().is_some_and(|output| {
-                    output.contains(resource.id.trim_start_matches("herdr-plugin:"))
-                }),
-                ResourceKind::PiPackage => pi_packages.as_ref().is_some_and(|output| {
-                    crate::install::pi_package_installed(output, &resource.install_target, false)
-                }),
+                ResourceKind::Tool => crate::presence::tool_present(
+                    system,
+                    selected_tools.contains(&resource.install_target),
+                    resource.bin.as_deref(),
+                    ToolRule::Installed,
+                ),
+                ResourceKind::HerdrPlugin => herdr_plugins
+                    .as_ref()
+                    .is_some_and(|listing| listing.has_herdr_plugin(&resource.id)),
+                ResourceKind::PiPackage => pi_packages
+                    .as_ref()
+                    .is_some_and(|listing| listing.has_pi_package(&resource.install_target, false)),
                 ResourceKind::Skill => {
                     !skill_trees.is_empty()
                         && skill_trees.iter().zip(&skill_names).all(|(tree, names)| {
@@ -702,6 +610,7 @@ pub fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::presence::pi_packages_listing;
     use crate::session::adapter_existed;
     use crate::testing::{failed, ok, ScriptedSystem};
 

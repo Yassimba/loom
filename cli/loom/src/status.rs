@@ -1,7 +1,9 @@
+use crate::presence::{Listing, Manager};
 use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, CommandSpec, System};
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
 
 struct RuntimeCheck {
     name: &'static str,
@@ -133,7 +135,7 @@ fn read_selected_resources(home: &Path) -> Result<HashSet<String>, String> {
         .collect())
 }
 
-fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
+pub(crate) fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
     let Some(home) = system.home_dir() else {
         style.row(Mark::Bad, "resources", "home directory is unavailable");
         return false;
@@ -155,10 +157,13 @@ fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
             && resource.group != "Wiki"
             && selected.contains(&resource.install_target)
     }) {
-        let present = resource
-            .bin
-            .as_deref()
-            .is_some_and(|binary| system.command_exists(binary));
+        // Rows are already limited to the Selection.
+        let present = crate::presence::tool_present(
+            system,
+            true,
+            resource.bin.as_deref(),
+            crate::presence::ToolRule::Working,
+        );
         style.row(
             if present { Mark::Ok } else { Mark::Bad },
             &status_label(resource, &catalog),
@@ -174,8 +179,7 @@ fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
         system,
         style,
         &catalog,
-        "pi",
-        &["list"],
+        Manager::Pi,
         crate::ResourceKind::PiPackage,
         &managed,
     );
@@ -183,8 +187,7 @@ fn print_managed_resources(system: &dyn System, style: &Out) -> bool {
         system,
         style,
         &catalog,
-        "herdr",
-        &["plugin", "list"],
+        Manager::Herdr,
         crate::ResourceKind::HerdrPlugin,
         &managed,
     );
@@ -195,8 +198,7 @@ fn print_manager_inventory(
     system: &dyn System,
     style: &Out,
     catalog: &crate::Catalog,
-    manager: &'static str,
-    args: &[&str],
+    manager: Manager,
     kind: crate::ResourceKind,
     selected: &HashSet<String>,
 ) -> bool {
@@ -207,7 +209,11 @@ fn print_manager_inventory(
     let selected_for_manager = resources
         .clone()
         .any(|resource| selected.contains(&resource.id));
-    if !system.command_exists(manager) {
+    let listing = system
+        .command_exists(manager.program())
+        .then(|| Listing::probe(system, manager, &AtomicBool::new(false)));
+    let manager = manager.program();
+    let Some(listing) = listing else {
         style.row(
             if selected_for_manager {
                 Mark::Bad
@@ -222,17 +228,15 @@ fn print_manager_inventory(
             },
         );
         return !selected_for_manager;
-    }
-    match system.run_probe(&CommandSpec::new(manager, args.iter().copied())) {
-        Ok(result) if result.success => {
-            let output = result.stdout;
+    };
+    match listing {
+        Ok(listing) => {
             let mut healthy = true;
             for resource in resources {
                 let installed = if kind == crate::ResourceKind::PiPackage {
-                    crate::install::pi_package_installed(&output, &resource.install_target, false)
+                    listing.has_pi_package(&resource.install_target, false)
                 } else {
-                    output.contains(&resource.install_target)
-                        || output.contains(resource.id.trim_start_matches("herdr-plugin:"))
+                    listing.has_herdr_plugin(&resource.id)
                 };
                 let expected = selected.contains(&resource.id);
                 if !installed && !expected {
@@ -258,14 +262,6 @@ fn print_manager_inventory(
                 );
             }
             healthy
-        }
-        Ok(result) => {
-            style.row(
-                Mark::Bad,
-                manager,
-                crate::install::command_failure_message(&result),
-            );
-            false
         }
         Err(error) => {
             style.row(Mark::Bad, manager, error.to_string());

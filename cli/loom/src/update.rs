@@ -1,5 +1,7 @@
+use crate::presence::{Listing, Manager};
 use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, Catalog, CommandSpec, NodeStatus, ResourceKind, System};
+use std::sync::atomic::AtomicBool;
 
 /// One independent update lane; lanes run concurrently and report whole
 /// blocks so nothing interleaves.
@@ -41,7 +43,11 @@ fn progress_status(completed: usize, total: usize, running: &[&str], elapsed: u6
     format!("{completed}/{total} complete · {active} · {elapsed}s")
 }
 
-fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) -> Vec<CommandSpec> {
+fn pi_package_commands(
+    catalog: &Catalog,
+    listed: &Listing,
+    native_windows: bool,
+) -> Vec<CommandSpec> {
     catalog
         .resources
         .iter()
@@ -49,12 +55,12 @@ fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) ->
         .filter(|resource| !native_windows || !resource.windows_wsl)
         .flat_map(|resource| {
             let spec = resource.pi_install_spec();
-            let global =
-                crate::install::pi_package_installed(listed, &resource.install_target, false)
-                    .then(|| CommandSpec::new("pi", ["install", &spec]));
-            let local =
-                crate::install::pi_package_installed(listed, &resource.install_target, true)
-                    .then(|| CommandSpec::new("pi", ["install", "-l", &spec]));
+            let global = listed
+                .has_pi_package(&resource.install_target, false)
+                .then(|| CommandSpec::new("pi", ["install", &spec]));
+            let local = listed
+                .has_pi_package(&resource.install_target, true)
+                .then(|| CommandSpec::new("pi", ["install", "-l", &spec]));
             [global, local].into_iter().flatten()
         })
         .collect()
@@ -137,17 +143,11 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
         // use their pin, first-party packages request npm's latest release, and
         // Pi itself is the mise manifest's job. Packages outside the catalog
         // are left alone.
-        let listed = match system.run_probe(&CommandSpec::new("pi", ["list"])) {
-            Ok(result) if result.success => result.stdout,
-            Ok(result) => {
-                inventory_error = Some(crate::install::command_failure_message(&result));
-                String::new()
-            }
-            Err(error) => {
+        let listed =
+            Listing::probe(system, Manager::Pi, &AtomicBool::new(false)).unwrap_or_else(|error| {
                 inventory_error = Some(error.to_string());
-                String::new()
-            }
-        };
+                Listing::default()
+            });
         let commands = pi_package_commands(catalog, &listed, cfg!(windows));
         pi_compat_targets = catalog
             .resources
@@ -155,9 +155,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
             .filter(|resource| {
                 resource.group != "Wiki" && crate::pi_compat::is_managed(&resource.id)
             })
-            .filter(|resource| {
-                crate::install::pi_package_installed(&listed, &resource.install_target, false)
-            })
+            .filter(|resource| listed.has_pi_package(&resource.install_target, false))
             .map(|resource| resource.id.clone())
             .collect();
         if !commands.is_empty() {
@@ -470,23 +468,12 @@ fn run_command_lane(system: &dyn System, task: CommandLane, progress: &dyn Fn(St
                 index + 1,
                 task.commands.len()
             ));
-            let probe = if command.program == "pi" {
-                CommandSpec::new("pi", ["list"])
-            } else {
-                CommandSpec::new("herdr", ["plugin", "list"])
-            };
-            let result = system
-                .run_probe(&probe)
+            // Open decision: `herdr plugin update --all` names no plugin, so
+            // its listing only has to answer; nothing is matched in it.
+            let manager = Manager::named(&command.program).unwrap_or(Manager::Herdr);
+            let listing = Listing::probe(system, manager, &AtomicBool::new(false))
                 .map_err(|error| format!("verification failed: {error}"))?;
-            if !result.success {
-                return Err(format!(
-                    "verification failed: {}",
-                    crate::install::command_failure_message(&result)
-                ));
-            }
-            if command.program == "pi"
-                && !crate::install::pi_package_installed(&result.stdout, target, scope != "global")
-            {
+            if manager == Manager::Pi && !listing.has_pi_package(target, scope != "global") {
                 return Err(
                     "verification did not find the selected package in its destination".into(),
                 );
@@ -597,55 +584,6 @@ mod tests {
             r#"{"server":{"status":"stopped","running":false}}"#
         ));
         assert!(!herdr_server_running("not json"));
-    }
-
-    #[test]
-    fn package_verification_requires_the_exact_identity_and_destination() {
-        let listed = "User packages:\n npm:@tintinweb/pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:@tintinweb/pi-subagents@0.19.0\n npm:@example/foo@1";
-        assert!(!crate::install::pi_package_installed(
-            listed,
-            "@tintinweb/pi-subagents",
-            false
-        ));
-        assert!(crate::install::pi_package_installed(
-            listed,
-            "npm:@tintinweb/pi-subagents@latest",
-            true
-        ));
-        assert!(!crate::install::pi_package_installed(
-            listed,
-            "@example/foo",
-            false
-        ));
-        assert!(crate::install::pi_package_installed(
-            listed,
-            "@example/foo",
-            true
-        ));
-        assert!(!crate::install::pi_package_installed(
-            "npm:@tintinweb/pi-subagents",
-            "@tintinweb/pi-subagents",
-            false
-        ));
-        let root = std::env::temp_dir().join(format!(
-            "loom-path-pkg-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let package = root
-            .join("github-agrici-daniel-claude-obsidian")
-            .join("2.1.1");
-        std::fs::create_dir_all(&package).unwrap();
-        let listed = format!("Project packages:\n  {}\n", package.display());
-        assert!(crate::install::pi_package_installed(
-            &listed,
-            "github:AgriciDaniel/claude-obsidian",
-            true
-        ));
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -847,7 +785,9 @@ mod tests {
             .version
             .as_deref()
             .expect("external Pi packages carry an exact version");
-        let listed = "User packages:\n  npm:@tintinweb/pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:@tintinweb/pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
+        let listed = &Listing::of(
+            "User packages:\n  npm:@tintinweb/pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:@tintinweb/pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n",
+        );
         let commands = pi_package_commands(&catalog, listed, false)
             .into_iter()
             .map(|command| command.display())

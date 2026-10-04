@@ -88,7 +88,7 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
         .is_some_and(|root| doctor_ok(system, root, &record.path));
     // Read the Vault's own Pi settings first; `pi list` boots Node and was
     // the slow part of every health check.
-    let packages = crate::app::pi_packages_listing(
+    let packages = crate::presence::pi_packages_listing(
         &record.path.join(".pi/settings.json"),
         "Project packages:",
     )
