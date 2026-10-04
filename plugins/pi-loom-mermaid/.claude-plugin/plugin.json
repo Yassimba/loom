@@ -7,5 +7,6 @@
   },
   "homepage": "https://github.com/Yassimba/loom/tree/main/plugins/pi-loom-mermaid",
   "repository": "https://github.com/Yassimba/loom",
-  "license": "MIT"
+  "license": "MIT",
+  "types": "./types/index.d.ts"
 }

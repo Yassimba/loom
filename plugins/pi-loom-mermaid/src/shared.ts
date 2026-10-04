@@ -1,7 +1,7 @@
 /** What Pi and the Claude Code mod both do around the renderer. */
 
 import { type Fence, scanFences } from "./fences.ts";
-import { render } from "./loom-mermaid/index.ts";
+import { render, toAnsi } from "./loom-mermaid/index.ts";
 import type { MermaidArt } from "./loom-mermaid/types.ts";
 import { drawArriving } from "./streaming.ts";
 
@@ -62,8 +62,8 @@ export type Part = {
   raw: string;
   indent: string;
   drawing: Drawn | "pending" | null;
-  /** A Mermaid fence whose closing line has not arrived. */
-  open: boolean;
+  /** Whether the run is a Mermaid fence, and whether its closing line has arrived. */
+  fence: "open" | "closed" | null;
 };
 
 function draw(fence: Fence, columns: number, arriving: boolean): Part["drawing"] {
@@ -83,7 +83,7 @@ export function drawMessage(markdown: string, columns: number, arriving: boolean
     raw,
     indent: mermaid?.indent ?? "",
     drawing: mermaid ? draw(mermaid, columns - mermaid.indent.length, arriving) : null,
-    open: mermaid?.closed === false,
+    fence: mermaid ? (mermaid.closed ? "closed" : "open") : null,
   }));
 }
 
@@ -92,4 +92,17 @@ export function fenced(text: string, info = ""): string {
   const longestRun = Math.max(0, ...Array.from(text.matchAll(/`+/g), (match) => match[0].length));
   const fence = "`".repeat(Math.max(3, longestRun + 1));
   return `${fence}${info}\n${text}\n${fence}\n`;
+}
+
+/** The art as ANSI lines, its default diff borders dim. */
+export function ansiLines({ art, dimStrokes }: Drawn): string[] {
+  const sgrValues = dimStrokes.map(
+    (hex) => `38;2;${[1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)).join(";")}`,
+  );
+  return toAnsi(art).map((line) =>
+    sgrValues.reduce(
+      (result, sgr) => result.replaceAll(`\u001b[${sgr}m`, `\u001b[2;${sgr}m`),
+      line,
+    ),
+  );
 }

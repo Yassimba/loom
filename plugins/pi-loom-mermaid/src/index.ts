@@ -1,6 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { toAnsi } from "./loom-mermaid/index.ts";
-import { type Drawn, drawMessage, fenced, GUIDANCE } from "./shared.ts";
+import { ansiLines, drawMessage, fenced, GUIDANCE } from "./shared.ts";
 
 type TransformContext = {
   messageType: "user" | "assistant" | "assistant-thinking";
@@ -8,19 +7,6 @@ type TransformContext = {
   /** Draw completed statements while the message is still arriving. */
   isStreaming?: boolean;
 };
-
-/** The art as ANSI lines, its default diff borders dim. */
-function ansiLines({ art, dimStrokes }: Drawn): string[] {
-  const sgrValues = dimStrokes.map(
-    (hex) => `38;2;${[1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)).join(";")}`,
-  );
-  return toAnsi(art).map((line) =>
-    sgrValues.reduce(
-      (result, sgr) => result.replaceAll(`\u001b[${sgr}m`, `\u001b[2;${sgr}m`),
-      line,
-    ),
-  );
-}
 
 function codeSpan(line: string): string {
   const content = line || "\u00a0";

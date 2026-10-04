@@ -1,4 +1,4 @@
-import { expect, test } from "claude-code/testing";
+import { expect, type TestBody, test } from "claude-code/testing";
 
 const SURFACES = ["terminal", "desktop", "vscode", "mobile"] as const;
 const mounted = (text: string) => ({
@@ -70,27 +70,63 @@ test("the system prompt gains the Mermaid note after the engine's sections", asy
   expect(sections[1]?.text).toContain(":::green");
 });
 
-test("a streaming reply shows a diagram when its fence closes and withholds the source until then", async ($, on) => {
-  on("classic.MessageDisplay", () => ({}));
-  const batches = [
-    "Before\n\n",
-    "```mermaid\nflowchart LR\n",
-    " A[Start] --> B[End]\n",
-    "```\n\nAfter\n",
-  ];
+const stream = async ($: Parameters<TestBody>[0], batches: string[]) => {
   const displayed = [];
   for (const [index, delta] of batches.entries()) {
     const result = await $.classic.MessageDisplay({
       turn_id: "turn",
       message_id: "message",
       index,
-      final: index === batches.length - 1,
+      final: false,
       delta,
     });
     displayed.push(result.displayContent ?? delta);
   }
-  expect(displayed.slice(0, 3)).toEqual(["Before\n\n", "", ""]);
+  return displayed;
+};
+
+test("a streaming reply notes a fence when it opens and draws it when it closes", async ($, on) => {
+  on("classic.MessageDisplay", () => ({}));
+  const displayed = await stream($, [
+    "Before\n\n",
+    "```mermaid\nflowchart LR\n",
+    " A[Start] --> B[End]\n",
+    "```\n\nAfter\n",
+  ]);
+  expect(displayed.slice(0, 3)).toEqual(["Before\n\n", "_Drawing Mermaid…_\n\n", ""]);
   expect(displayed[3]).toContain("Start");
   expect(displayed[3]).not.toContain("flowchart");
   expect(displayed[3]?.endsWith("\nAfter\n")).toBe(true);
+});
+
+test("the band above the prompt grows with the open fence and clears when it closes", async ($, on) => {
+  on("classic.MessageDisplay", () => ({}));
+  on("ui.render", { component: "AbovePrompt" }, ($, e) => {
+    const { Text } = $.ui.resolve(e);
+    return <Text>engine band</Text>;
+  });
+  for (const surface of ["terminal", "desktop"] as const) {
+    const ui = await $.ui.mount({
+      plugin: "loom-mermaid",
+      surface,
+      component: "AbovePrompt",
+      props: {
+        hasSurvey: false,
+        isWorking: true,
+        maxRows: 20,
+        bodyColumns: 80,
+        scroll: { offset: 0, bodyRows: 20 },
+        view: {},
+      },
+    });
+    expect(await ui.find({ type: "Text", text: /engine band/ })).toBeDefined();
+    await stream($, ["```mermaid\nflowchart"]);
+    expect(await ui.find({ type: "Text", text: /Drawing Mermaid/ })).toBeDefined();
+    await stream($, [" LR\n A[First] --> B[Second]\n B --> C[Thi"]);
+    expect(await ui.find({ type: "Text", text: /Second/ })).toBeDefined();
+    expect(await ui.find({ type: "Text", text: /Thi/ })).toBeUndefined();
+    await stream($, ["rd]\n```\n"]);
+    expect(await ui.find({ type: "Text", text: /engine band/ })).toBeDefined();
+    await ui.unmount();
+  }
 });

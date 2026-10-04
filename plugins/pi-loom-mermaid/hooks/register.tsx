@@ -1,7 +1,8 @@
-import type { Register, TextProps } from "claude-code";
+import type { Elements, Register, RenderSurface, TextProps } from "claude-code";
+import { atom, read, update } from "claude-code";
 import { resolveClassStyle } from "../src/loom-mermaid/class-style.ts";
 import type { Role } from "../src/loom-mermaid/types.ts";
-import { type Drawn, drawMessage, fenced, GUIDANCE } from "../src/shared.ts";
+import { ansiLines, type Drawn, drawMessage, fenced, GUIDANCE } from "../src/shared.ts";
 
 /** A surface that has not measured draws at the document transformer's width. */
 const DEFAULT_COLUMNS = 100;
@@ -14,52 +15,107 @@ const THEME: Partial<Record<Role, TextProps>> = {
   title: { bold: true },
 };
 
-function runs({ art, dimStrokes }: Drawn) {
+function runs({ art }: Drawn) {
   return art.styled.map((row) =>
     row.map((span) => {
       const themed = THEME[span.role] ?? {};
       const cls = resolveClassStyle(span.classes, art.classDefs);
       // Only `stroke` colors a border; fills and text colors stay with the theme.
+      // It is never drawn dim: `dimColor` replaces a Text's color with the theme's grey.
       const stroke = span.role === "border" ? cls?.stroke : undefined;
       const style =
         stroke === undefined
           ? { ...themed, ...(cls?.bold === true ? { bold: true } : {}) }
-          : { color: stroke, bold: cls?.bold === true, dimColor: dimStrokes.includes(stroke) };
+          : { color: stroke, bold: cls?.bold === true };
       return { text: span.text, href: span.href, style };
     }),
   );
 }
 
+const PENDING = "Drawing Mermaid…";
+
+/** The diagram as one Text per row, each run in its own style. */
+function diagram(
+  { Box, Link, Text }: Pick<Elements[RenderSurface], "Box" | "Link" | "Text">,
+  drawn: Drawn,
+  indent: string,
+  key: string,
+) {
+  return (
+    <Box key={key} flexDirection="column">
+      {runs(drawn).map((row, y) => (
+        <Text key={`row-${y}`} wrap="truncate">
+          {indent}
+          {row.map((run, x) => (
+            <Text key={`run-${x}`} {...run.style}>
+              {run.href === undefined || run.text.trim() === "" ? (
+                run.text
+              ) : (
+                <Link href={run.href}>{run.text}</Link>
+              )}
+            </Text>
+          ))}
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
 /**
- * A streaming reply as its lines are shown: each closed fence as an uncolored
- * drawing, a fence still open withheld. Lines only ever add to the end of it,
- * so what a new batch shows is what it adds; the finished reply is then drawn
- * in color by the `AssistantMessage` site.
+ * A streaming reply as its lines are shown: a note where each Mermaid fence
+ * opens, then its uncolored drawing once it closes. Lines only ever add to the
+ * end of it, so what a new batch shows is what it adds; the band above the
+ * prompt shows the fence still open, and the finished reply is drawn in color
+ * by the `AssistantMessage` site.
  */
 function shown(text: string, columns: number): string {
   return drawMessage(text, columns, false)
-    .map(({ raw, indent, drawing, open }) => {
-      if (open) return "";
-      if (drawing === null || drawing === "pending") return raw;
-      return fenced(drawing.art.plain.join("\n")).replace(/^(?=.)/gm, indent);
+    .map(({ raw, indent, drawing, fence }) => {
+      if (fence === null) return raw;
+      const note = `${indent}_${PENDING}_\n\n`;
+      if (fence === "open") return note;
+      if (drawing === null || drawing === "pending") return note + raw;
+      return note + fenced(ansiLines(drawing).join("\n")).replace(/^(?=.)/gm, indent);
     })
     .join("");
 }
 
+const arrivingFence = atom({ plugin: "loom-mermaid", key: "arriving" } as const, null);
+
 export const register: Register = (on) => {
-  // The streaming event carries no width, so it draws at the last one a reply was drawn at.
+  // The streaming event carries no width, so it draws at the last one a site was drawn at.
   let columns = DEFAULT_COLUMNS;
   // ponytail: a reply that never sends its final batch keeps its text here; cap it if sessions leak.
   const arriving = new Map<string, string>();
 
-  on("classic.MessageDisplay", async (_$, e, next) => {
+  on("classic.MessageDisplay", async ($, e, next) => {
     const result = await next(e);
     const before = arriving.get(e.message_id) ?? "";
     const text = before + e.delta;
     if (e.final) arriving.delete(e.message_id);
     else arriving.set(e.message_id, text);
+
+    const last = drawMessage(text, columns, true).at(-1);
+    const open = !e.final && last?.fence === "open" ? last.raw : null;
+    if ((await read($, arrivingFence)) !== open) await update($, arrivingFence, () => open);
+
     const displayContent = shown(text, columns).slice(shown(before, columns).length);
     return displayContent === e.delta ? result : { ...result, displayContent };
+  });
+
+  // The open fence of a streaming reply, growing statement by statement above the prompt.
+  on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
+    columns = e.viewport?.columns ?? columns;
+    const fence = await read($, arrivingFence);
+    if (fence === null || e.props.hasSurvey) return next(e);
+    const drawing = drawMessage(fence, e.props.bodyColumns, true)[0]?.drawing ?? null;
+    if (drawing === null) return next(e);
+    const ui = $.ui.resolve(e);
+    return drawing === "pending" ? (
+      <ui.Text italic>{PENDING}</ui.Text>
+    ) : (
+      diagram(ui, drawing, "", "preview")
+    );
   });
 
   on("prompt.compose", async (_$, e, next) => {
@@ -75,7 +131,8 @@ export const register: Register = (on) => {
     const parts = drawMessage(e.props.text, columns, true);
     if (parts.every((part) => part.drawing === null)) return next(e);
 
-    const { Box, Link, Markdown, Text } = $.ui.resolve(e);
+    const ui = $.ui.resolve(e);
+    const { Box, Markdown, Text } = ui;
     return (
       <Box flexDirection="column" gap={1}>
         {parts.map(({ raw, indent, drawing }, at) => {
@@ -85,28 +142,11 @@ export const register: Register = (on) => {
           if (drawing === "pending") {
             return (
               <Text key={`pending-${at}`} italic>
-                Drawing Mermaid…
+                {PENDING}
               </Text>
             );
           }
-          return (
-            <Box key={`diagram-${at}`} flexDirection="column">
-              {runs(drawing).map((row, y) => (
-                <Text key={`row-${y}`} wrap="truncate">
-                  {indent}
-                  {row.map((run, x) => (
-                    <Text key={`run-${x}`} {...run.style}>
-                      {run.href === undefined || run.text.trim() === "" ? (
-                        run.text
-                      ) : (
-                        <Link href={run.href}>{run.text}</Link>
-                      )}
-                    </Text>
-                  ))}
-                </Text>
-              ))}
-            </Box>
-          );
+          return diagram(ui, drawing, indent, `diagram-${at}`);
         })}
       </Box>
     );
