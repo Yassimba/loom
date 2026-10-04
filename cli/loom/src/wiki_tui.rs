@@ -923,6 +923,7 @@ fn require_terminal() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{ok, ScriptedSystem};
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::KeyModifiers;
     use ratatui::Terminal;
@@ -1095,19 +1096,14 @@ mod tests {
     #[test]
     #[cfg(target_os = "macos")]
     fn mac_picker_uses_the_native_save_panel_for_a_new_vault() {
-        struct Fake;
-        impl System for Fake {
-            fn command_exists(&self, _: &str) -> bool {
-                false
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, _: &CommandSpec) -> Result<crate::CommandResult> {
-                unreachable!()
-            }
-        }
-
-        let command =
-            picker_command(&Fake, &WikiOperation::Create, std::path::Path::new("/tmp")).unwrap();
+        let system = ScriptedSystem::new().only(&[]);
+        let command = picker_command(
+            &system,
+            &WikiOperation::Create,
+            std::path::Path::new("/tmp"),
+        )
+        .unwrap();
+        assert!(system.calls().is_empty());
         assert_eq!(command.program, "osascript");
         assert!(command
             .args
@@ -1118,43 +1114,30 @@ mod tests {
     #[test]
     #[cfg(not(windows))]
     fn folder_picker_validates_existing_and_new_paths_without_writing() {
-        struct Picked {
-            path: PathBuf,
-            cancelled: bool,
-        }
-        impl System for Picked {
-            fn command_exists(&self, _: &str) -> bool {
-                true
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, _: &CommandSpec) -> Result<crate::CommandResult> {
-                Ok(crate::CommandResult {
-                    success: !self.cancelled,
-                    stdout: self.path.display().to_string(),
-                    stderr: String::new(),
-                })
-            }
-        }
+        let picked = |path: &std::path::Path, cancelled: bool| {
+            ScriptedSystem::new().otherwise(crate::CommandResult {
+                success: !cancelled,
+                ..ok(path.display().to_string())
+            })
+        };
         let root = std::env::temp_dir().join(format!("loom-wiki-picker-{}", std::process::id()));
         std::fs::create_dir_all(root.join("Existing Wiki/.obsidian")).unwrap();
         let target = root.join("New Wiki");
-        let mut system = Picked {
-            path: target.clone(),
-            cancelled: false,
-        };
+        let system = picked(&target, false);
         assert_eq!(
             pick_vault_path(&system, &WikiOperation::Create, &root).unwrap(),
             Some(target.clone())
         );
         assert!(!target.exists(), "choosing a name must not create the Wiki");
         assert!(pick_vault_path(&system, &WikiOperation::Adopt, &root).is_err());
-        system.path = root.join("Existing Wiki");
+        let existing = root.join("Existing Wiki");
+        let system = picked(&existing, false);
         assert_eq!(
             pick_vault_path(&system, &WikiOperation::Adopt, &root).unwrap(),
-            Some(system.path.clone())
+            Some(existing.clone())
         );
         assert!(pick_vault_path(&system, &WikiOperation::Create, &root).is_err());
-        system.cancelled = true;
+        let system = picked(&existing, true);
         assert!(pick_vault_path(&system, &WikiOperation::Create, &root)
             .unwrap()
             .is_none());

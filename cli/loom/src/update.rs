@@ -577,6 +577,7 @@ fn sync_projects_lane(system: &dyn System, repository: &skills::Repository) -> L
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{failed, ScriptedSystem};
 
     #[test]
     fn herdr_gate_skips_inside_and_offers_stop_when_the_server_is_up() {
@@ -802,44 +803,26 @@ mod tests {
 
     #[test]
     fn optional_tool_failure_only_blocks_packages_if_pi_cannot_be_updated() {
-        struct ToolSystem {
-            pi_install_ok: bool,
-            calls: std::sync::Mutex<Vec<String>>,
-        }
-        impl System for ToolSystem {
-            fn command_exists(&self, _: &str) -> bool {
-                true
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
-                self.calls.lock().unwrap().push(command.display());
-                Ok(crate::CommandResult {
-                    success: self.pi_install_ok,
-                    stdout: String::new(),
-                    stderr: "Pi installation failed".into(),
-                })
-            }
-        }
+        let tool_system = |pi_install_ok| {
+            ScriptedSystem::new().otherwise(crate::CommandResult {
+                success: pi_install_ok,
+                ..failed("Pi installation failed")
+            })
+        };
         for pi_install_ok in [true, false] {
-            let system = ToolSystem {
-                pi_install_ok,
-                calls: std::sync::Mutex::new(Vec::new()),
-            };
+            let system = tool_system(pi_install_ok);
             assert_eq!(pi_runtime_ready(&system, false), pi_install_ok);
             assert_eq!(
-                *system.calls.lock().unwrap(),
+                system.shown(),
                 vec![format!(
                     "mise install --yes {}",
                     crate::manifest::PI_TOOL_KEY
                 )]
             );
         }
-        let system = ToolSystem {
-            pi_install_ok: false,
-            calls: std::sync::Mutex::new(Vec::new()),
-        };
+        let system = tool_system(false);
         assert!(pi_runtime_ready(&system, true));
-        assert!(system.calls.lock().unwrap().is_empty());
+        assert!(system.calls().is_empty());
     }
 
     #[test]

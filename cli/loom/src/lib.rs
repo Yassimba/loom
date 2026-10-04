@@ -17,6 +17,8 @@ pub mod settings;
 mod skills;
 pub mod status;
 mod system;
+#[doc(hidden)]
+pub mod testing;
 pub mod ui;
 pub mod uninstall;
 pub mod update;

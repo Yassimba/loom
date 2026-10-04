@@ -487,25 +487,7 @@ fn check_command(system: &dyn System, name: &'static str, args: &[&str]) -> Runt
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
-    struct HomeSystem(PathBuf);
-
-    impl System for HomeSystem {
-        fn command_exists(&self, _name: &str) -> bool {
-            false
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, _command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
-            unreachable!()
-        }
-
-        fn home_dir(&self) -> Option<PathBuf> {
-            Some(self.0.clone())
-        }
-    }
+    use crate::testing::ScriptedSystem;
 
     #[test]
     fn a_missing_selected_manager_makes_status_unhealthy() {
@@ -523,7 +505,7 @@ mod tests {
             .into_iter()
             .find(|resource| resource.kind == crate::ResourceKind::PiPackage)
             .unwrap();
-        let system = HomeSystem(root.clone());
+        let system = ScriptedSystem::new().only(&[]).home(&root);
         let mut state = crate::ownership::InstallState {
             schema_version: 1,
             resources: std::collections::BTreeMap::new(),
@@ -540,6 +522,7 @@ mod tests {
         state.save(&root).unwrap();
 
         assert!(!print_managed_resources(&system, &Out::plain()));
+        assert!(system.calls().is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 

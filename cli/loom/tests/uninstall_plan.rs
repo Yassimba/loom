@@ -1,11 +1,11 @@
+use loom::testing::{failed, ok, ScriptedSystem};
 use loom::{
-    build_uninstall_plan, execute_uninstall_plan, CommandResult, CommandSpec, InstallState,
-    OwnedResource, OwnershipScope, Receipt, ReceiptStatus, System, UninstallRequest,
+    build_uninstall_plan, execute_uninstall_plan, InstallState, OwnedResource, OwnershipScope,
+    Receipt, ReceiptStatus, UninstallRequest,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use std::sync::Mutex;
 
 fn owned(
     id: &str,
@@ -38,39 +38,12 @@ fn state(resources: Vec<OwnedResource>) -> InstallState {
     }
 }
 
-struct FakeSystem {
-    home: PathBuf,
-    commands: Mutex<Vec<String>>,
-}
-
-impl System for FakeSystem {
-    fn command_exists(&self, _name: &str) -> bool {
-        true
-    }
-
-    fn refresh_path(&self) {}
-
-    fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
-        let shown = command.display();
-        self.commands.lock().unwrap().push(shown.clone());
-        Ok(CommandResult {
-            success: !shown.contains("broken"),
-            stdout: if shown == "pi list" {
-                "npm:pi-web-access".into()
-            } else {
-                String::new()
-            },
-            stderr: if shown.contains("broken") {
-                "nope".into()
-            } else {
-                String::new()
-            },
-        })
-    }
-
-    fn home_dir(&self) -> Option<PathBuf> {
-        Some(self.home.clone())
-    }
+fn fake_system(home: &Path) -> ScriptedSystem {
+    ScriptedSystem::new()
+        .home(home)
+        .on("pi list", ok("npm:pi-web-access"))
+        .on("test uninstall broken-node", failed("nope"))
+        .on("test uninstall broken", failed("nope"))
 }
 
 fn temp_home(label: &str) -> PathBuf {
@@ -261,10 +234,7 @@ fn executor_rechecks_content_before_deleting() {
     )
     .unwrap();
     std::fs::write(&path, "edited after review").unwrap();
-    let system = FakeSystem {
-        home: home.clone(),
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system(&home);
 
     let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
 
@@ -302,15 +272,12 @@ fn executor_removes_dependents_first_and_keeps_failed_receipts() {
         |_| ReceiptStatus::Clean,
     )
     .unwrap();
-    let system = FakeSystem {
-        home: home.clone(),
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system(&home);
 
     let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
 
     assert_eq!(
-        system.commands.into_inner().unwrap(),
+        system.shown(),
         vec!["test uninstall pi", "test uninstall broken-node",]
     );
     assert_eq!(report.removed, vec!["tool:pi"]);
@@ -341,15 +308,12 @@ fn pi_uninstall_uses_a_package_source() {
         |_| ReceiptStatus::Clean,
     )
     .unwrap();
-    let system = FakeSystem {
-        home: home.clone(),
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system(&home);
 
     let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
 
     assert_eq!(
-        system.commands.into_inner().unwrap(),
+        system.shown(),
         vec!["pi list", "pi uninstall npm:pi-web-access"]
     );
     assert_eq!(report.removed, vec!["pi-package:web-access"]);
@@ -394,10 +358,7 @@ fn clean_file_receipts_restore_the_previous_content_and_missing_receipts_prune()
         loom::receipt_status,
     )
     .unwrap();
-    let system = FakeSystem {
-        home: home.clone(),
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system(&home);
 
     let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
 
@@ -425,10 +386,7 @@ fn executor_persists_each_successful_receipt_before_continuing() {
         |_| ReceiptStatus::Clean,
     )
     .unwrap();
-    let system = FakeSystem {
-        home: home.clone(),
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system(&home);
 
     let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
 
@@ -512,10 +470,7 @@ fn final_cleanup_preserves_shared_mise_and_project_local_runtimes() {
             loom::receipt_status,
         )
         .unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         let report =
             execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
         assert!(report.failures.is_empty(), "{report:?}");
@@ -594,10 +549,7 @@ fn removing_a_selected_tool_never_prunes_shared_mise_runtimes() {
         ReceiptStatus::Clean
     })
     .unwrap();
-    let system = FakeSystem {
-        home: home.clone(),
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system(&home);
     let report = execute_uninstall_plan(&plan, &mut state, &home, &system, &AtomicBool::new(false));
     assert!(report.failures.is_empty(), "{report:?}");
     assert_eq!(report.removed, vec!["tool:gh"]);
@@ -605,7 +557,7 @@ fn removing_a_selected_tool_never_prunes_shared_mise_runtimes() {
     assert!(!content.contains("gh ="));
     assert!(content.contains("node = \"24.19.0\""));
     assert!(
-        system.commands.lock().unwrap().is_empty(),
+        system.shown().is_empty(),
         "selection removal must not prune shared runtimes"
     );
     assert!(InstallState::load(&home).unwrap().resources.is_empty());

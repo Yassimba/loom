@@ -703,6 +703,7 @@ pub fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec
 mod tests {
     use super::*;
     use crate::session::adapter_existed;
+    use crate::testing::{failed, ok, ScriptedSystem};
 
     fn temp_root(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
@@ -736,48 +737,13 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    struct NoCommands;
-
-    impl System for NoCommands {
-        fn command_exists(&self, _name: &str) -> bool {
-            false
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            panic!("dry run executed {}", command.display())
-        }
-    }
-
-    struct InstalledSkillSystem {
-        home: std::path::PathBuf,
-        commands: std::sync::Mutex<Vec<String>>,
-    }
-
-    impl System for InstalledSkillSystem {
-        fn command_exists(&self, _name: &str) -> bool {
-            false
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            self.commands.lock().unwrap().push(command.display());
-            Ok(crate::CommandResult {
-                success: false,
-                stdout: String::new(),
-                stderr: String::new(),
-            })
-        }
-
-        fn home_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
-
-        fn current_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
+    /// No binary exists and every command fails.
+    fn installed_skill_system(home: &std::path::Path) -> ScriptedSystem {
+        ScriptedSystem::new()
+            .only(&[])
+            .home(home)
+            .cwd(home)
+            .otherwise(failed(""))
     }
 
     #[test]
@@ -846,10 +812,7 @@ mod tests {
             ..Selectors::default()
         };
 
-        let system = InstalledSkillSystem {
-            home: root.clone(),
-            commands: std::sync::Mutex::new(Vec::new()),
-        };
+        let system = installed_skill_system(&root);
         assert!(install_selected(
             SelectionMode::Setup,
             &catalog,
@@ -862,63 +825,23 @@ mod tests {
             &system,
         )
         .unwrap());
-        assert!(system.commands.into_inner().unwrap().is_empty());
+        assert!(system.calls().is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    struct InstalledPackageSystem {
-        home: std::path::PathBuf,
+    /// Only Pi exists, with one package already installed.
+    fn installed_package_system(home: &std::path::Path) -> ScriptedSystem {
+        ScriptedSystem::new()
+            .only(&["pi"])
+            .home(home)
+            .cwd(home)
+            .on("pi", ok("User packages:\n  npm:@example/already-there\n"))
+            .otherwise(failed(""))
     }
 
-    impl System for InstalledPackageSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi"
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            Ok(crate::CommandResult {
-                success: command.program == "pi",
-                stdout: if command.program == "pi" {
-                    "User packages:\n  npm:@example/already-there\n".into()
-                } else {
-                    String::new()
-                },
-                stderr: String::new(),
-            })
-        }
-
-        fn home_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
-
-        fn current_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
-    }
-
-    struct SettingsOnlySystem {
-        home: std::path::PathBuf,
-    }
-
-    impl System for SettingsOnlySystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi"
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            panic!(
-                "installed-state detection shelled out to {}",
-                command.display()
-            )
-        }
-
-        fn home_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
+    /// Only Pi exists; installed-state detection must read files, not run it.
+    fn settings_only_system(home: &std::path::Path) -> ScriptedSystem {
+        ScriptedSystem::new().only(&["pi"]).home(home)
     }
 
     #[test]
@@ -955,6 +878,7 @@ mod tests {
         .collect::<Vec<_>>();
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
 
+        let system = settings_only_system(&root);
         assert_eq!(
             detect_installed(
                 &resources,
@@ -963,10 +887,15 @@ mod tests {
                     herdr: false,
                     mise: true,
                 },
-                &SettingsOnlySystem { home: root.clone() },
+                &system,
                 &destination,
             ),
             [true, true, true, false]
+        );
+        assert!(
+            system.calls().is_empty(),
+            "installed-state detection shelled out to {:?}",
+            system.shown()
         );
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1028,6 +957,7 @@ mod tests {
         let resources = vec![annotate, other];
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
 
+        let system = settings_only_system(&root);
         assert_eq!(
             detect_installed(
                 &resources,
@@ -1036,35 +966,29 @@ mod tests {
                     herdr: true,
                     mise: false,
                 },
-                &SettingsOnlySystem { home: root.clone() },
+                &system,
                 &destination,
             ),
             [true, false]
         );
-    }
-
-    struct GlobalFeynmanSystem;
-
-    impl System for GlobalFeynmanSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi"
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            Ok(crate::CommandResult {
-                success: command.program == "pi",
-                stdout: "User packages:\n  npm:@companion-ai/feynman@0.3.47\n".into(),
-                stderr: String::new(),
-            })
-        }
+        assert!(
+            system.calls().is_empty(),
+            "installed-state detection shelled out to {:?}",
+            system.shown()
+        );
     }
 
     #[test]
     fn global_feynman_does_not_satisfy_vault_local_setup() {
         let root = temp_root("vault-feynman");
-        let system = GlobalFeynmanSystem;
+        let listing = "User packages:\n  npm:@companion-ai/feynman@0.3.47\n";
+        let system = ScriptedSystem::new()
+            .only(&["pi"])
+            .on("pi", ok(listing))
+            .otherwise(crate::CommandResult {
+                success: false,
+                ..ok(listing)
+            });
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
         let resource = Resource {
             id: "pi-package:@companion-ai/feynman".into(),
@@ -1098,7 +1022,7 @@ mod tests {
     fn successful_tool_sync_records_companions_and_required_runtimes() {
         let root = temp_root("record-tools");
         std::fs::create_dir_all(&root).unwrap();
-        let system = InstalledPackageSystem { home: root.clone() };
+        let system = installed_package_system(&root);
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
         let resources = vec![
             Resource {
@@ -1209,7 +1133,7 @@ mod tests {
             false,
             true,
             false,
-            &InstalledPackageSystem { home: root.clone() },
+            &installed_package_system(&root),
         )
         .unwrap());
         assert!(crate::ownership::InstallState::load(&root)
@@ -1282,13 +1206,7 @@ mod tests {
                 mise: false,
             },
         )
-        .record(
-            &InstalledSkillSystem {
-                home: root.clone(),
-                commands: std::sync::Mutex::new(Vec::new()),
-            },
-            &report.installed,
-        )
+        .record(&installed_skill_system(&root), &report.installed)
         .unwrap();
 
         assert!(crate::ownership::InstallState::load(&root)
@@ -1300,7 +1218,13 @@ mod tests {
 
     #[test]
     fn wsl_dry_run_executes_nothing() {
-        assert!(prepare_wsl(&NoCommands, true).unwrap());
+        let system = ScriptedSystem::new().only(&[]);
+        assert!(prepare_wsl(&system, true).unwrap());
+        assert!(
+            system.calls().is_empty(),
+            "dry run executed {:?}",
+            system.shown()
+        );
     }
 
     #[test]

@@ -955,8 +955,8 @@ pub(crate) fn sync_projects_from(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CommandResult, CommandSpec};
-    use std::sync::Mutex;
+    use crate::testing::{failed, ok, ScriptedSystem};
+    use crate::CommandSpec;
 
     const BASE: &str = "# AGENTS.md\n\n## Style\n- be kind\n";
 
@@ -1048,49 +1048,12 @@ mod tests {
         assert_eq!(outcome.kept_edited, vec!["python"]);
     }
 
-    struct RecordingSystem {
-        commands: Mutex<Vec<CommandSpec>>,
-    }
-
-    impl System for RecordingSystem {
-        fn command_exists(&self, _name: &str) -> bool {
-            false
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-            self.commands.lock().unwrap().push(command.clone());
-            Ok(CommandResult {
-                success: true,
-                stdout: String::new(),
-                stderr: String::new(),
-            })
-        }
-    }
-
-    struct CodeIntelligenceSystem {
-        commands: Mutex<Vec<CommandSpec>>,
-        indexed: bool,
-    }
-
-    impl System for CodeIntelligenceSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "codebase-memory-mcp"
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-            self.commands.lock().unwrap().push(command.clone());
-            Ok(CommandResult {
-                success: command.program != "codebase-memory-mcp"
-                    || command.args.get(2).map(String::as_str) != Some("index_status")
-                    || self.indexed,
-                stdout: String::new(),
-                stderr: String::new(),
-            })
-        }
+    /// Only codebase-memory-mcp exists; `indexed` decides its index_status.
+    fn code_intelligence_system(indexed: bool) -> ScriptedSystem {
+        let status = if indexed { ok("") } else { failed("") };
+        ScriptedSystem::new()
+            .only(&["codebase-memory-mcp"])
+            .on("codebase-memory-mcp index_status", status)
     }
 
     #[test]
@@ -1100,23 +1063,14 @@ mod tests {
             std::process::id()
         ));
         fs::create_dir_all(project.join(".git")).unwrap();
-        let system = CodeIntelligenceSystem {
-            commands: Mutex::new(Vec::new()),
-            indexed: false,
-        };
+        let system = code_intelligence_system(false);
 
         assert_eq!(
             setup_codebase_memory(&system, &project).unwrap(),
             Some("registered with fast index")
         );
         assert_eq!(
-            system
-                .commands
-                .lock()
-                .unwrap()
-                .iter()
-                .map(CommandSpec::display)
-                .collect::<Vec<_>>(),
+            system.shown(),
             [
                 format!(
                     "codebase-memory-mcp cli --json index_status --project {}",
@@ -1129,15 +1083,12 @@ mod tests {
             ]
         );
 
-        let system = CodeIntelligenceSystem {
-            commands: Mutex::new(Vec::new()),
-            indexed: true,
-        };
+        let system = code_intelligence_system(true);
         assert_eq!(
             setup_codebase_memory(&system, &project).unwrap(),
             Some("already indexed")
         );
-        assert_eq!(system.commands.lock().unwrap().len(), 1);
+        assert_eq!(system.calls().len(), 1);
         fs::remove_dir_all(project).unwrap();
     }
 
@@ -1312,15 +1263,13 @@ mod tests {
     fn beads_setup_uses_noninteractive_init() {
         // Capability/seam: Beads repository initialization. This fails if
         // loom invokes the instructional quickstart command instead. No expiry.
-        let system = RecordingSystem {
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = ScriptedSystem::new().only(&[]);
         let project = Path::new(env!("CARGO_MANIFEST_DIR"));
 
         assert!(setup_beads(&system, project).unwrap());
 
         assert_eq!(
-            *system.commands.lock().unwrap(),
+            system.calls(),
             [CommandSpec::new("br", ["init", "--quiet"])]
         );
     }

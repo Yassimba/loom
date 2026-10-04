@@ -1,36 +1,8 @@
 mod common;
 use common::install;
-use loom::{CommandResult, CommandSpec, InstallPlan, InstallStep, Operation, System};
+use loom::testing::{ok, ScriptedSystem};
+use loom::{InstallPlan, InstallStep, Operation};
 use std::fs;
-use std::path::PathBuf;
-
-struct FakeSystem {
-    home: PathBuf,
-}
-
-impl System for FakeSystem {
-    fn command_exists(&self, _name: &str) -> bool {
-        true
-    }
-
-    fn refresh_path(&self) {}
-
-    fn run(&self, _command: &CommandSpec) -> anyhow::Result<CommandResult> {
-        Ok(CommandResult {
-            success: true,
-            stdout: "User packages:\n  npm:pi-autoresearch\n  npm:@companion-ai/feynman\n".into(),
-            stderr: String::new(),
-        })
-    }
-
-    fn home_dir(&self) -> Option<PathBuf> {
-        Some(self.home.clone())
-    }
-
-    fn current_dir(&self) -> Option<PathBuf> {
-        Some(self.home.join("project"))
-    }
-}
 
 fn package(target: &str) -> InstallStep {
     InstallStep {
@@ -71,7 +43,14 @@ fn package_install_applies_pi_compatibility_fixes() {
         ],
     };
 
-    let report = install(&plan, &FakeSystem { home: home.clone() });
+    let system = ScriptedSystem::new()
+        .home(&home)
+        .cwd(home.join("project"))
+        .otherwise(ok(
+            "User packages:\n  npm:pi-autoresearch\n  npm:@companion-ai/feynman\n",
+        ));
+
+    let report = install(&plan, &system);
 
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert!(

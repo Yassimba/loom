@@ -2139,21 +2139,6 @@ fn adhd_question_does_not_change_add_or_uninstall() {
     }
 }
 
-struct AdhdInstallSystem(bool);
-impl crate::System for AdhdInstallSystem {
-    fn command_exists(&self, _: &str) -> bool {
-        true
-    }
-    fn refresh_path(&self) {}
-    fn run(&self, _: &crate::CommandSpec) -> anyhow::Result<crate::CommandResult> {
-        Ok(crate::CommandResult {
-            success: self.0,
-            stdout: "User packages:\n  npm:i-have-adhd".into(),
-            stderr: "package install failed".into(),
-        })
-    }
-}
-
 #[test]
 fn adhd_install_job_writes_only_after_success_and_preserves_existing_flag() {
     for (succeeds, cancelled, installed) in [
@@ -2177,7 +2162,12 @@ fn adhd_install_job_writes_only_after_success_and_preserves_existing_flag() {
         job.cancelled
             .store(cancelled, std::sync::atomic::Ordering::Relaxed);
         let (sender, receiver) = std::sync::mpsc::channel();
-        super::run_install_job(job, &AdhdInstallSystem(succeeds), &sender);
+        let system = crate::testing::ScriptedSystem::new().otherwise(crate::CommandResult {
+            success: succeeds,
+            stdout: "User packages:\n  npm:i-have-adhd".into(),
+            stderr: "package install failed".into(),
+        });
+        super::run_install_job(job, &system, &sender);
         assert_eq!(flag.exists(), (succeeds || installed) && !cancelled);
         assert_eq!(
             std::fs::read_to_string(config).unwrap(),

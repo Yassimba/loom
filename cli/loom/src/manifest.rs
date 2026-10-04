@@ -294,6 +294,7 @@ fn mise_install(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{failed, ok, ScriptedSystem};
 
     #[test]
     fn selected_confluence_includes_its_pinned_installer_once() {
@@ -426,32 +427,12 @@ gh = \"2.97.0\"
         assert!(!rendered.contains("gone"));
     }
 
-    struct TargetedInstallSystem {
-        commands: std::sync::Mutex<Vec<String>>,
-    }
-
-    impl System for TargetedInstallSystem {
-        fn command_exists(&self, _name: &str) -> bool {
-            true
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
-            self.commands.lock().unwrap().push(command.display());
-            Ok(crate::CommandResult {
-                success: command.args.len() > 2,
-                stdout: String::new(),
-                stderr: "unrelated selected tool failed".into(),
-            })
-        }
-    }
-
     #[test]
     fn mise_install_retries_only_requested_tools() {
-        let system = TargetedInstallSystem {
-            commands: std::sync::Mutex::new(Vec::new()),
-        };
+        // The full install fails; only the retry naming the tool succeeds.
+        let system = ScriptedSystem::new()
+            .on(&format!("mise install --yes {RTK_TOOL_KEY}"), ok(""))
+            .otherwise(failed("unrelated selected tool failed"));
         let requested = vec![RTK_TOOL_KEY.to_string()];
 
         mise_install(
@@ -462,7 +443,7 @@ gh = \"2.97.0\"
         .unwrap();
 
         assert_eq!(
-            *system.commands.lock().unwrap(),
+            system.shown(),
             ["mise install --yes", "mise install --yes github:rtk-ai/rtk"]
         );
     }

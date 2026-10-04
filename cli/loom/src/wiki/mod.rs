@@ -284,6 +284,7 @@ mod tests {
     use super::health::percent_encode_path;
     use super::product::*;
     use super::*;
+    use crate::testing::{ok, ScriptedSystem};
     use crate::ui::Out;
     use crate::CommandResult;
     use std::fs;
@@ -358,25 +359,6 @@ mod tests {
 
     #[test]
     fn inspect_requires_qmd_only_when_the_vault_selected_it() {
-        struct SharedOnly {
-            root: PathBuf,
-        }
-        impl System for SharedOnly {
-            fn command_exists(&self, name: &str) -> bool {
-                matches!(name, "pi" | "qmd")
-            }
-            fn refresh_path(&self) {}
-            fn home_dir(&self) -> Option<PathBuf> {
-                Some(self.root.clone())
-            }
-            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-                Ok(CommandResult {
-                    success: command.program == "pi",
-                    stdout: "User packages:\nProject packages:\n".into(),
-                    stderr: String::new(),
-                })
-            }
-        }
         let root = temp("optional-qmd");
         let skill = root.join(".agents/skills/qmd");
         fs::create_dir_all(&skill).unwrap();
@@ -384,7 +366,15 @@ mod tests {
         let selection = crate::manifest::conf_d_target(&root);
         fs::create_dir_all(selection.parent().unwrap()).unwrap();
         fs::write(&selection, "[tools]\n\"npm:@tobilu/qmd\" = \"1\"\n").unwrap();
-        let system = SharedOnly { root: root.clone() };
+        let listing = "User packages:\nProject packages:\n";
+        let system = ScriptedSystem::new()
+            .only(&["pi", "qmd"])
+            .home(&root)
+            .on("pi", ok(listing))
+            .otherwise(CommandResult {
+                success: false,
+                ..ok(listing)
+            });
         let leftover = inspect_vault(
             &system,
             &VaultRecord {
@@ -452,10 +442,7 @@ mod tests {
                 }
             ]
         );
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         run_wiki(
             &WikiRequest {
                 operation: WikiOperation::Unregister,
@@ -473,42 +460,26 @@ mod tests {
         fs::remove_dir_all(home).unwrap();
     }
 
-    struct FakeSystem {
-        home: PathBuf,
-        commands: Mutex<Vec<CommandSpec>>,
-    }
-    impl System for FakeSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi" || name == "mise" || name == "python" || name == "qmd"
-        }
-        fn refresh_path(&self) {}
-        fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-            self.commands.lock().unwrap().push(command.clone());
-            let stdout = if command.program == "mise"
-                && command.args.first().map(String::as_str) == Some("where")
-            {
-                format!("{}\n", self.home.join("product/claude-obsidian").display())
-            } else if command.program == "pi"
-                && command.args.first().map(String::as_str) == Some("list")
-            {
-                "Project packages:\n  /product/claude-obsidian\n  npm:@companion-ai/feynman@0.3.47\n".into()
-            } else if command.program == "mise" && command.args.iter().any(|arg| arg == "doctor") {
-                r#"{"schema":"claude-obsidian.doctor.v1","ok":true}"#.into()
-            } else {
-                String::new()
-            };
-            Ok(CommandResult {
-                success: true,
-                stdout,
-                stderr: String::new(),
-            })
-        }
-        fn home_dir(&self) -> Option<PathBuf> {
-            Some(self.home.clone())
-        }
-        fn current_dir(&self) -> Option<PathBuf> {
-            Some(self.home.clone())
-        }
+    fn fake_system(home: &Path) -> ScriptedSystem {
+        ScriptedSystem::new()
+            .only(&["pi", "mise", "python", "qmd"])
+            .home(home)
+            .cwd(home)
+            .on(
+                "mise where",
+                ok(format!(
+                    "{}\n",
+                    home.join("product/claude-obsidian").display()
+                )),
+            )
+            .on(
+                "pi list",
+                ok("Project packages:\n  /product/claude-obsidian\n  npm:@companion-ai/feynman@0.3.47\n"),
+            )
+            .on(
+                "mise doctor",
+                ok(r#"{"schema":"claude-obsidian.doctor.v1","ok":true}"#),
+            )
     }
 
     #[test]
@@ -755,13 +726,10 @@ mod tests {
         let mut registry = WikiRegistry::default();
         registry.register(vault.clone(), true, false, false);
         registry.save(&home).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         let product = PathBuf::from("/product/claude-obsidian");
         install_packages(&system, &product, &vault, true).unwrap();
-        let commands = system.commands.into_inner().unwrap();
+        let commands = system.calls();
         assert_eq!(commands[0].cwd.as_deref(), Some(vault.as_path()));
         assert!(commands[1]
             .display()
@@ -791,16 +759,11 @@ mod tests {
         registry.register(missing.clone(), false, false, false);
         registry.register(present.clone(), false, false, false);
         registry.save(&home).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         assert!(!update_registered(&system, false, &Out::plain()));
         assert!(!missing.exists());
         assert!(system
-            .commands
-            .into_inner()
-            .unwrap()
+            .calls()
             .iter()
             .any(|command| command.program == "pi"
                 && command.cwd.as_deref() == Some(present.as_path())));
@@ -809,35 +772,13 @@ mod tests {
 
     #[test]
     fn reviewed_adoption_forwards_the_exact_hash_without_force() {
-        struct ReviewSystem {
-            commands: Mutex<Vec<CommandSpec>>,
-        }
-        impl System for ReviewSystem {
-            fn command_exists(&self, _name: &str) -> bool {
-                true
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-                let mut commands = self.commands.lock().unwrap();
-                commands.push(command.clone());
-                let stdout = if commands.len() == 1 {
-                    r#"{"schema":"claude-obsidian.adoption-plan.v1","status":"dry-run","changed_paths":[".claude-obsidian.json"],"approved_plan_sha256":"reviewed-hash"}"#.into()
-                } else {
-                    "{}".into()
-                };
-                Ok(CommandResult {
-                    success: true,
-                    stdout,
-                    stderr: String::new(),
-                })
-            }
-        }
         let root = temp("review-hash");
         let vault = root.join("vault");
         fs::create_dir_all(vault.join(".obsidian")).unwrap();
-        let system = ReviewSystem {
-            commands: Mutex::new(Vec::new()),
-        };
+        // The dry run returns the plan to review; applying it returns nothing.
+        let system = ScriptedSystem::new().on("mise --apply", ok("{}")).otherwise(ok(
+            r#"{"schema":"claude-obsidian.adoption-plan.v1","status":"dry-run","changed_paths":[".claude-obsidian.json"],"approved_plan_sha256":"reviewed-hash"}"#,
+        ));
 
         assert!(initialize_vault(
             &system,
@@ -847,7 +788,7 @@ mod tests {
             &mut |_, _| Ok(true),
         )
         .unwrap());
-        let commands = system.commands.into_inner().unwrap();
+        let commands = system.calls();
         assert_eq!(commands.len(), 2);
         assert!(commands[1]
             .args
@@ -1024,10 +965,7 @@ mod tests {
     fn relative_create_targets_are_made_absolute_before_review() {
         let home = temp("absolute-create");
         fs::create_dir_all(&home).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         assert_eq!(
             absolute_vault_target(&system, Path::new("New Vault"), true).unwrap(),
             home.canonicalize().unwrap().join("New Vault")
@@ -1040,10 +978,7 @@ mod tests {
         let home = temp("repair-unregistered");
         let vault = home.join("vault");
         fs::create_dir_all(&vault).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         let error = run_wiki(
             &WikiRequest {
                 operation: WikiOperation::Repair,
@@ -1061,7 +996,7 @@ mod tests {
         } else {
             "not registered"
         }));
-        assert!(system.commands.into_inner().unwrap().is_empty());
+        assert!(system.calls().is_empty());
         fs::remove_dir_all(home).unwrap();
     }
 
@@ -1071,10 +1006,7 @@ mod tests {
         let vault = root.join("vault");
         fs::create_dir_all(vault.join(".obsidian")).unwrap();
         fs::write(vault.join(".claude-obsidian.json"), "{}").unwrap();
-        let system = FakeSystem {
-            home: root.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&root);
         assert!(initialize_vault(
             &system,
             Path::new("/product"),
@@ -1083,7 +1015,7 @@ mod tests {
             &mut |_, _| Ok(true)
         )
         .unwrap());
-        let commands = system.commands.into_inner().unwrap();
+        let commands = system.calls();
         assert_eq!(commands.len(), 1);
         assert!(commands[0].args.iter().any(|arg| arg == "doctor"));
         fs::remove_dir_all(root).unwrap();

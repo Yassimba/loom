@@ -853,20 +853,6 @@ mod tests {
     fn project_install_rejects_a_symlink_before_writing() {
         use std::os::unix::fs::symlink;
 
-        struct NeverRun(PathBuf);
-        impl System for NeverRun {
-            fn command_exists(&self, _name: &str) -> bool {
-                false
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
-                panic!("symlink validation ran {}", command.display())
-            }
-            fn home_dir(&self) -> Option<PathBuf> {
-                Some(self.0.clone())
-            }
-        }
-
         let home = temp_home("project-install-symlink");
         let target = home.join("target");
         let project = home.join("project");
@@ -879,8 +865,9 @@ mod tests {
             &project,
         );
 
+        let system = crate::testing::ScriptedSystem::new().only(&[]).home(&home);
         let error = install_skills(
-            &NeverRun(home.clone()),
+            &system,
             &Repository::default(),
             &["tdd".into()],
             &destination,
@@ -888,6 +875,11 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("symlinked project"));
+        assert!(
+            system.calls().is_empty(),
+            "symlink validation ran {:?}",
+            system.shown()
+        );
         assert!(!target.join(".agents").exists());
         fs::remove_dir_all(&home).ok();
     }

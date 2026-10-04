@@ -343,6 +343,7 @@ pub(crate) fn run<T: Send>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::ScriptedSystem;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
@@ -389,22 +390,9 @@ mod tests {
 
     #[test]
     fn progress_keeps_the_three_latest_completed_stages() {
-        struct Fake;
-        impl System for Fake {
-            fn command_exists(&self, _: &str) -> bool {
-                true
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, _: &CommandSpec) -> Result<CommandResult> {
-                Ok(CommandResult {
-                    success: true,
-                    stdout: String::new(),
-                    stderr: String::new(),
-                })
-            }
-        }
+        let system = ScriptedSystem::new();
         let cancelled = AtomicBool::new(false);
-        let progress = ProgressSystem::new(&Fake, &cancelled, None);
+        let progress = ProgressSystem::new(&system, &cancelled, None);
 
         for command in ["update", "pull", "embed", "query"] {
             progress.run(&CommandSpec::new("qmd", [command])).unwrap();
@@ -444,23 +432,15 @@ mod tests {
     }
     #[test]
     fn scripted_work_has_no_terminal() {
-        struct Fake;
-        impl System for Fake {
-            fn command_exists(&self, _: &str) -> bool {
-                true
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, _: &CommandSpec) -> Result<CommandResult> {
-                unreachable!()
-            }
-        }
+        let system = ScriptedSystem::new();
         assert_eq!(
-            run(&Fake, false, "Refreshing Wiki Vault", |_, cancelled| {
+            run(&system, false, "Refreshing Wiki Vault", |_, cancelled| {
                 assert!(!cancelled.load(Ordering::Relaxed));
                 Ok(42)
             })
             .unwrap(),
             42
         );
+        assert!(system.calls().is_empty());
     }
 }
