@@ -1,8 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { scanFences } from "./fences.ts";
 import { toAnsi } from "./loom-mermaid/index.ts";
-import { type Drawn, drawDiagram, GUIDANCE } from "./shared.ts";
-import { drawArriving } from "./streaming.ts";
+import { type Drawn, drawMessage, GUIDANCE } from "./shared.ts";
 
 type TransformContext = {
   messageType: "user" | "assistant" | "assistant-thinking";
@@ -10,11 +8,6 @@ type TransformContext = {
   /** Draw completed statements while the message is still arriving. */
   isStreaming?: boolean;
 };
-
-function renderBlock(text: string, availableWidth: number): string | null {
-  const drawn = drawDiagram(text, availableWidth);
-  return drawn && `${ansiLines(drawn).map(codeSpan).join("  \n")}\n`;
-}
 
 /** The art as ANSI lines, its default diff borders dim. */
 function ansiLines({ art, dimStrokes }: Drawn): string[] {
@@ -41,16 +34,15 @@ function codeSpan(line: string): string {
 }
 
 export function transformMermaidForDocument(markdown: string, availableWidth = 100): string {
-  return scanFences(markdown)
-    .map(({ raw, mermaid }) => {
-      if (!mermaid || mermaid.nested) return raw;
-      const drawn = drawDiagram(mermaid.source, availableWidth);
-      if (drawn === null) return raw;
+  return drawMessage(markdown, availableWidth, false)
+    .map(({ raw, indent, drawing }) => {
+      // A document fence has no indented form, so a list item's diagram stays source.
+      if (drawing === null || drawing === "pending" || indent !== "") return raw;
       // The document viewer accepts SGR styling only, not terminal hyperlinks.
-      const styled = drawn.art.styled.map((row) =>
+      const styled = drawing.art.styled.map((row) =>
         row.map((span) => ({ ...span, href: undefined })),
       );
-      const text = ansiLines({ ...drawn, art: { ...drawn.art, styled } }).join("\n");
+      const text = ansiLines({ ...drawing, art: { ...drawing.art, styled } }).join("\n");
       const longestRun = Math.max(
         0,
         ...Array.from(text.matchAll(/`+/g), (match) => match[0].length),
@@ -64,24 +56,12 @@ export function transformMermaidForDocument(markdown: string, availableWidth = 1
 export function transformMermaidMarkdown(markdown: string, context: TransformContext): string {
   if (context.messageType === "assistant-thinking") return markdown;
 
-  return scanFences(markdown)
-    .map(({ raw, mermaid }) => {
-      if (!mermaid) return raw;
-      if (mermaid.nested) {
-        const out = mermaid.closed ? renderBlock(mermaid.source, context.availableWidth) : null;
-        if (out === null) return raw;
-        const lines = out.trimEnd().split("\n");
-        return (
-          lines.map((line) => mermaid.indent + line).join("\n") + (raw.endsWith("\n") ? "\n" : "")
-        );
-      }
-      if (context.isStreaming === true && !mermaid.closed) {
-        const out = drawArriving(mermaid.source, (source) =>
-          renderBlock(source, context.availableWidth),
-        );
-        return out === "pending" ? "_Drawing Mermaid…_\n" : (out ?? raw);
-      }
-      return renderBlock(mermaid.source, context.availableWidth) ?? raw;
+  return drawMessage(markdown, context.availableWidth, context.isStreaming === true)
+    .map(({ raw, indent, drawing }) => {
+      if (drawing === null) return raw;
+      if (drawing === "pending") return "_Drawing Mermaid…_\n";
+      const lines = ansiLines(drawing).map((line) => indent + codeSpan(line));
+      return lines.join("  \n") + (indent === "" || raw.endsWith("\n") ? "\n" : "");
     })
     .join("");
 }

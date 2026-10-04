@@ -1,7 +1,9 @@
 /** What Pi and the Claude Code mod both do around the renderer. */
 
+import { type Fence, scanFences } from "./fences.ts";
 import { render } from "./loom-mermaid/index.ts";
 import type { MermaidArt } from "./loom-mermaid/types.ts";
+import { drawArriving } from "./streaming.ts";
 
 /** The system prompt note that makes the model reach for Mermaid and the diff markers. */
 export const GUIDANCE = `Use fenced \`mermaid\` blocks; they render automatically in the user’s session. Always use Mermaid when it is easier to read than prose. Choose by subject: architecture for deployed services, flowchart for dependencies/decisions, sequence for interactions, state for lifecycles, ER/class for models, mindmap for hierarchies, timeline/git graph for history, pie for proportions. Use complementary diagrams when explaining multiple aspects. Keep diagram labels short. Mark changes by appending :::red (removed), :::green (added), or :::orange (changed) after the node, outside its label brackets (A[Added]:::green, never A[Added :::green]); their default colors are automatic—do not add classDef for these diff markers. In general prefer colored outlines to logically group things (if there are no changes involved).`;
@@ -35,7 +37,7 @@ const drawn = new Map<string, Drawn | null>();
 const CACHE_SIZE = 64;
 
 /** The diagram drawn within `columns`, or null when the source does not draw or fit. */
-export function drawDiagram(source: string, columns: number): Drawn | null {
+function drawDiagram(source: string, columns: number): Drawn | null {
   const key = `${columns}\0${source.trimEnd()}`;
   const hit = drawn.get(key);
   if (hit !== undefined) {
@@ -49,4 +51,31 @@ export function drawDiagram(source: string, columns: number): Drawn | null {
   drawn.set(key, out);
   if (drawn.size > CACHE_SIZE) drawn.delete(drawn.keys().next().value as string);
   return out;
+}
+
+/**
+ * One run of a message: text to show as written (`drawing` null), a diagram,
+ * or "pending" for a fence that has arrived too little to draw. A fence in a
+ * list item carries the item's `indent`.
+ */
+export type Part = { raw: string; indent: string; drawing: Drawn | "pending" | null };
+
+function draw(fence: Fence, columns: number, arriving: boolean): Part["drawing"] {
+  if (fence.closed || !(arriving || fence.nested)) return drawDiagram(fence.source, columns);
+  // A list item's fence draws only once closed.
+  return fence.nested ? null : drawArriving(fence.source, (source) => drawDiagram(source, columns));
+}
+
+/**
+ * Split a message at its Mermaid fences and draw each within `columns`.
+ * `arriving` says the message is still streaming, so an unclosed fence draws
+ * its newest complete statements; otherwise it draws whole. A fence that does
+ * not draw or fit stays text.
+ */
+export function drawMessage(markdown: string, columns: number, arriving: boolean): Part[] {
+  return scanFences(markdown).map(({ raw, mermaid }) => ({
+    raw,
+    indent: mermaid?.indent ?? "",
+    drawing: mermaid ? draw(mermaid, columns - mermaid.indent.length, arriving) : null,
+  }));
 }

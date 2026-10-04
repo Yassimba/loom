@@ -1,9 +1,7 @@
 import type { Register, TextProps } from "claude-code";
-import { type Fence, scanFences } from "../src/fences.ts";
 import { resolveClassStyle } from "../src/loom-mermaid/class-style.ts";
 import type { Role } from "../src/loom-mermaid/types.ts";
-import { type Drawn, drawDiagram, GUIDANCE } from "../src/shared.ts";
-import { drawArriving } from "../src/streaming.ts";
+import { type Drawn, drawMessage, GUIDANCE } from "../src/shared.ts";
 
 /** A surface that has not measured draws at the document transformer's width. */
 const DEFAULT_COLUMNS = 100;
@@ -32,12 +30,6 @@ function runs({ art, dimStrokes }: Drawn) {
   );
 }
 
-/** Null leaves the source as written; a nested fence draws only once closed. */
-function draw(fence: Fence, columns: number): Drawn | "pending" | null {
-  if (fence.closed) return drawDiagram(fence.source, columns);
-  return fence.nested ? null : drawArriving(fence.source, (source) => drawDiagram(source, columns));
-}
-
 export const register: Register = (on) => {
   on("prompt.compose", async (_$, e, next) => {
     const { sections } = await next(e);
@@ -47,12 +39,8 @@ export const register: Register = (on) => {
   });
 
   on("ui.render", { component: "AssistantMessage" }, ($, e, next) => {
-    const columns = e.viewport?.columns ?? DEFAULT_COLUMNS;
-    const parts = scanFences(e.props.text).map(({ raw, mermaid }) => ({
-      raw,
-      indent: mermaid?.indent ?? "",
-      drawing: mermaid ? draw(mermaid, columns - mermaid.indent.length) : null,
-    }));
+    // The site carries no streaming flag, so an unclosed fence is one still arriving.
+    const parts = drawMessage(e.props.text, e.viewport?.columns ?? DEFAULT_COLUMNS, true);
     if (parts.every((part) => part.drawing === null)) return next(e);
 
     const { Box, Link, Markdown, Text } = $.ui.resolve(e);
