@@ -186,12 +186,12 @@ impl Wizard {
             if wiki.operation.is_some() {
                 required.push(Line::styled("Wiki essentials", Style::new().bold()));
                 required.push(Line::from("Vault-local claude-obsidian. Shared pinned runtimes: Python, Pi, claude-obsidian."));
-                if wiki.record.qmd {
+                if wiki.record.capabilities.qmd {
                     required.push(Line::from(
                         "QMD: shared tool + Vault-local skill and index; first setup can download models.",
                     ));
                 }
-                if wiki.record.confluence {
+                if wiki.record.capabilities.confluence {
                     required.push(Line::from(
                         "Confluence: shared exporter + Vault-local skill; credentials unchanged.",
                     ));

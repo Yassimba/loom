@@ -109,9 +109,11 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
         .into_iter()
         .map(|path| VaultRecord {
             path: path.clone(),
-            feynman: true,
-            confluence: true,
-            qmd: true,
+            capabilities: loom::wiki::Capabilities {
+                feynman: true,
+                confluence: true,
+                qmd: true,
+            },
         })
         .collect();
     registry.save(&home).unwrap();
@@ -209,8 +211,8 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
     );
 
     // Unselected companions are optional; global copies still don't count as local installs.
-    registry.vaults[0].feynman = false;
-    registry.vaults[0].confluence = false;
+    registry.vaults[0].capabilities.feynman = false;
+    registry.vaults[0].capabilities.confluence = false;
     registry.save(&home).unwrap();
     fs::write(
         ready.join(".pi/settings.json"),

@@ -30,9 +30,7 @@ fn request(operation: WikiOperation, vault: impl AsRef<Path>) -> WikiRequest {
     WikiRequest {
         operation,
         vault: vault.as_ref().to_path_buf(),
-        feynman: false,
-        confluence: false,
-        qmd: false,
+        capabilities: loom::wiki::Capabilities::default(),
         yes: true,
     }
 }

@@ -1,7 +1,7 @@
 //! Vault-scoped picks inside the setup chooser. Selecting a folder never writes to it.
 use super::render::{bordered, ListHit, ACCENT, ERR, TITLE};
 use super::state::{clamp_step, movement, Action, Group, Item, Pane, Screen, Wizard};
-use crate::wiki::{VaultHealth, VaultRecord, WikiOperation, WikiRegistry};
+use crate::wiki::{Capability, Check, VaultHealth, VaultRecord, WikiOperation, WikiRegistry};
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -12,41 +12,40 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+/// One row of a Vault's chooser: the essentials, an optional capability, or a skill.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) enum Capability {
+pub(super) enum Pick {
     Essentials,
-    Feynman,
-    Confluence,
-    Qmd,
+    Capability(Capability),
     Skill(&'static str),
 }
 
-pub(super) fn wiki_capabilities() -> &'static [Capability] {
-    static LIST: OnceLock<Vec<Capability>> = OnceLock::new();
+pub(super) fn wiki_capabilities() -> &'static [Pick] {
+    static LIST: OnceLock<Vec<Pick>> = OnceLock::new();
     LIST.get_or_init(|| {
         let mut list = vec![
-            Capability::Essentials,
-            Capability::Feynman,
-            Capability::Confluence,
-            Capability::Qmd,
+            Pick::Essentials,
+            Pick::Capability(Capability::Feynman),
+            Pick::Capability(Capability::Confluence),
+            Pick::Capability(Capability::Qmd),
         ];
         list.extend(
             serde_json::from_str::<Vec<&'static str>>(include_str!("../../wiki-skills.json"))
                 .expect("embedded wiki-skills.json is invalid")
                 .into_iter()
-                .map(Capability::Skill),
+                .map(Pick::Skill),
         );
         list
     })
 }
 
-impl Capability {
+impl Pick {
     pub fn label(self) -> &'static str {
         match self {
             Self::Essentials => "Wiki essentials · claude-obsidian",
-            Self::Feynman => "Feynman · research companion",
-            Self::Confluence => "Confluence · export notes",
-            Self::Qmd => "QMD · local search",
+            Self::Capability(Capability::Feynman) => "Feynman · research companion",
+            Self::Capability(Capability::Confluence) => "Confluence · export notes",
+            Self::Capability(Capability::Qmd) => "QMD · local search",
             Self::Skill(name) => name,
         }
     }
@@ -55,7 +54,7 @@ impl Capability {
 #[derive(Default)]
 pub(super) struct WikiPicks {
     pub operation: Option<WikiOperation>,
-    pub selected: BTreeSet<Capability>,
+    pub selected: BTreeSet<Pick>,
 }
 
 #[derive(Default)]
@@ -115,15 +114,13 @@ impl WikiBrowser {
             self.cursor = self.vaults.len();
             self.vaults.push(VaultRecord {
                 path: path.clone(),
-                feynman: false,
-                confluence: false,
-                qmd: false,
+                capabilities: crate::wiki::Capabilities::default(),
             });
             self.pending.insert(
                 path,
                 WikiPicks {
                     operation: Some(operation),
-                    selected: BTreeSet::from([Capability::Essentials]),
+                    selected: BTreeSet::from([Pick::Essentials]),
                 },
             );
         }
@@ -170,42 +167,39 @@ impl WikiBrowser {
         Some(record)
     }
 
-    fn health_ready(&self, record: &VaultRecord, label: &str) -> bool {
-        self.health.get(&record.path).is_some_and(|health| {
-            health
-                .rows
-                .iter()
-                .any(|(mark, name, _)| *name == label && matches!(mark, crate::ui::Mark::Ok))
-        })
+    fn health_ready(&self, record: &VaultRecord, check: Check) -> bool {
+        self.health
+            .get(&record.path)
+            .is_some_and(|health| health.ready(check))
     }
 
-    pub fn installed(&self, record: &VaultRecord, capability: Capability) -> bool {
+    pub fn installed(&self, record: &VaultRecord, capability: Pick) -> bool {
         match capability {
-            Capability::Essentials => {
+            Pick::Essentials => {
                 !self
                     .pending
                     .get(&record.path)
                     .is_some_and(|p| p.operation.is_some())
-                    && self.health_ready(record, "claude-obsidian")
+                    && self.health_ready(record, Check::Core)
             }
-            Capability::Feynman => self.health_ready(record, "Feynman"),
-            Capability::Confluence => self.health_ready(record, "Confluence"),
-            Capability::Qmd => self.health_ready(record, "qmd"),
-            Capability::Skill(name) => {
+            Pick::Capability(capability) => {
+                self.health_ready(record, Check::Capability(capability))
+            }
+            Pick::Skill(name) => {
                 crate::skills::skill_present_in(&record.path.join(".agents/skills"), name)
             }
         }
     }
 
-    pub fn selected(&self, record: &VaultRecord) -> BTreeSet<Capability> {
+    pub fn selected(&self, record: &VaultRecord) -> BTreeSet<Pick> {
         let mut selected = self
             .pending
             .get(&record.path)
             .map(|p| p.selected.clone())
             .unwrap_or_default();
         selected.retain(|capability| !self.installed(record, *capability));
-        if !selected.is_empty() && !self.installed(record, Capability::Essentials) {
-            selected.insert(Capability::Essentials);
+        if !selected.is_empty() && !self.installed(record, Pick::Essentials) {
+            selected.insert(Pick::Essentials);
         }
         selected
     }
@@ -225,7 +219,7 @@ impl WikiBrowser {
             .sum()
     }
 
-    pub fn capabilities(&self) -> Vec<Capability> {
+    pub fn capabilities(&self) -> Vec<Pick> {
         let query = self.search.as_ref().map(|query| query.to_lowercase());
         wiki_capabilities()
             .iter()
@@ -385,7 +379,7 @@ impl WikiBrowser {
             .map(|capability| {
                 let (mark, color) = if self.installed(record, capability) {
                     ("✓", Color::Green)
-                } else if capability == Capability::Essentials
+                } else if capability == Pick::Essentials
                     && selected.contains(&capability)
                     && self
                         .pending
@@ -433,11 +427,13 @@ impl WikiBrowser {
                 "✓ Already installed in this Wiki.".into()
             } else {
                 match current {
-                    Some(Capability::Qmd) if self.health_ready(record, "QMD (shared)") => {
+                    Some(Pick::Capability(Capability::Qmd))
+                        if self.health_ready(record, Check::SharedQmd) =>
+                    {
                         "QMD is installed on this machine. Select it to enable this Wiki.".into()
                     }
-                    Some(Capability::Confluence)
-                        if self.health_ready(record, "Confluence (shared)") =>
+                    Some(Pick::Capability(Capability::Confluence))
+                        if self.health_ready(record, Check::SharedConfluence) =>
                     {
                         "Confluence is installed on this machine. Select it for this Wiki.".into()
                     }

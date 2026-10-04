@@ -12,10 +12,10 @@ mod health;
 mod product;
 mod registry;
 
-pub(crate) use health::{inspect_vault, obsidian_installed, VaultHealth};
+pub(crate) use health::{inspect_vault, obsidian_installed, Check, VaultHealth};
 pub use health::{status_registered, update_registered};
 pub(crate) use product::absolute_vault_target;
-pub use registry::{VaultRecord, WikiRegistry};
+pub use registry::{Capabilities, Capability, VaultRecord, WikiRegistry};
 
 pub const PRODUCT_KEY: &str = "github:AgriciDaniel/claude-obsidian";
 pub const PYTHON_KEY: &str = "python";
@@ -38,9 +38,7 @@ pub enum WikiOperation {
 pub struct WikiRequest {
     pub operation: WikiOperation,
     pub vault: PathBuf,
-    pub feynman: bool,
-    pub confluence: bool,
-    pub qmd: bool,
+    pub capabilities: Capabilities,
     pub yes: bool,
 }
 
@@ -105,7 +103,7 @@ pub(crate) fn setup_with_confirmation(
         "Vault setup, repair, and Pi launch run in WSL2 on Windows. Open Ubuntu, change to the Vault's WSL path, and rerun this command."
     );
     let home = system.home_dir().context("home directory is unavailable")?;
-    let (vault_target, feynman, confluence, qmd) = match request.operation {
+    let (vault_target, capabilities) = match request.operation {
         WikiOperation::Status => return Ok(WikiOutcome::Finished(status_registered(system))),
         WikiOperation::Unregister => {
             let mut registry = WikiRegistry::load(&home)?;
@@ -143,12 +141,7 @@ pub(crate) fn setup_with_confirmation(
                 )?;
                 return Ok(WikiOutcome::Finished(true));
             }
-            (
-                record.path,
-                record.feynman || request.feynman,
-                record.confluence || request.confluence,
-                record.qmd || request.qmd,
-            )
+            (record.path, record.capabilities.union(request.capabilities))
         }
         WikiOperation::Create | WikiOperation::Adopt => (
             absolute_vault_target(
@@ -156,11 +149,14 @@ pub(crate) fn setup_with_confirmation(
                 &request.vault,
                 request.operation == WikiOperation::Create,
             )?,
-            request.feynman,
-            request.confluence,
-            request.qmd,
+            request.capabilities,
         ),
     };
+    let Capabilities {
+        feynman,
+        confluence,
+        qmd,
+    } = capabilities;
     let initializing = matches!(
         request.operation,
         WikiOperation::Create | WikiOperation::Adopt
@@ -174,7 +170,7 @@ pub(crate) fn setup_with_confirmation(
             let cancelled = if inline { cancelled } else { local_cancelled };
             manifest::sync_selected_from(
                 system,
-                &wiki_tool_keys(qmd, confluence),
+                &wiki_tool_keys(capabilities),
                 cancelled,
                 &repository,
             )
@@ -201,7 +197,7 @@ pub(crate) fn setup_with_confirmation(
             crate::skills::install_skills(
                 system,
                 &repository,
-                &wiki_skill_names(confluence),
+                &wiki_skill_names(capabilities),
                 &crate::skills::SkillDestination {
                     agents: vec![crate::skills::SkillAgent::AgentsStandard],
                     scope: crate::skills::SkillScope::Project,
@@ -223,7 +219,7 @@ pub(crate) fn setup_with_confirmation(
     }
     notes.push(search_note);
     let mut registry = WikiRegistry::load(&home)?;
-    registry.register(vault.clone(), feynman, confluence, qmd);
+    registry.register(vault.clone(), capabilities);
     registry.save(&home)?;
     if confluence && interactive {
         crate::wiki_confluence::configure(system)?;
@@ -332,21 +328,19 @@ mod tests {
             &system,
             &VaultRecord {
                 path: root.clone(),
-                feynman: true,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default().with(Capability::Feynman),
             },
         );
         assert!(!health.healthy);
-        for (label, expected) in [
-            ("qmd", crate::ui::Mark::Off),
-            ("Feynman", crate::ui::Mark::Bad),
-            ("QMD (shared)", crate::ui::Mark::Ok),
+        for (check, expected) in [
+            (Check::Capability(Capability::Qmd), crate::ui::Mark::Off),
+            (Check::Capability(Capability::Feynman), crate::ui::Mark::Bad),
+            (Check::SharedQmd, crate::ui::Mark::Ok),
         ] {
             assert!(health
-                .rows
+                .checks
                 .iter()
-                .any(|(mark, name, _)| *name == label && *mark == expected));
+                .any(|(name, mark, _)| *name == check && *mark == expected));
         }
         assert!(system
             .commands
@@ -379,9 +373,7 @@ mod tests {
             &system,
             &VaultRecord {
                 path: root.clone(),
-                feynman: false,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default(),
             },
         );
         fs::remove_file(skill.join("SKILL.md")).unwrap();
@@ -389,19 +381,18 @@ mod tests {
             &system,
             &VaultRecord {
                 path: root.clone(),
-                feynman: false,
-                confluence: false,
-                qmd: true,
+                capabilities: Capabilities::default().with(Capability::Qmd),
             },
         );
+        let qmd = Check::Capability(Capability::Qmd);
         assert!(leftover
-            .rows
+            .checks
             .iter()
-            .any(|(mark, name, _)| *name == "qmd" && matches!(mark, crate::ui::Mark::Off)));
+            .any(|(name, mark, _)| *name == qmd && matches!(mark, crate::ui::Mark::Off)));
         assert!(selected
-            .rows
+            .checks
             .iter()
-            .any(|(mark, name, _)| *name == "qmd" && matches!(mark, crate::ui::Mark::Bad)));
+            .any(|(name, mark, _)| *name == qmd && matches!(mark, crate::ui::Mark::Bad)));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -414,14 +405,17 @@ mod tests {
         fs::create_dir_all(&b).unwrap();
         fs::write(a.join("note.md"), "knowledge").unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(b.clone(), false, false, false);
-        registry.register(a.clone(), false, false, false);
-        registry.register(a.clone(), true, false, false);
+        let feynman = Capabilities::default().with(Capability::Feynman);
+        registry.register(b.clone(), Capabilities::default());
+        registry.register(a.clone(), Capabilities::default());
+        registry.register(a.clone(), feynman);
         registry.vaults.push(VaultRecord {
             path: a.clone(),
-            feynman: false,
-            confluence: true,
-            qmd: true,
+            capabilities: Capabilities {
+                feynman: false,
+                confluence: true,
+                qmd: true,
+            },
         });
         registry.save(&home).unwrap();
         let loaded = WikiRegistry::load(&home).unwrap();
@@ -430,15 +424,11 @@ mod tests {
             [
                 VaultRecord {
                     path: a.clone(),
-                    feynman: true,
-                    confluence: false,
-                    qmd: false
+                    capabilities: feynman,
                 },
                 VaultRecord {
                     path: b.clone(),
-                    feynman: false,
-                    confluence: false,
-                    qmd: false
+                    capabilities: Capabilities::default(),
                 }
             ]
         );
@@ -447,9 +437,7 @@ mod tests {
             &WikiRequest {
                 operation: WikiOperation::Unregister,
                 vault: PathBuf::from("a"),
-                feynman: false,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default(),
                 yes: true,
             },
             &system,
@@ -484,15 +472,68 @@ mod tests {
 
     #[test]
     fn confluence_is_only_installed_when_selected_for_the_vault() {
-        assert!(!wiki_tool_keys(false, false)
+        let none = Capabilities::default();
+        let confluence = none.with(Capability::Confluence);
+        assert!(!wiki_tool_keys(none)
             .iter()
             .any(|key| key == CONFLUENCE_KEY || key == QMD_KEY));
-        assert!(wiki_tool_keys(false, true)
+        assert!(wiki_tool_keys(confluence)
             .iter()
             .any(|key| key == CONFLUENCE_KEY));
-        assert!(wiki_tool_keys(true, false).iter().any(|key| key == QMD_KEY));
-        assert!(wiki_skill_names(false).is_empty());
-        assert_eq!(wiki_skill_names(true), [CONFLUENCE_SKILL]);
+        assert!(wiki_tool_keys(none.with(Capability::Qmd))
+            .iter()
+            .any(|key| key == QMD_KEY));
+        assert!(wiki_skill_names(none).is_empty());
+        assert_eq!(wiki_skill_names(confluence), [CONFLUENCE_SKILL]);
+    }
+
+    #[test]
+    fn registry_keeps_its_original_record_fields_on_disk() {
+        let home = temp("registry-format");
+        let path = WikiRegistry::path(&home);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // Written before Confluence and QMD existed: only `feynman` is present.
+        fs::write(
+            &path,
+            r#"{"schemaVersion":1,"vaults":[{"path":"/old/vault","feynman":true}]}"#,
+        )
+        .unwrap();
+        let mut registry = WikiRegistry::load(&home).unwrap();
+        assert_eq!(
+            registry.vaults,
+            [VaultRecord {
+                path: PathBuf::from("/old/vault"),
+                capabilities: Capabilities::default().with(Capability::Feynman),
+            }]
+        );
+        registry.register(
+            PathBuf::from("/old/vault"),
+            registry.vaults[0]
+                .capabilities
+                .union(Capabilities::default().with(Capability::Qmd)),
+        );
+        registry.save(&home).unwrap();
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            r#"{
+  "schemaVersion": 1,
+  "vaults": [
+    {
+      "path": "/old/vault",
+      "feynman": true,
+      "confluence": false,
+      "qmd": true
+    }
+  ]
+}"#
+        );
+        fs::write(
+            &path,
+            r#"{"schemaVersion":1,"vaults":[{"path":"/old/vault"}]}"#,
+        )
+        .unwrap();
+        assert!(WikiRegistry::load(&home).is_err());
+        fs::remove_dir_all(home).unwrap();
     }
 
     #[test]
@@ -724,7 +765,10 @@ mod tests {
         )
         .unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(vault.clone(), true, false, false);
+        registry.register(
+            vault.clone(),
+            Capabilities::default().with(Capability::Feynman),
+        );
         registry.save(&home).unwrap();
         let system = fake_system(&home);
         let product = PathBuf::from("/product/claude-obsidian");
@@ -756,8 +800,8 @@ mod tests {
         let missing = home.join("missing");
         fs::create_dir_all(&present).unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(missing.clone(), false, false, false);
-        registry.register(present.clone(), false, false, false);
+        registry.register(missing.clone(), Capabilities::default());
+        registry.register(present.clone(), Capabilities::default());
         registry.save(&home).unwrap();
         let system = fake_system(&home);
         assert!(!update_registered(&system, false, &Out::plain()));
@@ -983,9 +1027,7 @@ mod tests {
             &WikiRequest {
                 operation: WikiOperation::Repair,
                 vault,
-                feynman: false,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default(),
                 yes: true,
             },
             &system,

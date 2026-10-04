@@ -1366,15 +1366,13 @@ fn vault_browser_wizard() -> Wizard {
 
 #[test]
 fn wiki_browser_keeps_three_lanes_and_inspects_only_the_selected_vault() {
-    use crate::wiki::{VaultHealth, VaultRecord};
+    use crate::wiki::{Capability, Check, VaultHealth, VaultRecord};
     let mut wizard = vault_browser_wizard();
     wizard.selected[0] = true; // An unrelated setup choice survives Wiki navigation.
     let picks = wizard.selected.clone();
     let records = ["/tmp/Vault A", "/tmp/Vault B"].map(|path| VaultRecord {
         path: path.into(),
-        feynman: false,
-        confluence: false,
-        qmd: false,
+        capabilities: crate::wiki::Capabilities::default(),
     });
     let browser = &mut wizard.wiki;
     browser.vaults = records.to_vec();
@@ -1388,16 +1386,20 @@ fn wiki_browser_keeps_three_lanes_and_inspects_only_the_selected_vault() {
         records[0].path.clone(),
         VaultHealth {
             healthy: false,
-            rows: vec![
+            checks: vec![
                 (
+                    Check::Capability(Capability::Feynman),
                     crate::ui::Mark::Ok,
-                    "Feynman",
                     "A-only Vault package".into(),
                 ),
-                (crate::ui::Mark::Off, "qmd", "missing from this Wiki".into()),
                 (
+                    Check::Capability(Capability::Qmd),
+                    crate::ui::Mark::Off,
+                    "missing from this Wiki".into(),
+                ),
+                (
+                    Check::SharedQmd,
                     crate::ui::Mark::Ok,
-                    "QMD (shared)",
                     "installed on this machine".into(),
                 ),
             ],
@@ -1461,9 +1463,7 @@ fn wiki_browser_selects_new_registrations_and_does_not_replace_a_broken_registry
     let root = std::env::temp_dir().join(format!("loom-vault-browser-{}", std::process::id()));
     let record = |name: &str| crate::wiki::VaultRecord {
         path: root.join(name),
-        feynman: false,
-        confluence: false,
-        qmd: false,
+        capabilities: crate::wiki::Capabilities::default(),
     };
     let mut registry = crate::wiki::WikiRegistry::default();
     registry.vaults.push(record("Old Wiki"));

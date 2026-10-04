@@ -1,4 +1,4 @@
-use crate::wiki::{VaultRecord, WikiOperation, WikiRegistry, WikiRequest};
+use crate::wiki::{Capabilities, VaultRecord, WikiOperation, WikiRegistry, WikiRequest};
 use crate::{CommandSpec, System};
 use anyhow::{Context, Result};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -43,9 +43,7 @@ struct WikiWizard {
     cursor: usize,
     operation: WikiOperation,
     path: String,
-    feynman: bool,
-    confluence: bool,
-    qmd: bool,
+    capabilities: Capabilities,
     vaults: Vec<VaultRecord>,
     selected_vault: usize,
     obsidian_installed: bool,
@@ -68,9 +66,10 @@ impl WikiWizard {
             cursor: 0,
             operation: WikiOperation::Create,
             path: format!("{}/", current.display()),
-            feynman: feynman_default,
-            confluence: false,
-            qmd: false,
+            capabilities: Capabilities {
+                feynman: feynman_default,
+                ..Capabilities::default()
+            },
             vaults,
             selected_vault: 0,
             obsidian_installed,
@@ -185,9 +184,7 @@ impl WikiWizard {
             vault: record
                 .map(|record| record.path.clone())
                 .unwrap_or_else(|| PathBuf::from(self.path.trim())),
-            feynman: record.map_or(self.feynman, |record| record.feynman),
-            confluence: record.map_or(self.confluence, |record| record.confluence),
-            qmd: record.map_or(self.qmd, |record| record.qmd),
+            capabilities: record.map_or(self.capabilities, |record| record.capabilities),
             yes: false,
         }
     }
@@ -256,9 +253,9 @@ impl WikiWizard {
                 KeyCode::Up | KeyCode::Char('k') => self.step(-1, 3),
                 KeyCode::Down | KeyCode::Char('j') => self.step(1, 3),
                 KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right => match self.cursor {
-                    0 => self.feynman = !self.feynman,
-                    1 => self.confluence = !self.confluence,
-                    _ => self.qmd = !self.qmd,
+                    0 => self.capabilities.feynman = !self.capabilities.feynman,
+                    1 => self.capabilities.confluence = !self.capabilities.confluence,
+                    _ => self.capabilities.qmd = !self.capabilities.qmd,
                 },
                 KeyCode::Enter => return self.enter(),
                 _ => {}
@@ -523,13 +520,17 @@ impl WikiWizard {
                     self.shown(std::path::Path::new(self.path.trim()))
                 )),
                 Line::from(""),
-                option(self.feynman, "Feynman research tools", self.cursor == 0),
                 option(
-                    self.confluence,
+                    self.capabilities.feynman,
+                    "Feynman research tools",
+                    self.cursor == 0,
+                ),
+                option(
+                    self.capabilities.confluence,
                     "Confluence Markdown exporter",
                     self.cursor == 1,
                 ),
-                option(self.qmd, "QMD local search", self.cursor == 2),
+                option(self.capabilities.qmd, "QMD local search", self.cursor == 2),
                 Line::from(""),
                 Line::styled("Selections are enabled for this Vault.", Style::new().dim()),
             ])
@@ -554,7 +555,7 @@ impl WikiWizard {
                 Line::from(""),
                 Line::from(format!(
                     "Feynman    {}",
-                    if self.feynman {
+                    if self.capabilities.feynman {
                         "included"
                     } else {
                         "not selected"
@@ -562,7 +563,7 @@ impl WikiWizard {
                 )),
                 Line::from(format!(
                     "Confluence {}",
-                    if self.confluence {
+                    if self.capabilities.confluence {
                         "included"
                     } else {
                         "not selected"
@@ -570,10 +571,14 @@ impl WikiWizard {
                 )),
                 Line::from(format!(
                     "QMD        {}",
-                    if self.qmd { "included" } else { "not selected" }
+                    if self.capabilities.qmd {
+                        "included"
+                    } else {
+                        "not selected"
+                    }
                 )),
                 Line::from(""),
-                Line::from(if self.qmd {
+                Line::from(if self.capabilities.qmd {
                     "First QMD search setup can download about 2 GB of models."
                 } else {
                     "QMD search is optional; pick it only if this Vault should index locally."
@@ -611,11 +616,11 @@ impl WikiWizard {
 
 pub(crate) fn health_lines(health: &crate::wiki::VaultHealth) -> Vec<Line<'static>> {
     health
-        .rows
+        .checks
         .iter()
-        .map(|(mark, label, detail)| {
+        .map(|(check, mark, detail)| {
             Line::styled(
-                format!("{} {label}: {detail}", mark.glyph()),
+                format!("{} {}: {detail}", mark.glyph(), check.label()),
                 Style::new().fg(mark.color()),
             )
         })
@@ -1072,8 +1077,8 @@ mod tests {
         };
 
         assert_eq!(request.vault, root.join("Notes"));
-        assert!(request.feynman);
-        assert!(request.confluence);
+        assert!(request.capabilities.feynman);
+        assert!(request.capabilities.confluence);
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1148,9 +1153,7 @@ mod tests {
     fn unregister_requires_a_second_enter_and_keeps_the_registered_path() {
         let record = VaultRecord {
             path: PathBuf::from("/tmp/Vault"),
-            feynman: false,
-            confluence: false,
-            qmd: false,
+            capabilities: Capabilities::default(),
         };
         let mut wizard = WikiWizard::new(
             PathBuf::from("/tmp"),

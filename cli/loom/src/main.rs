@@ -899,9 +899,11 @@ fn main() -> Result<()> {
                 let request = WikiRequest {
                     operation,
                     vault: args.path,
-                    feynman: args.feynman,
-                    confluence: args.confluence,
-                    qmd: args.qmd,
+                    capabilities: loom::wiki::Capabilities {
+                        feynman: args.feynman,
+                        confluence: args.confluence,
+                        qmd: args.qmd,
+                    },
                     yes: args.yes,
                 };
                 loom::wiki::run_wiki(&request, &system)?

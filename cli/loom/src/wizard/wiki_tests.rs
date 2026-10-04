@@ -1,6 +1,8 @@
 use super::*;
-use crate::wiki::{VaultHealth, VaultRecord, WikiOperation, WikiRegistry};
-use crate::wizard::wiki::{wiki_capabilities, Capability};
+use crate::wiki::{
+    Capabilities, Capability, Check, VaultHealth, VaultRecord, WikiOperation, WikiRegistry,
+};
+use crate::wizard::wiki::{wiki_capabilities, Pick};
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -45,9 +47,7 @@ fn registered_wiki_can_be_unregistered_from_setup() {
     let mut registry = WikiRegistry::default();
     registry.vaults.push(VaultRecord {
         path: vault.clone(),
-        feynman: false,
-        confluence: false,
-        qmd: false,
+        capabilities: Capabilities::default(),
     });
     registry.save(&home).unwrap();
     let mut wizard = chooser(&home);
@@ -82,11 +82,11 @@ fn folder_picks_stay_inline_and_checkmarks_are_vault_local() {
     browser.item_cursor = 4;
     browser.toggle();
     assert_eq!(browser.count(), 2);
-    assert!(!browser.installed(browser.record().unwrap(), Capability::Skill("research")));
+    assert!(!browser.installed(browser.record().unwrap(), Pick::Skill("research")));
     browser.picked_path(WikiOperation::Create, b.clone());
     assert!(!browser
         .selected(browser.record().unwrap())
-        .contains(&Capability::Skill("research")));
+        .contains(&Pick::Skill("research")));
     browser.cursor = 0;
     browser.item_cursor = 4;
     assert!(!a.exists() && !b.exists());
@@ -108,12 +108,12 @@ fn folder_picks_stay_inline_and_checkmarks_are_vault_local() {
     assert!(!wizard
         .wiki
         .selected(&wizard.wiki.vaults[0])
-        .contains(&Capability::Skill("research")));
+        .contains(&Pick::Skill("research")));
     press(&mut wizard, &[KeyCode::Char(' ')]);
     local_skill(&a, "research", "local copy");
     let browser = &wizard.wiki;
-    assert!(browser.installed(&browser.vaults[0], Capability::Skill("research")));
-    assert!(!browser.installed(&browser.vaults[1], Capability::Skill("research")));
+    assert!(browser.installed(&browser.vaults[0], Pick::Skill("research")));
+    assert!(!browser.installed(&browser.vaults[1], Pick::Skill("research")));
     let output = screen(&mut wizard, 160, 28);
     assert!(output.contains("✓ research"), "{output}");
     assert_eq!(
@@ -273,7 +273,7 @@ impl crate::System for SetupSystem {
                     include_str!("../../../../manifest/loom.toml"),
                 )?;
                 for capability in wiki_capabilities() {
-                    if let Capability::Skill(name) = capability {
+                    if let Pick::Skill(name) = capability {
                         let skill = repo.join("skills").join(name);
                         fs::create_dir_all(&skill)?;
                         fs::write(skill.join("SKILL.md"), format!("# {name}"))?;
@@ -439,9 +439,7 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
         registry.vaults,
         [VaultRecord {
             path: vault.clone(),
-            feynman: true,
-            confluence: false,
-            qmd: false
+            capabilities: Capabilities::default().with(Capability::Feynman),
         }]
     );
     let ownership = crate::ownership::InstallState::load(&home).unwrap();
@@ -488,9 +486,7 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
     let mut registry = WikiRegistry::default();
     registry.vaults.push(VaultRecord {
         path: vault.clone(),
-        feynman: false,
-        confluence: false,
-        qmd: false,
+        capabilities: Capabilities::default(),
     });
     registry.save(&home).unwrap();
     let mut wizard = chooser(&home);
@@ -499,9 +495,13 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
         vault.clone(),
         VaultHealth {
             healthy: true,
-            rows: vec![
-                (crate::ui::Mark::Ok, "claude-obsidian", "ready".into()),
-                (crate::ui::Mark::Ok, "qmd", "ready".into()),
+            checks: vec![
+                (Check::Core, crate::ui::Mark::Ok, "ready".into()),
+                (
+                    Check::Capability(Capability::Qmd),
+                    crate::ui::Mark::Ok,
+                    "ready".into(),
+                ),
             ],
         },
     );
@@ -534,15 +534,15 @@ fn wiki_skills_are_reviewed_catalog_skills() {
     assert_eq!(
         &list[..4],
         [
-            Capability::Essentials,
-            Capability::Feynman,
-            Capability::Confluence,
-            Capability::Qmd,
+            Pick::Essentials,
+            Pick::Capability(Capability::Feynman),
+            Pick::Capability(Capability::Confluence),
+            Pick::Capability(Capability::Qmd),
         ]
     );
     assert!(list.len() > 4);
     for capability in &list[4..] {
-        let Capability::Skill(name) = capability else {
+        let Pick::Skill(name) = capability else {
             panic!("wiki skill list mixed in a special capability");
         };
         assert!(
@@ -552,4 +552,42 @@ fn wiki_skills_are_reviewed_catalog_skills() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn chooser_marks_installed_exactly_what_health_reports_ready() {
+    let home = root("health-agrees");
+    let vault = home.join("Vault");
+    fs::create_dir_all(vault.join(".pi")).unwrap();
+    fs::write(
+        vault.join(".pi/settings.json"),
+        r#"{"packages": ["npm:@companion-ai/feynman@0.3.47"]}"#,
+    )
+    .unwrap();
+    let record = VaultRecord {
+        path: vault.clone(),
+        capabilities: Capabilities::default()
+            .with(Capability::Feynman)
+            .with(Capability::Qmd),
+    };
+    let system = crate::testing::ScriptedSystem::new()
+        .only(&[])
+        .home(&home)
+        .otherwise(crate::testing::failed("unavailable"));
+    let health = crate::wiki::inspect_vault(&system, &record);
+    let expected = [Capability::Feynman, Capability::Confluence, Capability::Qmd]
+        .map(|capability| health.ready(Check::Capability(capability)));
+    assert_eq!(expected, [true, false, false]);
+    let core = health.ready(Check::Core);
+    assert!(!core);
+
+    let mut browser = crate::wizard::wiki::WikiBrowser::default();
+    browser.health.insert(vault, health);
+    assert_eq!(
+        [Capability::Feynman, Capability::Confluence, Capability::Qmd]
+            .map(|capability| browser.installed(&record, Pick::Capability(capability))),
+        expected
+    );
+    assert_eq!(browser.installed(&record, Pick::Essentials), core);
+    fs::remove_dir_all(home).unwrap();
 }
