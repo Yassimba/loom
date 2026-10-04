@@ -227,7 +227,7 @@
       "label": "plannotator",
       "description": "Interactive plan review with annotations, agent-message annotation, and code review in Pi. By backnotprop.",
       "installTarget": "@plannotator/pi-extension",
-      "version": "0.27.23",
+      "version": "0.27.24",
       "bundledSkills": [
         "plannotator"
       ],
