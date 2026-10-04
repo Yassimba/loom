@@ -459,7 +459,13 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
     wizard.cancelled.store(true, Ordering::Relaxed);
     let (sender, _) = mpsc::channel();
     assert!(job.wikis[0]
-        .run(&system, &wizard.cancelled, 0, &sender, &job.session.paths)
+        .run(
+            &system,
+            &wizard.cancelled,
+            Row::Vault(0),
+            &sender,
+            &job.session.paths
+        )
         .is_err());
     assert_eq!(system.commands.lock().unwrap().len(), commands_before);
     fs::write(
@@ -469,7 +475,13 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
     .unwrap();
     wizard.cancelled.store(false, Ordering::Relaxed);
     assert!(job.wikis[0]
-        .run(&system, &wizard.cancelled, 0, &sender, &job.session.paths)
+        .run(
+            &system,
+            &wizard.cancelled,
+            Row::Vault(0),
+            &sender,
+            &job.session.paths
+        )
         .unwrap_err()
         .to_string()
         .contains("registry"));

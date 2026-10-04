@@ -504,7 +504,10 @@ pub(crate) fn next_actions(resources: &[Resource], report: &InstallReport) -> Ve
     for resource in resources {
         let installed = report.installed.contains(&resource.id)
             || (resource.kind == ResourceKind::Skill
-                && report.installed.iter().any(|target| target == "skills"));
+                && report
+                    .installed
+                    .iter()
+                    .any(|target| target == crate::install::SKILLS_TARGET));
         if installed && !actions.contains(&resource.next_action) {
             actions.push(resource.next_action.clone());
         }

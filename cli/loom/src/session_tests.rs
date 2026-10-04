@@ -131,21 +131,21 @@ fn cancelled_retry_keeps_reviewed_destination_completed_work_and_setting_ownersh
     assert_eq!(first.installed, ["skills", "zed:zoomed-padding"]);
     assert_eq!(first.failures.len(), 1);
     assert_eq!(first.failures[0].target, "herdr-plugin:unavailable");
-    assert_eq!(session.completed, [0, 2]);
+    assert_eq!(session.completed, [Row::Step(0), Row::Setting(0)]);
     let written_setting = fs::read_to_string(&paths.zed_settings).unwrap();
     let command_count = system.commands.lock().unwrap().len();
 
     // A retry must use the reviewed project even if the caller has moved elsewhere.
     *system.current.lock().unwrap() = other.clone();
     let mut statuses = Vec::new();
-    let second = session.run_attempt(&system, &cancelled, &mut |index, status| {
-        if index == 0 && status == StepStatus::Installed {
+    let second = session.run_attempt(&system, &cancelled, &mut |row, status| {
+        if row == Row::Step(0) && status == StepStatus::Installed {
             cancelled.store(true, Ordering::Relaxed);
         }
-        statuses.push((index, status));
+        statuses.push((row, status));
     });
     assert_eq!(session.plan, plan);
-    assert_eq!(session.completed, [0]);
+    assert_eq!(session.completed, [Row::Step(0)]);
     assert_eq!(second.installed, ["skills"]);
     assert_eq!(second.failures.len(), 2);
     assert!(second
@@ -154,7 +154,10 @@ fn cancelled_retry_keeps_reviewed_destination_completed_work_and_setting_ownersh
         .all(|failure| failure.message == "cancelled"));
     assert_eq!(
         &statuses[..2],
-        &[(0, StepStatus::Verifying), (0, StepStatus::Installed)]
+        &[
+            (Row::Step(0), StepStatus::Verifying),
+            (Row::Step(0), StepStatus::Installed)
+        ]
     );
     assert_eq!(system.commands.lock().unwrap().len(), command_count);
     assert_eq!(

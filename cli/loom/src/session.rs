@@ -1,4 +1,5 @@
 //! Reviewed installation state, retry bookkeeping, and ownership of this run.
+use crate::install::{SKILLS_TARGET, TOOLS_TARGET};
 use crate::settings::{SettingSpec, SettingsPaths};
 use crate::{
     InstallFailure, InstallPlan, InstallReport, PrerequisiteStatus, Resource, ResourceKind,
@@ -8,11 +9,21 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// One row of an install attempt: which list it comes from and its place there.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) enum Row {
+    Step(usize),
+    Setting(usize),
+    Vault(usize),
+}
+
 pub(crate) struct InstallSession {
     pub plan: InstallPlan,
     pub settings: Vec<SettingSpec>,
     pub paths: SettingsPaths,
-    pub completed: Vec<usize>,
+    /// Vault jobs the caller runs after the settings; the session only numbers their rows.
+    pub vault_jobs: usize,
+    pub completed: Vec<Row>,
     pub written: Vec<String>,
     pub ownership: Option<InstallOwnership>,
 }
@@ -23,49 +34,64 @@ impl InstallSession {
             plan,
             settings,
             paths,
+            vault_jobs: 0,
             completed: Vec::new(),
             written: Vec::new(),
             ownership: None,
         }
     }
 
+    /// Every row of the attempt, in the order it is shown and reported.
+    pub fn rows(&self) -> impl Iterator<Item = Row> {
+        (0..self.plan.steps.len())
+            .map(Row::Step)
+            .chain((0..self.settings.len()).map(Row::Setting))
+            .chain((0..self.vault_jobs).map(Row::Vault))
+    }
+
     pub fn run_attempt(
         &mut self,
         system: &(dyn System + Sync),
         cancelled: &AtomicBool,
-        observer: &mut dyn FnMut(usize, StepStatus),
+        observer: &mut dyn FnMut(Row, StepStatus),
     ) -> InstallReport {
         let mut completed = self.completed.clone();
+        let completed_steps = self
+            .completed
+            .iter()
+            .filter_map(|row| match row {
+                Row::Step(step) => Some(*step),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let mut prepared_tools = false;
-        let mut observe = |index: usize, status: StepStatus| {
+        let mut observe = |row: Row, status: StepStatus| {
             prepared_tools |= status == StepStatus::Prepared
-                && matches!(
-                    self.plan.steps[index].operation,
-                    crate::Operation::Tools { .. }
-                );
+                && matches!(row, Row::Step(step)
+                    if matches!(self.plan.steps[step].operation, crate::Operation::Tools { .. }));
             match &status {
                 StepStatus::Prepared | StepStatus::Installed => {
-                    if !completed.contains(&index) {
-                        completed.push(index);
+                    if !completed.contains(&row) {
+                        completed.push(row);
                     }
                 }
-                _ => completed.retain(|i| *i != index),
+                _ => completed.retain(|done| *done != row),
             }
-            observer(index, status);
+            observer(row, status);
         };
         let mut report = crate::install::execute_attempt(
             &self.plan,
             system,
             cancelled,
-            &self.completed,
-            &mut observe,
+            &completed_steps,
+            &mut |step, status| observe(Row::Step(step), status),
         );
         self.apply_settings(&mut report, cancelled, &mut observe);
         completed.sort_unstable();
         self.completed = completed;
         self.absorb(&report);
-        if prepared_tools && !self.written.iter().any(|target| target == "tools") {
-            self.written.push("tools".into());
+        if prepared_tools && !self.written.iter().any(|target| target == TOOLS_TARGET) {
+            self.written.push(TOOLS_TARGET.into());
         }
         report
     }
@@ -74,27 +100,26 @@ impl InstallSession {
         &self,
         report: &mut InstallReport,
         cancelled: &AtomicBool,
-        observer: &mut dyn FnMut(usize, StepStatus),
+        observer: &mut dyn FnMut(Row, StepStatus),
     ) {
-        let plan_steps = self.plan.steps.len();
         for (offset, spec) in self.settings.iter().enumerate() {
-            let index = plan_steps + offset;
+            let row = Row::Setting(offset);
             if cancelled.load(Ordering::Relaxed) {
-                observer(index, StepStatus::Skipped("cancelled".into()));
+                observer(row, StepStatus::Skipped("cancelled".into()));
                 report.failures.push(InstallFailure {
                     target: spec.id.clone(),
                     message: "cancelled".into(),
                 });
                 continue;
             }
-            if self.completed.contains(&index)
+            if self.completed.contains(&row)
                 && crate::settings::setting_state(spec, &self.paths)
                     == crate::settings::SettingState::Applied
             {
                 if self.written.contains(&spec.id) {
                     report.installed.push(spec.id.clone());
                 }
-                observer(index, StepStatus::Installed);
+                observer(row, StepStatus::Installed);
                 continue;
             }
             let related_install_failed = spec.related_resource.as_ref().is_some_and(|related| {
@@ -106,23 +131,23 @@ impl InstallSession {
                     target: spec.id.clone(),
                     message: "Related package failed; retry it before applying this setting".into(),
                 });
-                observer(index, StepStatus::Skipped("related package failed".into()));
+                observer(row, StepStatus::Skipped("related package failed".into()));
                 continue;
             }
-            observer(index, StepStatus::Running);
+            observer(row, StepStatus::Running);
             match crate::settings::apply_setting(spec, &self.paths) {
                 Ok(true) => {
                     report.installed.push(spec.id.clone());
-                    observer(index, StepStatus::Installed);
+                    observer(row, StepStatus::Installed);
                 }
-                Ok(false) => observer(index, StepStatus::Installed),
+                Ok(false) => observer(row, StepStatus::Installed),
                 Err(error) => {
                     let message = error.to_string();
                     report.failures.push(InstallFailure {
                         target: spec.id.clone(),
                         message: message.clone(),
                     });
-                    observer(index, StepStatus::Failed(message));
+                    observer(row, StepStatus::Failed(message));
                 }
             }
         }
@@ -225,9 +250,9 @@ impl InstallOwnership {
         let succeeded = |resource: &Resource| {
             written.contains(&resource.id)
                 || (resource.kind == ResourceKind::Skill
-                    && written.iter().any(|target| target == "skills"))
+                    && written.iter().any(|target| target == SKILLS_TARGET))
                 || (resource.kind == ResourceKind::Tool
-                    && written.iter().any(|target| target == "tools"))
+                    && written.iter().any(|target| target == TOOLS_TARGET))
         };
         let mut state = InstallState::load(&home)?;
         for resource in resources.iter().filter(|resource| succeeded(resource)) {
@@ -306,7 +331,7 @@ impl InstallOwnership {
                 });
             }
         }
-        if written.iter().any(|target| target == "tools") {
+        if written.iter().any(|target| target == TOOLS_TARGET) {
             for (needed, id, key) in [
                 (
                     !prerequisite_status.pi
@@ -361,7 +386,7 @@ impl InstallOwnership {
         }
         if !adapter_existed
             && destination.agents.contains(&SkillAgent::OpenCode)
-            && written.iter().any(|target| target == "skills")
+            && written.iter().any(|target| target == SKILLS_TARGET)
         {
             let path = destination.opencode_adapter_path();
             if path.is_file() {

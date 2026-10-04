@@ -4,6 +4,7 @@
 //! unit-testable; rendering lives in `render.rs`.
 
 use super::choose::choose_groups;
+use crate::session::Row;
 use crate::settings::{SettingSpec, SettingState, SettingsPaths};
 use crate::{
     build_install_plan, InstallPlan, InstallReport, Platform, PrerequisiteStatus, Resource,
@@ -295,6 +296,7 @@ pub enum ExecStatus {
 
 #[derive(Clone, Debug)]
 pub struct ExecItem {
+    pub(crate) row: Row,
     pub label: String,
     pub detail: String,
     pub status: ExecStatus,
@@ -313,6 +315,12 @@ pub(crate) struct InstallStage {
     pub show_details: bool,
     /// The command last copied to the clipboard, shown as confirmation.
     pub copied: Option<String>,
+}
+
+impl InstallStage {
+    fn item_mut(&mut self, row: Row) -> Option<&mut ExecItem> {
+        self.items.iter_mut().find(|item| item.row == row)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -348,8 +356,8 @@ impl Screen {
 #[derive(Debug)]
 pub enum InstallEvent {
     Confirm(String, Vec<String>, std::sync::mpsc::Sender<bool>),
-    Detail(usize, String),
-    Status(usize, ExecStatus),
+    Detail(Row, String),
+    Status(Row, ExecStatus),
     Finished(Box<InstallJob>, InstallReport),
 }
 
@@ -1163,66 +1171,63 @@ impl Wizard {
     pub fn begin_install(&mut self) -> Result<InstallJob> {
         let job = match self.reviewed_job.take() {
             Some(job) => job,
-            None => InstallJob {
-                session: crate::session::InstallSession::new(
+            None => {
+                let wikis = self.wiki_jobs()?;
+                let mut session = crate::session::InstallSession::new(
                     self.plan()?,
                     self.selected_settings(),
                     self.model.settings_paths.clone(),
-                ),
-                wikis: self.wiki_jobs()?,
-                cancelled: Arc::clone(&self.cancelled),
-            },
+                );
+                session.vault_jobs = wikis.len();
+                InstallJob {
+                    session,
+                    wikis,
+                    cancelled: Arc::clone(&self.cancelled),
+                }
+            }
         };
-        let plan = &job.session.plan;
-        let settings = &job.session.settings;
-        let mut items = Vec::new();
-        for step in plan.prerequisites() {
-            items.push(ExecItem {
-                label: format!("Install {}", step.target),
-                detail: step.operation.display(),
-                status: ExecStatus::Pending,
-                started: None,
-                elapsed: std::time::Duration::ZERO,
-            });
-        }
-        for step in plan.resources() {
-            // Show the human name from the catalog, not the resource id.
-            let name = self
-                .model
-                .resources
-                .iter()
-                .find(|resource| resource.id == step.target)
-                .map(|resource| resource.label.as_str())
-                .unwrap_or(&step.target);
-            items.push(ExecItem {
-                label: format!("Install {name}"),
-                detail: step.operation.display(),
-                status: ExecStatus::Pending,
-                started: None,
-                elapsed: std::time::Duration::ZERO,
-            });
-        }
-        for spec in settings {
-            items.push(ExecItem {
-                label: format!("Configure {}", spec.label),
-                detail: spec
-                    .target_path(&self.model.settings_paths)
-                    .display()
-                    .to_string(),
-                status: ExecStatus::Pending,
-                started: None,
-                elapsed: std::time::Duration::ZERO,
-            });
-        }
-        for wiki in &job.wikis {
-            items.push(ExecItem {
-                label: wiki.label(),
-                detail: wiki.labels.join(", "),
-                status: ExecStatus::Pending,
-                started: None,
-                elapsed: std::time::Duration::ZERO,
-            });
-        }
+        // The session owns the rows; each one is labelled from the list it names.
+        let session = &job.session;
+        let items = session
+            .rows()
+            .map(|row| {
+                let (label, detail) = match row {
+                    Row::Step(step) => {
+                        let step = &session.plan.steps[step];
+                        // Show the human name from the catalog, not the resource id.
+                        let name = self
+                            .model
+                            .resources
+                            .iter()
+                            .find(|resource| !step.is_prerequisite() && resource.id == step.target)
+                            .map(|resource| resource.label.as_str())
+                            .unwrap_or(&step.target);
+                        (format!("Install {name}"), step.operation.display())
+                    }
+                    Row::Setting(setting) => {
+                        let spec = &session.settings[setting];
+                        (
+                            format!("Configure {}", spec.label),
+                            spec.target_path(&self.model.settings_paths)
+                                .display()
+                                .to_string(),
+                        )
+                    }
+                    Row::Vault(vault) => {
+                        let wiki = &job.wikis[vault];
+                        (wiki.label(), wiki.labels.join(", "))
+                    }
+                };
+                ExecItem {
+                    row,
+                    label,
+                    detail,
+                    status: ExecStatus::Pending,
+                    started: None,
+                    elapsed: std::time::Duration::ZERO,
+                }
+            })
+            .collect();
         anyhow::ensure!(
             self.screen == Screen::Install,
             "install started outside the install stage"
@@ -1248,13 +1253,13 @@ impl Wizard {
             InstallEvent::Confirm(_, _, reply) => {
                 let _ = reply.send(false);
             }
-            InstallEvent::Detail(index, detail) => {
-                if let Some(item) = self.install.items.get_mut(index) {
+            InstallEvent::Detail(row, detail) => {
+                if let Some(item) = self.install.item_mut(row) {
                     item.detail = detail;
                 }
             }
-            InstallEvent::Status(index, status) => {
-                if let Some(item) = self.install.items.get_mut(index) {
+            InstallEvent::Status(row, status) => {
+                if let Some(item) = self.install.item_mut(row) {
                     if matches!(status, ExecStatus::Running | ExecStatus::Verifying) {
                         item.started.get_or_insert_with(std::time::Instant::now);
                     } else if let Some(started) = item.started.take() {

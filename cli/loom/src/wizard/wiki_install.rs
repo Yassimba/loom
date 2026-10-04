@@ -1,7 +1,7 @@
 //! Per-Vault work uses the regular installer and the existing reviewed Wiki setup.
 use super::state::{ExecStatus, InstallEvent, Model, Wizard};
 use super::wiki::{Pick, WikiBrowser};
-use crate::session::InstallOwnership;
+use crate::session::{InstallOwnership, Row};
 use crate::wiki::{VaultRecord, WikiOperation, WikiOutcome, WikiRequest};
 use crate::{InstallPlan, Resource, SkillAgent, SkillDestination, SkillScope, System};
 use anyhow::Result;
@@ -132,7 +132,7 @@ impl WikiInstall {
         &self,
         system: &(dyn System + Sync),
         cancelled: &AtomicBool,
-        index: usize,
+        index: Row,
         sender: &mpsc::Sender<InstallEvent>,
         paths: &crate::settings::SettingsPaths,
     ) -> Result<String> {
@@ -236,7 +236,7 @@ impl WikiInstall {
             },
         );
         if prepared_tools {
-            report.installed.push("tools".into());
+            report.installed.push(crate::install::TOOLS_TARGET.into());
         }
         ownership
             .record(system, &report.installed)

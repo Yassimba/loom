@@ -211,6 +211,13 @@ impl Operation {
     }
 }
 
+/// Targets of the plan steps that stand for no single catalog resource. Reports
+/// carry them as text, so their spelling is fixed.
+pub const MISE_TARGET: &str = "mise";
+pub const TOOLS_TARGET: &str = "tools";
+pub const RTK_PI_TARGET: &str = "rtk-pi";
+pub const SKILLS_TARGET: &str = "skills";
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstallStep {
     pub target: String,
@@ -308,7 +315,7 @@ pub fn build_install_plan(
     let mut steps = Vec::new();
     if !tools.is_empty() && !status.mise {
         steps.push(InstallStep {
-            target: "mise".into(),
+            target: MISE_TARGET.into(),
             operation: Operation::BootstrapMise(platform),
         });
     }
@@ -316,13 +323,13 @@ pub fn build_install_plan(
         && (status.pi || needs_pi || tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()));
     if !tools.is_empty() {
         steps.push(InstallStep {
-            target: "tools".into(),
+            target: TOOLS_TARGET.into(),
             operation: Operation::Tools { tools },
         });
     }
     if configure_rtk_pi {
         steps.push(InstallStep {
-            target: "rtk-pi".into(),
+            target: RTK_PI_TARGET.into(),
             operation: Operation::RtkPi,
         });
     }
@@ -337,7 +344,7 @@ pub fn build_install_plan(
             "installing skills needs at least one selected agent"
         );
         steps.push(InstallStep {
-            target: "skills".into(),
+            target: SKILLS_TARGET.into(),
             operation: Operation::Skills {
                 skills,
                 destination: skill_destination.clone(),
@@ -400,7 +407,7 @@ pub fn execute_attempt(
             observer(index, StepStatus::Verifying);
             if step_is_present(step, system, cancelled) {
                 observer(index, StepStatus::Installed);
-                if !step.is_prerequisite() || step.target == "tools" {
+                if !step.is_prerequisite() || step.target == TOOLS_TARGET {
                     report.installed.push(step.target.clone());
                 }
                 continue;

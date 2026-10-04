@@ -2,6 +2,7 @@
 mod inline_wiki;
 
 use super::state::*;
+use crate::session::Row;
 use crate::settings::{
     KeyCommand, SettingChange, SettingSpec, SettingState, SettingsPaths, ZedKeybinding,
 };
@@ -654,13 +655,16 @@ fn ready_uses_successful_goal_actions_and_freezes_completed_step_time() {
         ],
     );
     let job = wizard.begin_install().unwrap();
-    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Running));
+    wizard.handle_install_event(InstallEvent::Status(Row::Step(0), ExecStatus::Running));
     {
         let stage = &mut wizard.install;
         stage.items[0].started =
             Some(std::time::Instant::now() - std::time::Duration::from_secs(3));
     }
-    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
+    wizard.handle_install_event(InstallEvent::Status(
+        Row::Step(0),
+        ExecStatus::Ok("installed".into()),
+    ));
     {
         let stage = &wizard.install;
         assert!(stage.items[0].started.is_none());
@@ -1009,9 +1013,12 @@ fn retry_keeps_the_reviewed_plan_destination_and_completed_items() {
     press(&mut wizard, &[KeyCode::Enter, KeyCode::Enter]);
     let initial = wizard.begin_install().unwrap();
     let initial_plan = initial.session.plan.clone();
-    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
     wizard.handle_install_event(InstallEvent::Status(
-        1,
+        Row::Step(0),
+        ExecStatus::Ok("installed".into()),
+    ));
+    wizard.handle_install_event(InstallEvent::Status(
+        Row::Step(1),
         ExecStatus::Failed("timed out after 30s".into()),
     ));
     finish_test_job(
@@ -1035,8 +1042,49 @@ fn retry_keeps_the_reviewed_plan_destination_and_completed_items() {
     ));
     let retried = wizard.begin_install().unwrap();
     assert_eq!(retried.session.plan, initial_plan);
-    assert_eq!(retried.session.completed, vec![0]);
+    assert_eq!(retried.session.completed, vec![Row::Step(0)]);
     assert!(!retried.cancelled.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+#[test]
+fn install_rows_are_the_sessions_rows_whatever_order_the_plan_was_built_in() {
+    let mut wizard = wizard();
+    wizard.selected[0] = true;
+    press(&mut wizard, &[KeyCode::Enter, KeyCode::Enter]);
+    let mut job = wizard.begin_install().unwrap();
+    // A prerequisite that is not first: the view must follow the session, not assume an order.
+    job.session.plan.steps.push(crate::InstallStep {
+        target: "tools".into(),
+        operation: crate::Operation::Tools {
+            tools: vec!["jq".into()],
+        },
+    });
+    job.session.settings = test_settings()[..1].to_vec();
+    wizard.reviewed_job = Some(job);
+    let job = wizard.begin_install().unwrap();
+    let rows = job.session.rows().collect::<Vec<_>>();
+    assert_eq!(rows, [Row::Step(0), Row::Step(1), Row::Setting(0)]);
+    let stage = &wizard.install;
+    assert_eq!(
+        stage.items.iter().map(|item| item.row).collect::<Vec<_>>(),
+        rows
+    );
+    assert_eq!(
+        stage
+            .items
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "Install subagents".to_owned(),
+            "Install tools".to_owned(),
+            format!("Configure {}", job.session.settings[0].label),
+        ]
+    );
+    assert_eq!(
+        stage.items[1].detail,
+        job.session.plan.steps[1].operation.display()
+    );
 }
 
 #[test]
@@ -1167,7 +1215,10 @@ fn install_events_drive_the_install_screen_to_completion() {
     let job = wizard.begin_install().unwrap();
     assert!(wizard.install_running());
     assert!(press(&mut wizard, &[KeyCode::Enter]).is_none(), "keys wait");
-    wizard.handle_install_event(InstallEvent::Status(0, ExecStatus::Ok("installed".into())));
+    wizard.handle_install_event(InstallEvent::Status(
+        Row::Step(0),
+        ExecStatus::Ok("installed".into()),
+    ));
     let report = crate::InstallReport {
         installed: vec!["Pi packages:subagents".into()],
         failures: vec![],
@@ -2264,8 +2315,7 @@ fn finish_test_job(wizard: &mut Wizard, mut job: InstallJob, report: crate::Inst
         .install
         .items
         .iter()
-        .enumerate()
-        .filter_map(|(index, item)| matches!(item.status, ExecStatus::Ok(_)).then_some(index))
+        .filter_map(|item| matches!(item.status, ExecStatus::Ok(_)).then_some(item.row))
         .collect();
     job.session.absorb(&report);
     wizard.handle_install_event(InstallEvent::Finished(Box::new(job), report));
