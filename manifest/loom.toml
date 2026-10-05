@@ -105,5 +105,5 @@ rust = { version = "1.98.1", os = ["macos"] }
 uv = "0.12.20"
 
 # skill tooling (browser automation, diagram/slide export)
-"npm:agent-browser" = "0.38.1"
+"npm:agent-browser" = "0.38.2"
 "npm:@mermaid-js/mermaid-cli" = "12.0.0"
