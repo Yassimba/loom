@@ -72,7 +72,7 @@
     },
     {
       "name": "@gotgenes/pi-anthropic-auth",
-      "version": "3.4.1",
+      "version": "3.4.2",
       "label": "anthropic-auth",
       "description": "Use Claude models inside Pi through your Claude subscription, over Anthropic OAuth. By gotgenes.",
       "nextAction": "Run /model in Pi and pick a Claude model."
