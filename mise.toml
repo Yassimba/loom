@@ -6,7 +6,7 @@
 [tools]
 node = "24.21.0"
 bun = "1.4.2"
-rust = "1.98.1"
+rust = "1.99.0"
 
 [tasks.test]
 description = "JS test suite"
