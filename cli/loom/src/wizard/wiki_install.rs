@@ -1,7 +1,7 @@
 //! Per-Vault work uses the regular installer and the existing reviewed Wiki setup.
 use super::state::{ExecStatus, InstallEvent, Model, Wizard};
-use super::wiki::{Capability, WikiBrowser};
-use crate::session::InstallOwnership;
+use super::wiki::{Pick, WikiBrowser};
+use crate::session::{InstallOwnership, Row};
 use crate::wiki::{VaultRecord, WikiOperation, WikiOutcome, WikiRequest};
 use crate::{InstallPlan, Resource, SkillAgent, SkillDestination, SkillScope, System};
 use anyhow::Result;
@@ -26,14 +26,18 @@ impl WikiBrowser {
             .filter(|record| !self.selected(record).is_empty())
             .map(|record| {
                 let selected = self.selected(record);
-                let feynman = record.feynman || selected.contains(&Capability::Feynman);
-                let confluence = record.confluence || selected.contains(&Capability::Confluence);
-                let qmd = record.qmd || selected.contains(&Capability::Qmd);
-                let needs_wiki = selected.iter().any(|c| !matches!(c, Capability::Skill(_)));
+                let capabilities =
+                    selected
+                        .iter()
+                        .fold(record.capabilities, |set, pick| match pick {
+                            Pick::Capability(capability) => set.with(*capability),
+                            _ => set,
+                        });
+                let needs_wiki = selected.iter().any(|c| !matches!(c, Pick::Skill(_)));
                 let direct = selected
                     .iter()
                     .filter_map(|capability| {
-                        let Capability::Skill(name) = capability else {
+                        let Pick::Skill(name) = capability else {
                             return None;
                         };
                         Some(
@@ -70,9 +74,7 @@ impl WikiBrowser {
                 Ok(WikiInstall {
                     record: VaultRecord {
                         path: record.path.clone(),
-                        feynman,
-                        confluence,
-                        qmd,
+                        capabilities,
                     },
                     operation: needs_wiki.then(|| {
                         self.pending
@@ -116,9 +118,7 @@ impl WikiInstall {
         crate::wiki::WikiRegistry::load(&self.destination.home).is_ok_and(|registry| {
             registry.vaults.iter().any(|record| {
                 record.path == self.record.path
-                    && (!self.record.feynman || record.feynman)
-                    && (!self.record.confluence || record.confluence)
-                    && (!self.record.qmd || record.qmd)
+                    && record.capabilities.includes(self.record.capabilities)
             })
         }) && (self.operation.is_none() || crate::wiki::inspect_vault(system, &self.record).healthy)
             && self
@@ -132,7 +132,7 @@ impl WikiInstall {
         &self,
         system: &(dyn System + Sync),
         cancelled: &AtomicBool,
-        index: usize,
+        index: Row,
         sender: &mpsc::Sender<InstallEvent>,
         paths: &crate::settings::SettingsPaths,
     ) -> Result<String> {
@@ -157,15 +157,11 @@ impl WikiInstall {
             let mut request = WikiRequest {
                 operation: operation.clone(),
                 vault: path.clone(),
-                feynman: self.record.feynman,
-                confluence: self.record.confluence,
-                qmd: self.record.qmd,
+                capabilities: self.record.capabilities,
                 yes: false,
             };
             if let Some(record) = registry.vaults.iter().find(|record| record.path == *path) {
-                request.feynman |= record.feynman;
-                request.confluence |= record.confluence;
-                request.qmd |= record.qmd;
+                request.capabilities = request.capabilities.union(record.capabilities);
             }
             crate::wiki_progress::in_setup(
                 system,
@@ -240,7 +236,7 @@ impl WikiInstall {
             },
         );
         if prepared_tools {
-            report.installed.push("tools".into());
+            report.installed.push(crate::install::TOOLS_TARGET.into());
         }
         ownership
             .record(system, &report.installed)

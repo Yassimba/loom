@@ -1,5 +1,7 @@
+use crate::presence::{Listing, Manager};
 use crate::ui::{tidy_path, Mark, Out};
 use crate::{skills, Catalog, CommandSpec, NodeStatus, ResourceKind, System};
+use std::sync::atomic::AtomicBool;
 
 /// One independent update lane; lanes run concurrently and report whole
 /// blocks so nothing interleaves.
@@ -30,10 +32,76 @@ impl Lane {
     }
 }
 
+/// What `loom update` did, for the caller's verdict and for tests. Rows are
+/// printed live as the run goes; this is the result, not the output.
+pub struct UpdateReport {
+    /// Every printed lane, in row order.
+    pub lanes: Vec<Lane>,
+    pub herdr_skipped: Option<HerdrSkip>,
+    pub vaults_ok: bool,
+}
+
+impl UpdateReport {
+    fn lanes_ok(&self) -> bool {
+        self.lanes.iter().all(|lane| lane.ok)
+    }
+
+    pub fn ok(&self) -> bool {
+        self.lanes_ok() && self.vaults_ok
+    }
+
+    pub fn next_action(&self) -> &'static str {
+        match self.herdr_skipped {
+            _ if !self.vaults_ok => "run `loom wiki` to repair the flagged Vault",
+            Some(HerdrSkip::Inside) => "run `loom update` from a regular terminal to update Herdr",
+            Some(HerdrSkip::Server) => {
+                "run `herdr server stop`, then `loom update` to update Herdr"
+            }
+            None if !self.lanes_ok() => {
+                "resolve the reported cause, then run `loom update --yes` again"
+            }
+            None => "run `loom status` to verify the updated setup",
+        }
+    }
+}
+
+/// One refresh a command lane performs, with the facts its report line needs.
+enum Refresh {
+    /// `spec` is the full `npm:name@version` install spec.
+    PiPackage {
+        spec: String,
+        local: bool,
+    },
+    HerdrPlugins,
+}
+
+impl Refresh {
+    fn command(&self) -> CommandSpec {
+        match self {
+            Self::PiPackage { spec, local: false } => CommandSpec::new("pi", ["install", spec]),
+            Self::PiPackage { spec, local: true } => {
+                CommandSpec::new("pi", ["install", "-l", spec])
+            }
+            Self::HerdrPlugins => CommandSpec::new("herdr", ["plugin", "update", "--all"]),
+        }
+    }
+
+    fn target(&self) -> &str {
+        match self {
+            Self::PiPackage { spec, .. } => spec,
+            Self::HerdrPlugins => "plugins",
+        }
+    }
+
+    fn local(&self) -> bool {
+        matches!(self, Self::PiPackage { local: true, .. })
+    }
+}
+
 struct CommandLane {
     label: &'static str,
     detail: String,
-    commands: Vec<CommandSpec>,
+    refreshes: Vec<Refresh>,
 }
 
 fn progress_status(completed: usize, total: usize, running: &[&str], elapsed: u64) -> String {
@@ -41,7 +109,7 @@ fn progress_status(completed: usize, total: usize, running: &[&str], elapsed: u6
     format!("{completed}/{total} complete · {active} · {elapsed}s")
 }
 
-fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) -> Vec<CommandSpec> {
+fn pi_package_refreshes(catalog: &Catalog, listed: &Listing, native_windows: bool) -> Vec<Refresh> {
     catalog
         .resources
         .iter()
@@ -49,13 +117,14 @@ fn pi_package_commands(catalog: &Catalog, listed: &str, native_windows: bool) ->
         .filter(|resource| !native_windows || !resource.windows_wsl)
         .flat_map(|resource| {
             let spec = resource.pi_install_spec();
-            let global =
-                crate::install::pi_package_installed(listed, &resource.install_target, false)
-                    .then(|| CommandSpec::new("pi", ["install", &spec]));
-            let local =
-                crate::install::pi_package_installed(listed, &resource.install_target, true)
-                    .then(|| CommandSpec::new("pi", ["install", "-l", &spec]));
-            [global, local].into_iter().flatten()
+            [false, true]
+                .into_iter()
+                .filter(|local| listed.has_pi_package(&resource.install_target, *local))
+                .map(move |local| Refresh::PiPackage {
+                    spec: spec.clone(),
+                    local,
+                })
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -97,26 +166,76 @@ pub fn herdr_server_running(status_json: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn probe_herdr_server_running(system: &dyn System) -> bool {
+fn probe_herdr_server_running(system: &dyn System) -> bool {
     let Ok(result) = system.run_probe(&CommandSpec::new("herdr", ["status", "--json"])) else {
         return false;
     };
     result.success && herdr_server_running(&result.stdout)
 }
 
-pub const HERDR_SKIP_INSIDE: &str = "skipped · run `loom update` from a regular terminal";
-pub const HERDR_SKIP_SERVER: &str =
-    "skipped · close the server with `herdr server stop`, then rerun";
-
-/// Plugin lane: run it, or skip with a report line.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HerdrLane {
-    Run,
-    Skip(&'static str),
+/// Probe this machine's Herdr before anything is asked or changed.
+pub fn detect_herdr(system: &dyn System, inside: bool) -> HerdrGate {
+    let present = system.command_exists("herdr");
+    herdr_gate(
+        present,
+        inside,
+        present && probe_herdr_server_running(system),
+    )
 }
 
-pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: HerdrLane) -> bool {
-    let out = Out::detect();
+/// The user's answer for a Herdr server running outside this process; only
+/// read under [`HerdrGate::StopServer`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RunningServer {
+    /// Close it, then update; skip Herdr if it will not close.
+    Stop,
+    /// Leave it running and skip Herdr.
+    Skip,
+    /// Update with the server left running (`--yes` asks nothing).
+    Leave,
+}
+
+/// Why the Herdr lane did not run.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HerdrSkip {
+    Inside,
+    Server,
+}
+
+impl HerdrSkip {
+    fn detail(self) -> &'static str {
+        match self {
+            Self::Inside => "skipped · run `loom update` from a regular terminal",
+            Self::Server => "skipped · close the server with `herdr server stop`, then rerun",
+        }
+    }
+}
+
+fn settle_herdr(system: &dyn System, herdr: HerdrGate, server: RunningServer) -> Option<HerdrSkip> {
+    match (herdr, server) {
+        (HerdrGate::Inside, _) => Some(HerdrSkip::Inside),
+        (HerdrGate::StopServer, RunningServer::Skip) => Some(HerdrSkip::Server),
+        (HerdrGate::StopServer, RunningServer::Stop) => {
+            match system.run(&CommandSpec::new("herdr", ["server", "stop"])) {
+                Ok(result) if result.success => None,
+                _ => Some(HerdrSkip::Server),
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Run every update lane, then refresh registered Vaults. `interactive`
+/// only shapes the Vault refresh's progress display.
+pub fn run_updates(
+    system: &(dyn System + Sync),
+    catalog: &Catalog,
+    out: &Out,
+    herdr: HerdrGate,
+    server: RunningServer,
+    interactive: bool,
+) -> UpdateReport {
+    let herdr_skipped = settle_herdr(system, herdr, server);
     out.title("update", concat!("v", env!("CARGO_PKG_VERSION")));
 
     // Warn-only: loom never installs or updates Node itself, but a Node
@@ -137,49 +256,36 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
         // use their pin, first-party packages request npm's latest release, and
         // Pi itself is the mise manifest's job. Packages outside the catalog
         // are left alone.
-        let listed = match system.run_probe(&CommandSpec::new("pi", ["list"])) {
-            Ok(result) if result.success => result.stdout,
-            Ok(result) => {
-                inventory_error = Some(crate::install::command_failure_message(&result));
-                String::new()
-            }
-            Err(error) => {
+        let listed =
+            Listing::probe(system, Manager::Pi, &AtomicBool::new(false)).unwrap_or_else(|error| {
                 inventory_error = Some(error.to_string());
-                String::new()
-            }
-        };
-        let commands = pi_package_commands(catalog, &listed, cfg!(windows));
+                Listing::default()
+            });
+        let refreshes = pi_package_refreshes(catalog, &listed, cfg!(windows));
         pi_compat_targets = catalog
             .resources
             .iter()
             .filter(|resource| {
                 resource.group != "Wiki" && crate::pi_compat::is_managed(&resource.id)
             })
-            .filter(|resource| {
-                crate::install::pi_package_installed(&listed, &resource.install_target, false)
-            })
+            .filter(|resource| listed.has_pi_package(&resource.install_target, false))
             .map(|resource| resource.id.clone())
             .collect();
-        if !commands.is_empty() {
+        if !refreshes.is_empty() {
             tasks.push(CommandLane {
                 label: "Pi packages",
-                detail: format!("{} refreshed", commands.len()),
-                commands,
+                detail: format!("{} refreshed", refreshes.len()),
+                refreshes,
             });
         }
     }
-    let skipped_herdr = match herdr {
-        HerdrLane::Run if system.command_exists("herdr") => {
-            tasks.push(CommandLane {
-                label: "Herdr",
-                detail: "plugins".into(),
-                commands: vec![CommandSpec::new("herdr", ["plugin", "update", "--all"])],
-            });
-            None
-        }
-        HerdrLane::Skip(reason) => Some(reason),
-        HerdrLane::Run => None,
-    };
+    if herdr_skipped.is_none() && system.command_exists("herdr") {
+        tasks.push(CommandLane {
+            label: "Herdr",
+            detail: "plugins".into(),
+            refreshes: vec![Refresh::HerdrPlugins],
+        });
+    }
     // The manifest lane owns tool updates, including this CLI's own pin.
     // Loom is only ever installed through mise, so a missing mise means the
     // bootstrap was undone; point back at it instead of self-updating.
@@ -238,10 +344,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
     // (Pi reinstalls and the repo download take minutes together).
     let labels = jobs.iter().map(|(label, _)| *label).collect::<Vec<_>>();
     let (sender, results) = std::sync::mpsc::channel::<(usize, Lane)>();
-    let mut lanes = inventory_error
-        .into_iter()
-        .map(|error| (labels.len() + 2, Lane::failed("Pi inventory", error)))
-        .collect::<Vec<_>>();
+    let mut finished = Vec::new();
     std::thread::scope(|scope| {
         for (index, (_, job)) in jobs.into_iter().enumerate() {
             let sender = sender.clone();
@@ -258,7 +361,7 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
             match results.recv_timeout(std::time::Duration::from_millis(250)) {
                 Ok((index, lane)) => {
                     running.retain(|label| *label != labels[index]);
-                    lanes.push((index, lane));
+                    finished.push((index, lane));
                     if running.is_empty() {
                         break;
                     }
@@ -293,28 +396,29 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
         }
     });
     out.progress_done();
-    if let Some(reason) = skipped_herdr {
-        lanes.push((labels.len() + 4, Lane::ok("Herdr", reason)));
-    }
+    finished.sort_by_key(|(index, _)| *index);
+    let mut lanes = finished
+        .into_iter()
+        .map(|(_, lane)| lane)
+        .collect::<Vec<_>>();
     // After the tools lane: the migration needs the Pi it just installed.
-    if let (Some(home), Some(project)) = (system.home_dir(), system.current_dir()) {
-        match crate::mcp_migration::migrate_adapter(system, &home, &project) {
-            Ok(Some(detail)) => lanes.push((labels.len() + 3, Lane::ok("MCP", detail))),
-            Ok(None) => {}
-            Err(error) => lanes.push((labels.len() + 3, Lane::failed("MCP", error.to_string()))),
+    let mcp = match (system.home_dir(), system.current_dir()) {
+        (Some(home), Some(project)) => {
+            match crate::mcp_migration::migrate_adapter(system, &home, &project) {
+                Ok(detail) => detail.map(|detail| Lane::ok("MCP", detail)),
+                Err(error) => Some(Lane::failed("MCP", error.to_string())),
+            }
         }
-    }
-    if !pi_compat_targets.is_empty() {
-        lanes.push((
-            labels.len(),
-            reconcile_pi_compat(system, &pi_compat_targets),
-        ));
-    }
+        _ => None,
+    };
+    let pi_compat =
+        (!pi_compat_targets.is_empty()).then(|| reconcile_pi_compat(system, &pi_compat_targets));
     // Package files are now stable; never reconcile during a reinstall or
     // after a failed Pi lane. Skills refresh and package installs run in parallel.
+    let mut bundled = None;
     if !lanes
         .iter()
-        .any(|(_, lane)| lane.label == "Pi packages" && !lane.ok)
+        .any(|lane| lane.label == "Pi packages" && !lane.ok)
     {
         if let Some(home) = system.home_dir() {
             match crate::bundled_skills::reconcile_installed(&home) {
@@ -323,24 +427,36 @@ pub fn run_updates(system: &(dyn System + Sync), catalog: &Catalog, herdr: Herdr
                         out.note(note);
                     }
                 }
-                Err(error) => lanes.push((labels.len() + 1, Lane::failed("Bundled skills", error))),
+                Err(error) => bundled = Some(Lane::failed("Bundled skills", error)),
             }
         }
     }
-    lanes.sort_by_key(|(index, _)| *index);
+    // Row order after the concurrent lanes; each ran in the order above.
+    lanes.extend(
+        [
+            pi_compat,
+            bundled,
+            inventory_error.map(|error| Lane::failed("Pi inventory", error)),
+            mcp,
+            herdr_skipped.map(|skip| Lane::ok("Herdr", skip.detail())),
+        ]
+        .into_iter()
+        .flatten(),
+    );
 
-    let mut failed = 0;
-    for (_, lane) in &lanes {
+    for lane in &lanes {
         let mark = if lane.ok { Mark::Ok } else { Mark::Bad };
         out.row(mark, lane.label, &lane.detail);
         for note in &lane.notes {
             out.note(note);
         }
-        if !lane.ok {
-            failed += 1;
-        }
     }
-    failed == 0
+    let vaults_ok = crate::wiki::update_registered(system, interactive, out);
+    UpdateReport {
+        lanes,
+        herdr_skipped,
+        vaults_ok,
+    }
 }
 
 /// Refresh mise's conf.d copy of the published manifest and install its pins.
@@ -402,10 +518,12 @@ fn reconcile_pi_compat(system: &dyn System, targets: &[String]) -> Lane {
     )
 }
 
-fn package_version(system: &dyn System, command: &CommandSpec) -> Option<String> {
-    let spec = command.args.last()?.strip_prefix("npm:")?;
-    let (name, _) = spec.rsplit_once('@')?;
-    let root = if command.args.iter().any(|arg| arg == "-l") {
+fn package_version(system: &dyn System, refresh: &Refresh) -> Option<String> {
+    let Refresh::PiPackage { spec, local } = refresh else {
+        return None;
+    };
+    let (name, _) = spec.strip_prefix("npm:")?.rsplit_once('@')?;
+    let root = if *local {
         system.current_dir()?.join(".pi")
     } else {
         std::env::var_os("PI_CODING_AGENT_DIR")
@@ -434,14 +552,10 @@ fn package_version(system: &dyn System, command: &CommandSpec) -> Option<String>
 
 fn run_command_lane(system: &dyn System, task: CommandLane, progress: &dyn Fn(String)) -> Lane {
     let mut lane = Lane::ok(task.label, task.detail);
-    for (index, command) in task.commands.iter().enumerate() {
-        let before = package_version(system, command);
-        let target = if command.program == "pi" {
-            command.args.last().map_or("package", String::as_str)
-        } else {
-            "plugins"
-        };
-        let scope = if command.args.iter().any(|arg| arg == "-l") {
+    for (index, refresh) in task.refreshes.iter().enumerate() {
+        let before = package_version(system, refresh);
+        let target = refresh.target();
+        let scope = if refresh.local() {
             "this project"
         } else {
             "global"
@@ -450,11 +564,15 @@ fn run_command_lane(system: &dyn System, task: CommandLane, progress: &dyn Fn(St
             "{}: installing {}/{} · {target} · {scope}",
             task.label,
             index + 1,
-            task.commands.len()
+            task.refreshes.len()
         ));
         let cancelled = std::sync::atomic::AtomicBool::new(false);
         let result = system
-            .run_controlled(command, crate::system::MANAGER_COMMAND_TIMEOUT, &cancelled)
+            .run_controlled(
+                &refresh.command(),
+                crate::system::MANAGER_COMMAND_TIMEOUT,
+                &cancelled,
+            )
             .map_err(|error| error.to_string())
             .and_then(|result| {
                 if result.success {
@@ -468,25 +586,17 @@ fn run_command_lane(system: &dyn System, task: CommandLane, progress: &dyn Fn(St
                 "{}: verifying {}/{} · {target}",
                 task.label,
                 index + 1,
-                task.commands.len()
+                task.refreshes.len()
             ));
-            let probe = if command.program == "pi" {
-                CommandSpec::new("pi", ["list"])
-            } else {
-                CommandSpec::new("herdr", ["plugin", "list"])
+            // Open decision: `herdr plugin update --all` names no plugin, so
+            // its listing only has to answer; nothing is matched in it.
+            let manager = match refresh {
+                Refresh::PiPackage { .. } => Manager::Pi,
+                Refresh::HerdrPlugins => Manager::Herdr,
             };
-            let result = system
-                .run_probe(&probe)
+            let listing = Listing::probe(system, manager, &AtomicBool::new(false))
                 .map_err(|error| format!("verification failed: {error}"))?;
-            if !result.success {
-                return Err(format!(
-                    "verification failed: {}",
-                    crate::install::command_failure_message(&result)
-                ));
-            }
-            if command.program == "pi"
-                && !crate::install::pi_package_installed(&result.stdout, target, scope != "global")
-            {
+            if manager == Manager::Pi && !listing.has_pi_package(target, refresh.local()) {
                 return Err(
                     "verification did not find the selected package in its destination".into(),
                 );
@@ -497,13 +607,13 @@ fn run_command_lane(system: &dyn System, task: CommandLane, progress: &dyn Fn(St
             lane.ok = false;
             lane.detail = format!(
                 "{index}/{} completed; remaining work not updated. {}",
-                task.commands.len(),
+                task.refreshes.len(),
                 crate::ui::failure_text(&error)
             );
             lane.notes.push(format!("Failed: {target} · {scope}"));
             return lane;
         }
-        let after = package_version(system, command);
+        let after = package_version(system, refresh);
         let outcome = match (before, after) {
             (Some(before), Some(after)) if before == after => format!("already current ({after})"),
             (Some(before), Some(after)) => format!("updated {before} → {after}"),
@@ -577,6 +687,7 @@ fn sync_projects_lane(system: &dyn System, repository: &skills::Repository) -> L
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{failed, ScriptedSystem};
 
     #[test]
     fn herdr_gate_skips_inside_and_offers_stop_when_the_server_is_up() {
@@ -584,6 +695,129 @@ mod tests {
         assert_eq!(herdr_gate(true, true, true), HerdrGate::Inside);
         assert_eq!(herdr_gate(true, false, true), HerdrGate::StopServer);
         assert_eq!(herdr_gate(true, false, false), HerdrGate::Ready);
+    }
+
+    #[test]
+    fn update_settles_herdr_from_the_gate_and_the_users_answer() {
+        const STOP: &str = "herdr server stop";
+        const UPDATE: &str = "herdr plugin update --all";
+        let running = r#"{"server":{"running":true}}"#;
+        for (index, (inside, server, stop_ok, skipped, ran)) in [
+            (
+                true,
+                RunningServer::Leave,
+                true,
+                Some(HerdrSkip::Inside),
+                vec![],
+            ),
+            (false, RunningServer::Stop, true, None, vec![STOP, UPDATE]),
+            (
+                false,
+                RunningServer::Stop,
+                false,
+                Some(HerdrSkip::Server),
+                vec![STOP],
+            ),
+            (
+                false,
+                RunningServer::Skip,
+                true,
+                Some(HerdrSkip::Server),
+                vec![],
+            ),
+            (false, RunningServer::Leave, true, None, vec![UPDATE]),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let root = std::env::temp_dir()
+                .join(format!("loom-update-herdr-{}-{index}", std::process::id()));
+            std::fs::create_dir_all(&root).unwrap();
+            let mut system = ScriptedSystem::new()
+                .only(&["herdr"])
+                .home(&root)
+                .cwd(&root)
+                .on("herdr status", crate::testing::ok(running));
+            if !stop_ok {
+                system = system.on(STOP, failed("server busy"));
+            }
+            let gate = detect_herdr(&system, inside);
+            assert_eq!(
+                gate,
+                if inside {
+                    HerdrGate::Inside
+                } else {
+                    HerdrGate::StopServer
+                }
+            );
+
+            let report = run_updates(
+                &system,
+                &Catalog::embedded().unwrap(),
+                &Out::plain(),
+                gate,
+                server,
+                false,
+            );
+
+            assert_eq!(report.herdr_skipped, skipped, "case {index}");
+            let herdr = report
+                .lanes
+                .iter()
+                .filter(|lane| lane.label == "Herdr")
+                .map(|lane| (lane.ok, lane.detail.as_str()))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                herdr,
+                [(true, skipped.map_or("plugins", HerdrSkip::detail))],
+                "case {index}"
+            );
+            let shown = system.shown();
+            assert_eq!(
+                shown
+                    .iter()
+                    .filter(|command| [STOP, UPDATE].contains(&command.as_str()))
+                    .collect::<Vec<_>>(),
+                ran,
+                "case {index}"
+            );
+            assert!(report.vaults_ok, "no Vault is registered");
+            // Without mise the Tools lane fails, so only a skip outranks it.
+            assert!(!report.ok());
+            assert_eq!(
+                report.next_action(),
+                match skipped {
+                    Some(HerdrSkip::Inside) =>
+                        "run `loom update` from a regular terminal to update Herdr",
+                    Some(HerdrSkip::Server) =>
+                        "run `herdr server stop`, then `loom update` to update Herdr",
+                    None => "resolve the reported cause, then run `loom update --yes` again",
+                },
+                "case {index}"
+            );
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn next_action_puts_a_flagged_vault_first_and_a_clean_run_last() {
+        let report = |herdr_skipped, vaults_ok| UpdateReport {
+            lanes: vec![Lane::ok("Skills", "none installed")],
+            herdr_skipped,
+            vaults_ok,
+        };
+        let flagged = report(Some(HerdrSkip::Inside), false);
+        assert!(!flagged.ok());
+        assert_eq!(
+            flagged.next_action(),
+            "run `loom wiki` to repair the flagged Vault"
+        );
+        let clean = report(None, true);
+        assert!(clean.ok());
+        assert_eq!(
+            clean.next_action(),
+            "run `loom status` to verify the updated setup"
+        );
     }
 
     #[test]
@@ -596,55 +830,6 @@ mod tests {
             r#"{"server":{"status":"stopped","running":false}}"#
         ));
         assert!(!herdr_server_running("not json"));
-    }
-
-    #[test]
-    fn package_verification_requires_the_exact_identity_and_destination() {
-        let listed = "User packages:\n npm:@tintinweb/pi-subagents-extra@1.0.0\n npm:@other/foo@1\nProject packages:\n npm:@tintinweb/pi-subagents@0.19.0\n npm:@example/foo@1";
-        assert!(!crate::install::pi_package_installed(
-            listed,
-            "@tintinweb/pi-subagents",
-            false
-        ));
-        assert!(crate::install::pi_package_installed(
-            listed,
-            "npm:@tintinweb/pi-subagents@latest",
-            true
-        ));
-        assert!(!crate::install::pi_package_installed(
-            listed,
-            "@example/foo",
-            false
-        ));
-        assert!(crate::install::pi_package_installed(
-            listed,
-            "@example/foo",
-            true
-        ));
-        assert!(!crate::install::pi_package_installed(
-            "npm:@tintinweb/pi-subagents",
-            "@tintinweb/pi-subagents",
-            false
-        ));
-        let root = std::env::temp_dir().join(format!(
-            "loom-path-pkg-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let package = root
-            .join("github-agrici-daniel-claude-obsidian")
-            .join("2.1.1");
-        std::fs::create_dir_all(&package).unwrap();
-        let listed = format!("Project packages:\n  {}\n", package.display());
-        assert!(crate::install::pi_package_installed(
-            &listed,
-            "github:AgriciDaniel/claude-obsidian",
-            true
-        ));
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -756,15 +941,13 @@ mod tests {
                 after,
                 wrong_scope,
             };
-            let mut commands = vec![CommandSpec::new(
-                "pi",
-                ["install", "-l", "npm:@test/pkg@latest"],
-            )];
+            let local = |spec: &str| Refresh::PiPackage {
+                spec: spec.into(),
+                local: true,
+            };
+            let mut refreshes = vec![local("npm:@test/pkg@latest")];
             if fail_next {
-                commands.push(CommandSpec::new(
-                    "pi",
-                    ["install", "-l", "npm:@test/failing@latest"],
-                ));
+                refreshes.push(local("npm:@test/failing@latest"));
             }
             let progress = std::cell::RefCell::new(Vec::new());
             let lane = run_command_lane(
@@ -772,7 +955,7 @@ mod tests {
                 CommandLane {
                     label: "Pi packages",
                     detail: "refresh".into(),
-                    commands,
+                    refreshes,
                 },
                 &|detail| progress.borrow_mut().push(detail),
             );
@@ -802,44 +985,26 @@ mod tests {
 
     #[test]
     fn optional_tool_failure_only_blocks_packages_if_pi_cannot_be_updated() {
-        struct ToolSystem {
-            pi_install_ok: bool,
-            calls: std::sync::Mutex<Vec<String>>,
-        }
-        impl System for ToolSystem {
-            fn command_exists(&self, _: &str) -> bool {
-                true
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, command: &CommandSpec) -> anyhow::Result<crate::CommandResult> {
-                self.calls.lock().unwrap().push(command.display());
-                Ok(crate::CommandResult {
-                    success: self.pi_install_ok,
-                    stdout: String::new(),
-                    stderr: "Pi installation failed".into(),
-                })
-            }
-        }
+        let tool_system = |pi_install_ok| {
+            ScriptedSystem::new().otherwise(crate::CommandResult {
+                success: pi_install_ok,
+                ..failed("Pi installation failed")
+            })
+        };
         for pi_install_ok in [true, false] {
-            let system = ToolSystem {
-                pi_install_ok,
-                calls: std::sync::Mutex::new(Vec::new()),
-            };
+            let system = tool_system(pi_install_ok);
             assert_eq!(pi_runtime_ready(&system, false), pi_install_ok);
             assert_eq!(
-                *system.calls.lock().unwrap(),
+                system.shown(),
                 vec![format!(
                     "mise install --yes {}",
                     crate::manifest::PI_TOOL_KEY
                 )]
             );
         }
-        let system = ToolSystem {
-            pi_install_ok: false,
-            calls: std::sync::Mutex::new(Vec::new()),
-        };
+        let system = tool_system(false);
         assert!(pi_runtime_ready(&system, true));
-        assert!(system.calls.lock().unwrap().is_empty());
+        assert!(system.calls().is_empty());
     }
 
     #[test]
@@ -864,10 +1029,12 @@ mod tests {
             .version
             .as_deref()
             .expect("external Pi packages carry an exact version");
-        let listed = "User packages:\n  npm:@tintinweb/pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:@tintinweb/pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n";
-        let commands = pi_package_commands(&catalog, listed, false)
+        let listed = &Listing::of(
+            "User packages:\n  npm:@tintinweb/pi-subagents\n  npm:@yassimba/pi-guardrails\n\nProject packages:\n  npm:@tintinweb/pi-subagents\n  npm:@companion-ai/feynman@0.0.0\n",
+        );
+        let commands = pi_package_refreshes(&catalog, listed, false)
             .into_iter()
-            .map(|command| command.display())
+            .map(|refresh| refresh.command().display())
             .collect::<Vec<_>>();
 
         assert!(commands
@@ -884,9 +1051,9 @@ mod tests {
             "Wiki packages are updated only in registered Vaults"
         );
 
-        let windows_commands = pi_package_commands(&catalog, listed, true)
+        let windows_commands = pi_package_refreshes(&catalog, listed, true)
             .into_iter()
-            .map(|command| command.display())
+            .map(|refresh| refresh.command().display())
             .collect::<Vec<_>>();
         assert!(!windows_commands
             .iter()

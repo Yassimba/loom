@@ -1,4 +1,4 @@
-use super::registry::WikiRegistry;
+use super::registry::{Capabilities, WikiRegistry};
 use super::{WikiOperation, CONFLUENCE_KEY, CONFLUENCE_SKILL, PRODUCT_KEY, PYTHON_KEY, QMD_KEY};
 use crate::{CommandSpec, System};
 use anyhow::{bail, Context, Result};
@@ -413,23 +413,24 @@ pub(super) fn install_packages(
     Ok(())
 }
 
-pub(super) fn wiki_tool_keys(qmd: bool, confluence: bool) -> Vec<String> {
+pub(super) fn wiki_tool_keys(capabilities: Capabilities) -> Vec<String> {
     let mut tools = vec![
         PYTHON_KEY.into(),
         crate::manifest::PI_TOOL_KEY.into(),
         PRODUCT_KEY.into(),
     ];
-    if qmd {
+    if capabilities.qmd {
         tools.push(QMD_KEY.into());
     }
-    if confluence {
+    if capabilities.confluence {
         tools.push(CONFLUENCE_KEY.into());
     }
     tools
 }
 
-pub(super) fn wiki_skill_names(confluence: bool) -> Vec<String> {
-    confluence
+pub(super) fn wiki_skill_names(capabilities: Capabilities) -> Vec<String> {
+    capabilities
+        .confluence
         .then(|| CONFLUENCE_SKILL.into())
         .into_iter()
         .collect()

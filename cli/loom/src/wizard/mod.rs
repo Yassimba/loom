@@ -15,7 +15,7 @@ mod wiki_install;
 use state::{Action, ExecStatus, InstallEvent, InstallJob, Wizard};
 pub use state::{Model, WizardOutcome, WizardPurpose};
 
-use crate::session::InstallOwnership;
+use crate::session::{InstallOwnership, Row};
 use crate::{InstallFailure, SkillAgent, SkillDestination, SkillScope, StepStatus, System};
 use anyhow::Result;
 use ratatui::crossterm::event::{
@@ -278,22 +278,24 @@ fn run_install_job(
     sender: &mpsc::Sender<InstallEvent>,
 ) {
     let completed = job.session.completed.clone();
-    let plan_steps = job.session.plan.steps.len();
-    let mcp_steps = job
+    let mcp_rows = job
         .session
-        .plan
-        .steps
-        .iter()
-        .map(|step| matches!(step.operation, crate::Operation::Mcp { .. }))
+        .rows()
+        .filter(|row| {
+            matches!(row, Row::Step(step) if matches!(
+                job.session.plan.steps[*step].operation,
+                crate::Operation::Mcp { .. }
+            ))
+        })
         .collect::<Vec<_>>();
     let mut report = job
         .session
-        .run_attempt(system, &job.cancelled, &mut |index, status| {
-            let status = wizard_status(index, plan_steps, &mcp_steps, &completed, status);
-            let _ = sender.send(InstallEvent::Status(index, status));
+        .run_attempt(system, &job.cancelled, &mut |row, status| {
+            let status = wizard_status(row, &mcp_rows, &completed, status);
+            let _ = sender.send(InstallEvent::Status(row, status));
         });
     for (offset, wiki) in job.wikis.iter().enumerate() {
-        let index = plan_steps + job.session.settings.len() + offset;
+        let index = Row::Vault(offset);
         let result = if job.cancelled.load(std::sync::atomic::Ordering::Relaxed) {
             Err(anyhow::anyhow!("cancelled"))
         } else if completed.contains(&index) && wiki.present(system, &job.cancelled) {
@@ -327,29 +329,19 @@ fn run_install_job(
     let _ = sender.send(InstallEvent::Finished(Box::new(job), report));
 }
 
-fn wizard_status(
-    index: usize,
-    plan_steps: usize,
-    mcp_steps: &[bool],
-    completed: &[usize],
-    status: StepStatus,
-) -> ExecStatus {
+fn wizard_status(row: Row, mcp_rows: &[Row], completed: &[Row], status: StepStatus) -> ExecStatus {
     match status {
         StepStatus::Running => ExecStatus::Running,
         StepStatus::Verifying => ExecStatus::Verifying,
         StepStatus::Prepared | StepStatus::Installed => ExecStatus::Ok(
-            if index < plan_steps {
-                if completed.contains(&index) {
-                    "already installed; verified"
-                } else if mcp_steps[index] {
+            match (row, completed.contains(&row)) {
+                (Row::Step(_), true) => "already installed; verified",
+                (Row::Step(_), false) if mcp_rows.contains(&row) => {
                     "configured; live health not checked"
-                } else {
-                    "installed"
                 }
-            } else if completed.contains(&index) {
-                "already set; verified"
-            } else {
-                "saved"
+                (Row::Step(_), false) => "installed",
+                (_, true) => "already set; verified",
+                (_, false) => "saved",
             }
             .into(),
         ),

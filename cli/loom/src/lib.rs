@@ -12,11 +12,14 @@ pub mod mcp;
 pub mod mcp_migration;
 pub mod ownership;
 mod pi_compat;
+mod presence;
 pub(crate) mod session;
 pub mod settings;
 mod skills;
 pub mod status;
 mod system;
+#[doc(hidden)]
+pub mod testing;
 pub mod ui;
 pub mod uninstall;
 pub mod update;

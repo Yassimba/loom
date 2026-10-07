@@ -479,35 +479,32 @@ fn dependency_depth(id: &str, state: &InstallState, seen: &mut BTreeSet<String>)
     })
 }
 
-fn receipt_status_on_system(receipt: &Receipt, system: &dyn System, home: &Path) -> ReceiptStatus {
+pub(crate) fn receipt_status_on_system(
+    receipt: &Receipt,
+    system: &dyn System,
+    home: &Path,
+) -> ReceiptStatus {
+    use crate::presence::{Listing, ListingError, Manager, ToolRule};
     match receipt {
         Receipt::Manager { manager, target } if manager == "pi" || manager == "herdr" => {
-            if !system.command_exists(manager) {
+            let Some(manager) = Manager::named(manager).filter(|_| system.command_exists(manager))
+            else {
                 return ReceiptStatus::Missing;
-            }
-            let command = if manager == "pi" {
-                CommandSpec::new("pi", ["list"])
-            } else {
-                CommandSpec::new("herdr", ["plugin", "list"])
             };
-            match system.run_probe(&command) {
-                Ok(result)
-                    if result.success
-                        && (result.stdout.contains(target)
-                            || result.stderr.contains(target)
-                            || target
-                                .split(['@', '#'])
-                                .find(|part| !part.is_empty())
-                                .is_some_and(|part| result.stdout.contains(part))) =>
-                {
-                    ReceiptStatus::Clean
-                }
-                Ok(_) => ReceiptStatus::Missing,
-                Err(_) => ReceiptStatus::Modified,
+            match Listing::probe(system, manager, &std::sync::atomic::AtomicBool::new(false)) {
+                // Open decision: receipts keep their looser substring rule.
+                Ok(listing) if listing.mentions(target) => ReceiptStatus::Clean,
+                Ok(_) | Err(ListingError::Failed(_)) => ReceiptStatus::Missing,
+                Err(ListingError::NotRun(_)) => ReceiptStatus::Modified,
             }
         }
         Receipt::MiseTool { key } => {
-            if crate::manifest::selection_contains(home, key) {
+            if crate::presence::tool_present(
+                system,
+                crate::manifest::selection_contains(home, key),
+                None,
+                ToolRule::Selected,
+            ) {
                 ReceiptStatus::Clean
             } else {
                 ReceiptStatus::Missing

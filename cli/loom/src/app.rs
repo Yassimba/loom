@@ -1,3 +1,4 @@
+use crate::presence::{Listing, Manager, ToolRule};
 use crate::session::{InstallOwnership, InstallSession};
 use crate::settings::{curated_settings, setting_state, SettingSpec, SettingsPaths};
 use crate::ui::{confirm_plan, print_plan, Mark, Out};
@@ -400,104 +401,15 @@ fn run_interactive(
 /// Which catalog resources are already on this machine. Uses the same
 /// probes as post-install verification: manager list output for plugins and
 /// packages, and the currently selected destination trees for skills.
-fn pi_packages_from_settings(home: &std::path::Path) -> Option<String> {
-    pi_packages_listing(
-        &crate::settings::pi_agent_dir(home).join("settings.json"),
-        "User packages:",
-    )
-}
-
-/// Prefer Herdr's registry file so the wizard probe does not boot `herdr`.
-fn herdr_plugins_from_registry(home: &std::path::Path) -> Option<String> {
-    let content =
-        std::fs::read_to_string(crate::settings::herdr_dir(home).join("plugins.json")).ok()?;
-    let plugins = serde_json::from_str::<serde_json::Value>(&content).ok()?;
-    let plugins = plugins.as_array()?;
-    let mut listed = String::new();
-    for plugin in plugins {
-        if let Some(id) = plugin.get("plugin_id").and_then(serde_json::Value::as_str) {
-            listed.push_str(id);
-            listed.push('\n');
-        }
-    }
-    Some(listed)
-}
-
-/// A `pi list`-shaped listing read straight from a Pi settings file, so the
-/// installed-state probe never has to boot the Node CLI. `None` when the file
-/// cannot be read safely; a missing file lists nothing.
-pub(crate) fn pi_packages_listing(
-    settings_path: &std::path::Path,
-    heading: &str,
-) -> Option<String> {
-    let content = match std::fs::read_to_string(settings_path) {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Some(format!("{heading}\n"));
-        }
-        Err(_) => return None,
-    };
-    let settings: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let mut listed = format!("{heading}\n");
-    let Some(packages) = settings.get("packages") else {
-        return Some(listed);
-    };
-    let packages = packages.as_array()?;
-    for package in packages {
-        if let Some(source) = package
-            .as_str()
-            .or_else(|| package.get("source").and_then(serde_json::Value::as_str))
-        {
-            let path = std::path::Path::new(source);
-            let resolved = path
-                .is_relative()
-                .then(|| {
-                    settings_path
-                        .parent()
-                        .unwrap_or_else(|| std::path::Path::new(""))
-                        .join(path)
-                })
-                .filter(|path| path.is_dir())
-                .map(|path| path.canonicalize().unwrap_or(path));
-            listed.push_str("  ");
-            listed.push_str(
-                resolved
-                    .as_deref()
-                    .and_then(std::path::Path::to_str)
-                    .unwrap_or(source),
-            );
-            listed.push('\n');
-        }
-    }
-    Some(listed)
-}
-
 pub(crate) fn detect_installed(
     resources: &[Resource],
     status: PrerequisiteStatus,
     system: &(dyn System + Sync),
     destination: &SkillDestination,
 ) -> Vec<bool> {
-    let list_output = |present: bool, program: &str, args: &[&str]| {
-        if !present {
-            return None;
-        }
-        system
-            .run_probe(&CommandSpec::new(program, args.iter().copied()))
-            .ok()
-            .filter(|result| result.success)
-            .map(|result| result.stdout)
-    };
     let home = system.home_dir();
-    // Prefer on-disk registries: `pi list` and `herdr plugin list` boot CLIs.
-    let pi_packages = home
-        .as_deref()
-        .and_then(pi_packages_from_settings)
-        .or_else(|| list_output(status.pi, "pi", &["list"]));
-    let herdr_plugins = home
-        .as_deref()
-        .and_then(herdr_plugins_from_registry)
-        .or_else(|| list_output(status.herdr, "herdr", &["plugin", "list"]));
+    let pi_packages = Listing::quick(system, Manager::Pi, status.pi);
+    let herdr_plugins = Listing::quick(system, Manager::Herdr, status.herdr);
     let skill_trees = destination.trees();
     let skill_names = skill_trees
         .iter()
@@ -518,22 +430,18 @@ pub(crate) fn detect_installed(
             match resource.kind {
                 ResourceKind::McpServer => crate::mcp::Server::from_name(&resource.install_target)
                     .is_ok_and(|server| crate::mcp::configured(server, destination, system)),
-                // A tool is installed when mise manages it (it is in the
-                // selection) or its binary is on PATH from any other installer
-                // (brew, cargo, ...): both are honestly "installed".
-                ResourceKind::Tool => {
-                    selected_tools.contains(&resource.install_target)
-                        || resource
-                            .bin
-                            .as_deref()
-                            .is_some_and(|bin| system.command_exists(bin))
-                }
-                ResourceKind::HerdrPlugin => herdr_plugins.as_ref().is_some_and(|output| {
-                    output.contains(resource.id.trim_start_matches("herdr-plugin:"))
-                }),
-                ResourceKind::PiPackage => pi_packages.as_ref().is_some_and(|output| {
-                    crate::install::pi_package_installed(output, &resource.install_target, false)
-                }),
+                ResourceKind::Tool => crate::presence::tool_present(
+                    system,
+                    selected_tools.contains(&resource.install_target),
+                    resource.bin.as_deref(),
+                    ToolRule::Installed,
+                ),
+                ResourceKind::HerdrPlugin => herdr_plugins
+                    .as_ref()
+                    .is_some_and(|listing| listing.has_herdr_plugin(&resource.id)),
+                ResourceKind::PiPackage => pi_packages
+                    .as_ref()
+                    .is_some_and(|listing| listing.has_pi_package(&resource.install_target, false)),
                 ResourceKind::Skill => {
                     !skill_trees.is_empty()
                         && skill_trees.iter().zip(&skill_names).all(|(tree, names)| {
@@ -596,7 +504,10 @@ pub(crate) fn next_actions(resources: &[Resource], report: &InstallReport) -> Ve
     for resource in resources {
         let installed = report.installed.contains(&resource.id)
             || (resource.kind == ResourceKind::Skill
-                && report.installed.iter().any(|target| target == "skills"));
+                && report
+                    .installed
+                    .iter()
+                    .any(|target| target == crate::install::SKILLS_TARGET));
         if installed && !actions.contains(&resource.next_action) {
             actions.push(resource.next_action.clone());
         }
@@ -702,7 +613,9 @@ pub fn resolve_selectors(catalog: &Catalog, selectors: &Selectors) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::presence::pi_packages_listing;
     use crate::session::adapter_existed;
+    use crate::testing::{failed, ok, ScriptedSystem};
 
     fn temp_root(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
@@ -736,48 +649,13 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    struct NoCommands;
-
-    impl System for NoCommands {
-        fn command_exists(&self, _name: &str) -> bool {
-            false
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            panic!("dry run executed {}", command.display())
-        }
-    }
-
-    struct InstalledSkillSystem {
-        home: std::path::PathBuf,
-        commands: std::sync::Mutex<Vec<String>>,
-    }
-
-    impl System for InstalledSkillSystem {
-        fn command_exists(&self, _name: &str) -> bool {
-            false
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            self.commands.lock().unwrap().push(command.display());
-            Ok(crate::CommandResult {
-                success: false,
-                stdout: String::new(),
-                stderr: String::new(),
-            })
-        }
-
-        fn home_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
-
-        fn current_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
+    /// No binary exists and every command fails.
+    fn installed_skill_system(home: &std::path::Path) -> ScriptedSystem {
+        ScriptedSystem::new()
+            .only(&[])
+            .home(home)
+            .cwd(home)
+            .otherwise(failed(""))
     }
 
     #[test]
@@ -846,10 +724,7 @@ mod tests {
             ..Selectors::default()
         };
 
-        let system = InstalledSkillSystem {
-            home: root.clone(),
-            commands: std::sync::Mutex::new(Vec::new()),
-        };
+        let system = installed_skill_system(&root);
         assert!(install_selected(
             SelectionMode::Setup,
             &catalog,
@@ -862,63 +737,23 @@ mod tests {
             &system,
         )
         .unwrap());
-        assert!(system.commands.into_inner().unwrap().is_empty());
+        assert!(system.calls().is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    struct InstalledPackageSystem {
-        home: std::path::PathBuf,
+    /// Only Pi exists, with one package already installed.
+    fn installed_package_system(home: &std::path::Path) -> ScriptedSystem {
+        ScriptedSystem::new()
+            .only(&["pi"])
+            .home(home)
+            .cwd(home)
+            .on("pi", ok("User packages:\n  npm:@example/already-there\n"))
+            .otherwise(failed(""))
     }
 
-    impl System for InstalledPackageSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi"
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            Ok(crate::CommandResult {
-                success: command.program == "pi",
-                stdout: if command.program == "pi" {
-                    "User packages:\n  npm:@example/already-there\n".into()
-                } else {
-                    String::new()
-                },
-                stderr: String::new(),
-            })
-        }
-
-        fn home_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
-
-        fn current_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
-    }
-
-    struct SettingsOnlySystem {
-        home: std::path::PathBuf,
-    }
-
-    impl System for SettingsOnlySystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi"
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            panic!(
-                "installed-state detection shelled out to {}",
-                command.display()
-            )
-        }
-
-        fn home_dir(&self) -> Option<std::path::PathBuf> {
-            Some(self.home.clone())
-        }
+    /// Only Pi exists; installed-state detection must read files, not run it.
+    fn settings_only_system(home: &std::path::Path) -> ScriptedSystem {
+        ScriptedSystem::new().only(&["pi"]).home(home)
     }
 
     #[test]
@@ -955,6 +790,7 @@ mod tests {
         .collect::<Vec<_>>();
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
 
+        let system = settings_only_system(&root);
         assert_eq!(
             detect_installed(
                 &resources,
@@ -963,10 +799,15 @@ mod tests {
                     herdr: false,
                     mise: true,
                 },
-                &SettingsOnlySystem { home: root.clone() },
+                &system,
                 &destination,
             ),
             [true, true, true, false]
+        );
+        assert!(
+            system.calls().is_empty(),
+            "installed-state detection shelled out to {:?}",
+            system.shown()
         );
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1028,6 +869,7 @@ mod tests {
         let resources = vec![annotate, other];
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
 
+        let system = settings_only_system(&root);
         assert_eq!(
             detect_installed(
                 &resources,
@@ -1036,35 +878,29 @@ mod tests {
                     herdr: true,
                     mise: false,
                 },
-                &SettingsOnlySystem { home: root.clone() },
+                &system,
                 &destination,
             ),
             [true, false]
         );
-    }
-
-    struct GlobalFeynmanSystem;
-
-    impl System for GlobalFeynmanSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi"
-        }
-
-        fn refresh_path(&self) {}
-
-        fn run(&self, command: &CommandSpec) -> Result<crate::CommandResult> {
-            Ok(crate::CommandResult {
-                success: command.program == "pi",
-                stdout: "User packages:\n  npm:@companion-ai/feynman@0.3.47\n".into(),
-                stderr: String::new(),
-            })
-        }
+        assert!(
+            system.calls().is_empty(),
+            "installed-state detection shelled out to {:?}",
+            system.shown()
+        );
     }
 
     #[test]
     fn global_feynman_does_not_satisfy_vault_local_setup() {
         let root = temp_root("vault-feynman");
-        let system = GlobalFeynmanSystem;
+        let listing = "User packages:\n  npm:@companion-ai/feynman@0.3.47\n";
+        let system = ScriptedSystem::new()
+            .only(&["pi"])
+            .on("pi", ok(listing))
+            .otherwise(crate::CommandResult {
+                success: false,
+                ..ok(listing)
+            });
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
         let resource = Resource {
             id: "pi-package:@companion-ai/feynman".into(),
@@ -1098,7 +934,7 @@ mod tests {
     fn successful_tool_sync_records_companions_and_required_runtimes() {
         let root = temp_root("record-tools");
         std::fs::create_dir_all(&root).unwrap();
-        let system = InstalledPackageSystem { home: root.clone() };
+        let system = installed_package_system(&root);
         let destination = SkillDestination::new(Vec::new(), SkillScope::Global, &root, &root);
         let resources = vec![
             Resource {
@@ -1209,7 +1045,7 @@ mod tests {
             false,
             true,
             false,
-            &InstalledPackageSystem { home: root.clone() },
+            &installed_package_system(&root),
         )
         .unwrap());
         assert!(crate::ownership::InstallState::load(&root)
@@ -1282,13 +1118,7 @@ mod tests {
                 mise: false,
             },
         )
-        .record(
-            &InstalledSkillSystem {
-                home: root.clone(),
-                commands: std::sync::Mutex::new(Vec::new()),
-            },
-            &report.installed,
-        )
+        .record(&installed_skill_system(&root), &report.installed)
         .unwrap();
 
         assert!(crate::ownership::InstallState::load(&root)
@@ -1300,7 +1130,13 @@ mod tests {
 
     #[test]
     fn wsl_dry_run_executes_nothing() {
-        assert!(prepare_wsl(&NoCommands, true).unwrap());
+        let system = ScriptedSystem::new().only(&[]);
+        assert!(prepare_wsl(&system, true).unwrap());
+        assert!(
+            system.calls().is_empty(),
+            "dry run executed {:?}",
+            system.shown()
+        );
     }
 
     #[test]

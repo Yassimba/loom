@@ -1,5 +1,6 @@
 mod common;
 
+use loom::testing::{ok, ScriptedSystem};
 use loom::{
     mcp, ownership, uninstall, CommandResult, CommandSpec, SkillAgent, SkillDestination,
     SkillScope, System,
@@ -26,55 +27,16 @@ fn read_generated_json(path: &Path) -> serde_json::Value {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
-struct Stub {
-    home: PathBuf,
-    commands: Mutex<Vec<String>>,
-    missing_binary: Option<&'static str>,
-    pi_version: &'static str,
+fn stub_system(home: &Path) -> ScriptedSystem {
+    pi_stub(home, "1.0.0")
 }
 
-impl Stub {
-    fn new(home: &Path) -> Self {
-        Self {
-            home: home.into(),
-            commands: Mutex::new(Vec::new()),
-            missing_binary: None,
-            pi_version: "1.0.0",
-        }
-    }
-}
-
-impl System for Stub {
-    fn command_exists(&self, name: &str) -> bool {
-        self.missing_binary != Some(name)
-    }
-
-    fn refresh_path(&self) {}
-
-    fn home_dir(&self) -> Option<PathBuf> {
-        Some(self.home.clone())
-    }
-
-    fn current_dir(&self) -> Option<PathBuf> {
-        Some(self.home.join("project"))
-    }
-
-    fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
-        self.commands.lock().unwrap().push(command.display());
-        let mut stdout = String::new();
-        if command.program == "pi" && command.args.first().map(String::as_str) == Some("list") {
-            stdout = "User packages:\n".into();
-        }
-        if command.program == "pi" && command.args.first().map(String::as_str) == Some("--version")
-        {
-            stdout = format!("{}\n", self.pi_version);
-        }
-        Ok(CommandResult {
-            success: true,
-            stdout,
-            stderr: String::new(),
-        })
-    }
+fn pi_stub(home: &Path, pi_version: &str) -> ScriptedSystem {
+    ScriptedSystem::new()
+        .home(home)
+        .cwd(home.join("project"))
+        .on("pi list", ok("User packages:\n"))
+        .on("pi --version", ok(format!("{pi_version}\n")))
 }
 
 fn plan(destination: &SkillDestination) -> loom::InstallPlan {
@@ -138,7 +100,7 @@ fn mcp_with_shared_agent_selection_does_not_require_pending_skill_copies() {
     for scope in [SkillScope::Global, SkillScope::Project] {
         let mut destination = destination("mcp-shared-agents", scope);
         destination.agents = SkillAgent::ALL.to_vec();
-        let stub = Stub::new(&destination.home);
+        let stub = stub_system(&destination.home);
         let claude = destination.home.join(".claude.json");
         write_json(&claude, json!({"mcpServers":{"keep":{"command":"custom"}}}));
         let before = fs::read(&claude).unwrap();
@@ -164,7 +126,7 @@ fn codebase_memory_writes_exact_entry_and_records_tool_dependency() {
         "tool:codebase-memory-mcp",
     );
     let destination = destination(name, SkillScope::Global);
-    let stub = Stub::new(&destination.home);
+    let stub = stub_system(&destination.home);
 
     mcp::install(server, &destination, &stub).unwrap();
 
@@ -195,13 +157,10 @@ fn codebase_memory_accepts_absolute_binary_and_requires_it() {
             "args": args
         }}}),
     );
-    let stub = Stub::new(&destination.home);
+    let stub = stub_system(&destination.home);
     assert!(mcp::configured(server, &destination, &stub));
 
-    let missing = Stub {
-        missing_binary: Some(name),
-        ..Stub::new(&destination.home)
-    };
+    let missing = stub_system(&destination.home).without(name);
     assert!(!mcp::configured(server, &destination, &missing));
     assert!(mcp::install(server, &destination, &missing)
         .unwrap_err()
@@ -285,7 +244,7 @@ fn context7_recovers_interrupted_config_before_merge_and_removal() {
     plan(&destination);
     assert!(!path.exists());
     assert_eq!(fs::read(&pending).unwrap(), before);
-    let stub = Stub::new(&destination.home);
+    let stub = stub_system(&destination.home);
     mcp::install(mcp::Server::Context7, &destination, &stub).unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap()
@@ -325,7 +284,7 @@ fn context7_plan_configures_and_uninstalls_each_scope() {
         );
         let path = mcp::config_path(&destination);
         write_json(&path, json!({"mcpServers":{"other":{"command":"keep"}}}));
-        let stub = Stub::new(&destination.home);
+        let stub = stub_system(&destination.home);
         let report = common::install(&plan, &stub);
         assert!(report.failures.is_empty(), "{report:?}");
         assert!(report.installed.contains(&"mcp-server:context7".into()));
@@ -384,12 +343,12 @@ fn context7_conflicts_stop_before_commands_and_preserve_secrets() {
         let path = mcp::config_path(&destination);
         write_json(&path, json!({"mcpServers":{"context7":value}}));
         let before = fs::read(&path).unwrap();
-        let stub = Stub::new(&destination.home);
+        let stub = stub_system(&destination.home);
         let report = common::install(&plan, &stub);
         assert_eq!(report.failures.len(), 1);
         assert_eq!(report.failures[0].target, "mcp-server:context7");
         assert!(!format!("{report:?}").contains("TOKEN"));
-        assert!(stub.commands.lock().unwrap().is_empty());
+        assert!(stub.calls().is_empty());
         assert_eq!(fs::read(&path).unwrap(), before);
         fs::remove_dir_all(destination.home).unwrap();
     }
@@ -402,7 +361,7 @@ fn context7_preserves_user_auth_and_modified_owned_config() {
     let entry = json!({"url":"https://mcp.context7.com/mcp","headers":{"Authorization":"Bearer private-sentinel"},"exposure":"direct"});
     write_json(&path, json!({"mcpServers":{"context7":entry}}));
     let before = fs::read(&path).unwrap();
-    let stub = Stub::new(&destination.home);
+    let stub = stub_system(&destination.home);
     mcp::install(mcp::Server::Context7, &destination, &stub).unwrap();
     assert_eq!(fs::read(&path).unwrap(), before);
     assert!(ownership::InstallState::load(&destination.home)
@@ -489,7 +448,7 @@ fn context7_and_skills_serialize_shared_ownership_transactions() {
     use std::sync::Condvar;
     use std::time::Duration;
     struct OrderedSystem {
-        stub: Stub,
+        stub: ScriptedSystem,
         skills_started: Mutex<bool>,
         gate: Condvar,
     }
@@ -573,7 +532,7 @@ fn context7_and_skills_serialize_shared_ownership_transactions() {
         },
     });
     let system = OrderedSystem {
-        stub: Stub::new(&d.home),
+        stub: stub_system(&d.home),
         skills_started: Mutex::new(false),
         gate: Condvar::new(),
     };
@@ -650,15 +609,12 @@ fn update_migrates_adapter_configs_receipts_and_package() {
         }}}),
     );
 
-    let old_pi = Stub {
-        pi_version: "0.87.1",
-        ..Stub::new(home)
-    };
+    let old_pi = pi_stub(home, "0.87.1");
     let project = destination.project_root.clone();
     assert!(loom::mcp_migration::migrate_adapter(&old_pi, home, &project).is_err());
     assert!(agent.join("mcp-adapter.json").is_file());
 
-    let stub = Stub::new(home);
+    let stub = stub_system(home);
     let detail = loom::mcp_migration::migrate_adapter(&stub, home, &project)
         .unwrap()
         .unwrap();
@@ -672,9 +628,7 @@ fn update_migrates_adapter_configs_receipts_and_package() {
     );
     assert!(agent.join("mcp-adapter.json.loom-migrated").is_file());
     assert!(stub
-        .commands
-        .lock()
-        .unwrap()
+        .shown()
         .contains(&"pi remove npm:pi-mcp-adapter".into()));
     let state = ownership::InstallState::load(home).unwrap();
     assert!(!state.resources.contains_key("pi-package:pi-mcp-adapter"));
@@ -730,7 +684,7 @@ fn update_repoints_receipts_stranded_on_the_migrated_adapter_file() {
     state.save(home).unwrap();
 
     let project = destination.project_root.clone();
-    let detail = loom::mcp_migration::migrate_adapter(&Stub::new(home), home, &project)
+    let detail = loom::mcp_migration::migrate_adapter(&stub_system(home), home, &project)
         .unwrap()
         .unwrap();
     assert!(detail.contains("2 MCP receipt"), "{detail}");

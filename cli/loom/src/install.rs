@@ -211,6 +211,13 @@ impl Operation {
     }
 }
 
+/// Targets of the plan steps that stand for no single catalog resource. Reports
+/// carry them as text, so their spelling is fixed.
+pub const MISE_TARGET: &str = "mise";
+pub const TOOLS_TARGET: &str = "tools";
+pub const RTK_PI_TARGET: &str = "rtk-pi";
+pub const SKILLS_TARGET: &str = "skills";
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstallStep {
     pub target: String,
@@ -308,7 +315,7 @@ pub fn build_install_plan(
     let mut steps = Vec::new();
     if !tools.is_empty() && !status.mise {
         steps.push(InstallStep {
-            target: "mise".into(),
+            target: MISE_TARGET.into(),
             operation: Operation::BootstrapMise(platform),
         });
     }
@@ -316,13 +323,13 @@ pub fn build_install_plan(
         && (status.pi || needs_pi || tools.contains(&crate::manifest::PI_TOOL_KEY.to_string()));
     if !tools.is_empty() {
         steps.push(InstallStep {
-            target: "tools".into(),
+            target: TOOLS_TARGET.into(),
             operation: Operation::Tools { tools },
         });
     }
     if configure_rtk_pi {
         steps.push(InstallStep {
-            target: "rtk-pi".into(),
+            target: RTK_PI_TARGET.into(),
             operation: Operation::RtkPi,
         });
     }
@@ -337,7 +344,7 @@ pub fn build_install_plan(
             "installing skills needs at least one selected agent"
         );
         steps.push(InstallStep {
-            target: "skills".into(),
+            target: SKILLS_TARGET.into(),
             operation: Operation::Skills {
                 skills,
                 destination: skill_destination.clone(),
@@ -400,7 +407,7 @@ pub fn execute_attempt(
             observer(index, StepStatus::Verifying);
             if step_is_present(step, system, cancelled) {
                 observer(index, StepStatus::Installed);
-                if !step.is_prerequisite() || step.target == "tools" {
+                if !step.is_prerequisite() || step.target == TOOLS_TARGET {
                     report.installed.push(step.target.clone());
                 }
                 continue;
@@ -723,13 +730,16 @@ pub(crate) fn step_is_present(
                 return false;
             };
             tools.iter().all(|key| {
-                selected.contains(key)
-                    && catalog
+                crate::presence::tool_present(
+                    system,
+                    selected.contains(key),
+                    catalog
                         .resources
                         .iter()
                         .find(|resource| resource.install_target == *key)
-                        .and_then(|resource| resource.bin.as_deref())
-                        .is_some_and(|bin| system.command_exists(bin))
+                        .and_then(|resource| resource.bin.as_deref()),
+                    crate::presence::ToolRule::Working,
+                )
             })
         }
         Operation::BootstrapMise(_) => false,
@@ -779,69 +789,6 @@ fn execute_action(
     }
 }
 
-fn path_package_matches(path: &std::path::Path, target: &str, unscoped: &str) -> bool {
-    if let Some(name) = std::fs::read(path.join("package.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|package| package["name"].as_str().map(str::to_owned))
-    {
-        return name == target;
-    }
-    path.to_string_lossy()
-        .to_ascii_lowercase()
-        .contains(&unscoped.to_ascii_lowercase())
-}
-
-/// Pi may list both scopes; only the reviewed destination is evidence.
-pub(crate) fn pi_package_installed(listed: &str, target: &str, project: bool) -> bool {
-    let target = target.strip_prefix("npm:").unwrap_or(target);
-    let target = target
-        .rsplit_once('@')
-        .filter(|(name, _)| !name.is_empty())
-        .map_or(target, |(name, _)| name);
-    let target = target.strip_prefix("git:").map_or(target, |source| {
-        source
-            .rsplit('/')
-            .next()
-            .unwrap_or(source)
-            .trim_end_matches(".git")
-    });
-    let mut in_scope = false;
-    let unscoped = target.rsplit('/').next().unwrap_or(target);
-    listed.lines().map(str::trim).any(|line| {
-        match line {
-            "User packages:" => {
-                in_scope = !project;
-                return false;
-            }
-            "Project packages:" => {
-                in_scope = project;
-                return false;
-            }
-            _ => {}
-        }
-        if !in_scope {
-            return false;
-        }
-        if let Some(spec) = line.strip_prefix("npm:") {
-            return spec
-                .strip_prefix(target)
-                .is_some_and(|rest| rest.is_empty() || rest.starts_with('@'));
-        }
-        if let Some(source) = line.strip_prefix("git:") {
-            return source.rsplit('/').next().is_some_and(|name| {
-                name.split('@')
-                    .next()
-                    .unwrap_or_default()
-                    .trim_end_matches(".git")
-                    == unscoped
-            });
-        }
-        let path = std::path::Path::new(line);
-        path.is_absolute() && path.is_dir() && path_package_matches(path, target, unscoped)
-    })
-}
-
 fn verify_step(
     step: &InstallStep,
     system: &dyn System,
@@ -859,24 +806,17 @@ fn verify_step(
             )
         });
     }
-    let (command, needle, project) = match &step.operation {
-        Operation::PiPackage { name, project, .. } => {
-            (CommandSpec::new("pi", ["list"]), name, Some(*project))
-        }
-        Operation::HerdrPlugin { name, .. } => {
-            (CommandSpec::new("herdr", ["plugin", "list"]), name, None)
-        }
+    use crate::presence::{Listing, Manager};
+    let (manager, needle) = match &step.operation {
+        Operation::PiPackage { name, .. } => (Manager::Pi, name),
+        Operation::HerdrPlugin { name, .. } => (Manager::Herdr, name),
         _ => return None,
     };
-    match system.run_controlled(&command, crate::system::PROBE_COMMAND_TIMEOUT, cancelled) {
-        Ok(result) if !result.success => Some(format!(
-            "verification failed: {}",
-            command_failure_message(&result)
-        )),
-        Ok(result) => {
-            let present = match project {
-                Some(project) => pi_package_installed(&result.stdout, needle, project),
-                None => result.stdout.contains(needle),
+    match Listing::probe(system, manager, cancelled) {
+        Ok(listing) => {
+            let present = match &step.operation {
+                Operation::PiPackage { project, .. } => listing.has_pi_package(needle, *project),
+                _ => listing.has_herdr_plugin(needle),
             };
             (!present)
                 .then(|| format!("verification did not find {needle} in the selected destination"))

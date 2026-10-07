@@ -1,41 +1,9 @@
-use anyhow::Result;
+use loom::testing::ScriptedSystem;
 use loom::wiki::{run_wiki, WikiOperation, WikiRequest};
-use loom::{CommandResult, CommandSpec, System};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
-struct FakeSystem {
-    home: PathBuf,
-    commands: Mutex<Vec<CommandSpec>>,
-}
-
-impl System for FakeSystem {
-    fn command_exists(&self, _name: &str) -> bool {
-        true
-    }
-
-    fn refresh_path(&self) {}
-
-    fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-        self.commands.lock().unwrap().push(command.clone());
-        Ok(CommandResult {
-            success: true,
-            stdout: String::new(),
-            stderr: String::new(),
-        })
-    }
-
-    fn home_dir(&self) -> Option<PathBuf> {
-        Some(self.home.clone())
-    }
-
-    fn current_dir(&self) -> Option<PathBuf> {
-        Some(self.home.clone())
-    }
-}
-
-fn fixture(name: &str, vault_exists: bool) -> (PathBuf, PathBuf, FakeSystem) {
+fn fixture(name: &str, vault_exists: bool) -> (PathBuf, PathBuf, ScriptedSystem) {
     let home =
         std::env::temp_dir().join(format!("loom-wiki-workflow-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&home);
@@ -54,10 +22,7 @@ fn fixture(name: &str, vault_exists: bool) -> (PathBuf, PathBuf, FakeSystem) {
         .unwrap(),
     )
     .unwrap();
-    let system = FakeSystem {
-        home: home.clone(),
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = ScriptedSystem::new().home(&home).cwd(&home);
     (home, vault, system)
 }
 
@@ -65,9 +30,7 @@ fn request(operation: WikiOperation, vault: impl AsRef<Path>) -> WikiRequest {
     WikiRequest {
         operation,
         vault: vault.as_ref().to_path_buf(),
-        feynman: false,
-        confluence: false,
-        qmd: false,
+        capabilities: loom::wiki::Capabilities::default(),
         yes: true,
     }
 }
@@ -118,12 +81,12 @@ fn launch_uses_the_registered_vault_as_pi_working_directory() {
     let result = run_wiki(&request(WikiOperation::Launch, &vault), &system);
     if cfg!(windows) {
         assert!(result.unwrap_err().to_string().contains("WSL2"));
-        assert!(system.commands.lock().unwrap().is_empty());
+        assert!(system.calls().is_empty());
         fs::remove_dir_all(home).unwrap();
         return;
     }
     assert!(result.unwrap());
-    let commands = system.commands.into_inner().unwrap();
+    let commands = system.calls();
     assert_eq!(commands.len(), 1);
     assert_eq!(commands[0].program, "pi");
     assert_eq!(commands[0].cwd.as_deref(), Some(vault.as_path()));
@@ -134,9 +97,9 @@ fn launch_uses_the_registered_vault_as_pi_working_directory() {
 fn opening_is_explicit_and_uses_an_obsidian_uri_for_the_registered_vault() {
     let (home, vault, system) = fixture("open", true);
 
-    assert!(system.commands.lock().unwrap().is_empty());
+    assert!(system.calls().is_empty());
     assert!(run_wiki(&request(WikiOperation::Open, &vault), &system).unwrap());
-    let commands = system.commands.into_inner().unwrap();
+    let commands = system.calls();
     assert_eq!(commands.len(), 1);
     assert!(commands[0]
         .args

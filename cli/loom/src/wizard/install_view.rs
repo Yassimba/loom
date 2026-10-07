@@ -25,7 +25,7 @@ impl Wizard {
                         format!(
                             "Open {} and run pi{}",
                             wiki.record.path.display(),
-                            if wiki.record.confluence {
+                            if wiki.record.capabilities.confluence {
                                 "; configure Confluence with cme config edit auth.confluence"
                             } else {
                                 ""

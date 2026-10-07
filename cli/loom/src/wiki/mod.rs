@@ -12,10 +12,10 @@ mod health;
 mod product;
 mod registry;
 
-pub(crate) use health::{inspect_vault, obsidian_installed, VaultHealth};
+pub(crate) use health::{inspect_vault, obsidian_installed, Check, VaultHealth};
 pub use health::{status_registered, update_registered};
 pub(crate) use product::absolute_vault_target;
-pub use registry::{VaultRecord, WikiRegistry};
+pub use registry::{Capabilities, Capability, VaultRecord, WikiRegistry};
 
 pub const PRODUCT_KEY: &str = "github:AgriciDaniel/claude-obsidian";
 pub const PYTHON_KEY: &str = "python";
@@ -38,9 +38,7 @@ pub enum WikiOperation {
 pub struct WikiRequest {
     pub operation: WikiOperation,
     pub vault: PathBuf,
-    pub feynman: bool,
-    pub confluence: bool,
-    pub qmd: bool,
+    pub capabilities: Capabilities,
     pub yes: bool,
 }
 
@@ -105,7 +103,7 @@ pub(crate) fn setup_with_confirmation(
         "Vault setup, repair, and Pi launch run in WSL2 on Windows. Open Ubuntu, change to the Vault's WSL path, and rerun this command."
     );
     let home = system.home_dir().context("home directory is unavailable")?;
-    let (vault_target, feynman, confluence, qmd) = match request.operation {
+    let (vault_target, capabilities) = match request.operation {
         WikiOperation::Status => return Ok(WikiOutcome::Finished(status_registered(system))),
         WikiOperation::Unregister => {
             let mut registry = WikiRegistry::load(&home)?;
@@ -143,12 +141,7 @@ pub(crate) fn setup_with_confirmation(
                 )?;
                 return Ok(WikiOutcome::Finished(true));
             }
-            (
-                record.path,
-                record.feynman || request.feynman,
-                record.confluence || request.confluence,
-                record.qmd || request.qmd,
-            )
+            (record.path, record.capabilities.union(request.capabilities))
         }
         WikiOperation::Create | WikiOperation::Adopt => (
             absolute_vault_target(
@@ -156,11 +149,14 @@ pub(crate) fn setup_with_confirmation(
                 &request.vault,
                 request.operation == WikiOperation::Create,
             )?,
-            request.feynman,
-            request.confluence,
-            request.qmd,
+            request.capabilities,
         ),
     };
+    let Capabilities {
+        feynman,
+        confluence,
+        qmd,
+    } = capabilities;
     let initializing = matches!(
         request.operation,
         WikiOperation::Create | WikiOperation::Adopt
@@ -174,7 +170,7 @@ pub(crate) fn setup_with_confirmation(
             let cancelled = if inline { cancelled } else { local_cancelled };
             manifest::sync_selected_from(
                 system,
-                &wiki_tool_keys(qmd, confluence),
+                &wiki_tool_keys(capabilities),
                 cancelled,
                 &repository,
             )
@@ -201,7 +197,7 @@ pub(crate) fn setup_with_confirmation(
             crate::skills::install_skills(
                 system,
                 &repository,
-                &wiki_skill_names(confluence),
+                &wiki_skill_names(capabilities),
                 &crate::skills::SkillDestination {
                     agents: vec![crate::skills::SkillAgent::AgentsStandard],
                     scope: crate::skills::SkillScope::Project,
@@ -223,7 +219,7 @@ pub(crate) fn setup_with_confirmation(
     }
     notes.push(search_note);
     let mut registry = WikiRegistry::load(&home)?;
-    registry.register(vault.clone(), feynman, confluence, qmd);
+    registry.register(vault.clone(), capabilities);
     registry.save(&home)?;
     if confluence && interactive {
         crate::wiki_confluence::configure(system)?;
@@ -284,6 +280,7 @@ mod tests {
     use super::health::percent_encode_path;
     use super::product::*;
     use super::*;
+    use crate::testing::{ok, ScriptedSystem};
     use crate::ui::Out;
     use crate::CommandResult;
     use std::fs;
@@ -331,21 +328,19 @@ mod tests {
             &system,
             &VaultRecord {
                 path: root.clone(),
-                feynman: true,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default().with(Capability::Feynman),
             },
         );
         assert!(!health.healthy);
-        for (label, expected) in [
-            ("qmd", crate::ui::Mark::Off),
-            ("Feynman", crate::ui::Mark::Bad),
-            ("QMD (shared)", crate::ui::Mark::Ok),
+        for (check, expected) in [
+            (Check::Capability(Capability::Qmd), crate::ui::Mark::Off),
+            (Check::Capability(Capability::Feynman), crate::ui::Mark::Bad),
+            (Check::SharedQmd, crate::ui::Mark::Ok),
         ] {
             assert!(health
-                .rows
+                .checks
                 .iter()
-                .any(|(mark, name, _)| *name == label && *mark == expected));
+                .any(|(name, mark, _)| *name == check && *mark == expected));
         }
         assert!(system
             .commands
@@ -358,25 +353,6 @@ mod tests {
 
     #[test]
     fn inspect_requires_qmd_only_when_the_vault_selected_it() {
-        struct SharedOnly {
-            root: PathBuf,
-        }
-        impl System for SharedOnly {
-            fn command_exists(&self, name: &str) -> bool {
-                matches!(name, "pi" | "qmd")
-            }
-            fn refresh_path(&self) {}
-            fn home_dir(&self) -> Option<PathBuf> {
-                Some(self.root.clone())
-            }
-            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-                Ok(CommandResult {
-                    success: command.program == "pi",
-                    stdout: "User packages:\nProject packages:\n".into(),
-                    stderr: String::new(),
-                })
-            }
-        }
         let root = temp("optional-qmd");
         let skill = root.join(".agents/skills/qmd");
         fs::create_dir_all(&skill).unwrap();
@@ -384,14 +360,20 @@ mod tests {
         let selection = crate::manifest::conf_d_target(&root);
         fs::create_dir_all(selection.parent().unwrap()).unwrap();
         fs::write(&selection, "[tools]\n\"npm:@tobilu/qmd\" = \"1\"\n").unwrap();
-        let system = SharedOnly { root: root.clone() };
+        let listing = "User packages:\nProject packages:\n";
+        let system = ScriptedSystem::new()
+            .only(&["pi", "qmd"])
+            .home(&root)
+            .on("pi", ok(listing))
+            .otherwise(CommandResult {
+                success: false,
+                ..ok(listing)
+            });
         let leftover = inspect_vault(
             &system,
             &VaultRecord {
                 path: root.clone(),
-                feynman: false,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default(),
             },
         );
         fs::remove_file(skill.join("SKILL.md")).unwrap();
@@ -399,19 +381,18 @@ mod tests {
             &system,
             &VaultRecord {
                 path: root.clone(),
-                feynman: false,
-                confluence: false,
-                qmd: true,
+                capabilities: Capabilities::default().with(Capability::Qmd),
             },
         );
+        let qmd = Check::Capability(Capability::Qmd);
         assert!(leftover
-            .rows
+            .checks
             .iter()
-            .any(|(mark, name, _)| *name == "qmd" && matches!(mark, crate::ui::Mark::Off)));
+            .any(|(name, mark, _)| *name == qmd && matches!(mark, crate::ui::Mark::Off)));
         assert!(selected
-            .rows
+            .checks
             .iter()
-            .any(|(mark, name, _)| *name == "qmd" && matches!(mark, crate::ui::Mark::Bad)));
+            .any(|(name, mark, _)| *name == qmd && matches!(mark, crate::ui::Mark::Bad)));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -424,14 +405,17 @@ mod tests {
         fs::create_dir_all(&b).unwrap();
         fs::write(a.join("note.md"), "knowledge").unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(b.clone(), false, false, false);
-        registry.register(a.clone(), false, false, false);
-        registry.register(a.clone(), true, false, false);
+        let feynman = Capabilities::default().with(Capability::Feynman);
+        registry.register(b.clone(), Capabilities::default());
+        registry.register(a.clone(), Capabilities::default());
+        registry.register(a.clone(), feynman);
         registry.vaults.push(VaultRecord {
             path: a.clone(),
-            feynman: false,
-            confluence: true,
-            qmd: true,
+            capabilities: Capabilities {
+                feynman: false,
+                confluence: true,
+                qmd: true,
+            },
         });
         registry.save(&home).unwrap();
         let loaded = WikiRegistry::load(&home).unwrap();
@@ -440,29 +424,20 @@ mod tests {
             [
                 VaultRecord {
                     path: a.clone(),
-                    feynman: true,
-                    confluence: false,
-                    qmd: false
+                    capabilities: feynman,
                 },
                 VaultRecord {
                     path: b.clone(),
-                    feynman: false,
-                    confluence: false,
-                    qmd: false
+                    capabilities: Capabilities::default(),
                 }
             ]
         );
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         run_wiki(
             &WikiRequest {
                 operation: WikiOperation::Unregister,
                 vault: PathBuf::from("a"),
-                feynman: false,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default(),
                 yes: true,
             },
             &system,
@@ -473,55 +448,97 @@ mod tests {
         fs::remove_dir_all(home).unwrap();
     }
 
-    struct FakeSystem {
-        home: PathBuf,
-        commands: Mutex<Vec<CommandSpec>>,
-    }
-    impl System for FakeSystem {
-        fn command_exists(&self, name: &str) -> bool {
-            name == "pi" || name == "mise" || name == "python" || name == "qmd"
-        }
-        fn refresh_path(&self) {}
-        fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-            self.commands.lock().unwrap().push(command.clone());
-            let stdout = if command.program == "mise"
-                && command.args.first().map(String::as_str) == Some("where")
-            {
-                format!("{}\n", self.home.join("product/claude-obsidian").display())
-            } else if command.program == "pi"
-                && command.args.first().map(String::as_str) == Some("list")
-            {
-                "Project packages:\n  /product/claude-obsidian\n  npm:@companion-ai/feynman@0.3.47\n".into()
-            } else if command.program == "mise" && command.args.iter().any(|arg| arg == "doctor") {
-                r#"{"schema":"claude-obsidian.doctor.v1","ok":true}"#.into()
-            } else {
-                String::new()
-            };
-            Ok(CommandResult {
-                success: true,
-                stdout,
-                stderr: String::new(),
-            })
-        }
-        fn home_dir(&self) -> Option<PathBuf> {
-            Some(self.home.clone())
-        }
-        fn current_dir(&self) -> Option<PathBuf> {
-            Some(self.home.clone())
-        }
+    fn fake_system(home: &Path) -> ScriptedSystem {
+        ScriptedSystem::new()
+            .only(&["pi", "mise", "python", "qmd"])
+            .home(home)
+            .cwd(home)
+            .on(
+                "mise where",
+                ok(format!(
+                    "{}\n",
+                    home.join("product/claude-obsidian").display()
+                )),
+            )
+            .on(
+                "pi list",
+                ok("Project packages:\n  /product/claude-obsidian\n  npm:@companion-ai/feynman@0.3.47\n"),
+            )
+            .on(
+                "mise doctor",
+                ok(r#"{"schema":"claude-obsidian.doctor.v1","ok":true}"#),
+            )
     }
 
     #[test]
     fn confluence_is_only_installed_when_selected_for_the_vault() {
-        assert!(!wiki_tool_keys(false, false)
+        let none = Capabilities::default();
+        let confluence = none.with(Capability::Confluence);
+        assert!(!wiki_tool_keys(none)
             .iter()
             .any(|key| key == CONFLUENCE_KEY || key == QMD_KEY));
-        assert!(wiki_tool_keys(false, true)
+        assert!(wiki_tool_keys(confluence)
             .iter()
             .any(|key| key == CONFLUENCE_KEY));
-        assert!(wiki_tool_keys(true, false).iter().any(|key| key == QMD_KEY));
-        assert!(wiki_skill_names(false).is_empty());
-        assert_eq!(wiki_skill_names(true), [CONFLUENCE_SKILL]);
+        assert!(wiki_tool_keys(none.with(Capability::Qmd))
+            .iter()
+            .any(|key| key == QMD_KEY));
+        assert!(wiki_skill_names(none).is_empty());
+        assert_eq!(wiki_skill_names(confluence), [CONFLUENCE_SKILL]);
+    }
+
+    #[test]
+    fn registry_keeps_its_original_record_fields_on_disk() {
+        let home = temp("registry-format");
+        let path = WikiRegistry::path(&home);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // An absolute path on every platform, as it is spelled in JSON.
+        let vault = home.join("vault");
+        let quoted = serde_json::to_string(&vault).unwrap();
+        // Written before Confluence and QMD existed: only `feynman` is present.
+        fs::write(
+            &path,
+            format!(r#"{{"schemaVersion":1,"vaults":[{{"path":{quoted},"feynman":true}}]}}"#),
+        )
+        .unwrap();
+        let mut registry = WikiRegistry::load(&home).unwrap();
+        assert_eq!(
+            registry.vaults,
+            [VaultRecord {
+                path: vault.clone(),
+                capabilities: Capabilities::default().with(Capability::Feynman),
+            }]
+        );
+        registry.register(
+            vault,
+            registry.vaults[0]
+                .capabilities
+                .union(Capabilities::default().with(Capability::Qmd)),
+        );
+        registry.save(&home).unwrap();
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            format!(
+                r#"{{
+  "schemaVersion": 1,
+  "vaults": [
+    {{
+      "path": {quoted},
+      "feynman": true,
+      "confluence": false,
+      "qmd": true
+    }}
+  ]
+}}"#
+            )
+        );
+        fs::write(
+            &path,
+            format!(r#"{{"schemaVersion":1,"vaults":[{{"path":{quoted}}}]}}"#),
+        )
+        .unwrap();
+        assert!(WikiRegistry::load(&home).is_err());
+        fs::remove_dir_all(home).unwrap();
     }
 
     #[test]
@@ -753,15 +770,15 @@ mod tests {
         )
         .unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(vault.clone(), true, false, false);
+        registry.register(
+            vault.clone(),
+            Capabilities::default().with(Capability::Feynman),
+        );
         registry.save(&home).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         let product = PathBuf::from("/product/claude-obsidian");
         install_packages(&system, &product, &vault, true).unwrap();
-        let commands = system.commands.into_inner().unwrap();
+        let commands = system.calls();
         assert_eq!(commands[0].cwd.as_deref(), Some(vault.as_path()));
         assert!(commands[1]
             .display()
@@ -788,19 +805,14 @@ mod tests {
         let missing = home.join("missing");
         fs::create_dir_all(&present).unwrap();
         let mut registry = WikiRegistry::default();
-        registry.register(missing.clone(), false, false, false);
-        registry.register(present.clone(), false, false, false);
+        registry.register(missing.clone(), Capabilities::default());
+        registry.register(present.clone(), Capabilities::default());
         registry.save(&home).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         assert!(!update_registered(&system, false, &Out::plain()));
         assert!(!missing.exists());
         assert!(system
-            .commands
-            .into_inner()
-            .unwrap()
+            .calls()
             .iter()
             .any(|command| command.program == "pi"
                 && command.cwd.as_deref() == Some(present.as_path())));
@@ -809,35 +821,13 @@ mod tests {
 
     #[test]
     fn reviewed_adoption_forwards_the_exact_hash_without_force() {
-        struct ReviewSystem {
-            commands: Mutex<Vec<CommandSpec>>,
-        }
-        impl System for ReviewSystem {
-            fn command_exists(&self, _name: &str) -> bool {
-                true
-            }
-            fn refresh_path(&self) {}
-            fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
-                let mut commands = self.commands.lock().unwrap();
-                commands.push(command.clone());
-                let stdout = if commands.len() == 1 {
-                    r#"{"schema":"claude-obsidian.adoption-plan.v1","status":"dry-run","changed_paths":[".claude-obsidian.json"],"approved_plan_sha256":"reviewed-hash"}"#.into()
-                } else {
-                    "{}".into()
-                };
-                Ok(CommandResult {
-                    success: true,
-                    stdout,
-                    stderr: String::new(),
-                })
-            }
-        }
         let root = temp("review-hash");
         let vault = root.join("vault");
         fs::create_dir_all(vault.join(".obsidian")).unwrap();
-        let system = ReviewSystem {
-            commands: Mutex::new(Vec::new()),
-        };
+        // The dry run returns the plan to review; applying it returns nothing.
+        let system = ScriptedSystem::new().on("mise --apply", ok("{}")).otherwise(ok(
+            r#"{"schema":"claude-obsidian.adoption-plan.v1","status":"dry-run","changed_paths":[".claude-obsidian.json"],"approved_plan_sha256":"reviewed-hash"}"#,
+        ));
 
         assert!(initialize_vault(
             &system,
@@ -847,7 +837,7 @@ mod tests {
             &mut |_, _| Ok(true),
         )
         .unwrap());
-        let commands = system.commands.into_inner().unwrap();
+        let commands = system.calls();
         assert_eq!(commands.len(), 2);
         assert!(commands[1]
             .args
@@ -1024,10 +1014,7 @@ mod tests {
     fn relative_create_targets_are_made_absolute_before_review() {
         let home = temp("absolute-create");
         fs::create_dir_all(&home).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         assert_eq!(
             absolute_vault_target(&system, Path::new("New Vault"), true).unwrap(),
             home.canonicalize().unwrap().join("New Vault")
@@ -1040,17 +1027,12 @@ mod tests {
         let home = temp("repair-unregistered");
         let vault = home.join("vault");
         fs::create_dir_all(&vault).unwrap();
-        let system = FakeSystem {
-            home: home.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&home);
         let error = run_wiki(
             &WikiRequest {
                 operation: WikiOperation::Repair,
                 vault,
-                feynman: false,
-                confluence: false,
-                qmd: false,
+                capabilities: Capabilities::default(),
                 yes: true,
             },
             &system,
@@ -1061,7 +1043,7 @@ mod tests {
         } else {
             "not registered"
         }));
-        assert!(system.commands.into_inner().unwrap().is_empty());
+        assert!(system.calls().is_empty());
         fs::remove_dir_all(home).unwrap();
     }
 
@@ -1071,10 +1053,7 @@ mod tests {
         let vault = root.join("vault");
         fs::create_dir_all(vault.join(".obsidian")).unwrap();
         fs::write(vault.join(".claude-obsidian.json"), "{}").unwrap();
-        let system = FakeSystem {
-            home: root.clone(),
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system(&root);
         assert!(initialize_vault(
             &system,
             Path::new("/product"),
@@ -1083,7 +1062,7 @@ mod tests {
             &mut |_, _| Ok(true)
         )
         .unwrap());
-        let commands = system.commands.into_inner().unwrap();
+        let commands = system.calls();
         assert_eq!(commands.len(), 1);
         assert!(commands[0].args.iter().any(|arg| arg == "doctor"));
         fs::remove_dir_all(root).unwrap();

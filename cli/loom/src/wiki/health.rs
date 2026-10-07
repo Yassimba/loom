@@ -2,7 +2,7 @@ use super::product::{
     doctor_ok, has_project_packages, install_packages, product_root, project_package_lines,
     setup_qmd,
 };
-use super::registry::{VaultRecord, WikiRegistry};
+use super::registry::{Capability, VaultRecord, WikiRegistry};
 use super::{CONFLUENCE_KEY, CONFLUENCE_SKILL, PRODUCT_KEY, PYTHON_KEY, QMD_KEY};
 use crate::ui::{Mark, Out};
 use crate::{manifest, CommandSpec, System};
@@ -38,28 +38,68 @@ pub fn status_registered(system: &(dyn System + Sync)) -> bool {
             &tidy_path(&record.path, &home),
             "",
         );
-        for (mark, label, detail) in health.rows {
-            if SHARED_WIKI_ROWS.contains(&label) {
-                if !shared.iter().any(|(_, name, _)| *name == label) {
-                    shared.push((mark, label, detail));
+        for (check, mark, detail) in health.checks {
+            if check.shared() {
+                if !shared.iter().any(|(seen, _, _)| *seen == check) {
+                    shared.push((check, mark, detail));
                 }
                 continue;
             }
-            style.row(mark, label, detail);
+            style.row(mark, check.label(), detail);
         }
         healthy &= health.healthy;
     }
-    for (mark, label, detail) in shared {
-        style.row(mark, label, detail);
+    for (check, mark, detail) in shared {
+        style.row(mark, check.label(), detail);
     }
     healthy
 }
 
-pub(super) const SHARED_WIKI_ROWS: [&str; 3] = ["QMD (shared)", "Confluence (shared)", "Obsidian"];
+/// What one health answer is about. Logic matches on this; `label` is display only.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Check {
+    Vault,
+    Core,
+    Capability(Capability),
+    SharedQmd,
+    SharedConfluence,
+    Obsidian,
+}
+
+impl Check {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Vault => "Vault",
+            Self::Core => "claude-obsidian",
+            Self::Capability(Capability::Feynman) => "Feynman",
+            Self::Capability(Capability::Qmd) => "qmd",
+            Self::Capability(Capability::Confluence) => "Confluence",
+            Self::SharedQmd => "QMD (shared)",
+            Self::SharedConfluence => "Confluence (shared)",
+            Self::Obsidian => "Obsidian",
+        }
+    }
+
+    /// Machine-wide answers, reported once below the per-Vault rows.
+    fn shared(self) -> bool {
+        matches!(
+            self,
+            Self::SharedQmd | Self::SharedConfluence | Self::Obsidian
+        )
+    }
+}
 
 pub(crate) struct VaultHealth {
     pub healthy: bool,
-    pub rows: Vec<(crate::ui::Mark, &'static str, String)>,
+    pub checks: Vec<(Check, crate::ui::Mark, String)>,
+}
+
+impl VaultHealth {
+    pub(crate) fn ready(&self, check: Check) -> bool {
+        self.checks
+            .iter()
+            .any(|(name, mark, _)| *name == check && matches!(mark, Mark::Ok))
+    }
 }
 
 /// Inspect only the chosen Vault. Shared by the status report and Wiki picker.
@@ -68,7 +108,7 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
     if !record.path.is_dir() {
         return VaultHealth {
             healthy: false,
-            rows: vec![(Mark::Bad, "Vault", "missing; not recreated".into())],
+            checks: vec![(Check::Vault, Mark::Bad, "missing; not recreated".into())],
         };
     }
     let product = product_root(system).ok();
@@ -81,14 +121,14 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
         && selected
             .iter()
             .any(|key| key == crate::manifest::PI_TOOL_KEY);
-    let mut rows = Vec::new();
+    let mut checks = Vec::new();
     let marker = record.path.join(".claude-obsidian.json").is_file();
     let doctor = product
         .as_ref()
         .is_some_and(|root| doctor_ok(system, root, &record.path));
     // Read the Vault's own Pi settings first; `pi list` boots Node and was
     // the slow part of every health check.
-    let packages = crate::app::pi_packages_listing(
+    let packages = crate::presence::pi_packages_listing(
         &record.path.join(".pi/settings.json"),
         "Project packages:",
     )
@@ -118,13 +158,14 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
             .join("SKILL.md")
             .is_file();
     let core_ready = marker && doctor && pins_ready && core;
+    let selected = record.capabilities;
     let ok = core_ready
-        && (!record.qmd || qmd)
-        && (!record.feynman || feynman)
-        && (!record.confluence || confluence);
-    rows.push((
+        && (!selected.qmd || qmd)
+        && (!selected.feynman || feynman)
+        && (!selected.confluence || confluence);
+    checks.push((
+        Check::Core,
         if core_ready { Mark::Ok } else { Mark::Bad },
-        "claude-obsidian",
         if core_ready {
             "ready".into()
         } else {
@@ -137,17 +178,14 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
             )
         },
     ));
-    for (label, installed, required, detail) in [
-        ("Feynman", feynman, record.feynman, "Vault Pi package"),
-        ("qmd", qmd, record.qmd, "tool + Vault skill"),
-        (
-            "Confluence",
-            confluence,
-            record.confluence,
-            "tool + Vault skill",
-        ),
+    for (capability, installed, detail) in [
+        (Capability::Feynman, feynman, "Vault Pi package"),
+        (Capability::Qmd, qmd, "tool + Vault skill"),
+        (Capability::Confluence, confluence, "tool + Vault skill"),
     ] {
-        rows.push((
+        let required = selected.has(capability);
+        checks.push((
+            Check::Capability(capability),
             if required && installed {
                 Mark::Ok
             } else if required {
@@ -155,7 +193,6 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
             } else {
                 Mark::Off
             },
-            label,
             if required && installed {
                 "ready".into()
             } else if required {
@@ -165,13 +202,13 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
             },
         ));
     }
-    for (label, installed) in [
-        ("QMD (shared)", qmd_tool),
-        ("Confluence (shared)", confluence_tool),
+    for (check, installed) in [
+        (Check::SharedQmd, qmd_tool),
+        (Check::SharedConfluence, confluence_tool),
     ] {
-        rows.push((
+        checks.push((
+            check,
             if installed { Mark::Ok } else { Mark::Off },
-            label,
             if installed {
                 "installed on this machine; does not imply Vault configuration"
             } else {
@@ -181,9 +218,9 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
         ));
     }
     let obsidian = obsidian_installed(system);
-    rows.push((
+    checks.push((
+        Check::Obsidian,
         if obsidian { Mark::Ok } else { Mark::Off },
-        "Obsidian",
         if obsidian {
             "shared desktop app available"
         } else {
@@ -191,7 +228,10 @@ pub(crate) fn inspect_vault(system: &(dyn System + Sync), record: &VaultRecord) 
         }
         .into(),
     ));
-    VaultHealth { healthy: ok, rows }
+    VaultHealth {
+        healthy: ok,
+        checks,
+    }
 }
 
 pub fn update_registered(system: &(dyn System + Sync), interactive: bool, out: &Out) -> bool {
@@ -216,10 +256,15 @@ pub fn update_registered(system: &(dyn System + Sync), interactive: bool, out: &
         }
     };
     let mut missing_tools = Vec::new();
-    if registry.vaults.iter().any(|vault| vault.qmd) && !system.command_exists("qmd") {
+    if registry.vaults.iter().any(|vault| vault.capabilities.qmd) && !system.command_exists("qmd") {
         missing_tools.push(QMD_KEY.into());
     }
-    if registry.vaults.iter().any(|vault| vault.confluence) && !system.command_exists("cme") {
+    if registry
+        .vaults
+        .iter()
+        .any(|vault| vault.capabilities.confluence)
+        && !system.command_exists("cme")
+    {
         missing_tools.push(CONFLUENCE_KEY.into());
     }
     if !missing_tools.is_empty() {
@@ -248,8 +293,8 @@ pub fn update_registered(system: &(dyn System + Sync), interactive: bool, out: &
             .to_string_lossy();
         let activity = format!("Vault {}/{} · {vault_name}", index + 1, vault_count);
         let refreshed = crate::wiki_progress::run(system, interactive, &activity, |system, _| {
-            install_packages(system, &product, &record.path, record.feynman)?;
-            if record.qmd {
+            install_packages(system, &product, &record.path, record.capabilities.feynman)?;
+            if record.capabilities.qmd {
                 setup_qmd(system, &record.path)
             } else {
                 Ok(String::new())

@@ -3,15 +3,63 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultRecord {
-    pub path: PathBuf,
+/// An optional Vault capability; claude-obsidian itself is always part of a Vault.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum Capability {
+    Feynman,
+    Confluence,
+    Qmd,
+}
+
+/// The optional capabilities chosen for one Vault. Its fields are the registry's
+/// on-disk record fields, so existing registries keep loading.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Capabilities {
     pub feynman: bool,
     #[serde(default)]
     pub confluence: bool,
     #[serde(default)]
     pub qmd: bool,
+}
+
+impl Capabilities {
+    pub fn has(self, capability: Capability) -> bool {
+        match capability {
+            Capability::Feynman => self.feynman,
+            Capability::Confluence => self.confluence,
+            Capability::Qmd => self.qmd,
+        }
+    }
+
+    pub fn with(mut self, capability: Capability) -> Self {
+        match capability {
+            Capability::Feynman => self.feynman = true,
+            Capability::Confluence => self.confluence = true,
+            Capability::Qmd => self.qmd = true,
+        }
+        self
+    }
+
+    pub fn union(self, other: Self) -> Self {
+        Self {
+            feynman: self.feynman || other.feynman,
+            confluence: self.confluence || other.confluence,
+            qmd: self.qmd || other.qmd,
+        }
+    }
+
+    /// Whether every capability in `other` is also in this set.
+    pub fn includes(self, other: Self) -> bool {
+        self.union(other) == self
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultRecord {
+    pub path: PathBuf,
+    #[serde(flatten)]
+    pub capabilities: Capabilities,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -77,18 +125,11 @@ impl WikiRegistry {
         self.vaults.len() != before
     }
 
-    pub(crate) fn register(&mut self, path: PathBuf, feynman: bool, confluence: bool, qmd: bool) {
+    pub(crate) fn register(&mut self, path: PathBuf, capabilities: Capabilities) {
         if let Some(record) = self.vaults.iter_mut().find(|record| record.path == path) {
-            record.feynman = feynman;
-            record.confluence = confluence;
-            record.qmd = qmd;
+            record.capabilities = capabilities;
         } else {
-            self.vaults.push(VaultRecord {
-                path,
-                feynman,
-                confluence,
-                qmd,
-            });
+            self.vaults.push(VaultRecord { path, capabilities });
         }
     }
 }

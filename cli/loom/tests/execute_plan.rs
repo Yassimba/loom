@@ -1,6 +1,7 @@
 mod common;
 use common::install;
 use loom::manifest::PI_TOOL_KEY;
+use loom::testing::{failed, ok, ScriptedSystem};
 use loom::{
     execute_attempt, CommandResult, CommandSpec, InstallPlan, InstallStep, Operation, SkillAgent,
     SkillDestination, SkillScope, StepStatus, System,
@@ -11,34 +12,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
-struct FakeSystem {
-    commands: std::sync::Mutex<Vec<String>>,
-}
-
-impl System for FakeSystem {
-    fn command_exists(&self, _name: &str) -> bool {
-        false
-    }
-
-    fn refresh_path(&self) {}
-
-    fn run(&self, command: &CommandSpec) -> anyhow::Result<CommandResult> {
-        let display = command.display();
-        self.commands.lock().unwrap().push(display.clone());
-        if display.contains("mise.run") {
-            Ok(CommandResult {
-                success: false,
+/// No binary exists and bootstrapping mise fails.
+fn fake_system() -> ScriptedSystem {
+    ScriptedSystem::new()
+        .only(&[])
+        .on(
+            "sh",
+            CommandResult {
                 stdout: fake_listing().into(),
-                stderr: "network unavailable".into(),
-            })
-        } else {
-            Ok(CommandResult {
-                success: true,
-                stdout: fake_listing().into(),
-                stderr: String::new(),
-            })
-        }
-    }
+                ..failed("network unavailable")
+            },
+        )
+        .otherwise(ok(fake_listing()))
 }
 
 fn step(target: &str, manager: &str) -> InstallStep {
@@ -140,9 +125,7 @@ fn cancellation_skips_resources_before_launch() {
     let plan = InstallPlan {
         steps: vec![step("pi-package:one", "pi"), step("pi-package:two", "pi")],
     };
-    let system = FakeSystem {
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system();
     let cancelled = AtomicBool::new(true);
     let mut statuses = Vec::new();
 
@@ -150,7 +133,7 @@ fn cancellation_skips_resources_before_launch() {
         statuses.push((index, status))
     });
 
-    assert!(system.commands.lock().unwrap().is_empty());
+    assert!(system.calls().is_empty());
     assert_eq!(
         statuses,
         [
@@ -178,9 +161,7 @@ fn resume_skips_completed_steps_that_still_verify() {
             ["pi-package:two", "pi-package:one"],
         ),
     ] {
-        let system = FakeSystem {
-            commands: Mutex::new(Vec::new()),
-        };
+        let system = fake_system();
         let mut statuses = Vec::new();
         let report = execute_attempt(
             &plan,
@@ -189,7 +170,7 @@ fn resume_skips_completed_steps_that_still_verify() {
             &[completed],
             &mut |index, status| statuses.push((index, status)),
         );
-        assert_eq!(*system.commands.lock().unwrap(), expected_commands);
+        assert_eq!(system.shown(), expected_commands);
         assert!(statuses.contains(&(completed, StepStatus::Verifying)));
         assert!(statuses.contains(&(1 - completed, StepStatus::Running)));
         assert!(report.failures.is_empty());
@@ -438,9 +419,7 @@ fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
             step("pi-package:sample", "pi"),
         ],
     };
-    let system = FakeSystem {
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system();
     let report = install(&plan, &system);
     assert_eq!(report.installed, ["pi-package:sample"]);
     assert_eq!(
@@ -454,7 +433,7 @@ fn failed_prerequisite_skips_only_resources_that_need_that_manager() {
     assert!(report.failures[0].message.contains("network unavailable"));
     assert_eq!(report.failures[1].message, "mise is unavailable");
     assert_eq!(report.failures[2].message, "Herdr is unavailable");
-    let commands = system.commands.into_inner().unwrap();
+    let commands = system.shown();
     assert!(!commands
         .iter()
         .any(|command| command.starts_with("mise ") || command.starts_with("herdr ")));
@@ -477,9 +456,7 @@ fn failed_prerequisite_skips_later_prerequisites_in_its_lane() {
             step("herdr-plugin:jumplist", "herdr"),
         ],
     };
-    let system = FakeSystem {
-        commands: Mutex::new(Vec::new()),
-    };
+    let system = fake_system();
     let mut statuses = Vec::new();
     let report = execute_attempt(
         &plan,
@@ -497,25 +474,14 @@ fn failed_prerequisite_skips_later_prerequisites_in_its_lane() {
         ["mise", "tools", "herdr-plugin:jumplist"]
     );
     assert!(statuses.contains(&(1, StepStatus::Skipped("mise is unavailable".into()))));
-    assert_eq!(system.commands.into_inner().unwrap().len(), 1);
+    assert_eq!(system.calls().len(), 1);
 }
 
-struct HiddenCommandSystem;
-
-impl System for HiddenCommandSystem {
-    fn command_exists(&self, _name: &str) -> bool {
-        false
-    }
-
-    fn refresh_path(&self) {}
-
-    fn run(&self, _command: &CommandSpec) -> anyhow::Result<CommandResult> {
-        Ok(CommandResult {
-            success: true,
-            stdout: fake_listing().into(),
-            stderr: String::new(),
-        })
-    }
+/// No binary exists, even after a bootstrap that reports success.
+fn hidden_command_system() -> ScriptedSystem {
+    ScriptedSystem::new()
+        .only(&[])
+        .otherwise(ok(fake_listing()))
 }
 
 #[test]
@@ -535,7 +501,7 @@ fn successful_bootstrap_must_make_its_manager_available() {
             step("herdr-plugin:jumplist", "herdr"),
         ],
     };
-    let report = install(&plan, &HiddenCommandSystem);
+    let report = install(&plan, &hidden_command_system());
     assert!(report.installed.is_empty());
     assert_eq!(report.failures[0].target, "mise");
     assert_eq!(
@@ -808,7 +774,7 @@ fn parallel_managers_still_report_in_plan_order() {
         ],
     };
 
-    let report = install(&plan, &HiddenCommandSystem);
+    let report = install(&plan, &hidden_command_system());
 
     assert!(report.failures.is_empty());
     assert_eq!(
