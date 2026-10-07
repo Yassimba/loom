@@ -172,7 +172,7 @@
       "label": "feynman",
       "description": "Research-first Pi package with literature search, scientific databases, source-grounded deep research, and research workflows. By Companion AI.",
       "installTarget": "@companion-ai/feynman",
-      "version": "0.5.15",
+      "version": "0.5.16",
       "nextAction": "Ask Pi to run /deepresearch on a scientific topic.",
       "dependencies": [
         "github:AgriciDaniel/claude-obsidian"
