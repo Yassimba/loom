@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.1](https://github.com/Yassimba/loom/compare/pi-guardrails-v0.20.0...pi-guardrails-v0.20.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @aliou/pi-utils-settings to ^0.22.0 ([#368](https://github.com/Yassimba/loom/issues/368)) ([58c2d95](https://github.com/Yassimba/loom/commit/58c2d95e015f36506bed832b2fecbd6f4162dcea))
+
 ## [0.20.0](https://github.com/Yassimba/loom/compare/pi-guardrails-v0.19.0...pi-guardrails-v0.20.0) (2026-09-18)
 
 
