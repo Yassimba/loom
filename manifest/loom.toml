@@ -65,7 +65,7 @@ herdr = { version = "0.9.3", os = ["macos", "linux"] }
 "github:agavra/tuicr" = "v0.27.0"
 
 # browser-based plan and code review for coding agents
-"github:backnotprop/plannotator" = "v0.27.23"
+"github:backnotprop/plannotator" = "v0.28.4"
 
 # forges
 gh = "2.102.0"
