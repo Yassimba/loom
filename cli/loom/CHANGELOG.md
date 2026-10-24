@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/Yassimba/loom/compare/loom-v1.15.0...loom-v1.15.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **manifest:** drop retired tools and follow the last unmapped renames ([d48b299](https://github.com/Yassimba/loom/commit/d48b299fecbd3832cc14a0fe709b16bc5ea08ab8))
+
 ## [1.15.0](https://github.com/Yassimba/loom/compare/loom-v1.14.4...loom-v1.15.0) (2026-10-24)
 
 
