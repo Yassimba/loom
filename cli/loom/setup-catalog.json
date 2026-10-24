@@ -666,6 +666,56 @@
       "dependencies": []
     },
     {
+      "id": "skill:ponytail-audit",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ponytail-audit",
+      "description": "Quality audit of a whole repo: bugs, security holes, what breaks under real load, risky code without tests, slow paths, and what to delete, merge or split. Ranked, each finding explained in plain English. One-shot report, changes nothing. Use for \"audit this codebase\", \"review the whole repo\", \"find bloat\", \"what can I delete\", /ponytail-audit.\n",
+      "installTarget": "ponytail-audit",
+      "nextAction": "Ask your coding agent to use the ponytail-audit skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-debt",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ponytail-debt",
+      "description": "List every `shortcut:` comment (and older `ponytail:` ones) as a debt ledger. One-shot report, changes nothing. Use for \"ponytail debt\", \"what did ponytail defer\", \"list the shortcuts\", /ponytail-debt.\n",
+      "installTarget": "ponytail-debt",
+      "nextAction": "Ask your coding agent to use the ponytail-debt skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-gain",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ponytail-gain",
+      "description": "Show ponytail's measured savings (code, cost, speed) from the benchmark. One-shot display. Use for /ponytail-gain, \"what does ponytail save\", \"ponytail impact\".\n",
+      "installTarget": "ponytail-gain",
+      "nextAction": "Ask your coding agent to use the ponytail-gain skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-help",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ponytail-help",
+      "description": "Quick reference for ponytail levels, skills and commands. One-shot display. Use for /ponytail-help, \"ponytail help\", \"how do I use ponytail\".\n",
+      "installTarget": "ponytail-help",
+      "nextAction": "Ask your coding agent to use the ponytail-help skill.",
+      "dependencies": []
+    },
+    {
+      "id": "skill:ponytail-review",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "ponytail-review",
+      "description": "Quality review of a change: is the logic right, is it safe, does it hold under real load, is risky code tested, is it fast enough, and is every line needed. Reads the connected code, not only the diff. Each finding is explained in plain English. Use for \"review this\", \"code review\", \"review the last commit\", \"review my PR\", \"is this over-engineered\", /ponytail-review.\n",
+      "installTarget": "ponytail-review",
+      "nextAction": "Ask your coding agent to use the ponytail-review skill.",
+      "dependencies": []
+    },
+    {
       "id": "skill:impeccable",
       "kind": "skill",
       "group": "Diagrams and slides",
