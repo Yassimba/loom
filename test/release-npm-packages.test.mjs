@@ -18,6 +18,6 @@ test("release workflow publishes every released plugin before pinning", async ()
   assert.match(workflow, /!cancelled\(\) && needs\.binaries\.result == 'success'/);
   assert.match(
     workflow,
-    /full-install:\n    needs: pin\n(?:    #.*\n)*    if: "!cancelled\(\) && needs\.pin\.result == 'success'"/,
+    /full-install:\n {4}needs: pin\n(?: {4}#.*\n)* {4}if: "!cancelled\(\) && needs\.pin\.result == 'success'"/,
   );
 });
