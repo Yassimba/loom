@@ -38,7 +38,12 @@
         "modularity-design",
         "modularity-review",
         "show-me",
-        "ponytail"
+        "ponytail",
+        "ponytail-audit",
+        "ponytail-debt",
+        "ponytail-gain",
+        "ponytail-help",
+        "ponytail-review"
       ]
     },
     {

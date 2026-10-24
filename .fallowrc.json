@@ -3,8 +3,8 @@
   "entry": [
     "plugins/*/src/index.ts",
     "plugins/*/src/*/index.ts",
-    "plugins/*/hooks/register.tsx",
-    "plugins/*/tests/*.test.tsx",
+    "plugins/*/hooks/register.{ts,tsx}",
+    "plugins/*/tests/*.test.{ts,tsx}",
     "manifest/opencode/plugins/*.js",
     "test/pi-skill-discovery.mjs",
     "scripts/mermaid-compare.ts"

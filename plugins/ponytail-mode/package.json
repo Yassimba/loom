@@ -1,0 +1,7 @@
+{
+  "name": "@yassimba/ponytail-mode",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Code mod that turns on Loom's ponytail skill for every session.",
+  "license": "MIT"
+}
