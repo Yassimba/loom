@@ -31,7 +31,7 @@ function Invoke-WithRetry([scriptblock]$Action) {
 $manifest = Invoke-WithRetry { Invoke-RestMethod -Uri "${ManifestUrl}?$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())" }
 $tag = [regex]::Match(
     $manifest,
-    '(?m)^"ubi:Yassimba/loom" = \{ version = "([^"]+)"'
+    '(?m)^"http:loom-teams" = \{ version = "([^"]+)"'
 ).Groups[1].Value
 if (-not $tag) { throw "${Name}: could not read the release pin from the manifest" }
 

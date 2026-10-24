@@ -49,8 +49,11 @@ fn line_key(line: &str) -> Option<&str> {
 /// Manifest keys that moved: a selection written under the old key follows
 /// the tool to its new key instead of being dropped as "no longer published".
 const RENAMED_KEYS: &[(&str, &str)] = &[
-    // loom-teams left the shared `github:` backend it collided with loom on.
-    ("github:Yassimba/loom[exe=loom-teams]", "ubi:Yassimba/loom"),
+    // loom-teams left the shared `github:` backend it collided with loom on,
+    // then left `ubi:` (deprecated in mise 2026.10) for the `http:` backend.
+    ("github:Yassimba/loom[exe=loom-teams]", "http:loom-teams"),
+    ("ubi:Yassimba/loom", "http:loom-teams"),
+    ("ubi:AlexsJones/llmfit", "github:AlexsJones/llmfit"),
     // mise 2026.10 rejects `exe` on the github backend; each archive holds
     // one executable, so the option was dropped from the key.
     (
@@ -370,7 +373,7 @@ gh = \"2.97.0\"
         std::fs::create_dir_all(target.parent().unwrap()).unwrap();
         std::fs::write(
             &target,
-            "[tools]\n\"github:Yassimba/loom[exe=loom-teams]\" = \"old\"\ngh = \"2.97.0\"\n\"ubi:Yassimba/loom\" = \"new\"\n",
+            "[tools]\n\"github:Yassimba/loom[exe=loom-teams]\" = \"old\"\ngh = \"2.97.0\"\n\"http:loom-teams\" = \"new\"\n",
         )
         .unwrap();
         let backup = target.with_file_name(".loom.toml.loom-old");
@@ -378,7 +381,7 @@ gh = \"2.97.0\"
 
         assert_eq!(
             selected_keys(&home),
-            vec!["ubi:Yassimba/loom".to_string(), "gh".to_string()]
+            vec!["http:loom-teams".to_string(), "gh".to_string()]
         );
         assert!(selection_contains(&home, "gh"));
         assert!(!target.exists());
@@ -387,7 +390,7 @@ gh = \"2.97.0\"
         assert!(target.is_file());
         assert!(!backup.exists());
         assert!(selection_contains(&home, "gh"));
-        assert!(selection_contains(&home, "ubi:Yassimba/loom"));
+        assert!(selection_contains(&home, "http:loom-teams"));
         std::fs::remove_dir_all(home).unwrap();
     }
 
@@ -418,7 +421,12 @@ gh = \"2.97.0\"
     fn renamed_keys_follow_the_tool() {
         assert_eq!(
             current_key("github:Yassimba/loom[exe=loom-teams]"),
-            "ubi:Yassimba/loom"
+            "http:loom-teams"
+        );
+        assert_eq!(current_key("ubi:Yassimba/loom"), "http:loom-teams");
+        assert_eq!(
+            current_key("ubi:AlexsJones/llmfit"),
+            "github:AlexsJones/llmfit"
         );
         assert_eq!(
             current_key("github:Ataraxy-Labs/sem[exe=sem]"),
