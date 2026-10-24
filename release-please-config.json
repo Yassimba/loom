@@ -13,23 +13,58 @@
     },
     "plugins/pi-fast": {
       "release-type": "node",
-      "component": "pi-fast"
+      "component": "pi-fast",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/pi-fast'].version"
+        }
+      ]
     },
     "plugins/pi-code-intelligence": {
       "release-type": "node",
-      "component": "pi-code-intelligence"
+      "component": "pi-code-intelligence",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/pi-code-intelligence'].version"
+        }
+      ]
     },
     "plugins/pi-guardrails": {
       "release-type": "node",
-      "component": "pi-guardrails"
+      "component": "pi-guardrails",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/pi-guardrails'].version"
+        }
+      ]
     },
     "plugins/skill-autocomplete": {
       "release-type": "node",
-      "component": "skill-autocomplete"
+      "component": "skill-autocomplete",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/skill-autocomplete'].version"
+        }
+      ]
     },
     "plugins/pi-loom": {
       "release-type": "node",
-      "component": "pi-loom"
+      "component": "pi-loom",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/pi-loom'].version"
+        }
+      ]
     },
     "plugins/pi-loom-mermaid": {
       "release-type": "node",
@@ -39,6 +74,11 @@
           "type": "json",
           "path": ".claude-plugin/plugin.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/pi-loom-mermaid'].version"
         }
       ]
     },
@@ -50,6 +90,11 @@
           "type": "json",
           "path": ".claude-plugin/plugin.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/ponytail-mode'].version"
         }
       ]
     }

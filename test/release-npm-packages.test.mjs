@@ -27,3 +27,25 @@ test("release workflow publishes every released plugin before pinning", async ()
     /full-install:\n {4}needs: pin\n(?: {4}#.*\n)* {4}if: "!cancelled\(\) && needs\.pin\.result == 'success'"/,
   );
 });
+
+// Capability: a release keeps the root lockfile in step with each plugin.
+// Seam: release-please-config.json and package-lock.json (external contract).
+// Fails when: a plugin has no lockfile extra-file, or the lockfile holds a
+// version its package.json no longer has (the drift every release used to leave).
+test("every released plugin keeps its root lockfile version in step", async () => {
+  const config = JSON.parse(await readFile(join(repoRoot, "release-please-config.json"), "utf8"));
+  const lock = JSON.parse(await readFile(join(repoRoot, "package-lock.json"), "utf8"));
+  const plugins = Object.keys(config.packages).filter((path) => path.startsWith("plugins/"));
+  assert.ok(plugins.length > 0);
+  for (const path of plugins) {
+    assert.ok(
+      config.packages[path]["extra-files"]?.some(
+        (file) =>
+          file.path === "/package-lock.json" && file.jsonpath === `$.packages['${path}'].version`,
+      ),
+      `${path} has no lockfile extra-file`,
+    );
+    const manifest = JSON.parse(await readFile(join(repoRoot, path, "package.json"), "utf8"));
+    assert.equal(lock.packages[path]?.version, manifest.version, `${path} lockfile version`);
+  }
+});
