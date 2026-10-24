@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 const manifest = (version: string) =>
-  `[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v${version}", tag_regex = "^loom-v" }\n`;
+  `[tools]\n"github:Yassimba/loom" = { version = "loom-v${version}" }\n`;
 const installed: ExtensionAPI["exec"] = async () => ({
   stdout: "loom 0.19.1\n",
   stderr: "",
@@ -51,7 +51,7 @@ test("availableLoomVersion compares the exact manifest pin numerically", async (
   for (const invalid of [
     "not TOML",
     manifest("9.0.0").replace("[tools]", "[other]"),
-    manifest("9.0.0").replace("exe=loom]", "exe=loom-teams]"),
+    manifest("9.0.0").replace('"github:Yassimba/loom"', '"github:Yassimba/loom-teams"'),
     manifest("9.0.0").replace('"github:', '# "github:'),
     manifest("9.0.0").replace("loom-v9.0.0", "pi-loom-v9.0.0"),
     `[tools]\n[other]\n${manifest("9.0.0").split("\n").slice(1).join("\n")}`,

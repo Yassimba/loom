@@ -46,7 +46,7 @@ case "$1" in
   *) exit 64 ;;
 esac
 `,
-    '"github:Yassimba/loom[exe=loom]" = "loom-v0.9.0"',
+    '"github:Yassimba/loom" = "loom-v0.9.0"',
   );
 
   const selection = join(home, ".config", "mise", "conf.d", "loom.toml");
@@ -89,7 +89,7 @@ esac
     ]);
     const repairedSelection = await readFile(selection, "utf8");
     assert.match(repairedSelection, /# core:begin/);
-    assert.match(repairedSelection, /github:Yassimba\/loom\[exe=loom\]/);
+    assert.match(repairedSelection, /"github:Yassimba\/loom" =/);
     assert.match(repairedSelection, /tokei = "12\.1\.2"/);
   } finally {
     await rm(root, { recursive: true, force: true });

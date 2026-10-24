@@ -1006,7 +1006,7 @@
       "group": "Tools",
       "label": "sem",
       "description": "Semantic Git history, diffs, blame, and change impact from the command line.",
-      "installTarget": "github:Ataraxy-Labs/sem[exe=sem]",
+      "installTarget": "github:Ataraxy-Labs/sem",
       "nextAction": "Run `sem --help`, then use Sem from the command line when reviewing repository history or change impact.",
       "bin": "sem",
       "companions": []
@@ -1139,7 +1139,7 @@
       "group": "Tools",
       "label": "jira-cli",
       "description": "View, create, and update Jira issues from the terminal. Used by the jira skill.",
-      "installTarget": "github:ankitpokhrel/jira-cli[exe=jira]",
+      "installTarget": "github:ankitpokhrel/jira-cli",
       "nextAction": "Run `jira init` to configure your Jira connection.",
       "bin": "jira",
       "companions": []

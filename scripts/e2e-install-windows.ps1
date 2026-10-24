@@ -219,7 +219,7 @@ if ($env:LOOM_E2E_TOKEI -ne "skip") {
   }
 }
 if ($env:LOOM_E2E_PUBLISHED -eq "true") {
-  $LoomVersion = ([regex]::Match(($ManifestLines -join "`n"), '(?m)^"github:Yassimba/loom\[exe=loom\]" = \{ version = "loom-v([^"]+)"')).Groups[1].Value
+  $LoomVersion = ([regex]::Match(($ManifestLines -join "`n"), '(?m)^"github:Yassimba/loom" = \{ version = "loom-v([^"]+)"')).Groups[1].Value
   if (-not $LoomVersion) { throw "missing published Loom pin" }
 } else {
   $Cargo = Get-Content (Join-Path $Workspace "cli\loom\Cargo.toml")
