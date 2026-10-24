@@ -111,7 +111,12 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
-      - run: npm publish ./${{ matrix.path }} --access public --provenance
+      - env:
+          PACKAGE: ${{ matrix.path }}
+        run: |
+          # A private package (a Claude Code mod) ships through the marketplace, not npm.
+          if [ "$(jq -r '.private // false' "./$PACKAGE/package.json")" = true ]; then exit 0; fi
+          npm publish "./$PACKAGE" --access public --provenance
 
   # Only after every asset is up: point the published manifest at the new
   # tags, so `loom update` and fresh installs never see a partial release.

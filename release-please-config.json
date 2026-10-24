@@ -41,6 +41,17 @@
           "jsonpath": "$.version"
         }
       ]
+    },
+    "plugins/ponytail-mode": {
+      "release-type": "node",
+      "component": "ponytail-mode",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }
