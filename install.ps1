@@ -16,7 +16,7 @@ $script:ProgressPreference = "SilentlyContinue"
 
 $Name = "loom"
 $Repo = "Yassimba/loom"
-$ManifestUrl = "https://raw.githubusercontent.com/$Repo/main/manifest/loom.toml"
+$ManifestUrl = if ($env:LOOM_MANIFEST_URL) { $env:LOOM_MANIFEST_URL } else { "https://raw.githubusercontent.com/$Repo/main/manifest/loom.toml" }
 $ConfD = Join-Path $HOME ".config\mise\conf.d"
 
 function Get-Url([string]$Url, [string]$OutFile) {

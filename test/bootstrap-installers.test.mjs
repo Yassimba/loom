@@ -96,6 +96,18 @@ test("bootstrap CI handoff can exercise the checked-out Loom binary", async () =
   assert.match(windows, /& \$env:LOOM_E2E_LOOM_BIN setup @SetupArgs/);
 });
 
+// Fails when an installer ignores LOOM_MANIFEST_URL: the CI smoke then
+// installs main's manifest and not the manifest of the commit it tests.
+test("bootstraps read the manifest from LOOM_MANIFEST_URL when it is set", async () => {
+  const [unix, windows] = await Promise.all([unixInstaller, windowsInstaller]);
+
+  assert.match(unix, /MANIFEST_URL="\$\{LOOM_MANIFEST_URL:-/);
+  assert.match(
+    windows,
+    /\$ManifestUrl = if \(\$env:LOOM_MANIFEST_URL\) \{ \$env:LOOM_MANIFEST_URL \}/,
+  );
+});
+
 test("bootstraps install only the Loom selection, not the current project", async () => {
   const [unix, windows] = await Promise.all([unixInstaller, windowsInstaller]);
 
