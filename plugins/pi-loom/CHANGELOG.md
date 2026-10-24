@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Yassimba/loom/compare/pi-loom-v0.4.0...pi-loom-v0.4.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **manifest:** drop the github backend options that mise 2026.10 rejects ([289458d](https://github.com/Yassimba/loom/commit/289458dd6676c2d7a58f6efcd29c92b0acd5e356))
+
 ## [0.4.0](https://github.com/Yassimba/loom/compare/pi-loom-v0.3.0...pi-loom-v0.4.0) (2026-10-02)
 
 
