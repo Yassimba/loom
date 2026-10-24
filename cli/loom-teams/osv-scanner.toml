@@ -1,0 +1,15 @@
+# Accepted-risk ignores for osv-scanner (security.yml): transitive crates
+# pinned by keyring with no compatible fixed version. Delete each entry when
+# the parent crate bumps past it.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0370"
+reason = "zvariant is unmaintained (advisory, not a vuln), merged into zbus 6; keyring 4.2.0 still pulls zbus 5 (2026-10-24)"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0371"
+reason = "zbus_names is unmaintained (advisory, not a vuln), merged into zbus 6; keyring 4.2.0 still pulls zbus 5 (2026-10-24)"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0372"
+reason = "zvariant_derive is unmaintained (advisory, not a vuln), merged into zbus 6; keyring 4.2.0 still pulls zbus 5 (2026-10-24)"
