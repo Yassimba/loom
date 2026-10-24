@@ -70,6 +70,28 @@ const RENAMED_KEYS: &[(&str, &str)] = &[
         "npm:@mariozechner/pi-coding-agent",
         "npm:@earendil-works/pi-coding-agent",
     ),
+    // loom's own key lost its `exe` option (mise 2026.10 rejects it).
+    ("github:Yassimba/loom[exe=loom]", "github:Yassimba/loom"),
+    // Plannotator went back from the Loom fork to upstream.
+    (
+        "github:Yassimba/plannotator",
+        "github:backnotprop/plannotator",
+    ),
+    // tokei is split per OS; the cargo:tokei companion covers macOS.
+    ("tokei", "aqua:XAMPPRocky/tokei"),
+];
+
+/// Manifest keys Loom removed on purpose. A selection drops them instead of
+/// keeping them as pinned forever. A user who still wants one keeps it in
+/// their own ~/.config/mise/config.toml.
+const RETIRED_KEYS: &[&str] = &[
+    "github:Yassimba/loom[exe=stackdiff]",
+    "github:zzet/gortex[exe=gortex]",
+    "npm:@colbymchenry/codegraph",
+    "npm:@marp-team/marp-cli",
+    "npm:calldiff",
+    "pipx:headroom-ai",
+    "pipx:serena-agent",
 ];
 
 fn current_key(key: &str) -> &str {
@@ -92,6 +114,7 @@ pub fn selected_keys(home: &std::path::Path) -> Vec<String> {
         .lines()
         .filter(|line| !core.contains(*line))
         .filter_map(line_key)
+        .filter(|key| !RETIRED_KEYS.contains(key))
         .map(|key| current_key(key).to_string())
         .filter(|key| seen.insert(key.clone()))
         .collect();
@@ -155,6 +178,17 @@ fn render_selection(manifest: &str, current: &str, keys: &[String]) -> Result<St
                 }
             }
         }
+    }
+    let retired: Vec<&str> = current
+        .lines()
+        .filter_map(line_key)
+        .filter(|key| RETIRED_KEYS.contains(key))
+        .collect();
+    if !retired.is_empty() {
+        eprintln!(
+            "  ! Loom no longer ships {}; removed from the selection. To keep one, add it to ~/.config/mise/config.toml",
+            retired.join(", ")
+        );
     }
     if !kept.is_empty() {
         eprintln!(
@@ -415,6 +449,63 @@ gh = \"2.97.0\"
             .expect("the bundled manifest pins python");
         let rendered = render_selection(MANIFEST, "", &["python".into()]).unwrap();
         assert!(rendered.contains(&format!("python = {pin}")));
+    }
+
+    #[test]
+    fn retired_keys_leave_the_selection_and_renamed_keys_follow() {
+        let home = std::env::temp_dir().join(format!(
+            "loom-manifest-retired-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let target = conf_d_target(&home);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(
+            &target,
+            "[tools]\n\"pipx:serena-agent\" = \"1.7.0\"\ngh = \"2.97.0\"\n\"github:Yassimba/plannotator\" = \"v0.27.12-loom.1\"\ntokei = \"12.1.2\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            selected_keys(&home),
+            vec![
+                "gh".to_string(),
+                "github:backnotprop/plannotator".to_string(),
+                "aqua:XAMPPRocky/tokei".to_string(),
+            ]
+        );
+        std::fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn retired_and_renamed_keys_are_never_published() {
+        // A key in both lists, or one the bundled manifest still carries,
+        // would make a live tool vanish or loop.
+        for key in RETIRED_KEYS {
+            assert!(
+                BUNDLED_MANIFEST
+                    .lines()
+                    .all(|line| line_key(line) != Some(key)),
+                "{key}"
+            );
+            assert!(RENAMED_KEYS.iter().all(|(old, _)| old != key), "{key}");
+        }
+        for (old, new) in RENAMED_KEYS {
+            assert!(
+                BUNDLED_MANIFEST
+                    .lines()
+                    .all(|line| line_key(line) != Some(old)),
+                "{old}"
+            );
+            assert!(
+                BUNDLED_MANIFEST
+                    .lines()
+                    .any(|line| line_key(line) == Some(new)),
+                "{new} is not in the bundled manifest"
+            );
+        }
     }
 
     #[test]
