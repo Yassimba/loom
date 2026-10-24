@@ -763,9 +763,11 @@ mod tests {
         install_packages(&system, &product, &vault, true).unwrap();
         let commands = system.commands.into_inner().unwrap();
         assert_eq!(commands[0].cwd.as_deref(), Some(vault.as_path()));
+        // Read the pin from the embedded catalog: a hardcoded version fails
+        // every Feynman bump instead of a real regression.
         assert!(commands[1]
             .display()
-            .contains("npm:@companion-ai/feynman@0.5.15"));
+            .contains(&product::feynman_spec().unwrap()));
         assert!(commands
             .iter()
             .all(|command| command.cwd.as_deref() == Some(vault.as_path())));
