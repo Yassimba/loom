@@ -10,7 +10,13 @@ test("release workflow publishes every released plugin before pinning", async ()
   const workflow = await readFile(join(repoRoot, ".github/workflows/release.yml"), "utf8");
 
   assert.match(workflow, /\^plugins\/\.\*--release_created\$/);
-  assert.match(workflow, /npm publish \.\/\$\{\{ matrix\.path \}\}/);
+  assert.match(workflow, /PACKAGE: \$\{\{ matrix\.path \}\}/);
+  assert.match(workflow, /npm publish "\.\/\$PACKAGE"/);
+  // A private package (a Claude Code mod) is released by tag but never published to npm.
+  assert.match(
+    workflow,
+    /jq -r '\.private \/\/ false' "\.\/\$PACKAGE\/package\.json"\)" = true \]; then exit 0; fi/,
+  );
   assert.doesNotMatch(workflow, /npm publish \.\/plugins\/pi-fast/);
   assert.match(workflow, /needs: \[release-please, binaries, npm\]/);
   assert.match(workflow, /needs\.npm\.result == 'success' \|\| needs\.npm\.result == 'skipped'/);
