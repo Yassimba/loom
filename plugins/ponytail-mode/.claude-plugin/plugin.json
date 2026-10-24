@@ -1,6 +1,6 @@
 {
   "name": "ponytail-mode",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn on Loom's ponytail skill for every session, with level switching.",
   "author": {
     "name": "Yassimba"

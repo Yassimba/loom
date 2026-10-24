@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.5](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.4...loom-teams-v0.2.5) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deps:** clear the osv-scanner findings ([68b6fc2](https://github.com/Yassimba/loom/commit/68b6fc2e356f5029d281a2f5dd1dede4cbe7bc26))
+* **manifest:** drop the github backend options that mise 2026.10 rejects ([289458d](https://github.com/Yassimba/loom/commit/289458dd6676c2d7a58f6efcd29c92b0acd5e356))
+* **manifest:** move loom-teams and llmfit off the deprecated ubi backend ([8538dd7](https://github.com/Yassimba/loom/commit/8538dd7ac1d14a5c94e8812466e8782110d2767a))
+
 ## [0.2.4](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.3...loom-teams-v0.2.4) (2026-09-30)
 
 
