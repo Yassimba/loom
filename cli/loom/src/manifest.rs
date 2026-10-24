@@ -51,6 +51,16 @@ fn line_key(line: &str) -> Option<&str> {
 const RENAMED_KEYS: &[(&str, &str)] = &[
     // loom-teams left the shared `github:` backend it collided with loom on.
     ("github:Yassimba/loom[exe=loom-teams]", "ubi:Yassimba/loom"),
+    // mise 2026.10 rejects `exe` on the github backend; each archive holds
+    // one executable, so the option was dropped from the key.
+    (
+        "github:Ataraxy-Labs/sem[exe=sem]",
+        "github:Ataraxy-Labs/sem",
+    ),
+    (
+        "github:ankitpokhrel/jira-cli[exe=jira]",
+        "github:ankitpokhrel/jira-cli",
+    ),
     // Pi moved npm scopes; extensions built for the new scope cannot load
     // under the old package.
     (
@@ -313,13 +323,9 @@ mod tests {
 
     #[test]
     fn sem_selection_keeps_the_reviewed_exact_pin() {
-        let rendered = render_selection(
-            BUNDLED_MANIFEST,
-            "",
-            &["github:Ataraxy-Labs/sem[exe=sem]".into()],
-        )
-        .unwrap();
-        assert!(rendered.contains("\"github:Ataraxy-Labs/sem[exe=sem]\" = \"v0.25.0\""));
+        let rendered =
+            render_selection(BUNDLED_MANIFEST, "", &["github:Ataraxy-Labs/sem".into()]).unwrap();
+        assert!(rendered.contains("\"github:Ataraxy-Labs/sem\" = \"v0.25.0\""));
         let empty = render_selection(BUNDLED_MANIFEST, "", &[]).unwrap();
         assert!(!empty.contains("Ataraxy-Labs"));
     }
@@ -342,7 +348,7 @@ mod tests {
 [tools]
 # core:begin
 node = \"24.19.0\"
-\"github:Yassimba/loom[exe=loom]\" = { version = \"loom-v0.6.2\" }
+\"github:Yassimba/loom\" = { version = \"loom-v0.6.2\" }
 # core:end
 
 gh = \"2.97.0\"
@@ -413,6 +419,10 @@ gh = \"2.97.0\"
         assert_eq!(
             current_key("github:Yassimba/loom[exe=loom-teams]"),
             "ubi:Yassimba/loom"
+        );
+        assert_eq!(
+            current_key("github:Ataraxy-Labs/sem[exe=sem]"),
+            "github:Ataraxy-Labs/sem"
         );
         assert_eq!(current_key("gh"), "gh");
     }

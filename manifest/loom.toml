@@ -18,7 +18,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.21.0"
-"github:Yassimba/loom[exe=loom]" = { version = "loom-v1.14.4", tag_regex = "^loom-v" }
+"github:Yassimba/loom" = { version = "loom-v1.14.4" }
 # core:end
 
 # claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
@@ -44,7 +44,7 @@ bun = "1.4.2"
 herdr = { version = "0.9.3", os = ["macos", "linux"] }
 
 # semantic Git history, diffs, and change impact
-"github:Ataraxy-Labs/sem[exe=sem]" = "v0.25.0"
+"github:Ataraxy-Labs/sem" = "v0.25.0"
 
 # persistent local repository graph and impact analysis
 "npm:codebase-memory-mcp" = "0.11.0"
@@ -69,7 +69,7 @@ herdr = { version = "0.9.3", os = ["macos", "linux"] }
 
 # forges
 gh = "2.102.0"
-"github:ankitpokhrel/jira-cli[exe=jira]" = "v1.7.0"
+"github:ankitpokhrel/jira-cli" = "v1.7.0"
 glab = "1.120.0"
 "github:rcieri/glab-tui" = "v0.9.2"
 

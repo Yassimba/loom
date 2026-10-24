@@ -350,7 +350,7 @@ pub fn record_bootstrap_from_env(home: &Path) -> Result<(), String> {
         scope: OwnershipScope::Global,
         depends_on: vec!["core:node".into(), "core:mise".into()],
         receipts: vec![Receipt::MiseTool {
-            key: "github:Yassimba/loom[exe=loom]".into(),
+            key: "github:Yassimba/loom".into(),
         }],
     });
     state.save(home)

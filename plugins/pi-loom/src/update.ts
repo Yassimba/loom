@@ -24,7 +24,7 @@ export function availableLoomVersion(installed: string, manifest: string): strin
   const tools = manifest.split(/^\[tools\]\s*$/m)[1]?.split(/^\[/m)[0];
   const latest = tools?.match(
     new RegExp(
-      String.raw`^"github:Yassimba/loom\[exe=loom\]"\s*=\s*\{\s*version\s*=\s*"loom-v(${VERSION})"[^\r\n]*\}\s*(?:#.*)?$`,
+      String.raw`^"github:Yassimba/loom"\s*=\s*\{\s*version\s*=\s*"loom-v(${VERSION})"[^\r\n]*\}\s*(?:#.*)?$`,
       "m",
     ),
   );

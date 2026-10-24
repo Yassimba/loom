@@ -125,7 +125,7 @@ awk '/^# core:begin/{inside=1; next} /^# core:end/{inside=0} inside && /^[^#[:sp
   while IFS= read -r pin; do grep -Fqx "$pin" "$selection"; done
 grep -Fxf <(grep -E '^"(aqua:XAMPPRocky/tokei|cargo:tokei)"' "$manifest") "$selection" >/dev/null
 if [[ ${LOOM_E2E_PUBLISHED:-false} == true ]]; then
-  loom_tag=$(awk -F'"' '$2 == "github:Yassimba/loom[exe=loom]" {print $4; exit}' "$manifest")
+  loom_tag=$(awk -F'"' '$2 == "github:Yassimba/loom" {print $4; exit}' "$manifest")
   [[ $loom_tag == loom-v* ]] || { echo "missing published Loom pin" >&2; exit 1; }
   loom_version=${loom_tag#loom-v}
 else

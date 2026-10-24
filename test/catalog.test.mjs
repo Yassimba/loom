@@ -142,7 +142,7 @@ test("software profile keeps Sem CLI and adds exact local code MCP dependencies"
   const sem = catalog.resources.find(({ id }) => id === "tool:sem");
   const pi = catalog.resources.find(({ id }) => id === "tool:pi");
   assert.equal(sem.kind, "tool");
-  assert.equal(sem.installTarget, "github:Ataraxy-Labs/sem[exe=sem]");
+  assert.equal(sem.installTarget, "github:Ataraxy-Labs/sem");
   assert.ok(profile.resources.includes(sem.id));
   assert.deepEqual(
     catalog.resources.filter(({ kind }) => kind === "mcp-server").map(({ label }) => label),

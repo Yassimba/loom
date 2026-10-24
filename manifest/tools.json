@@ -2,7 +2,7 @@
   "comment": "Wizard metadata for the optional (non-core) tools in loom.toml. Keys must match the manifest's tool keys exactly; the catalog generator validates both directions.",
   "tools": [
     {
-      "key": "github:Ataraxy-Labs/sem[exe=sem]",
+      "key": "github:Ataraxy-Labs/sem",
       "label": "sem",
       "description": "Semantic Git history, diffs, blame, and change impact from the command line.",
       "nextAction": "Run `sem --help`, then use Sem from the command line when reviewing repository history or change impact."
@@ -85,7 +85,7 @@
       "nextAction": "Run `gh auth login` once."
     },
     {
-      "key": "github:ankitpokhrel/jira-cli[exe=jira]",
+      "key": "github:ankitpokhrel/jira-cli",
       "label": "jira-cli",
       "bin": "jira",
       "description": "View, create, and update Jira issues from the terminal. Used by the jira skill.",

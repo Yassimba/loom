@@ -132,10 +132,7 @@ test("Unix smoke checks the published pin rather than an unreleased Cargo versio
   try {
     await mkdir(join(workspace, "cli/loom"), { recursive: true });
     await writeFile(join(workspace, "cli/loom/Cargo.toml"), 'version = "9.9.9"\n');
-    await writeFile(
-      manifest,
-      '[tools]\n"github:Yassimba/loom[exe=loom]" = { version = "loom-v1.2.3" }\n',
-    );
+    await writeFile(manifest, '[tools]\n"github:Yassimba/loom" = { version = "loom-v1.2.3" }\n');
     const version = (published) =>
       execFileSync("bash", ["-eu", "-c", `${branch}\nprintf '%s' "$loom_version"`], {
         encoding: "utf8",
