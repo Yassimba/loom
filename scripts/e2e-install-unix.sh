@@ -54,6 +54,9 @@ run_loom() {
 run_loom --version >"$evidence_dir/loom-version.txt" 2>&1
 run_loom add --tool tokei --yes >"$evidence_dir/tokei-install.txt" 2>&1
 "$mise_bin" -C "$HOME" exec -- tokei --version >"$evidence_dir/tokei-version.txt" 2>&1
+# loom-teams is the one `http:` tool: install it on every OS to prove its per-platform URL.
+run_loom add --tool loom-teams --yes >"$evidence_dir/loom-teams-install.txt" 2>&1
+"$mise_bin" -C "$HOME" exec -- loom-teams --version >"$evidence_dir/loom-teams-version.txt" 2>&1
 run_loom status >"$evidence_dir/loom-status.txt" 2>&1
 project=${RUNNER_TEMP}/loom-first-project
 mkdir -p "$project"
@@ -135,6 +138,9 @@ grep -Fqx "loom $loom_version" "$evidence_dir/loom-version.txt"
 tokei_version=$(awk -F'"' -v backend="$tokei_backend" '$2 == backend {print $4; exit}' "$manifest")
 test -n "$tokei_version"
 grep -Fq "tokei $tokei_version" "$evidence_dir/tokei-version.txt"
+grep -Fxf <(grep -E '^"http:loom-teams"' "$manifest") "$selection" >/dev/null
+loom_teams_tag=$(awk -F'"' '$2 == "http:loom-teams" {print $4; exit}' "$manifest")
+grep -Fqx "loom-teams ${loom_teams_tag#loom-teams-v}" "$evidence_dir/loom-teams-version.txt"
 grep -Fq 'loom setup' "$evidence_dir/rerun-stdout.txt"
 grep -Fq 'Everything selected is already set up; no changes made' "$evidence_dir/rerun-stdout.txt"
 grep -Fq 'next run `loom status` to verify the setup' "$evidence_dir/bootstrap-stdout.txt"

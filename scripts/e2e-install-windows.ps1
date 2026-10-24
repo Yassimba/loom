@@ -73,6 +73,11 @@ if ($env:LOOM_E2E_TOKEI -eq "skip") {
   & $Mise -C $HOME exec -- tokei --version *> (Join-Path $EvidenceDir "tokei-version.txt")
   if ($LASTEXITCODE -ne 0) { throw "tokei did not run" }
 }
+# loom-teams is the one `http:` tool: install it on every OS to prove its per-platform URL.
+Invoke-Loom add --tool loom-teams --yes *> (Join-Path $EvidenceDir "loom-teams-install.txt")
+if ($LASTEXITCODE -ne 0) { throw "loom-teams install failed" }
+& $Mise -C $HOME exec -- loom-teams --version *> (Join-Path $EvidenceDir "loom-teams-version.txt")
+if ($LASTEXITCODE -ne 0) { throw "loom-teams did not run" }
 $StatusLog = Join-Path $EvidenceDir "loom-status.txt"
 Invoke-Loom status *> $StatusLog
 if ($LASTEXITCODE -ne 0) { throw "loom status failed" }
@@ -217,6 +222,12 @@ if ($env:LOOM_E2E_TOKEI -ne "skip") {
   if (-not (Select-String -Quiet -Path (Join-Path $EvidenceDir "tokei-version.txt") -SimpleMatch 'tokei 12.1.2')) {
     throw "Tokei version did not match its exact pin"
   }
+}
+$LoomTeamsPin = $ManifestLines | Where-Object { $_ -match '^"http:loom-teams"' } | Select-Object -First 1
+if (-not $SelectionLines.Contains($LoomTeamsPin)) { throw "selection changed the exact loom-teams pin" }
+$LoomTeamsVersion = ([regex]::Match($LoomTeamsPin, 'version = "loom-teams-v([^"]+)"')).Groups[1].Value
+if (-not (Select-String -Quiet -Path (Join-Path $EvidenceDir "loom-teams-version.txt") -SimpleMatch "loom-teams $LoomTeamsVersion")) {
+  throw "loom-teams version did not match its exact pin"
 }
 if ($env:LOOM_E2E_PUBLISHED -eq "true") {
   $LoomVersion = ([regex]::Match(($ManifestLines -join "`n"), '(?m)^"github:Yassimba/loom" = \{ version = "loom-v([^"]+)"')).Groups[1].Value
