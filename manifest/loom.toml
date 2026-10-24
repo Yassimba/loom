@@ -18,7 +18,7 @@
 [tools]
 # core:begin — always installed; everything the setup itself needs
 node = "24.21.0"
-"github:Yassimba/loom" = { version = "loom-v1.14.4" }
+"github:Yassimba/loom" = { version = "loom-v1.15.0" }
 # core:end
 
 # claude-obsidian: an Obsidian vault as the agent's wiki (wiki, save, think,
@@ -32,7 +32,7 @@ python = "3.14.8"
 # releases as loom, but through the http backend: mise keys an install by
 # backend + repo, so two `github:` entries for one repo merge into one tool.
 # The version is the full release tag; the URL is per platform.
-"http:loom-teams" = { version = "loom-teams-v0.2.4", platforms = { macos-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-apple-darwin.tar.gz" }, macos-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-apple-darwin.tar.gz" }, linux-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-unknown-linux-gnu.tar.gz" }, linux-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-unknown-linux-gnu.tar.gz" }, windows-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-pc-windows-msvc.zip" }, windows-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-pc-windows-msvc.zip" } } }
+"http:loom-teams" = { version = "loom-teams-v0.2.5", platforms = { macos-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-apple-darwin.tar.gz" }, macos-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-apple-darwin.tar.gz" }, linux-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-unknown-linux-gnu.tar.gz" }, linux-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-unknown-linux-gnu.tar.gz" }, windows-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-pc-windows-msvc.zip" }, windows-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-pc-windows-msvc.zip" } } }
 
 # agents & multiplexer
 "npm:@earendil-works/pi-coding-agent" = "1.0.0"
