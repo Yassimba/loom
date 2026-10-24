@@ -1,4 +1,4 @@
-import type { Register } from "claude-code";
+import type { PromptSubmitInput, Register } from "claude-code";
 import { atom, read, update } from "claude-code";
 import type { Level } from "../types";
 
@@ -16,22 +16,36 @@ function section(current: Level): string {
     "Before your first reply to a coding task, load the `ponytail` skill with the Skill tool,",
     "and apply it to every reply for the rest of the session.",
     'Switch the level with `/ponytail lite|full|ultra`. "stop ponytail" or "normal mode" turns it off.',
+    "A later message that sets a new level or turns ponytail off overrides this section.",
   ].join("\n");
 }
 
-function levelFrom(args: string): Level | undefined {
-  const word = args.trim().split(/\s+/)[0]?.toLowerCase();
-  return LEVELS.find((name) => name === word);
+// The engine composes the system prompt once per session (again only after a
+// compaction or a resume), so a switch cannot reach the model through the
+// section. The switch goes beside the prompt that made it, and the transcript
+// keeps it for the rest of the session.
+function note(chosen: Level): string {
+  return chosen === "off"
+    ? "Ponytail mode is now off. Ignore the ponytail section of the system prompt from this reply on."
+    : `Ponytail mode is now on, level: ${chosen}. Load the \`ponytail\` skill if it is not loaded, and apply that level from this reply on.`;
+}
+
+function chosenLevel(e: PromptSubmitInput): Level | undefined {
+  if (e.command) {
+    const word = e.command.args.trim().split(/\s+/)[0]?.toLowerCase();
+    return e.command.name === "ponytail" ? LEVELS.find((name) => name === word) : undefined;
+  }
+  return STOP.test(e.text) ? "off" : undefined;
 }
 
 export const register: Register = (on) => {
   on("prompt.submit", async ($, e, next) => {
-    const chosen = e.command?.name === "ponytail" ? levelFrom(e.command.args) : undefined;
-    const isStop = !e.command && STOP.test(e.text);
-    if (chosen || isStop) {
-      await update($, level, () => chosen ?? "off");
+    const chosen = chosenLevel(e);
+    if (!chosen) {
+      return next(e);
     }
-    return next(e);
+    await update($, level, () => chosen);
+    return next({ ...e, context: [...(e.context ?? []), note(chosen)] });
   });
 
   on("prompt.compose", async ($, e, next) => {
