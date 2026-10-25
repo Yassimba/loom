@@ -18,6 +18,9 @@ const LOGO = [
   "          ⠘⢿⠟⠁",
 ];
 
+// A first sync also fetches every Amp thread; later syncs take seconds.
+const SESSION_SYNC_TIMEOUT = 15 * 60_000;
+
 export default function (pi: ExtensionAPI, exec = execVersionCommand) {
   let checked = false;
   const shutdown = new AbortController();
@@ -50,6 +53,11 @@ export default function (pi: ExtensionAPI, exec = execVersionCommand) {
     // checks; branding still applies to every replacement session.
     if (checked || event.reason !== "startup") return;
     checked = true;
+    // Copy agent sessions into the Wiki Vaults that have session sync on.
+    // In the background and once per process; `loom` picks the Vaults.
+    void pi
+      .exec("loom", ["wiki", "sessions", "--quiet"], { timeout: SESSION_SYNC_TIMEOUT })
+      .catch(() => {});
     void checkLoomUpdate(exec, shutdown.signal).then((version) => {
       if (version && !shutdown.signal.aborted) {
         ctx.ui.notify(

@@ -11,3 +11,5 @@ Loom reviews portable vault writes through `claude-obsidian`, keeps product code
 Native Windows uses WSL for vault mutations. Obsidian itself remains optional.
 
 Return to [Apply and verify](changes.md#3-apply-and-verify) to check the requested vault operation and report any remaining setup step.
+
+`loom wiki sessions <path>` turns on agent-session sync for a registered vault and runs it. Without a path it syncs every vault that has it on. Session copies go below Git-ignored `.raw/agent-sessions/`; never commit them, because they can contain secrets.

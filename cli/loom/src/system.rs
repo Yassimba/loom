@@ -38,6 +38,11 @@ pub trait System {
         );
         Ok(())
     }
+    /// Like `run`, but keeps all of stdout. `run` keeps only the last 4 MiB,
+    /// which breaks commands whose stdout is one large JSON document.
+    fn run_unbounded(&self, command: &CommandSpec) -> Result<CommandResult> {
+        self.run(command)
+    }
     fn run_probe(&self, command: &CommandSpec) -> Result<CommandResult> {
         self.run_controlled(command, PROBE_COMMAND_TIMEOUT, &AtomicBool::new(false))
     }
@@ -294,6 +299,18 @@ impl System for RealSystem {
 
     fn run(&self, command: &CommandSpec) -> Result<CommandResult> {
         self.run_controlled(command, MANAGER_COMMAND_TIMEOUT, &AtomicBool::new(false))
+    }
+
+    fn run_unbounded(&self, command: &CommandSpec) -> Result<CommandResult> {
+        let output = command_for(&self.path_value(), command)
+            .stdin(Stdio::null())
+            .output()
+            .with_context(|| format!("could not start {}", command.program))?;
+        Ok(CommandResult {
+            success: output.status.success(),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        })
     }
 
     fn spawn_detached(&self, command: &CommandSpec) -> Result<()> {

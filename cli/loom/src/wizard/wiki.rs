@@ -118,6 +118,7 @@ impl WikiBrowser {
                 feynman: false,
                 confluence: false,
                 qmd: false,
+                sessions: false,
             });
             self.pending.insert(
                 path,

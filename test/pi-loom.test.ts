@@ -181,6 +181,7 @@ function runtime(exec: ExtensionAPI["exec"] = installed) {
   const handlers = new Map<string, Handler>();
   const notices: string[] = [];
   const headers: Parameters<ExtensionContext["ui"]["setHeader"]>[0][] = [];
+  const piCommands: string[][] = [];
   const ctx = {
     mode: "tui",
     hasUI: true,
@@ -192,6 +193,10 @@ function runtime(exec: ExtensionAPI["exec"] = installed) {
   register(
     {
       on: (event: string, handler: Handler) => handlers.set(event, handler),
+      exec: async (command: string, args: string[]) => {
+        piCommands.push([command, ...args]);
+        return { stdout: "", stderr: "", code: 0, killed: false };
+      },
     } as unknown as ExtensionAPI,
     exec,
   );
@@ -201,6 +206,7 @@ function runtime(exec: ExtensionAPI["exec"] = installed) {
   return {
     notices,
     headers,
+    piCommands,
     ctx,
     start: (reason = "startup") => start({ reason }, ctx),
     shutdown: () => shutdown({ reason: "quit" }, ctx),
@@ -283,4 +289,22 @@ test("pi-loom cancels in-flight work and never notifies a shut-down session", as
   finish(new Response(manifest("0.20.0")));
   await setImmediate();
   assert.deepEqual(app.notices, []);
+});
+
+// Capability: pi-loom starts the Wiki session sync once per Pi process.
+// Seam: Pi's session_start event and pi.exec, with fakes for both.
+// Fails when: the sync does not start at startup, starts again on a reload,
+// or runs in a session without a UI (for example a headless subagent).
+test("pi-loom starts the session sync once, at an interactive startup", () => {
+  process.env.PI_OFFLINE = "1";
+  const app = runtime();
+  app.start("reload");
+  assert.deepEqual(app.piCommands, []);
+  app.start();
+  app.start();
+  assert.deepEqual(app.piCommands, [["loom", "wiki", "sessions", "--quiet"]]);
+  const headless = runtime();
+  headless.ctx.hasUI = false;
+  headless.start();
+  assert.deepEqual(headless.piCommands, []);
 });

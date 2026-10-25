@@ -1168,6 +1168,7 @@ mod tests {
             feynman: false,
             confluence: false,
             qmd: false,
+            sessions: false,
         };
         let mut wizard = WikiWizard::new(
             PathBuf::from("/tmp"),

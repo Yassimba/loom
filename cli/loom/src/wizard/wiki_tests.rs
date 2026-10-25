@@ -48,6 +48,7 @@ fn registered_wiki_can_be_unregistered_from_setup() {
         feynman: false,
         confluence: false,
         qmd: false,
+        sessions: false,
     });
     registry.save(&home).unwrap();
     let mut wizard = chooser(&home);
@@ -441,7 +442,8 @@ fn inline_install_requires_file_approval_retries_and_writes_only_the_selected_va
             path: vault.clone(),
             feynman: true,
             confluence: false,
-            qmd: false
+            qmd: false,
+            sessions: false,
         }]
     );
     let ownership = crate::ownership::InstallState::load(&home).unwrap();
@@ -491,6 +493,7 @@ fn selecting_general_skills_on_a_ready_vault_does_not_schedule_wiki_repair() {
         feynman: false,
         confluence: false,
         qmd: false,
+        sessions: false,
     });
     registry.save(&home).unwrap();
     let mut wizard = chooser(&home);
