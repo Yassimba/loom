@@ -97,6 +97,22 @@
           "jsonpath": "$.packages['plugins/ponytail-mode'].version"
         }
       ]
+    },
+    "plugins/loom-sessions": {
+      "release-type": "node",
+      "component": "loom-sessions",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/loom-sessions'].version"
+        }
+      ]
     }
   }
 }

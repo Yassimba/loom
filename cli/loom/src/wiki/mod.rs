@@ -11,6 +11,7 @@ use std::path::PathBuf;
 mod health;
 mod product;
 mod registry;
+pub mod sessions;
 
 pub(crate) use health::{inspect_vault, obsidian_installed, VaultHealth};
 pub use health::{status_registered, update_registered};
@@ -334,6 +335,7 @@ mod tests {
                 feynman: true,
                 confluence: false,
                 qmd: false,
+                sessions: false,
             },
         );
         assert!(!health.healthy);
@@ -392,6 +394,7 @@ mod tests {
                 feynman: false,
                 confluence: false,
                 qmd: false,
+                sessions: false,
             },
         );
         fs::remove_file(skill.join("SKILL.md")).unwrap();
@@ -402,6 +405,7 @@ mod tests {
                 feynman: false,
                 confluence: false,
                 qmd: true,
+                sessions: false,
             },
         );
         assert!(leftover
@@ -432,6 +436,7 @@ mod tests {
             feynman: false,
             confluence: true,
             qmd: true,
+            sessions: false,
         });
         registry.save(&home).unwrap();
         let loaded = WikiRegistry::load(&home).unwrap();
@@ -442,13 +447,15 @@ mod tests {
                     path: a.clone(),
                     feynman: true,
                     confluence: false,
-                    qmd: false
+                    qmd: false,
+                    sessions: false,
                 },
                 VaultRecord {
                     path: b.clone(),
                     feynman: false,
                     confluence: false,
-                    qmd: false
+                    qmd: false,
+                    sessions: false,
                 }
             ]
         );

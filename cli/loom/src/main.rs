@@ -180,6 +180,14 @@ enum WikiCommand {
     Open { path: PathBuf },
     /// Launch Pi with the Vault as its working directory
     Launch { path: PathBuf },
+    /// Copy Claude Code, pi, OpenCode and Amp sessions into Vaults for search
+    Sessions {
+        /// Turn session sync on for this Vault first
+        path: Option<PathBuf>,
+        /// Print nothing; for session-start hooks
+        #[arg(long)]
+        quiet: bool,
+    },
 }
 
 #[derive(Args, Default)]
@@ -881,6 +889,9 @@ fn main() -> Result<()> {
         Command::Uninstall(args) => run_uninstall(args, &system)?,
         Command::Wiki { command } => match command {
             None => loom::wiki::run_interactive(&system)?,
+            Some(WikiCommand::Sessions { path, quiet }) => {
+                loom::wiki::sessions::run(&system, path.as_deref(), quiet)?
+            }
             Some(command) => {
                 let existing = |path| WikiSetupArgs {
                     path,
@@ -895,6 +906,7 @@ fn main() -> Result<()> {
                     WikiCommand::Unregister { path } => (WikiOperation::Unregister, existing(path)),
                     WikiCommand::Open { path } => (WikiOperation::Open, existing(path)),
                     WikiCommand::Launch { path } => (WikiOperation::Launch, existing(path)),
+                    WikiCommand::Sessions { .. } => unreachable!("handled above"),
                 };
                 let request = WikiRequest {
                     operation,

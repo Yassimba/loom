@@ -112,6 +112,7 @@ fn wiki_section_checks_each_registered_vault_not_global_packages() {
             feynman: true,
             confluence: true,
             qmd: true,
+            sessions: false,
         })
         .collect();
     registry.save(&home).unwrap();

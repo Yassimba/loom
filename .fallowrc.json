@@ -2,7 +2,7 @@
   "$schema": "https://docs.fallow.tools/schemas/fallowrc.json",
   "entry": [
     "plugins/*/src/index.ts",
-    "plugins/*/src/*/index.ts",
+    "plugins/**/src/**/index.ts",
     "plugins/*/hooks/register.{ts,tsx}",
     "plugins/*/tests/*.test.{ts,tsx}",
     "manifest/opencode/plugins/*.js",

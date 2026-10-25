@@ -12,6 +12,9 @@ pub struct VaultRecord {
     pub confluence: bool,
     #[serde(default)]
     pub qmd: bool,
+    /// Copy coding-agent sessions into this Vault (`loom wiki sessions`).
+    #[serde(default)]
+    pub sessions: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -88,6 +91,7 @@ impl WikiRegistry {
                 feynman,
                 confluence,
                 qmd,
+                sessions: false,
             });
         }
     }

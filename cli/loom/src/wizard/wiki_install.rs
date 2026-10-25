@@ -73,6 +73,7 @@ impl WikiBrowser {
                         feynman,
                         confluence,
                         qmd,
+                        sessions: record.sessions,
                     },
                     operation: needs_wiki.then(|| {
                         self.pending

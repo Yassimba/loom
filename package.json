@@ -22,7 +22,7 @@
     "audit": "fallow audit",
     "audit:brief": "fallow review --brief",
     "pack:check": "npm pack --dry-run --workspaces",
-    "check:mods": "claude plugin validate plugins/pi-loom-mermaid && claude plugin test plugins/pi-loom-mermaid && claude plugin validate plugins/ponytail-mode && claude plugin test plugins/ponytail-mode",
+    "check:mods": "claude plugin validate plugins/pi-loom-mermaid && claude plugin test plugins/pi-loom-mermaid && claude plugin validate plugins/ponytail-mode && claude plugin test plugins/ponytail-mode && claude plugin validate plugins/loom-sessions && claude plugin test plugins/loom-sessions",
     "check:js": "npm test && npm run typecheck && npm run lint && npm run catalog:check && npm run pack:check && npm run check:mods",
     "check": "npm run check:js && npm run check:rust"
   },

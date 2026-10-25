@@ -197,6 +197,19 @@ loom wiki unregister /path/to/Vault
 
 The index is a snapshot, so run `repair` after editing notes. `unregister` removes Loom's machine record without deleting notes. If you enable Confluence export, CME stores its credentials as owner-only plaintext.
 
+### Agent sessions
+
+`loom wiki sessions /path/to/Vault` copies your Claude Code, pi, OpenCode and Amp sessions into the Vault as Markdown, below the Git-ignored `.raw/agent-sessions/`, and adds them to the Vault's QMD search as the `agent-sessions` collection. Each file keeps prompts, answers and one line per tool call. Tool output and thinking are dropped, token-shaped strings are redacted, and subagent sessions are skipped. Amp threads are fetched with the `amp` CLI.
+
+After that first run, `loom wiki sessions` syncs every Vault that has sessions on, converting only sessions that changed. Pi (through `pi-loom`) and Claude Code (through the `loom-sessions` plugin) run it in the background at session start, so a session reaches the Vault when your next session starts.
+
+```bash
+loom wiki sessions ~/notes
+claude plugin install loom-sessions@loom
+```
+
+Session copies can contain secrets that redaction misses. Keep the Vault on your own machine.
+
 ## Install without Loom
 
 Use the Vercel skills CLI to install Loom skills directly into OpenCode, Claude Code, Codex, Cursor, or another supported agent:
