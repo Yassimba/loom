@@ -1,12 +1,12 @@
 {
-  "cli/loom": "1.15.1",
+  "cli/loom": "1.16.0",
   "cli/loom-teams": "0.2.5",
   "plugins/pi-fast": "2.0.0",
   "plugins/pi-code-intelligence": "0.3.0",
   "plugins/pi-guardrails": "0.20.1",
   "plugins/skill-autocomplete": "0.2.0",
-  "plugins/pi-loom": "0.4.1",
+  "plugins/pi-loom": "0.5.0",
   "plugins/pi-loom-mermaid": "0.10.0",
   "plugins/ponytail-mode": "0.2.0",
-  "plugins/loom-sessions": "0.1.0"
+  "plugins/loom-sessions": "0.2.0"
 }

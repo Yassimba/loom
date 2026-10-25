@@ -1,6 +1,6 @@
 {
   "name": "loom-sessions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Copy Claude Code, pi, OpenCode and Amp sessions into your Loom Wiki Vaults, so agents can search past work.",
   "author": {
     "name": "Yassimba"
