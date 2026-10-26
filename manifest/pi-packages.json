@@ -51,7 +51,7 @@
     },
     {
       "name": "@tintinweb/pi-subagents",
-      "version": "0.19.0",
+      "version": "0.22.0",
       "label": "subagents",
       "description": "Run Claude Code-style subagents asynchronously, steer them while they work, and inspect their live conversations. By tintinweb.",
       "nextAction": "Ask Pi to run an Explore subagent in the background."
