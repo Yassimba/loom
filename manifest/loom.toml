@@ -35,7 +35,7 @@ python = "3.14.8"
 "http:loom-teams" = { version = "loom-teams-v0.2.5", platforms = { macos-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-apple-darwin.tar.gz" }, macos-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-apple-darwin.tar.gz" }, linux-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-unknown-linux-gnu.tar.gz" }, linux-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-unknown-linux-gnu.tar.gz" }, windows-arm64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-aarch64-pc-windows-msvc.zip" }, windows-x64 = { url = "https://github.com/Yassimba/loom/releases/download/{{ version }}/loom-teams-x86_64-pc-windows-msvc.zip" } } }
 
 # agents & multiplexer
-"npm:@earendil-works/pi-coding-agent" = "1.0.0"
+"npm:@earendil-works/pi-coding-agent" = "1.4.0"
 # Herdr Annotate actions and the Mermaid document CLI run on Bun.
 bun = "1.4.3"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its
