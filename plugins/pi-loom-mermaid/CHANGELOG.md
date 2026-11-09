@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.10.0...pi-loom-mermaid-v0.10.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **install:** read the manifest from LOOM_MANIFEST_URL in install.ps1 ([eb70f43](https://github.com/Yassimba/loom/commit/eb70f435d9f0a8d17563eecdd249b779dc36c560))
+* **pi-loom-mermaid:** draw character art only in the terminal ([0129329](https://github.com/Yassimba/loom/commit/01293290311d66ab23799ef2329f8c5303a60a0e))
+
 ## [0.10.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.9.0...pi-loom-mermaid-v0.10.0) (2026-10-04)
 
 
