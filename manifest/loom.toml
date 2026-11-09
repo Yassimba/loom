@@ -37,7 +37,7 @@ python = "3.14.8"
 # agents & multiplexer
 "npm:@earendil-works/pi-coding-agent" = "1.0.0"
 # Herdr Annotate actions and the Mermaid document CLI run on Bun.
-bun = "1.4.3"
+bun = "1.4.4"
 # herdr ships no stable Windows assets yet; on Windows the CLI keeps its
 # manual install instruction and mise skips this entry.
 herdr = { version = "0.9.5", os = ["macos", "linux"] }
