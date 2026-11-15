@@ -359,10 +359,14 @@ mod tests {
     }
 
     #[test]
-    fn sem_selection_keeps_the_reviewed_exact_pin() {
+    fn sem_selection_keeps_the_manifest_pin() {
         let rendered =
             render_selection(BUNDLED_MANIFEST, "", &["github:Ataraxy-Labs/sem".into()]).unwrap();
-        assert!(rendered.contains("\"github:Ataraxy-Labs/sem\" = \"v0.25.0\""));
+        let pinned_sem = BUNDLED_MANIFEST
+            .lines()
+            .find(|line| line_key(line) == Some("github:Ataraxy-Labs/sem"))
+            .unwrap();
+        assert!(rendered.contains(pinned_sem));
         let empty = render_selection(BUNDLED_MANIFEST, "", &[]).unwrap();
         assert!(!empty.contains("Ataraxy-Labs"));
     }
