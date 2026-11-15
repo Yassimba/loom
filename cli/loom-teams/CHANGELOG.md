@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.5...loom-teams-v0.2.6) (2026-11-15)
+
+
+### Bug Fixes
+
+* **deps:** move rustix, quinn-udp and minimatch to patched versions ([#423](https://github.com/Yassimba/loom/issues/423)) ([ecd5f18](https://github.com/Yassimba/loom/commit/ecd5f1879753bccee654c3fd3fa3aa1243d31172))
+
 ## [0.2.5](https://github.com/Yassimba/loom/compare/loom-teams-v0.2.4...loom-teams-v0.2.5) (2026-10-24)
 
 

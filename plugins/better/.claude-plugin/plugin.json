@@ -1,6 +1,6 @@
 {
   "name": "better",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "/better rewrites a prompt into the version a top professional would ask for, checked against your files, and puts it in the prompt box.",
   "author": {
     "name": "Yassimba"
