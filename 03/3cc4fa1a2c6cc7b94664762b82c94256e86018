@@ -1,0 +1,19 @@
+biome.json
+  s_26ed2a08afb01b::t_5248873dcbab0b 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "033cc4fa1a2c6cc7b94664762b82c94256e86018",
+  "prompts": {},
+  "sessions": {
+    "s_26ed2a08afb01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "340b9701-5aaa-4a26-a486-4ecf3b34e3ac",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
