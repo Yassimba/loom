@@ -1,0 +1,23 @@
+cli/loom/setup-catalog.json
+  s_26ed2a08afb01b::t_1cb0f90613f251 309,354,358
+skills/blueprint/SKILL.md
+  s_26ed2a08afb01b::t_d8dd3377d808aa 16
+skills/code-review/SKILL.md
+  s_26ed2a08afb01b::t_11bab1cb76275e 3,11,60,74,76,78,80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "e643b6f8d2c206382efe14ce3f9b2976a5a900f2",
+  "prompts": {},
+  "sessions": {
+    "s_26ed2a08afb01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "340b9701-5aaa-4a26-a486-4ecf3b34e3ac",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
