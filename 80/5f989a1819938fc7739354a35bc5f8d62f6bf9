@@ -1,0 +1,33 @@
+cli/loom-teams/Cargo.lock
+  s_26ed2a08afb01b::t_bdd4799715fad3 1762,1764,1958,1960
+cli/loom/Cargo.lock
+  s_26ed2a08afb01b::t_3c47db3efc419f 1483,1485
+package-lock.json
+  s_b7059aad521cdd::t_f814fecfea9c34 1075-1081,3343-3359
+package.json
+  s_26ed2a08afb01b::t_9c7af62bf11486 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "805f989a1819938fc7739354a35bc5f8d62f6bf9",
+  "prompts": {},
+  "sessions": {
+    "s_26ed2a08afb01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "340b9701-5aaa-4a26-a486-4ecf3b34e3ac",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    },
+    "s_b7059aad521cdd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7b03b03-3c31-4cbd-965b-835601a2fe58",
+        "model": "unknown"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
