@@ -1,0 +1,706 @@
+cli/loom/setup-catalog.json
+  h_f4f8b47c8af6c2 680,702
+skills/browser-usage/SKILL.md
+  h_f4f8b47c8af6c2 21,52,70,137,177,180,182,189,360,366,462,466
+skills/browser-usage/deps.yml
+  h_f4f8b47c8af6c2 8
+skills/browser-usage/references/authentication.md
+  h_f4f8b47c8af6c2 129,141,149,151
+skills/browser-usage/references/commands.md
+  h_f4f8b47c8af6c2 69,77,117,130,137,169,310,382,391,401,464
+skills/browser-usage/references/profiling.md
+  h_f4f8b47c8af6c2 66,86
+skills/browser-usage/references/proxy-support.md
+  h_f4f8b47c8af6c2 64,187
+skills/browser-usage/references/snapshot-refs.md
+  h_f4f8b47c8af6c2 83,93,95
+skills/browser-usage/references/video-recording.md
+  h_f4f8b47c8af6c2 38,45,87,167,173,175
+skills/browser-usage/templates/authenticated-session.sh
+  h_f4f8b47c8af6c2 38,59,83,90
+skills/browser-usage/templates/capture-workflow.sh
+  h_f4f8b47c8af6c2 30
+skills/browser-usage/templates/form-automation.sh
+  h_f4f8b47c8af6c2 22,47
+skills/diagram-design/SKILL.md
+  h_f4f8b47c8af6c2 3,11,13,21,23,25,27,31,52,56,58,82,86-87,97,108,157,165,182-194,196-201,203,207-210,223-245,247-266,270-292,294-343,349-364,373-407,413-419,424-443,480-485,490-491,514,516,518,532,534,538,547,552,556,572,574-579,583,585
+skills/diagram-design/assets/example-architecture-dark.html
+  h_f4f8b47c8af6c2 70,84,86,88,96,104-105,107-108,112,114,122,168,171
+skills/diagram-design/assets/example-architecture-full.html
+  h_f4f8b47c8af6c2 12,14,59,75-76,78,92,94-95,97-98,102-104,112,119-122,146,158,164
+skills/diagram-design/assets/example-architecture.html
+  h_f4f8b47c8af6c2 14,69,85-87,89,103,105-106,108-109,113-115,123,130-133,157,169,175
+skills/diagram-design/assets/example-bar-full.html
+  h_f4f8b47c8af6c2 10,64,72,78
+skills/diagram-design/assets/example-bar.html
+  h_f4f8b47c8af6c2 14,89-90,112,121
+skills/diagram-design/assets/example-beeswarm-full.html
+  h_f4f8b47c8af6c2 10,366,387
+skills/diagram-design/assets/example-beeswarm.html
+  h_f4f8b47c8af6c2 14,356,377
+skills/diagram-design/assets/example-bubble-full.html
+  h_f4f8b47c8af6c2 10,109,150
+skills/diagram-design/assets/example-bubble.html
+  h_f4f8b47c8af6c2 14,99,140
+skills/diagram-design/assets/example-bump-dark.html
+  h_f4f8b47c8af6c2 116
+skills/diagram-design/assets/example-bump-full.html
+  h_f4f8b47c8af6c2 10,126,128-132,143-144
+skills/diagram-design/assets/example-bump.html
+  h_f4f8b47c8af6c2 14,116,118-122,133-134
+skills/diagram-design/assets/example-data-flow-dark.html
+  h_f4f8b47c8af6c2 12-13,48,80,139
+skills/diagram-design/assets/example-data-flow-full.html
+  h_f4f8b47c8af6c2 12-13,67,85,98,102,119-120,143,158
+skills/diagram-design/assets/example-data-flow.html
+  h_f4f8b47c8af6c2 12-13,47,65,78,82,99-100,123,138
+skills/diagram-design/assets/example-datalake-dark.html
+  h_f4f8b47c8af6c2 97-100,104
+skills/diagram-design/assets/example-datalake-full.html
+  h_f4f8b47c8af6c2 10,57,66,72,80,83-87,90,137-140,143-144,201,209
+skills/diagram-design/assets/example-datalake.html
+  h_f4f8b47c8af6c2 14,66,77,84,103,109,123,179-182,185-186,252,264
+skills/diagram-design/assets/example-db-schema-dark.html
+  h_f4f8b47c8af6c2 73-74,80,84,90-91,96-97,253-272,275,277-278
+skills/diagram-design/assets/example-db-schema-full.html
+  h_f4f8b47c8af6c2 10,47,54-55,61,65,71-72,77-78,154-155,234-253,256,258-259,278
+skills/diagram-design/assets/example-db-schema.html
+  h_f4f8b47c8af6c2 14,66,73-74,80,84,90-91,96-97,173-174,253-272,275,277-278,297
+skills/diagram-design/assets/example-dependency-dark.html
+  h_f4f8b47c8af6c2 72
+skills/diagram-design/assets/example-dependency-full.html
+  h_f4f8b47c8af6c2 10,50,91,93,198
+skills/diagram-design/assets/example-dependency.html
+  h_f4f8b47c8af6c2 14,69,110,112,217
+skills/diagram-design/assets/example-deployment-dark.html
+  h_f4f8b47c8af6c2 70,90,92,97,103,112,179
+skills/diagram-design/assets/example-deployment-full.html
+  h_f4f8b47c8af6c2 12,14,59,83,96,102,135-137,157,172
+skills/diagram-design/assets/example-deployment.html
+  h_f4f8b47c8af6c2 14,69,93,106,112,145-147,167,182
+skills/diagram-design/assets/example-dp-integration-dark.html
+  h_f4f8b47c8af6c2 10
+skills/diagram-design/assets/example-dp-integration-full.html
+  h_f4f8b47c8af6c2 10
+skills/diagram-design/assets/example-dp-integration.html
+  h_f4f8b47c8af6c2 10
+skills/diagram-design/assets/example-dp-security-matrix-dark.html
+  h_f4f8b47c8af6c2 8,13-14
+skills/diagram-design/assets/example-dp-security-matrix-full.html
+  h_f4f8b47c8af6c2 8,12
+skills/diagram-design/assets/example-dp-security-matrix.html
+  h_f4f8b47c8af6c2 10,20-21
+skills/diagram-design/assets/example-er-full.html
+  h_f4f8b47c8af6c2 10,108-112,163
+skills/diagram-design/assets/example-er.html
+  h_f4f8b47c8af6c2 14,127-131,182
+skills/diagram-design/assets/example-fishbone-full.html
+  h_f4f8b47c8af6c2 10,57,88-89,101-103,113,119
+skills/diagram-design/assets/example-fishbone.html
+  h_f4f8b47c8af6c2 14,77,114-115,128-130,141,147
+skills/diagram-design/assets/example-flowchart-dark.html
+  h_f4f8b47c8af6c2 31,53,61-63,90-91,93-94,96-97,99-100,103,112-113,116,122-123,125-127,131
+skills/diagram-design/assets/example-flowchart-full.html
+  h_f4f8b47c8af6c2 10,17-18,50,68,71-72,74-75,77-78,80-81,84,93-94,97,103-104,106-108,112,129
+skills/diagram-design/assets/example-flowchart.html
+  h_f4f8b47c8af6c2 14,31,53,61-63,69,87,90-91,93-94,96-97,99-100,103,112-113,116,122-123,125-127,131,148
+skills/diagram-design/assets/example-gantt-dark.html
+  h_f4f8b47c8af6c2 10
+skills/diagram-design/assets/example-gantt-full.html
+  h_f4f8b47c8af6c2 10,84,86-87,98
+skills/diagram-design/assets/example-gantt.html
+  h_f4f8b47c8af6c2 10,105,107-108,126
+skills/diagram-design/assets/example-high-level-dark.html
+  h_f4f8b47c8af6c2 95-98,102-107
+skills/diagram-design/assets/example-high-level-full.html
+  h_f4f8b47c8af6c2 10,55,84-87,91-96,151-156,190,192
+skills/diagram-design/assets/example-high-level-vertical-dark.html
+  h_f4f8b47c8af6c2 106-109,115-116
+skills/diagram-design/assets/example-high-level-vertical-full.html
+  h_f4f8b47c8af6c2 10,52,87-90,94-95,97,150-155,193,195
+skills/diagram-design/assets/example-high-level-vertical.html
+  h_f4f8b47c8af6c2 14,66,128-132,139-142,148,239-242,245-246,311,314
+skills/diagram-design/assets/example-high-level.html
+  h_f4f8b47c8af6c2 14,66,109-113,120-121,124,127,129,132,135,228-231,234-235,290,293
+skills/diagram-design/assets/example-import-drawio.html
+  h_f4f8b47c8af6c2 14,66,74,77,80,100,103,106,109,112,115,118,122,126,131,165,174
+skills/diagram-design/assets/example-import-mermaid.html
+  h_f4f8b47c8af6c2 10,27,32,34,39,45-51,53-55,62,65
+skills/diagram-design/assets/example-it-state-dark.html
+  h_f4f8b47c8af6c2 10,41,53-55,59-60,72-74,78-79,82
+skills/diagram-design/assets/example-it-state-full.html
+  h_f4f8b47c8af6c2 10,21-22,40,46,50,53,57-58
+skills/diagram-design/assets/example-it-state.html
+  h_f4f8b47c8af6c2 12-13,31,36,53,77,79,93,101,111,113,121,123
+skills/diagram-design/assets/example-journey-full.html
+  h_f4f8b47c8af6c2 10,71,77,92-93,95-96,111-112,115
+skills/diagram-design/assets/example-journey.html
+  h_f4f8b47c8af6c2 14,93,99,118-119,121-122,139-140,143
+skills/diagram-design/assets/example-kanban-full.html
+  h_f4f8b47c8af6c2 10,71-72,100-101,142,151
+skills/diagram-design/assets/example-kanban.html
+  h_f4f8b47c8af6c2 14,89-90,118-119,160,169
+skills/diagram-design/assets/example-layers-full.html
+  h_f4f8b47c8af6c2 10,72-74,76
+skills/diagram-design/assets/example-layers.html
+  h_f4f8b47c8af6c2 14,91-93,95
+skills/diagram-design/assets/example-line-full.html
+  h_f4f8b47c8af6c2 10,62-65,76
+skills/diagram-design/assets/example-line.html
+  h_f4f8b47c8af6c2 10,69,73,76-83,99-100
+skills/diagram-design/assets/example-loop-dark.html
+  h_f4f8b47c8af6c2 11-12,46-47
+skills/diagram-design/assets/example-loop-full.html
+  h_f4f8b47c8af6c2 12-13,65,67
+skills/diagram-design/assets/example-loop.html
+  h_f4f8b47c8af6c2 11-12,45,47
+skills/diagram-design/assets/example-medallion-dark.html
+  h_f4f8b47c8af6c2 12-13,46,67,131
+skills/diagram-design/assets/example-medallion-full.html
+  h_f4f8b47c8af6c2 12-13,65,78,82,134-136
+skills/diagram-design/assets/example-medallion.html
+  h_f4f8b47c8af6c2 12-13,45,58,62,114-116
+skills/diagram-design/assets/example-nested-dark.html
+  h_f4f8b47c8af6c2 6,59,62-63,119
+skills/diagram-design/assets/example-nested-full.html
+  h_f4f8b47c8af6c2 6,10,37-38,43-44,63,79,100,117,130
+skills/diagram-design/assets/example-nested.html
+  h_f4f8b47c8af6c2 6,14,59,62-63,82,98,123
+skills/diagram-design/assets/example-org-chart-dark.html
+  h_f4f8b47c8af6c2 4,42,44
+skills/diagram-design/assets/example-org-chart-full.html
+  h_f4f8b47c8af6c2 4,26-27,42,44
+skills/diagram-design/assets/example-org-chart.html
+  h_f4f8b47c8af6c2 4,26-27,42,44
+skills/diagram-design/assets/example-paved-road-animated.html
+  h_f4f8b47c8af6c2 15,18-19,201,215-217,234-236,278-281,288-290,298,313,321,325
+skills/diagram-design/assets/example-polar-full.html
+  h_f4f8b47c8af6c2 10,98-99
+skills/diagram-design/assets/example-polar.html
+  h_f4f8b47c8af6c2 10,88-89
+skills/diagram-design/assets/example-policy-trace-animated.html
+  h_f4f8b47c8af6c2 15,18-19,238-240,242,249,252,262,268-269,275,277
+skills/diagram-design/assets/example-process-dark.html
+  h_f4f8b47c8af6c2 10
+skills/diagram-design/assets/example-process-full.html
+  h_f4f8b47c8af6c2 10,13,40,61
+skills/diagram-design/assets/example-process.html
+  h_f4f8b47c8af6c2 10,13,37,58
+skills/diagram-design/assets/example-pyramid-full.html
+  h_f4f8b47c8af6c2 10,63,69,75,78,81,90
+skills/diagram-design/assets/example-pyramid.html
+  h_f4f8b47c8af6c2 14,82,88,94,97,100,109
+skills/diagram-design/assets/example-quadrant-consultant.html
+  h_f4f8b47c8af6c2 15,17,77,89-91,131
+skills/diagram-design/assets/example-quadrant-full.html
+  h_f4f8b47c8af6c2 10,55,68,75,106
+skills/diagram-design/assets/example-quadrant.html
+  h_f4f8b47c8af6c2 14,74,87,94,125
+skills/diagram-design/assets/example-queue-animated.html
+  h_f4f8b47c8af6c2 15,18-19,211,250-251,272-273,276,280-281,284-285,288-291,297,300-301,308,340,344,352,356
+skills/diagram-design/assets/example-radar-full.html
+  h_f4f8b47c8af6c2 10,84,86-90,95
+skills/diagram-design/assets/example-radar.html
+  h_f4f8b47c8af6c2 14,110,113-117,123
+skills/diagram-design/assets/example-ridgeline-full.html
+  h_f4f8b47c8af6c2 10,84,105-106
+skills/diagram-design/assets/example-ridgeline.html
+  h_f4f8b47c8af6c2 14,74,95-96
+skills/diagram-design/assets/example-sankey-full.html
+  h_f4f8b47c8af6c2 10,71-72,119
+skills/diagram-design/assets/example-sankey.html
+  h_f4f8b47c8af6c2 14,91-92,140
+skills/diagram-design/assets/example-scatter-dark.html
+  h_f4f8b47c8af6c2 10
+skills/diagram-design/assets/example-scatter-full.html
+  h_f4f8b47c8af6c2 10,80,82,87
+skills/diagram-design/assets/example-scatter.html
+  h_f4f8b47c8af6c2 10,116,120,130
+skills/diagram-design/assets/example-sequence-dark.html
+  h_f4f8b47c8af6c2 78,110,133,162,164,172,188,208
+skills/diagram-design/assets/example-sequence-full.html
+  h_f4f8b47c8af6c2 16,19-20,200,247,274,287-289,297,303-305,313,325,341
+skills/diagram-design/assets/example-sequence-oauth-dark.html
+  h_f4f8b47c8af6c2 76,96,98,122,124,130,132,144-146,174
+skills/diagram-design/assets/example-sequence-oauth-full.html
+  h_f4f8b47c8af6c2 16,19-20,196,231,233,267-269,274-276,290,306
+skills/diagram-design/assets/example-sequence-oauth.html
+  h_f4f8b47c8af6c2 14,73,130,132,178-180,186-188,206,222
+skills/diagram-design/assets/example-sequence.html
+  h_f4f8b47c8af6c2 14,75,122,149,162-164,172,178-180,188,200,216
+skills/diagram-design/assets/example-slopegraph-dark.html
+  h_f4f8b47c8af6c2 90-93
+skills/diagram-design/assets/example-slopegraph-full.html
+  h_f4f8b47c8af6c2 10,100-103,107-109,120-121
+skills/diagram-design/assets/example-slopegraph.html
+  h_f4f8b47c8af6c2 14,90-93,97-99,110-111
+skills/diagram-design/assets/example-state-full.html
+  h_f4f8b47c8af6c2 10,50,62,78,108-110
+skills/diagram-design/assets/example-state.html
+  h_f4f8b47c8af6c2 14,69,81,97,127-129
+skills/diagram-design/assets/example-story-map-full.html
+  h_f4f8b47c8af6c2 10,122,124,136,139-140,158,161
+skills/diagram-design/assets/example-story-map.html
+  h_f4f8b47c8af6c2 14,140,142,154,157-158,176,179
+skills/diagram-design/assets/example-swimlane-dark.html
+  h_f4f8b47c8af6c2 94-95,100-101,106-107,109-110,112-113
+skills/diagram-design/assets/example-swimlane-full.html
+  h_f4f8b47c8af6c2 10,50,75-76,81-82,87-88,90-91,93-94,128,139,148
+skills/diagram-design/assets/example-swimlane.html
+  h_f4f8b47c8af6c2 14,69,94-95,100-101,106-107,109-110,112-113,147,158,167
+skills/diagram-design/assets/example-timeline-dark.html
+  h_f4f8b47c8af6c2 82
+skills/diagram-design/assets/example-timeline-full.html
+  h_f4f8b47c8af6c2 10,63,89-91,96-98,109
+skills/diagram-design/assets/example-timeline.html
+  h_f4f8b47c8af6c2 14,82,108-110,115-117,128
+skills/diagram-design/assets/example-tree-block-decomposition-full.html
+  h_f4f8b47c8af6c2 10,68,73-74
+skills/diagram-design/assets/example-tree-block-decomposition.html
+  h_f4f8b47c8af6c2 14,87,92-93
+skills/diagram-design/assets/example-tree-full.html
+  h_f4f8b47c8af6c2 10,78-80,141
+skills/diagram-design/assets/example-tree.html
+  h_f4f8b47c8af6c2 14,97-99,160
+skills/diagram-design/assets/example-treemap-full.html
+  h_f4f8b47c8af6c2 10,60,103
+skills/diagram-design/assets/example-treemap.html
+  h_f4f8b47c8af6c2 14,52,95
+skills/diagram-design/assets/example-uml-class-full.html
+  h_f4f8b47c8af6c2 10,64,66,91-95
+skills/diagram-design/assets/example-uml-class.html
+  h_f4f8b47c8af6c2 14,83,85,110-114
+skills/diagram-design/assets/example-venn-dark.html
+  h_f4f8b47c8af6c2 85,101
+skills/diagram-design/assets/example-venn-full.html
+  h_f4f8b47c8af6c2 10,66,71,82,96,103
+skills/diagram-design/assets/example-venn.html
+  h_f4f8b47c8af6c2 14,82
+skills/diagram-design/assets/example-wardley-full.html
+  h_f4f8b47c8af6c2 10,51,83,91,118-119
+skills/diagram-design/assets/example-wardley.html
+  h_f4f8b47c8af6c2 14,69,107,117,145-146
+skills/diagram-design/assets/icons.html
+  h_f4f8b47c8af6c2 1-230
+skills/diagram-design/assets/index.html
+  h_f4f8b47c8af6c2 46,52,54,66,73,97-98,130,141,167-176,189,195,215,218,221,224,227,230,233,235-236,238-239,241-242,244-245,247-248,250-251,253-254,256-257,259-260,262-263,265-266,268-269,271-272,274-275,277-278,280-281,283-284,286-287,289-290,292-293,295-296,298-299,301-302,304-305,307-308,310-311,313-314,316-317,319,322,325,328,331,334,337,340,343,346,349-374,378-387,427,430,451,457
+skills/diagram-design/assets/template-dark.html
+  h_f4f8b47c8af6c2 7,16,53,62-68,70-76,78,80,82
+skills/diagram-design/assets/template-full.html
+  h_f4f8b47c8af6c2 7,17,20-21,24,83,198,228,230,233-234,245,247-248,255-257,271,280,284,287-288,294,316-318,332,344,351,357
+skills/diagram-design/assets/template-motion.html
+  h_f4f8b47c8af6c2 7,14-15,18,45,179-187,189-192,194-217,219-222
+skills/diagram-design/assets/template-terminal.html
+  h_f4f8b47c8af6c2 112,132-155,157-162,164,166-169
+skills/diagram-design/assets/template.html
+  h_f4f8b47c8af6c2 7,14,16,53,62-68,70-76,78-79,81,83
+skills/diagram-design/deps.yml
+  h_f4f8b47c8af6c2 4
+skills/diagram-design/references/animation.md
+  h_f4f8b47c8af6c2 109,123
+skills/diagram-design/references/doctor.md
+  h_f4f8b47c8af6c2 33,39-42,117
+skills/diagram-design/references/export.md
+  h_f4f8b47c8af6c2 23,30,32,35,38,41-42,47-52,54,57-59,71,74,77,79-83,90,92-94,96-106,108,112,116
+skills/diagram-design/references/import-mermaid.md
+  h_f4f8b47c8af6c2 23,25,67,96,109
+skills/diagram-design/references/onboarding.md
+  h_f4f8b47c8af6c2 9-11,32,164
+skills/diagram-design/references/output-spec.md
+  h_f4f8b47c8af6c2 136,150
+skills/diagram-design/references/primitive-annotation.md
+  h_f4f8b47c8af6c2 8-10,13,15,28-30
+skills/diagram-design/references/primitive-icons.md
+  h_f4f8b47c8af6c2 1-827
+skills/diagram-design/references/profiles.md
+  h_f4f8b47c8af6c2 56,91
+skills/diagram-design/references/semantic-patterns.md
+  h_f4f8b47c8af6c2 3,122
+skills/diagram-design/references/style-guide.md
+  h_f4f8b47c8af6c2 5,86,176
+skills/diagram-design/references/type-architecture.md
+  h_f4f8b47c8af6c2 24,27-28,32,58,60-61,66-68
+skills/diagram-design/references/type-bar.md
+  h_f4f8b47c8af6c2 11-14,22,24,26,29,48,59-61,64,66,72,80-85,90,94
+skills/diagram-design/references/type-db-schema.md
+  h_f4f8b47c8af6c2 11-14,18,22
+skills/diagram-design/references/type-dependency.md
+  h_f4f8b47c8af6c2 8-10,14,36
+skills/diagram-design/references/type-deployment.md
+  h_f4f8b47c8af6c2 9-11,13,15
+skills/diagram-design/references/type-dp-integration.md
+  h_f4f8b47c8af6c2 60,180,191,201-205,211-215,236,308-322
+skills/diagram-design/references/type-er.md
+  h_f4f8b47c8af6c2 9-10,12
+skills/diagram-design/references/type-fishbone.md
+  h_f4f8b47c8af6c2 7-9
+skills/diagram-design/references/type-gantt.md
+  h_f4f8b47c8af6c2 7,10-11,20-22,26-28
+skills/diagram-design/references/type-high-level.md
+  h_f4f8b47c8af6c2 112,116,118,130,141,155,175,194,235,237,247-250,256-259,396,398,400-413
+skills/diagram-design/references/type-it-state.md
+  h_f4f8b47c8af6c2 135
+skills/diagram-design/references/type-journey.md
+  h_f4f8b47c8af6c2 9-13,16
+skills/diagram-design/references/type-kanban.md
+  h_f4f8b47c8af6c2 8-9,23,43
+skills/diagram-design/references/type-layers.md
+  h_f4f8b47c8af6c2 9-12,14
+skills/diagram-design/references/type-line.md
+  h_f4f8b47c8af6c2 9,22,24,28,42,57,71-73,95-96,101-107,110,154,183-187,219,241-244
+skills/diagram-design/references/type-loop.md
+  h_f4f8b47c8af6c2 63
+skills/diagram-design/references/type-nested.md
+  h_f4f8b47c8af6c2 3,7,11
+skills/diagram-design/references/type-org-chart.md
+  h_f4f8b47c8af6c2 13-14
+skills/diagram-design/references/type-polar.md
+  h_f4f8b47c8af6c2 90-92,112
+skills/diagram-design/references/type-process.md
+  h_f4f8b47c8af6c2 5,107-110,124-125,130-132,171-173,180,182-184,284-301
+skills/diagram-design/references/type-pyramid.md
+  h_f4f8b47c8af6c2 16-17,22
+skills/diagram-design/references/type-quadrant.md
+  h_f4f8b47c8af6c2 7,28,51-52,55-58,75
+skills/diagram-design/references/type-radar.md
+  h_f4f8b47c8af6c2 10-11,47,56-63,73
+skills/diagram-design/references/type-sankey.md
+  h_f4f8b47c8af6c2 13,16
+skills/diagram-design/references/type-scatter.md
+  h_f4f8b47c8af6c2 9,11-13,19-20,23-24,46,49,57,64,72,77,80,83,86,122,125,150,153,156,159
+skills/diagram-design/references/type-sequence.md
+  h_f4f8b47c8af6c2 30,34,38,45,48-50,54,60,68-69,73,90,102,108,118
+skills/diagram-design/references/type-state.md
+  h_f4f8b47c8af6c2 3,6,8
+skills/diagram-design/references/type-story-map.md
+  h_f4f8b47c8af6c2 15-18
+skills/diagram-design/references/type-swimlane.md
+  h_f4f8b47c8af6c2 6
+skills/diagram-design/references/type-timeline.md
+  h_f4f8b47c8af6c2 7,9
+skills/diagram-design/references/type-tree.md
+  h_f4f8b47c8af6c2 7
+skills/diagram-design/references/type-treemap.md
+  h_f4f8b47c8af6c2 15,22,38,40-42,45
+skills/diagram-design/references/type-uml-class.md
+  h_f4f8b47c8af6c2 19-21,39,47
+skills/diagram-design/references/type-venn.md
+  h_f4f8b47c8af6c2 8,10-12
+skills/diagram-design/references/type-wardley.md
+  h_f4f8b47c8af6c2 8-9,12
+skills/diagram-design/scripts/drawio_extract.py
+  h_f4f8b47c8af6c2 15,176,353-354,414,457-467,469,480,502-506,515-518,534,705,843,888
+skills/diagram-design/scripts/mermaid_extract.py
+  h_f4f8b47c8af6c2 62-63,116,124,137,203-204,223,243-244,249-250,254,256,422,424-428,567,609-611,614-616,618-619,622,625-650,652-653,656,664-665,667,780,829,836,840-841,898,927,929,952,954-956,968-969,984-985,992,1151,1157-1161,1188-1189,1273,1277,1299,1301,1303-1304,1306,1308,1335-1336,1338,1340
+skills/diagram-design/scripts/self_check.py
+  h_f4f8b47c8af6c2 10-11,31,60,353,375
+skills/impeccable/SKILL.md
+  h_f4f8b47c8af6c2 3,6,10-12,14,16-18,39-63,68-69,72,74,76,78,80
+skills/impeccable/agents/impeccable_asset_producer.toml
+  h_f4f8b47c8af6c2 1-92
+skills/impeccable/agents/impeccable_documenter.toml
+  h_f4f8b47c8af6c2 1-27
+skills/impeccable/agents/impeccable_finish_reviewer.toml
+  h_f4f8b47c8af6c2 1-41
+skills/impeccable/agents/impeccable_manual_edit_applier.toml
+  h_f4f8b47c8af6c2 1-55,57,59-62,64,66,68,70-92,94-95
+skills/impeccable/agents/openai.yaml
+  h_f4f8b47c8af6c2 1-4
+skills/impeccable/deps.yml
+  h_f4f8b47c8af6c2 3-4
+skills/impeccable/reference/adapt.md
+  h_f4f8b47c8af6c2 31,168,170,191
+skills/impeccable/reference/adapt.native.md
+  h_f4f8b47c8af6c2 51,53
+skills/impeccable/reference/android.md
+  h_f4f8b47c8af6c2 45
+skills/impeccable/reference/animate.md
+  h_f4f8b47c8af6c2 89
+skills/impeccable/reference/audit.md
+  h_f4f8b47c8af6c2 14,50,55,71-72,102,118-119,121,127,129,131
+skills/impeccable/reference/audit.native.md
+  h_f4f8b47c8af6c2 3,105,121-122,124,130,132,134
+skills/impeccable/reference/bolder.md
+  h_f4f8b47c8af6c2 9,33
+skills/impeccable/reference/clarify.md
+  h_f4f8b47c8af6c2 94
+skills/impeccable/reference/colorize.md
+  h_f4f8b47c8af6c2 76
+skills/impeccable/reference/craft-floor.md
+  h_f4f8b47c8af6c2 3,7,44-49
+skills/impeccable/reference/critique.md
+  h_f4f8b47c8af6c2 3,7-8,11,26,41-50,67,71,85,88,92-94,98,100-102,143,160,165,184-188,207,215-216,220,222,228,241,247,251,277-278,282,289,295,812
+skills/impeccable/reference/degraded/asset-producer.md
+  h_f4f8b47c8af6c2 14,16,18,20-40,42-50,52-56,58,60,62,64,66-77,81-89
+skills/impeccable/reference/degraded/documenter.md
+  h_f4f8b47c8af6c2 8,18,24
+skills/impeccable/reference/degraded/finish-reviewer.md
+  h_f4f8b47c8af6c2 14,19-20,22-24
+skills/impeccable/reference/degraded/manual-edit-applier.md
+  h_f4f8b47c8af6c2 24
+skills/impeccable/reference/delight.md
+  h_f4f8b47c8af6c2 70
+skills/impeccable/reference/distill.md
+  h_f4f8b47c8af6c2 24,26,37,44,73,77,86,111
+skills/impeccable/reference/doctor.md
+  h_f4f8b47c8af6c2 9,16,29,49,54
+skills/impeccable/reference/document.md
+  h_f4f8b47c8af6c2 20,23,71,78,328,369,388
+skills/impeccable/reference/extract.md
+  h_f4f8b47c8af6c2 9,34,62
+skills/impeccable/reference/harden.md
+  h_f4f8b47c8af6c2 31,310-312,336
+skills/impeccable/reference/hooks.md
+  h_f4f8b47c8af6c2 1,5,7,9,15,17,19,35,43,46,53,63,65,73,79,85,92,98,103-106,110-111
+skills/impeccable/reference/init.md
+  h_f4f8b47c8af6c2 7,27,104,112,114,126-127,129,131
+skills/impeccable/reference/layout.md
+  h_f4f8b47c8af6c2 28,74
+skills/impeccable/reference/live-setup.md
+  h_f4f8b47c8af6c2 1,35,37,48,81,96,100,102
+skills/impeccable/reference/live.md
+  h_f4f8b47c8af6c2 7,13,15,18-19,36,57,60,71-73,76,92,113,120,161,167-168,201,240,245,252,259,265,267-268,272,285,289,293,309,318,321,325
+skills/impeccable/reference/new-work.md
+  h_f4f8b47c8af6c2 18,37,39,44,46,49,51,53,55,59,63,67,71,75,77,79,83,89,91,94-97,100,106,110,112,114,116,120
+skills/impeccable/reference/onboard.md
+  h_f4f8b47c8af6c2 26,211,213,234
+skills/impeccable/reference/optimize.md
+  h_f4f8b47c8af6c2 20,41,236,238,258
+skills/impeccable/reference/overdrive.md
+  h_f4f8b47c8af6c2 10,17,22,24
+skills/impeccable/reference/polish.md
+  h_f4f8b47c8af6c2 32,35,95
+skills/impeccable/reference/quieter.md
+  h_f4f8b47c8af6c2 31,33,44,83,99
+skills/impeccable/reference/routing.md
+  h_f4f8b47c8af6c2 1,3,5,10-11,13,16
+skills/impeccable/reference/typeset.md
+  h_f4f8b47c8af6c2 27,70
+skills/impeccable/reference/visualize.md
+  h_f4f8b47c8af6c2 3,5,9,11-12,14,16,24,26,30-42,44,46,48,50,52,54,56
+skills/impeccable/scripts/command-metadata.json
+  h_f4f8b47c8af6c2 7,87
+skills/impeccable/scripts/concept-seed.mjs
+  h_f4f8b47c8af6c2 1-736
+skills/impeccable/scripts/context-signals.mjs
+  h_f4f8b47c8af6c2 1-325
+skills/impeccable/scripts/context.mjs
+  h_f4f8b47c8af6c2 1-323,325-328,331-1540,1542-1544
+skills/impeccable/scripts/critique-storage.mjs
+  h_f4f8b47c8af6c2 1-222
+skills/impeccable/scripts/detect-csp.mjs
+  h_f4f8b47c8af6c2 1-198
+skills/impeccable/scripts/detect.mjs
+  h_f4f8b47c8af6c2 1-21
+skills/impeccable/scripts/detector/browser/injected/index.mjs
+  h_f4f8b47c8af6c2 1-37,39-44,46-47,49-60,62,64-72,74-112,114-225,228-906,908-1009,1011-1043,1045-1068,1070-1153,1155-1198,1200-1334,1336-1411,1413-1414,1416-1425,1427-1428,1430-1438,1440-1453,1455-1468,1470-1668,1670-1954,1956-1986,1988-1997,1999-2073
+skills/impeccable/scripts/detector/cli/main.mjs
+  h_f4f8b47c8af6c2 1-73,75-432
+skills/impeccable/scripts/detector/design-system.mjs
+  h_f4f8b47c8af6c2 1-110,112-126,128-148,150-188,190-194,196-206,208-338,340-353,355-364,366-410,412-416,418-427,429-466,468-472,474-478,480-481,483-500,502-537,539-591,593-631,633-668,670-698,700-778,780-785,787-792,794-808,810-814,816-916,918-1078,1080-1081,1083-1167,1169-1204,1206-1271,1273-1309
+skills/impeccable/scripts/detector/detect-antipatterns-browser.js
+  h_f4f8b47c8af6c2 1-8734
+skills/impeccable/scripts/detector/detect-antipatterns.mjs
+  h_f4f8b47c8af6c2 1-51
+skills/impeccable/scripts/detector/engines/browser/detect-url.mjs
+  h_f4f8b47c8af6c2 1-58,60-372
+skills/impeccable/scripts/detector/engines/regex/detect-text.mjs
+  h_f4f8b47c8af6c2 1-1319
+skills/impeccable/scripts/detector/engines/static-html/css-cascade.mjs
+  h_f4f8b47c8af6c2 1-172,174-204,206-208,210-391,393-407,409-414,416-458,460-581,583-590,592-610,612-679,681-687,689-827,829-834,836-847,849-855,857-859,861-883,885-895,897,899-905,907-946,948-955,957-965,967-990,992-1026,1028-1043,1045-1074,1076-1099,1103-1119,1121-1130,1132-1241
+skills/impeccable/scripts/detector/engines/static-html/detect-html.mjs
+  h_f4f8b47c8af6c2 1-190,192-290
+skills/impeccable/scripts/detector/engines/visual/screenshot-contrast.mjs
+  h_f4f8b47c8af6c2 1-189
+skills/impeccable/scripts/detector/findings.mjs
+  h_f4f8b47c8af6c2 1-18
+skills/impeccable/scripts/detector/node/file-system.mjs
+  h_f4f8b47c8af6c2 1-213
+skills/impeccable/scripts/detector/profile/profiler.mjs
+  h_f4f8b47c8af6c2 1-166
+skills/impeccable/scripts/detector/registry/antipatterns.mjs
+  h_f4f8b47c8af6c2 1-617
+skills/impeccable/scripts/detector/rules/checks.mjs
+  h_f4f8b47c8af6c2 1-3217,3219-3275,3277-3304,3306-3360,3362-3423,3425-3458,3460-3596,3598-3788,3790-3974,3976-3986,3988-3998,4000-4005,4007-4818,4820-4931,4933-5221,5223-5294,5296-5532
+skills/impeccable/scripts/detector/shared/color.mjs
+  h_f4f8b47c8af6c2 1-596
+skills/impeccable/scripts/detector/shared/constants.mjs
+  h_f4f8b47c8af6c2 1-112
+skills/impeccable/scripts/detector/shared/fonts.mjs
+  h_f4f8b47c8af6c2 1-30
+skills/impeccable/scripts/detector/shared/inline-ignores.mjs
+  h_f4f8b47c8af6c2 1-148
+skills/impeccable/scripts/detector/shared/page.mjs
+  h_f4f8b47c8af6c2 1-7
+skills/impeccable/scripts/doctor.mjs
+  h_f4f8b47c8af6c2 1,3,5-8,10-12,14-19,21-56,58,60-67,69-70,72-152,155,157-158,160-171,173-179,181-184,186-191,193-194,196-211,213-225,227,229-240,242-243,246-251,253-254,256-267,269-275,277-287,290-329
+skills/impeccable/scripts/embed-prompt.mjs
+  h_f4f8b47c8af6c2 1-175
+skills/impeccable/scripts/generate-image.mjs
+  h_f4f8b47c8af6c2 1-277
+skills/impeccable/scripts/hook-admin.mjs
+  h_f4f8b47c8af6c2 1-801
+skills/impeccable/scripts/hook-before-edit.mjs
+  h_f4f8b47c8af6c2 1-538
+skills/impeccable/scripts/hook-lib.mjs
+  h_f4f8b47c8af6c2 1-2447
+skills/impeccable/scripts/hook.mjs
+  h_f4f8b47c8af6c2 1-79
+skills/impeccable/scripts/lib/artifact-schema.mjs
+  h_f4f8b47c8af6c2 1-93
+skills/impeccable/scripts/lib/composition-catalog.mjs
+  h_f4f8b47c8af6c2 1-83,85-200
+skills/impeccable/scripts/lib/concept-catalog.mjs
+  h_f4f8b47c8af6c2 1-396
+skills/impeccable/scripts/lib/design-parser.mjs
+  h_f4f8b47c8af6c2 1-892
+skills/impeccable/scripts/lib/impeccable-config.mjs
+  h_f4f8b47c8af6c2 1-640
+skills/impeccable/scripts/lib/impeccable-paths.mjs
+  h_f4f8b47c8af6c2 1-137
+skills/impeccable/scripts/lib/is-generated.mjs
+  h_f4f8b47c8af6c2 1-72
+skills/impeccable/scripts/lib/open-system-browser.mjs
+  h_f4f8b47c8af6c2 1-26
+skills/impeccable/scripts/lib/provider.mjs
+  h_f4f8b47c8af6c2 1-5
+skills/impeccable/scripts/lib/roll-selection.mjs
+  h_f4f8b47c8af6c2 1-369
+skills/impeccable/scripts/lib/staleness-deep.mjs
+  h_f4f8b47c8af6c2 1-485
+skills/impeccable/scripts/lib/staleness-notice.mjs
+  h_f4f8b47c8af6c2 1-169
+skills/impeccable/scripts/lib/staleness.mjs
+  h_f4f8b47c8af6c2 1-533
+skills/impeccable/scripts/lib/surface-briefs.mjs
+  h_f4f8b47c8af6c2 1-3,5,7-9,11-15,17-42,44-50,52-82,84-100,102-110,112-123,125-149
+skills/impeccable/scripts/lib/target-args.mjs
+  h_f4f8b47c8af6c2 1-42
+skills/impeccable/scripts/lib/target-slug.mjs
+  h_f4f8b47c8af6c2 1-33
+skills/impeccable/scripts/lib/template-extensions.mjs
+  h_f4f8b47c8af6c2 1-146
+skills/impeccable/scripts/live-accept.mjs
+  h_f4f8b47c8af6c2 1-152,154-170,172-204,206-215,217-254,256-304,306-410,412-511,513-596,598-938
+skills/impeccable/scripts/live-browser-dom.js
+  h_f4f8b47c8af6c2 68,84
+skills/impeccable/scripts/live-browser-session.js
+  h_f4f8b47c8af6c2 13-14,60,76,80,83-84,122
+skills/impeccable/scripts/live-browser.js
+  h_f4f8b47c8af6c2 18,22,64-68,850,953-955,957,980-981,2044,2115,2122,2420,2452,2506,2556,3140,3235,3246,3250,3277,3284-3285,3294,3314,3681-3682,3713-3714,4502,4884,4923-4924,4988,5039,6218-6220,6228-6229,6254-6258,6261-6283,6286-6318,6321-6326,6328-6340,6348-6385,6509,6519,6613,6616,6796,6923,6935,7338,7356,7384-7385,7533,7634,7716,8038,8079,8314,8470,8555,8561,8588,8594,8611,8622,8625,8632,8641,8644,8673,8843,8901,8994-8995,9013-9014,9016,9019-9028,9031,9114-9115,9119,9139,9209-9213,9218,10039,10514,10678,11149,12445,12469-12471,12497,12499-12501,12503,12506,12511-12512
+skills/impeccable/scripts/live-commit-manual-edits.mjs
+  h_f4f8b47c8af6c2 1-1200
+skills/impeccable/scripts/live-complete.mjs
+  h_f4f8b47c8af6c2 1-4,6-11,13-26,28-33,35-59,61-107
+skills/impeccable/scripts/live-copy-edit-agent.mjs
+  h_f4f8b47c8af6c2 1-800
+skills/impeccable/scripts/live-discard-manual-edits.mjs
+  h_f4f8b47c8af6c2 1-51
+skills/impeccable/scripts/live-inject.mjs
+  h_f4f8b47c8af6c2 1-503
+skills/impeccable/scripts/live-insert.mjs
+  h_f4f8b47c8af6c2 1-292
+skills/impeccable/scripts/live-manual-edit-evidence.mjs
+  h_f4f8b47c8af6c2 1-107,109-122,124-125,127-159,161-202,204-229,231-238,240-243,245-312,314-368
+skills/impeccable/scripts/live-poll.mjs
+  h_f4f8b47c8af6c2 1-430
+skills/impeccable/scripts/live-resume.mjs
+  h_f4f8b47c8af6c2 1-123
+skills/impeccable/scripts/live-server.mjs
+  h_f4f8b47c8af6c2 1-1686
+skills/impeccable/scripts/live-status.mjs
+  h_f4f8b47c8af6c2 1-71
+skills/impeccable/scripts/live-target.mjs
+  h_f4f8b47c8af6c2 1-30
+skills/impeccable/scripts/live-wrap.mjs
+  h_f4f8b47c8af6c2 1-927
+skills/impeccable/scripts/live.mjs
+  h_f4f8b47c8af6c2 1-365
+skills/impeccable/scripts/live/accept-css.mjs
+  h_f4f8b47c8af6c2 1-617
+skills/impeccable/scripts/live/accept-verify.mjs
+  h_f4f8b47c8af6c2 1-60
+skills/impeccable/scripts/live/browser-script-parts.mjs
+  h_f4f8b47c8af6c2 1-2,4,6-10,12-19,21-24,26-28,30-74,76-77
+skills/impeccable/scripts/live/completion.mjs
+  h_f4f8b47c8af6c2 1-28
+skills/impeccable/scripts/live/event-validation.mjs
+  h_f4f8b47c8af6c2 1-199
+skills/impeccable/scripts/live/frameworks/astro.mjs
+  h_f4f8b47c8af6c2 1-47
+skills/impeccable/scripts/live/frameworks/detect-utils.mjs
+  h_f4f8b47c8af6c2 1-73
+skills/impeccable/scripts/live/frameworks/index.mjs
+  h_f4f8b47c8af6c2 1-143
+skills/impeccable/scripts/live/frameworks/journal.mjs
+  h_f4f8b47c8af6c2 1-197
+skills/impeccable/scripts/live/frameworks/nextjs.mjs
+  h_f4f8b47c8af6c2 1-49
+skills/impeccable/scripts/live/frameworks/nuxt.mjs
+  h_f4f8b47c8af6c2 1-161
+skills/impeccable/scripts/live/frameworks/script-src.mjs
+  h_f4f8b47c8af6c2 1-17
+skills/impeccable/scripts/live/frameworks/static-html.mjs
+  h_f4f8b47c8af6c2 1-26
+skills/impeccable/scripts/live/frameworks/sveltekit.mjs
+  h_f4f8b47c8af6c2 1-71
+skills/impeccable/scripts/live/frameworks/tag-strategy.mjs
+  h_f4f8b47c8af6c2 1-247
+skills/impeccable/scripts/live/frameworks/tanstack-start.mjs
+  h_f4f8b47c8af6c2 1-70
+skills/impeccable/scripts/live/frameworks/vite-generic.mjs
+  h_f4f8b47c8af6c2 1-42
+skills/impeccable/scripts/live/generation-preflight.mjs
+  h_f4f8b47c8af6c2 1-149
+skills/impeccable/scripts/live/insert-ui.mjs
+  h_f4f8b47c8af6c2 1-458
+skills/impeccable/scripts/live/instructions.mjs
+  h_f4f8b47c8af6c2 1-142
+skills/impeccable/scripts/live/manual-apply.mjs
+  h_f4f8b47c8af6c2 1-89,91-147,149-157,159-224,226-255,257-512,514-518,520-523,525-528,530-533,535-536,538-539,541-546,548-551,553-557,559-560,562-593,595-616,618-620,622-625,627,629-800,802-804,806-817,819-835,837-843,845-872,874-877,879-886,888-898,900-911,913-925,927-939
+skills/impeccable/scripts/live/manual-edit-routes.mjs
+  h_f4f8b47c8af6c2 1-357
+skills/impeccable/scripts/live/manual-edits-buffer.mjs
+  h_f4f8b47c8af6c2 1-152
+skills/impeccable/scripts/live/poll-lanes.mjs
+  h_f4f8b47c8af6c2 1-14
+skills/impeccable/scripts/live/roots.mjs
+  h_f4f8b47c8af6c2 1-151,153-508
+skills/impeccable/scripts/live/session-store.mjs
+  h_f4f8b47c8af6c2 1-563
+skills/impeccable/scripts/live/source-lock.mjs
+  h_f4f8b47c8af6c2 1-105
+skills/impeccable/scripts/live/source-search.mjs
+  h_f4f8b47c8af6c2 1-105
+skills/impeccable/scripts/live/svelte-ast.mjs
+  h_f4f8b47c8af6c2 1-84,86-91,93-239,241-259,261-268,270-283,285-321,323-337,339-347,349-354,356-367,369-374,376-397,399-481,483-510,512-529,531-608,610-666,668-675,678-736,739-741,743-745,747-772,774-789,791-798,800-810,812-817,819-826,828-877,879-880,883-891,893-925,927-969
+skills/impeccable/scripts/live/svelte-component.mjs
+  h_f4f8b47c8af6c2 1-1366
+skills/impeccable/scripts/live/sveltekit-adapter.mjs
+  h_f4f8b47c8af6c2 1-304
+skills/impeccable/scripts/live/tanstack-adapter.mjs
+  h_f4f8b47c8af6c2 1-259
+skills/impeccable/scripts/live/ui-surfaces.mjs
+  h_f4f8b47c8af6c2 1-75
+skills/impeccable/scripts/live/vocabulary.mjs
+  h_f4f8b47c8af6c2 1-171
+skills/impeccable/scripts/palette.mjs
+  h_f4f8b47c8af6c2 1-628
+skills/impeccable/scripts/pin.mjs
+  h_f4f8b47c8af6c2 1-224
+skills/impeccable/scripts/serve-question.mjs
+  h_f4f8b47c8af6c2 1-966,969-1742
+skills/impeccable/scripts/surface-brief.mjs
+  h_f4f8b47c8af6c2 1-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "f2459ad9987db22e0bd0a4d95add24553738bedb",
+  "prompts": {},
+  "humans": {
+    "h_f4f8b47c8af6c2": {
+      "author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
