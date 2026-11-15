@@ -1,0 +1,19 @@
+cli/loom/src/manifest.rs
+  s_26ed2a08afb01b::t_dbe99d2ff9c552 362,365-369
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "c2ed6e598065cf0b8feec993e56e3e17bd906983",
+  "prompts": {},
+  "sessions": {
+    "s_26ed2a08afb01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "340b9701-5aaa-4a26-a486-4ecf3b34e3ac",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
