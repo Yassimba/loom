@@ -1,0 +1,989 @@
+cli/loom/setup-catalog.json
+  s_26ed2a08afb01b::t_6ed3750cf7a25c 648-659,675,735,757,912
+skills.sh.json
+  s_26ed2a08afb01b::t_f457882941f2c9 40
+skills/api-design/SKILL.md
+  s_26ed2a08afb01b::t_bfd350cd6d9ea8 307
+skills/api-design/deps.yml
+  s_26ed2a08afb01b::t_76618efb748c54 4
+skills/browser-usage/SKILL.md
+  s_26ed2a08afb01b::t_ed25c901725130 14-25,33,64,82,98-99,102-103,144,154,160,198-202,209-212,242-251,259,338-339,342-343,359-362,402,408-410,447-448,464-465,500-501,510,513,517,519,526-527,572-582
+skills/browser-usage/deps.yml
+  s_26ed2a08afb01b::t_d72daa32164bc8 8
+skills/browser-usage/references/authentication.md
+  s_26ed2a08afb01b::t_835bc4af0bbba8 129-130,142,148-167,170,172,220-225,336-337
+skills/browser-usage/references/commands.md
+  s_26ed2a08afb01b::t_48be82eac44db3 31-34,55-56,59-60,77,85-87,118-119,123-124,131,135-140,143-144,152-154,158-159,163-165,171-172,199,262-263,337-338,344,351-354,377-386,392-402,441,450-451,459,462,464,473-474,528,531-532,561-564,566,572-573
+skills/browser-usage/references/profiling.md
+  s_26ed2a08afb01b::t_d15c4b368ca52d 66,86
+skills/browser-usage/references/proxy-support.md
+  s_26ed2a08afb01b::t_cca7c3f1ae1d0a 64-66,185-188,191-192,195
+skills/browser-usage/references/snapshot-refs.md
+  s_26ed2a08afb01b::t_8b3c9193782220 83-85,95,97
+skills/browser-usage/references/video-recording.md
+  s_26ed2a08afb01b::t_d8a5fa42804e7f 9,12-14,20-25,28-29,50,53-55,60-98,101-113,153,233-235,241,243-244
+skills/browser-usage/templates/authenticated-session.sh
+  s_26ed2a08afb01b::t_bc5e44bb4b4c73 38,59-60,84-85,92-94
+skills/browser-usage/templates/capture-workflow.sh
+  s_26ed2a08afb01b::t_858492579bb9e6 30
+skills/browser-usage/templates/form-automation.sh
+  s_26ed2a08afb01b::t_6a8fa1f91a2aa4 22-23,49
+skills/database-pro/deps.yml
+  s_26ed2a08afb01b::t_28b30e1ced1158 4
+skills/diagram-design/SKILL.md
+  s_26ed2a08afb01b::t_572d516cd430f1 3,11,13,21,23,25,27,31,52,56,58,79,83,87-89,99,104-105,109,111,114,126,164,172,176-177,191,193,195,211,213-214,218,220-225,231,243,245,251,288-293,298-300,323,325,327,341,343,347,356,361,365,381,383-388,392,394
+skills/diagram-design/assets/example-architecture-containment-dark.html
+  s_26ed2a08afb01b::t_1c94da33cd836f 1-205
+skills/diagram-design/assets/example-architecture-containment-full.html
+  s_26ed2a08afb01b::t_fe058d53150c38 1-224
+skills/diagram-design/assets/example-architecture-containment.html
+  s_26ed2a08afb01b::t_5a0ae1192e28d1 1-205
+skills/diagram-design/assets/example-architecture-dark.html
+  s_26ed2a08afb01b::t_59f396fc9f7cef 70,84,86,88,96,104-105,107-108,112,114,122,168,171
+skills/diagram-design/assets/example-architecture-delta-dark.html
+  s_26ed2a08afb01b::t_beceae1d0bb977 1-193
+skills/diagram-design/assets/example-architecture-delta-full.html
+  s_26ed2a08afb01b::t_9982175d75c439 1-210
+skills/diagram-design/assets/example-architecture-delta.html
+  s_26ed2a08afb01b::t_d86a068e759b4e 1-18,20-193
+skills/diagram-design/assets/example-architecture-full.html
+  s_26ed2a08afb01b::t_0a8c604a4075d6 12,14,59,75-76,78,92,94-95,97-98,102-104,112,119-122,146,158,164
+skills/diagram-design/assets/example-architecture.html
+  s_26ed2a08afb01b::t_e98a1e7c159390 14,69,85-87,89,103,105-106,108-109,113-115,123,130-133,157,169,175
+skills/diagram-design/assets/example-axonometric-plan-campus-animated.html
+  s_26ed2a08afb01b::t_a3e855e53a52f3 1-24,26-34,36-42,44-61,63-67,69-75,77-78,80-83,85-86,88-91,94-101,103-114,116-119,121-125,127-141,144-150,152-156,158-167,169-181,184-296,298-305,307-311,313-319,321-329,331-348,350-353,355-358,361-399,402-442
+skills/diagram-design/assets/example-axonometric-plan-campus-dark.html
+  s_26ed2a08afb01b::t_4199b40cc45447 1-108
+skills/diagram-design/assets/example-axonometric-plan-campus-full.html
+  s_26ed2a08afb01b::t_787d693cf8e3f8 1-107
+skills/diagram-design/assets/example-axonometric-plan-campus.html
+  s_26ed2a08afb01b::t_5c2b1496b896f8 1-108
+skills/diagram-design/assets/example-axonometric-plan-coffee-shop-animated.html
+  s_26ed2a08afb01b::t_6ffb2cb036877e 1-24,26-34,36-42,44-61,63-67,69-75,77-78,80-83,85-86,88-91,94-101,103-114,116-119,121-125,127-136,138-141,144-150,152-156,158-163,165-167,169-180,184-301,304-310,313-317,319-324,327-335,337-448
+skills/diagram-design/assets/example-axonometric-plan-coffee-shop-dark.html
+  s_26ed2a08afb01b::t_c1fb22cc8c28cb 1-121
+skills/diagram-design/assets/example-axonometric-plan-coffee-shop-full.html
+  s_26ed2a08afb01b::t_476a1ec2d84850 1-120
+skills/diagram-design/assets/example-axonometric-plan-coffee-shop.html
+  s_26ed2a08afb01b::t_bc5671abae6391 1-121
+skills/diagram-design/assets/example-axonometric-plan-dark.html
+  s_26ed2a08afb01b::t_3d10f9fa01e414 1-114
+skills/diagram-design/assets/example-axonometric-plan-full.html
+  s_26ed2a08afb01b::t_2e32789e5eb784 1-113
+skills/diagram-design/assets/example-axonometric-plan-warehouse-animated.html
+  s_26ed2a08afb01b::t_88d40e7374c472 1-24,26-34,36-42,44-61,63-67,69-75,77-78,80-83,85-86,88-91,94-101,103-114,116-119,121-125,127-136,138-141,144-150,152-156,158-163,165-180,184-302,304-311,313-317,319-325,327-335,337-448
+skills/diagram-design/assets/example-axonometric-plan-warehouse-dark.html
+  s_26ed2a08afb01b::t_f292f477cb88c7 1-127
+skills/diagram-design/assets/example-axonometric-plan-warehouse-full.html
+  s_26ed2a08afb01b::t_000d4caab29d00 1-126
+skills/diagram-design/assets/example-axonometric-plan-warehouse.html
+  s_26ed2a08afb01b::t_bad27f4357e031 1-127
+skills/diagram-design/assets/example-axonometric-plan.html
+  s_26ed2a08afb01b::t_af41fc096fee71 1-114
+skills/diagram-design/assets/example-bar-full.html
+  s_26ed2a08afb01b::t_4c37158f9eb843 10,64,72,78
+skills/diagram-design/assets/example-bar.html
+  s_26ed2a08afb01b::t_e845fbe4712584 14,89-90,112,121
+skills/diagram-design/assets/example-beeswarm-full.html
+  s_26ed2a08afb01b::t_39d5c7af01038d 10,366,387
+skills/diagram-design/assets/example-beeswarm.html
+  s_26ed2a08afb01b::t_2b2085805d584f 14,356,377
+skills/diagram-design/assets/example-bubble-full.html
+  s_26ed2a08afb01b::t_deb0770a10c4ec 10,109,150
+skills/diagram-design/assets/example-bubble.html
+  s_26ed2a08afb01b::t_1ab3d7bec79b39 14,99,140
+skills/diagram-design/assets/example-bump-dark.html
+  s_26ed2a08afb01b::t_efaf3bc0d6616c 116
+skills/diagram-design/assets/example-bump-full.html
+  s_26ed2a08afb01b::t_ed4e44393fd773 10,126,128-132,143-144
+skills/diagram-design/assets/example-bump.html
+  s_26ed2a08afb01b::t_aa9a9920e8d650 14,116,118-122,133-134
+skills/diagram-design/assets/example-data-flow-dark.html
+  s_26ed2a08afb01b::t_f230fe05941057 12-13,48,80,139
+skills/diagram-design/assets/example-data-flow-full.html
+  s_26ed2a08afb01b::t_087d1ab8d6a033 12-13,67,85,98,102,119-120,143,158
+skills/diagram-design/assets/example-data-flow.html
+  s_26ed2a08afb01b::t_5d068008186cbe 12-13,47,65,78,82,99-100,123,138
+skills/diagram-design/assets/example-datalake-dark.html
+  s_26ed2a08afb01b::t_30a81e35a79ec6 97-100,104
+skills/diagram-design/assets/example-datalake-full.html
+  s_26ed2a08afb01b::t_a224e3107385d7 10,57,66,72,80,83-87,90,137-140,143-144,201,209
+skills/diagram-design/assets/example-datalake.html
+  s_26ed2a08afb01b::t_2a371a454f2e6e 14,66,77,84,103,109,123,179-182,185-186,252,264
+skills/diagram-design/assets/example-db-schema-dark.html
+  s_26ed2a08afb01b::t_94dc553b5a4d0b 73-74,80,84,90-91,96-97,253-259,262,264-278
+skills/diagram-design/assets/example-db-schema-full.html
+  s_26ed2a08afb01b::t_634d39056fba1a 10,47,54-55,61,65,71-72,77-78,154-155,234-240,243,245-259,278
+skills/diagram-design/assets/example-db-schema.html
+  s_26ed2a08afb01b::t_6bda01d096cd20 14,66,73-74,80,84,90-91,96-97,173-174,253-259,262,264-278,297
+skills/diagram-design/assets/example-dependency-dark.html
+  s_26ed2a08afb01b::t_f79c29dfa45f4e 72
+skills/diagram-design/assets/example-dependency-full.html
+  s_26ed2a08afb01b::t_2a0378e4027637 10,50,91,93,198
+skills/diagram-design/assets/example-dependency.html
+  s_26ed2a08afb01b::t_eef520e8bdbadb 14,69,110,112,217
+skills/diagram-design/assets/example-deployment-dark.html
+  s_26ed2a08afb01b::t_6d82f7ebaa6a53 70,90,92,97,103,112,179
+skills/diagram-design/assets/example-deployment-full.html
+  s_26ed2a08afb01b::t_746751c6bc610f 12,14,59,83,96,102,135-137,157,172
+skills/diagram-design/assets/example-deployment.html
+  s_26ed2a08afb01b::t_46738daa03b2e5 14,69,93,106,112,145-147,167,182
+skills/diagram-design/assets/example-dp-integration-dark.html
+  s_26ed2a08afb01b::t_daca2cc89d86a0 10
+skills/diagram-design/assets/example-dp-integration-full.html
+  s_26ed2a08afb01b::t_65944af1a67a3f 10
+skills/diagram-design/assets/example-dp-integration.html
+  s_26ed2a08afb01b::t_d776c42ad6c1b7 10
+skills/diagram-design/assets/example-dp-security-matrix-dark.html
+  s_26ed2a08afb01b::t_caae468066078f 8,13-14
+skills/diagram-design/assets/example-dp-security-matrix-full.html
+  s_26ed2a08afb01b::t_c8895b747c629d 8,12
+skills/diagram-design/assets/example-dp-security-matrix.html
+  s_26ed2a08afb01b::t_13656e19e6f0f9 10,20-21
+skills/diagram-design/assets/example-er-full.html
+  s_26ed2a08afb01b::t_43c4259410d517 10,108-112,163
+skills/diagram-design/assets/example-er.html
+  s_26ed2a08afb01b::t_1fb746cdf72981 14,127-131,182
+skills/diagram-design/assets/example-exploded-ai-stack-animated.html
+  s_26ed2a08afb01b::t_e2b92556a4ef80 1-163,165-180,184-438
+skills/diagram-design/assets/example-exploded-ai-stack-dark.html
+  s_26ed2a08afb01b::t_a4d7fc45a594ba 1-85
+skills/diagram-design/assets/example-exploded-ai-stack-full.html
+  s_26ed2a08afb01b::t_a35699f72cb68a 1-84
+skills/diagram-design/assets/example-exploded-ai-stack.html
+  s_26ed2a08afb01b::t_bbbd28d119911a 1-85
+skills/diagram-design/assets/example-exploded-dark.html
+  s_26ed2a08afb01b::t_8a26433e7fbb1e 1-83
+skills/diagram-design/assets/example-exploded-full.html
+  s_26ed2a08afb01b::t_44b2df9c7b405d 1-82
+skills/diagram-design/assets/example-exploded-keyboard-animated.html
+  s_26ed2a08afb01b::t_78e38c32eb153a 1-437
+skills/diagram-design/assets/example-exploded-keyboard-dark.html
+  s_26ed2a08afb01b::t_267e29d333c382 1-84
+skills/diagram-design/assets/example-exploded-keyboard-full.html
+  s_26ed2a08afb01b::t_ac8da4511ca5aa 1-83
+skills/diagram-design/assets/example-exploded-keyboard.html
+  s_26ed2a08afb01b::t_92ccf867cfc4d4 1-84
+skills/diagram-design/assets/example-exploded-phone-animated.html
+  s_26ed2a08afb01b::t_6fcb4d6ada24fa 1-24,26-34,36-42,44-61,63-67,69-75,77-78,80-83,85-86,88-91,93-101,103-114,116-119,121-125,127-136,138-141,143-150,152-156,158-163,165-167,169-180,184-290,292-299,301-305,307-313,315-323,325-334,336-353,355-389,392,394,396-429,431-436
+skills/diagram-design/assets/example-exploded-phone-dark.html
+  s_26ed2a08afb01b::t_ac01d040945d68 1-83
+skills/diagram-design/assets/example-exploded-phone-full.html
+  s_26ed2a08afb01b::t_c777f376461a95 1-82
+skills/diagram-design/assets/example-exploded-phone.html
+  s_26ed2a08afb01b::t_e815faca826746 1-83
+skills/diagram-design/assets/example-exploded-unboxing-animated.html
+  s_26ed2a08afb01b::t_5d8beeebb58344 1-24,26-34,36-42,44-61,63-67,69-75,77-78,80-83,85-86,88-91,93-101,103-114,116-119,121-125,127-136,138-141,144-150,152-156,158-163,165-167,169-180,184-291,293-300,302-306,308-314,316-324,326-335,337-354,356-395,397-437
+skills/diagram-design/assets/example-exploded-unboxing-dark.html
+  s_26ed2a08afb01b::t_056d79f9965ee6 1-84
+skills/diagram-design/assets/example-exploded-unboxing-full.html
+  s_26ed2a08afb01b::t_29ece2a2b26cdc 1-83
+skills/diagram-design/assets/example-exploded-unboxing.html
+  s_26ed2a08afb01b::t_7f8910ef471384 1-84
+skills/diagram-design/assets/example-exploded.html
+  s_26ed2a08afb01b::t_2945d68d5479ac 1-17,20-28,31-41,44-51,54-57,59-83
+skills/diagram-design/assets/example-fishbone-full.html
+  s_26ed2a08afb01b::t_9386f0f41f74b4 10,57,88-89,101-103,113,119
+skills/diagram-design/assets/example-fishbone.html
+  s_26ed2a08afb01b::t_96423410f63d46 14,77,114-115,128-130,141,147
+skills/diagram-design/assets/example-flowchart-dark.html
+  s_26ed2a08afb01b::t_167bbdf4ee4b52 31-32,54-58,66-69,96-97,99-100,102-103,105-106,109,118-119,122,128-129,131-133,137,160
+skills/diagram-design/assets/example-flowchart-full.html
+  s_26ed2a08afb01b::t_9909a4884952d0 10,17-19,51,69,72-73,75-76,78-79,81-82,85,94-95,98,104-105,107-109,113,130
+skills/diagram-design/assets/example-flowchart.html
+  s_26ed2a08afb01b::t_d4ad316f68b804 14,31-32,54-58,66-69,75,93,96-97,99-100,102-103,105-106,109,118-119,122,128-129,131-133,137,154,160
+skills/diagram-design/assets/example-gantt-dark.html
+  s_26ed2a08afb01b::t_9159bd5fc4fd53 10
+skills/diagram-design/assets/example-gantt-full.html
+  s_26ed2a08afb01b::t_eb30c44eabc175 10,84,86-87,98
+skills/diagram-design/assets/example-gantt.html
+  s_26ed2a08afb01b::t_50cd3556b4bd44 10,105,107-108,126
+skills/diagram-design/assets/example-heatmap-dark.html
+  s_26ed2a08afb01b::t_43d04ee115969f 1-224
+skills/diagram-design/assets/example-heatmap-full.html
+  s_26ed2a08afb01b::t_60555152a6640c 1-270
+skills/diagram-design/assets/example-heatmap.html
+  s_26ed2a08afb01b::t_ef60c47c14e39a 1-17,19-224
+skills/diagram-design/assets/example-high-level-dark.html
+  s_26ed2a08afb01b::t_88664779b2682b 95-98,102-107
+skills/diagram-design/assets/example-high-level-full.html
+  s_26ed2a08afb01b::t_420604e1495247 10,55,84-87,91-96,151-156,190,192
+skills/diagram-design/assets/example-high-level-vertical-dark.html
+  s_26ed2a08afb01b::t_4e38175e38fa55 106-109,115-116
+skills/diagram-design/assets/example-high-level-vertical-full.html
+  s_26ed2a08afb01b::t_375a0fdbaf8740 10,52,87-90,94-95,97,150-155,193,195
+skills/diagram-design/assets/example-high-level-vertical.html
+  s_26ed2a08afb01b::t_57173c25de0419 14,66,128-132,139-142,148,239-242,245-246,311,314
+skills/diagram-design/assets/example-high-level.html
+  s_26ed2a08afb01b::t_93315a880952a6 14,66,109-113,120-121,124,127,129,132,135,228-231,234-235,290,293
+skills/diagram-design/assets/example-import-drawio.html
+  s_26ed2a08afb01b::t_96c370d48728aa 14,66,74,77,80,100,103,106,109,112,115,118,122,126,131,165,174
+skills/diagram-design/assets/example-import-excalidraw.html
+  s_26ed2a08afb01b::t_4db9ba9d84a596 1-70
+skills/diagram-design/assets/example-import-mermaid.html
+  s_26ed2a08afb01b::t_35813ebc1873ce 10,27,32,34,39,45-51,53-55,62,65
+skills/diagram-design/assets/example-it-state-dark.html
+  s_26ed2a08afb01b::t_0d873a3917731a 10,41,53-55,59-60,72-74,78-79,82
+skills/diagram-design/assets/example-it-state-full.html
+  s_26ed2a08afb01b::t_5b45d65d2dd856 10,21-22,40,46,50,53,57-58
+skills/diagram-design/assets/example-it-state.html
+  s_26ed2a08afb01b::t_0c9c4d5ed81e2c 12-13,31,36,53,77,79,93,101,111,113,121,123
+skills/diagram-design/assets/example-journey-full.html
+  s_26ed2a08afb01b::t_b7968c6c6ac37a 10,71,77,92-93,95-96,111-112,115
+skills/diagram-design/assets/example-journey.html
+  s_26ed2a08afb01b::t_1642c7652fc09f 14,93,99,118-119,121-122,139-140,143
+skills/diagram-design/assets/example-kanban-full.html
+  s_26ed2a08afb01b::t_3a11d1de865461 10,71-72,100-101,142,151
+skills/diagram-design/assets/example-kanban.html
+  s_26ed2a08afb01b::t_c8471cb84bbede 14,89-90,118-119,160,169
+skills/diagram-design/assets/example-layers-full.html
+  s_26ed2a08afb01b::t_3ccd0bc0738fce 10,72-74,76
+skills/diagram-design/assets/example-layers.html
+  s_26ed2a08afb01b::t_41165585e95d69 14,91-93,95
+skills/diagram-design/assets/example-line-full.html
+  s_26ed2a08afb01b::t_1a313c452cb831 10,62-65,76
+skills/diagram-design/assets/example-line.html
+  s_26ed2a08afb01b::t_7b4b038caf2ada 10,69,73,76-83,99-100
+skills/diagram-design/assets/example-loop-dark.html
+  s_26ed2a08afb01b::t_04f269734cae01 11-12,46-47
+skills/diagram-design/assets/example-loop-full.html
+  s_26ed2a08afb01b::t_635bb02aeaeeba 12-13,65,67
+skills/diagram-design/assets/example-loop.html
+  s_26ed2a08afb01b::t_24c5074d238eef 11-12,45,47
+skills/diagram-design/assets/example-marimekko-dark.html
+  s_26ed2a08afb01b::t_00a93918b12b8b 1-17,19-148
+skills/diagram-design/assets/example-marimekko-full.html
+  s_26ed2a08afb01b::t_988ee473299ca8 1-172
+skills/diagram-design/assets/example-marimekko.html
+  s_26ed2a08afb01b::t_b19b3c63a5e37b 1-148
+skills/diagram-design/assets/example-medallion-dark.html
+  s_26ed2a08afb01b::t_4ad3420db9a9cc 12-13,46,67,131
+skills/diagram-design/assets/example-medallion-full.html
+  s_26ed2a08afb01b::t_479af2d80ae106 12-13,65,78,82,134-136
+skills/diagram-design/assets/example-medallion.html
+  s_26ed2a08afb01b::t_6b7c8124ae946c 12-13,45,58,62,114-116
+skills/diagram-design/assets/example-nested-dark.html
+  s_26ed2a08afb01b::t_fc4b928964347e 6,59,62-63,119
+skills/diagram-design/assets/example-nested-full.html
+  s_26ed2a08afb01b::t_adbc4081d9e2e6 6,10,37-38,43-44,63,79,100,117,130
+skills/diagram-design/assets/example-nested.html
+  s_26ed2a08afb01b::t_62874a335b088a 6,14,59,62-63,82,98,123
+skills/diagram-design/assets/example-org-chart-dark.html
+  s_26ed2a08afb01b::t_e3a4318311f78e 4,42,44
+skills/diagram-design/assets/example-org-chart-full.html
+  s_26ed2a08afb01b::t_c9cd656e4d82eb 4,26-27,42,44
+skills/diagram-design/assets/example-org-chart.html
+  s_26ed2a08afb01b::t_bc6cc664af1b41 4,26-27,42,44
+skills/diagram-design/assets/example-paved-road-animated.html
+  s_26ed2a08afb01b::t_834acf3675cd63 15,18-19,201,215-217,234-236,278-281,288-290,298,313,321,325
+skills/diagram-design/assets/example-polar-full.html
+  s_26ed2a08afb01b::t_9dbe0b9a55e83a 10,98-99
+skills/diagram-design/assets/example-polar.html
+  s_26ed2a08afb01b::t_6e11be9715763c 10,88-89
+skills/diagram-design/assets/example-policy-trace-animated.html
+  s_26ed2a08afb01b::t_81a0ba874ecc69 15,18-19,238-240,242,249,252,262,268-269,275,277
+skills/diagram-design/assets/example-process-dark.html
+  s_26ed2a08afb01b::t_5dff8725f6fb5f 10
+skills/diagram-design/assets/example-process-full.html
+  s_26ed2a08afb01b::t_cac3486bdc8b1f 10,13,40,61
+skills/diagram-design/assets/example-process.html
+  s_26ed2a08afb01b::t_74c27f1422c8d8 10,13,37,58
+skills/diagram-design/assets/example-pyramid-full.html
+  s_26ed2a08afb01b::t_281d1fe8798ea1 10,63,69,75,78,81,90
+skills/diagram-design/assets/example-pyramid.html
+  s_26ed2a08afb01b::t_32d47b62b1a4b1 14,82,88,94,97,100,109
+skills/diagram-design/assets/example-quadrant-consultant.html
+  s_26ed2a08afb01b::t_ce96b0d0acafca 15,17,77,89-91,131
+skills/diagram-design/assets/example-quadrant-full.html
+  s_26ed2a08afb01b::t_061ee91e75ff69 10,55,68,75,106
+skills/diagram-design/assets/example-quadrant.html
+  s_26ed2a08afb01b::t_c887b22a0cf688 14,74,87,94,125
+skills/diagram-design/assets/example-queue-animated.html
+  s_26ed2a08afb01b::t_10482c16bd47b0 15,18-19,211,250-251,272-273,276,280-281,284-285,288-291,297,300-301,308,340,344,352,356
+skills/diagram-design/assets/example-radar-full.html
+  s_26ed2a08afb01b::t_b111d6a1a61263 10,84,86-90,95
+skills/diagram-design/assets/example-radar.html
+  s_26ed2a08afb01b::t_97f5575ea16dc7 14,110,113-117,123
+skills/diagram-design/assets/example-ridgeline-full.html
+  s_26ed2a08afb01b::t_2bf0e7148fa980 10,84,105-106
+skills/diagram-design/assets/example-ridgeline.html
+  s_26ed2a08afb01b::t_698d0adb45ceba 14,74,95-96
+skills/diagram-design/assets/example-sankey-full.html
+  s_26ed2a08afb01b::t_23f4752d345dd7 10,71-72,119
+skills/diagram-design/assets/example-sankey.html
+  s_26ed2a08afb01b::t_8529618910533c 14,91-92,140
+skills/diagram-design/assets/example-scatter-dark.html
+  s_26ed2a08afb01b::t_47076c186df5f3 10
+skills/diagram-design/assets/example-scatter-full.html
+  s_26ed2a08afb01b::t_0e17d9627bdb2b 10,80,82,87
+skills/diagram-design/assets/example-scatter.html
+  s_26ed2a08afb01b::t_513d7b6bf5d52a 10,116,120,130
+skills/diagram-design/assets/example-sequence-dark.html
+  s_26ed2a08afb01b::t_cb70c16a9ba122 78,110,133,162,164,172,188,208
+skills/diagram-design/assets/example-sequence-full.html
+  s_26ed2a08afb01b::t_12d22535459465 16,19-20,200,247,274,287-289,297,303-305,313,325,341
+skills/diagram-design/assets/example-sequence-oauth-dark.html
+  s_26ed2a08afb01b::t_81d279e4dbad47 76,96,98,122,124,130,132,144-146,174
+skills/diagram-design/assets/example-sequence-oauth-full.html
+  s_26ed2a08afb01b::t_d92e5fb1b2ee4e 16,19-20,196,231,233,267-269,274-276,290,306
+skills/diagram-design/assets/example-sequence-oauth.html
+  s_26ed2a08afb01b::t_7c3d44eb0f0f58 14,73,130,132,178-180,186-188,206,222
+skills/diagram-design/assets/example-sequence.html
+  s_26ed2a08afb01b::t_f01d0d40831386 14,75,122,149,162-164,172,178-180,188,200,216
+skills/diagram-design/assets/example-service-blueprint-dark.html
+  s_26ed2a08afb01b::t_35b9197531b914 1-170
+skills/diagram-design/assets/example-service-blueprint-full.html
+  s_26ed2a08afb01b::t_70d22de33c3187 1-263
+skills/diagram-design/assets/example-service-blueprint.html
+  s_26ed2a08afb01b::t_e86b25dbb52ac4 1-185
+skills/diagram-design/assets/example-slopegraph-dark.html
+  s_26ed2a08afb01b::t_bce57fe777429a 90-93
+skills/diagram-design/assets/example-slopegraph-full.html
+  s_26ed2a08afb01b::t_2486f6f2b72e86 10,100-103,107-109,120-121
+skills/diagram-design/assets/example-slopegraph.html
+  s_26ed2a08afb01b::t_0f129262962d72 14,90-93,97-99,110-111
+skills/diagram-design/assets/example-state-full.html
+  s_26ed2a08afb01b::t_abb2002aebfb7b 10,50,62,78,108-110
+skills/diagram-design/assets/example-state-lifecycle-dark.html
+  s_26ed2a08afb01b::t_cb6c0c5cd9a6d1 1-88
+skills/diagram-design/assets/example-state-lifecycle-full.html
+  s_26ed2a08afb01b::t_3775c96d9c8068 1-112
+skills/diagram-design/assets/example-state-lifecycle.html
+  s_26ed2a08afb01b::t_cf19b556415bf0 1-92
+skills/diagram-design/assets/example-state.html
+  s_26ed2a08afb01b::t_4a523c9ee119d0 14,69,81,97,127-129
+skills/diagram-design/assets/example-story-map-full.html
+  s_26ed2a08afb01b::t_2d7c7ae68016f6 10,122,124,136,139-140,158,161
+skills/diagram-design/assets/example-story-map.html
+  s_26ed2a08afb01b::t_d03dad564c3c69 14,140,142,154,157-158,176,179
+skills/diagram-design/assets/example-streamgraph-dark.html
+  s_26ed2a08afb01b::t_db89e34278a93a 1-99
+skills/diagram-design/assets/example-streamgraph-full.html
+  s_26ed2a08afb01b::t_c8f12108b90f3f 1-129
+skills/diagram-design/assets/example-streamgraph.html
+  s_26ed2a08afb01b::t_8782149732020e 1-99
+skills/diagram-design/assets/example-swimlane-dark.html
+  s_26ed2a08afb01b::t_3dcdedb56782eb 94-95,100-101,106-107,109-110,112-113
+skills/diagram-design/assets/example-swimlane-full.html
+  s_26ed2a08afb01b::t_0c86799d1e5d4d 10,50,75-76,81-82,87-88,90-91,93-94,128,139,148
+skills/diagram-design/assets/example-swimlane.html
+  s_26ed2a08afb01b::t_f2a8d65dc13515 14,69,94-95,100-101,106-107,109-110,112-113,147,158,167
+skills/diagram-design/assets/example-timeline-dark.html
+  s_26ed2a08afb01b::t_42681a000ecd5b 82
+skills/diagram-design/assets/example-timeline-full.html
+  s_26ed2a08afb01b::t_d0c2d7252f97cc 10,63,89-91,96-98,109
+skills/diagram-design/assets/example-timeline.html
+  s_26ed2a08afb01b::t_d9b14b19e9f9f4 14,82,108-110,115-117,128
+skills/diagram-design/assets/example-tree-block-decomposition-full.html
+  s_26ed2a08afb01b::t_605022cc79eb53 10,68,73-74
+skills/diagram-design/assets/example-tree-block-decomposition.html
+  s_26ed2a08afb01b::t_510f1cf89a7d6a 14,87,92-93
+skills/diagram-design/assets/example-tree-full.html
+  s_26ed2a08afb01b::t_48dae7789d6135 10,78-80,141
+skills/diagram-design/assets/example-tree.html
+  s_26ed2a08afb01b::t_fa7fe188772948 14,97-99,160
+skills/diagram-design/assets/example-treemap-full.html
+  s_26ed2a08afb01b::t_f86b91669b8480 10,60,103
+skills/diagram-design/assets/example-treemap.html
+  s_26ed2a08afb01b::t_4c7b506082bcd6 14,52,95
+skills/diagram-design/assets/example-uml-class-full.html
+  s_26ed2a08afb01b::t_6c6047b487f9ae 10,64,66,91-95
+skills/diagram-design/assets/example-uml-class.html
+  s_26ed2a08afb01b::t_fdc538a41c4a19 14,83,85,110-114
+skills/diagram-design/assets/example-venn-dark.html
+  s_26ed2a08afb01b::t_d38645524833ef 85,101
+skills/diagram-design/assets/example-venn-full.html
+  s_26ed2a08afb01b::t_bd0ad20ac7bceb 10,66,71,82,96,103
+skills/diagram-design/assets/example-venn.html
+  s_26ed2a08afb01b::t_5373d5251af509 14,82
+skills/diagram-design/assets/example-wardley-full.html
+  s_26ed2a08afb01b::t_58c96741419855 10,51,83,91,118-119
+skills/diagram-design/assets/example-wardley.html
+  s_26ed2a08afb01b::t_9fb741f134cfb4 14,69,107,117,145-146
+skills/diagram-design/assets/example-waterfall-dark.html
+  s_26ed2a08afb01b::t_49dd38d07ff2da 1-17,19-129
+skills/diagram-design/assets/example-waterfall-full.html
+  s_26ed2a08afb01b::t_efbec41a9e2fe8 1-106
+skills/diagram-design/assets/example-waterfall.html
+  s_26ed2a08afb01b::t_490e5afd990930 1-129
+skills/diagram-design/assets/icons.html
+  s_26ed2a08afb01b::t_7e81c0194b0cf5 1-230
+skills/diagram-design/assets/index.html
+  s_26ed2a08afb01b::t_55d86a7eb7656f 46,52,54,66,73,97-101,133,144,169-210,212-224,231-235,242,248-249,264-283,288-305,307-316,319-322,325-328,331,334,337,340-358,360-361,363-364,366-367,369-370,372-373,375-376,378-379,381-382,384-385,387-388,390-391,393-394,396-397,399-400,402-403,405-406,408-409,411-412,414-415,417-418,420-421,423-424,426-427,429-430,432-433,435-436,438-439,441-442,444-492,495,498,501,504,507,510,513,516,519,522-523,527-528,544-601,606-608,629-630,633,654,660
+skills/diagram-design/assets/template-dark.html
+  s_26ed2a08afb01b::t_c7e351ae8e5ee2 7,16,32-35,57-65,74-81,83-89,91,93,95-96
+skills/diagram-design/assets/template-full.html
+  s_26ed2a08afb01b::t_e1ad3236604752 7,17,20-21,24,83-91,206,236,238,241-242,253,255-256,263-265,279,288,292,295-296,302,324-326,340,352,359,365
+skills/diagram-design/assets/template-motion.html
+  s_26ed2a08afb01b::t_bceb9904b9b6ed 7,14-15,18,45-52,170-174,191-200,202-205,207-230,232-236
+skills/diagram-design/assets/template-terminal.html
+  s_26ed2a08afb01b::t_f6a8d67407d9c3 112,115-127,145-169,171-176,178,180-184
+skills/diagram-design/assets/template.html
+  s_26ed2a08afb01b::t_2d47a125db8681 7,14,16,32-35,57-65,74-81,83-89,91-92,94,96-97
+skills/diagram-design/deps.yml
+  s_26ed2a08afb01b::t_e3c44f3e2ad17e 4
+skills/diagram-design/references/animation.md
+  s_26ed2a08afb01b::t_efb019085ed94b 107-108,111,125
+skills/diagram-design/references/doctor.md
+  s_26ed2a08afb01b::t_aafb3fc4f6512b 33-38,44-47,54,67,73,125
+skills/diagram-design/references/export.md
+  s_26ed2a08afb01b::t_93d0d6014b0cfa 23-25,31-42,44,46,49-62,65-68,71-72,76-80,82-91,93-274,277-280,292-293,296,299-302,304-306,313-317,319,321,323,327,331,368-376
+skills/diagram-design/references/import-drawio.md
+  s_26ed2a08afb01b::t_1343aaca36aa35 27-34
+skills/diagram-design/references/import-excalidraw.md
+  s_26ed2a08afb01b::t_534c9ca7c4a95f 1-130
+skills/diagram-design/references/import-mermaid.md
+  s_26ed2a08afb01b::t_c299cac251381a 10,24,26-29,71,100,103,114,132-137
+skills/diagram-design/references/layout-budget.md
+  s_26ed2a08afb01b::t_426072d7003de0 1-96
+skills/diagram-design/references/onboarding.md
+  s_26ed2a08afb01b::t_2222bdc0917086 9-11,32-34,54-65,178,359-368
+skills/diagram-design/references/output-spec.md
+  s_26ed2a08afb01b::t_70eeed2f288770 53,57-104,123-164,227,241,267-268
+skills/diagram-design/references/primitive-annotation.md
+  s_26ed2a08afb01b::t_303471cc65c3d3 8-10,13,15,28-30
+skills/diagram-design/references/primitive-icons.md
+  s_26ed2a08afb01b::t_3ed8da78f7df1f 1-827
+skills/diagram-design/references/primitives-core.md
+  s_26ed2a08afb01b::t_f6117ee71482c5 1-146
+skills/diagram-design/references/profiles.md
+  s_26ed2a08afb01b::t_66681027709583 56,91
+skills/diagram-design/references/semantic-patterns.md
+  s_26ed2a08afb01b::t_02a4dc2be4cfab 3,19,123,135-148
+skills/diagram-design/references/style-guide.md
+  s_26ed2a08afb01b::t_89ddf7538ba095 5,22,35-50,103,106-126,171-184,228
+skills/diagram-design/references/type-architecture-delta.md
+  s_26ed2a08afb01b::t_b81bb8a43da473 1-143
+skills/diagram-design/references/type-architecture.md
+  s_26ed2a08afb01b::t_83bc3443c866aa 24,27-28,32-34,60,62-63,68-101,107-109,115-117
+skills/diagram-design/references/type-axonometric-plan.md
+  s_26ed2a08afb01b::t_2b717b4f64d6ce 1-83
+skills/diagram-design/references/type-bar.md
+  s_26ed2a08afb01b::t_88074b27938af0 11-14,22,24,26,29,48,59-61,64,66,72,80-85,90,94,107-108
+skills/diagram-design/references/type-db-schema.md
+  s_26ed2a08afb01b::t_f92ec7d0d440e3 11-14,18,22
+skills/diagram-design/references/type-dependency.md
+  s_26ed2a08afb01b::t_71eb4bba68adf4 8-10,14,36
+skills/diagram-design/references/type-deployment.md
+  s_26ed2a08afb01b::t_67baf0effe0f1b 9-11,13,15
+skills/diagram-design/references/type-dp-integration.md
+  s_26ed2a08afb01b::t_476a167701e1ac 60-61,181,192,202-206,212-216,237,309-321
+skills/diagram-design/references/type-er.md
+  s_26ed2a08afb01b::t_3fea496bf238f5 9-10,12
+skills/diagram-design/references/type-exploded.md
+  s_26ed2a08afb01b::t_85decac8eb3046 1-115
+skills/diagram-design/references/type-fishbone.md
+  s_26ed2a08afb01b::t_a17d3cd92235dd 7-9
+skills/diagram-design/references/type-gantt.md
+  s_26ed2a08afb01b::t_eb243f09588fc0 7,10-11,20-22,26-28
+skills/diagram-design/references/type-heatmap.md
+  s_26ed2a08afb01b::t_7a654699f9012f 1-80
+skills/diagram-design/references/type-high-level.md
+  s_26ed2a08afb01b::t_5ed372ab1e8b6f 112,116,118,130,141,155,175,194,235,237,247-250,256-259,396,398-415,417-422
+skills/diagram-design/references/type-it-state.md
+  s_26ed2a08afb01b::t_cfb207ac75dfd6 135
+skills/diagram-design/references/type-journey.md
+  s_26ed2a08afb01b::t_53a673bbe69e87 5-6,11-15,18
+skills/diagram-design/references/type-kanban.md
+  s_26ed2a08afb01b::t_4bef5332743fab 8-9,23,43
+skills/diagram-design/references/type-layers.md
+  s_26ed2a08afb01b::t_e6d911aa591a0e 9-12,14
+skills/diagram-design/references/type-line.md
+  s_26ed2a08afb01b::t_2eacf66e829c47 9,22,24,28,42,44,58,72-74,96-97,102-108,111,155,184-188,207-277,291,313-316,332-334
+skills/diagram-design/references/type-loop.md
+  s_26ed2a08afb01b::t_2d4bd70d59d401 63
+skills/diagram-design/references/type-nested.md
+  s_26ed2a08afb01b::t_b8053f875cb265 3,7,11
+skills/diagram-design/references/type-org-chart.md
+  s_26ed2a08afb01b::t_0f5c7fa0cf4053 13-14
+skills/diagram-design/references/type-polar.md
+  s_26ed2a08afb01b::t_6fa5db44b03d2d 90-92,112
+skills/diagram-design/references/type-process.md
+  s_26ed2a08afb01b::t_f7c23bbbf81a56 5,107-110,124-125,130-132,171-173,180,182-184,188-189,286-299
+skills/diagram-design/references/type-pyramid.md
+  s_26ed2a08afb01b::t_ac0baa2ce414fb 16-17,22
+skills/diagram-design/references/type-quadrant.md
+  s_26ed2a08afb01b::t_cc462062a495a4 7,28,51-52,55-58,75
+skills/diagram-design/references/type-radar.md
+  s_26ed2a08afb01b::t_06582828debcbf 10-11,47,56-65,75
+skills/diagram-design/references/type-sankey.md
+  s_26ed2a08afb01b::t_74d9ddf5ef7a4a 5-7,16,19
+skills/diagram-design/references/type-scatter.md
+  s_26ed2a08afb01b::t_fa5067cfee79fa 9,11-13,19-20,23-24,46,49,57,64,72,77,80,83,86,122,125,150,153,156,159
+skills/diagram-design/references/type-sequence.md
+  s_26ed2a08afb01b::t_a573348efa79e2 30,34,38,45,48-50,54,60,68-69,73,90,102,108,118
+skills/diagram-design/references/type-service-blueprint.md
+  s_26ed2a08afb01b::t_4a6de808ee1741 1-103
+skills/diagram-design/references/type-state.md
+  s_26ed2a08afb01b::t_eb9f25c157b3fb 3-9,12,14,28-30
+skills/diagram-design/references/type-story-map.md
+  s_26ed2a08afb01b::t_720ed35aa7e2df 15-18
+skills/diagram-design/references/type-swimlane.md
+  s_26ed2a08afb01b::t_ee89e78f451c5e 5-6,8
+skills/diagram-design/references/type-timeline.md
+  s_26ed2a08afb01b::t_25e1fe9861e3f3 7,9
+skills/diagram-design/references/type-tree.md
+  s_26ed2a08afb01b::t_5274e09c825257 7
+skills/diagram-design/references/type-treemap.md
+  s_26ed2a08afb01b::t_9d27edea694ead 15,22-28,32-33,46,48-50,53,70-129,135-137
+skills/diagram-design/references/type-uml-class.md
+  s_26ed2a08afb01b::t_d2da0776e19f08 19-21,39,47
+skills/diagram-design/references/type-venn.md
+  s_26ed2a08afb01b::t_e303df6b2c3dd9 8,10-12
+skills/diagram-design/references/type-wardley.md
+  s_26ed2a08afb01b::t_94c9584ffa82bf 8-9,12
+skills/diagram-design/references/type-waterfall.md
+  s_26ed2a08afb01b::t_79294e04e28134 1-75
+skills/diagram-design/scripts/drawio_extract.py
+  s_26ed2a08afb01b::t_cb161de0e8f6a2 15,27,45-46,179,356-357,359-361,385-388,414-415,419-440,443,449,466-468,495-496,498-528,539,554-557,565-566,575-585,601,604-605,619-620,774-775,778,784-788,921,966-969
+skills/diagram-design/scripts/excalidraw_extract.py
+  s_26ed2a08afb01b::t_30de567bffd1a9 1-718
+skills/diagram-design/scripts/export_png.py
+  s_26ed2a08afb01b::t_331c3d63b3eef6 1-2,4,6-9,11,13-14,17-24,27-79,82-89,92-93
+skills/diagram-design/scripts/export_svg.py
+  s_26ed2a08afb01b::t_069943de1793e1 1-1610
+skills/diagram-design/scripts/mermaid_extract.py
+  s_26ed2a08afb01b::t_765757271a0c9e 35-38,56-63,73-76,78,122,132,140-142,155,225-241,256,274,277-280,283,286-289,293,295,447-453,468-479,481-483,604-605,624,648-650,669-678,681-692,694-695,698,701-730,732,735,743-749,751,795,842-846,865-866,872-874,917-920,927,932,935,939-940,997-1002,1010-1012,1017-1031,1049,1051-1057,1080,1082-1088,1093-1106,1114-1115,1130-1131,1138,1159-1160,1166-1174,1195-1199,1207-1208,1313-1334,1337,1343-1344,1371,1455,1459,1481-1482,1484,1486-1487,1489,1491,1497-1504,1526,1528,1530
+skills/diagram-design/scripts/self_check.py
+  s_26ed2a08afb01b::t_0df4dec3302fe3 10-12,32-116,130,132,147-151,161-162,246-409,457-490,534-536,541-569,676,681,686-689,691,700-704,709
+skills/excalidraw/SKILL.md
+  s_26ed2a08afb01b::t_9d82ddc3ad9d74 1-122
+skills/excalidraw/deps.yml
+  s_26ed2a08afb01b::t_38ff2ba494d758 1-3
+skills/excalidraw/references/recipes.md
+  s_26ed2a08afb01b::t_7b6f9ce638cd92 1-70
+skills/hallmark/LICENSE
+  s_26ed2a08afb01b::t_83375756ffe795 1-21
+skills/hallmark/SKILL.md
+  s_26ed2a08afb01b::t_25c31ffe0d48de 1-154
+skills/hallmark/agents/openai.yaml
+  s_26ed2a08afb01b::t_5aea4e3b3609d6 2-13
+skills/hallmark/deps.yml
+  s_26ed2a08afb01b::t_89584fca73b2e9 1-4
+skills/hallmark/references/anatomy.md
+  s_26ed2a08afb01b::t_967160515cbf2a 1-71
+skills/hallmark/references/brand-truth.md
+  s_26ed2a08afb01b::t_7d552d6bcf7841 1-40
+skills/hallmark/references/comp.md
+  s_26ed2a08afb01b::t_efcb96d283b879 1-104
+skills/hallmark/references/craft.md
+  s_26ed2a08afb01b::t_ade2b5650ab73b 1-116
+skills/hallmark/references/dark-mode.md
+  s_26ed2a08afb01b::t_4d56bb7169928f 1-49
+skills/hallmark/references/data-viz.md
+  s_26ed2a08afb01b::t_12d2a64a160eb6 1-48
+skills/hallmark/references/design-md.md
+  s_26ed2a08afb01b::t_446a0f8d0f515a 1,3,5,7,9-10,12,14-19,21-35,37-53
+skills/hallmark/references/direction.md
+  s_26ed2a08afb01b::t_0a706c698d9b67 1-52
+skills/hallmark/references/export-formats.md
+  s_26ed2a08afb01b::t_87509f720097a1 1-80
+skills/hallmark/references/flow.md
+  s_26ed2a08afb01b::t_47be73178dc899 1-131
+skills/hallmark/references/fonts.md
+  s_26ed2a08afb01b::t_1677382efcc144 1-58
+skills/hallmark/references/gates.md
+  s_26ed2a08afb01b::t_48dff13f245e16 1-243
+skills/hallmark/references/genres/atmospheric.md
+  s_26ed2a08afb01b::t_2e0b5b234d1e61 1-24
+skills/hallmark/references/genres/editorial.md
+  s_26ed2a08afb01b::t_6bcc7bba0c4366 1-24
+skills/hallmark/references/genres/modern-minimal.md
+  s_26ed2a08afb01b::t_6815a141034a0a 1-24
+skills/hallmark/references/genres/playful.md
+  s_26ed2a08afb01b::t_2fb5205d33ebaf 1-24
+skills/hallmark/references/imagery.md
+  s_26ed2a08afb01b::t_473298eefbcce0 1-99
+skills/hallmark/references/interaction-and-states.md
+  s_26ed2a08afb01b::t_66ebd522fe2275 1-89
+skills/hallmark/references/layout.md
+  s_26ed2a08afb01b::t_698e75fb9f2157 1-104
+skills/hallmark/references/macrostructures.md
+  s_26ed2a08afb01b::t_f332ded1d4d502 1-119
+skills/hallmark/references/macrostructures/01-bento-grid.md
+  s_26ed2a08afb01b::t_6514586dfd106d 1-21
+skills/hallmark/references/macrostructures/02-long-document.md
+  s_26ed2a08afb01b::t_021e9f7a7b220b 1-35
+skills/hallmark/references/macrostructures/03-marquee-hero.md
+  s_26ed2a08afb01b::t_3260b16522dc91 1-21
+skills/hallmark/references/macrostructures/04-stat-led.md
+  s_26ed2a08afb01b::t_7a6d5fcd1dd357 1-21
+skills/hallmark/references/macrostructures/05-workbench.md
+  s_26ed2a08afb01b::t_4c6bb0a00b3b7e 1,3,5-10,12,14,16,18-21
+skills/hallmark/references/macrostructures/06-conversational-faq.md
+  s_26ed2a08afb01b::t_e67c8f434a882a 1-28
+skills/hallmark/references/macrostructures/07-manifesto.md
+  s_26ed2a08afb01b::t_0dd12a21302f95 1-28
+skills/hallmark/references/macrostructures/08-photographic.md
+  s_26ed2a08afb01b::t_b1868d7f54fba5 1-21
+skills/hallmark/references/macrostructures/09-quote-led.md
+  s_26ed2a08afb01b::t_243c147d6cf530 1-21
+skills/hallmark/references/macrostructures/10-specimen.md
+  s_26ed2a08afb01b::t_1c58f9295e1cfa 1,3,5-10,12-21
+skills/hallmark/references/macrostructures/11-catalogue.md
+  s_26ed2a08afb01b::t_b5438a0fe2b811 1-21
+skills/hallmark/references/macrostructures/12-letter.md
+  s_26ed2a08afb01b::t_263e0a7b041c03 1-21
+skills/hallmark/references/macrostructures/13-index-first.md
+  s_26ed2a08afb01b::t_0f0a0840d9fa5d 1-21
+skills/hallmark/references/macrostructures/14-narrative-workflow.md
+  s_26ed2a08afb01b::t_9d21e278e8dd2b 1-21
+skills/hallmark/references/macrostructures/15-split-studio.md
+  s_26ed2a08afb01b::t_fb5d2a66e69341 1-21
+skills/hallmark/references/macrostructures/16-feature-stack.md
+  s_26ed2a08afb01b::t_652952e4d1fc28 1,3,5-10,12,14-23
+skills/hallmark/references/macrostructures/17-type-specimen.md
+  s_26ed2a08afb01b::t_db57763df94f7e 1-19
+skills/hallmark/references/macrostructures/18-portfolio-grid.md
+  s_26ed2a08afb01b::t_4b956a4cbdbac1 1-21
+skills/hallmark/references/macrostructures/19-map-diagram.md
+  s_26ed2a08afb01b::t_761e8a57508cf3 1-21
+skills/hallmark/references/macrostructures/20-ecosystem-index.md
+  s_26ed2a08afb01b::t_a909e0c0947d7c 1-19
+skills/hallmark/references/macrostructures/21-component-playground.md
+  s_26ed2a08afb01b::t_0db31697bd7cbd 1-21
+skills/hallmark/references/microinteractions.md
+  s_26ed2a08afb01b::t_c0cfca45f3a948 1-80
+skills/hallmark/references/patterns.md
+  s_26ed2a08afb01b::t_6dcd6472f41b10 1-202
+skills/hallmark/references/redesign.md
+  s_26ed2a08afb01b::t_5467343e1da780 1-88
+skills/hallmark/references/responsive.md
+  s_26ed2a08afb01b::t_9e27f2052294ef 1-46
+skills/hallmark/references/review-finish.md
+  s_26ed2a08afb01b::t_3415e080d28c34 1-19
+skills/hallmark/references/review-hero.md
+  s_26ed2a08afb01b::t_fda3cf33b5d2c8 1,3,5,7,9-14,16,18,20
+skills/hallmark/references/scroll-choreography.md
+  s_26ed2a08afb01b::t_245d9aa07aaa9b 1-37,40,42-44,46-57,61,63-65,67-76,78,80,82,84-90,93-97,99-105,107-110
+skills/hallmark/references/texture.md
+  s_26ed2a08afb01b::t_069b6ed34814a8 1,3-11,13-23,25-27,29-49,51-90
+skills/hallmark/references/themes/README.md
+  s_26ed2a08afb01b::t_2630616a256d61 1-58
+skills/hallmark/references/themes/almanac.md
+  s_26ed2a08afb01b::t_dc0c5762025158 1-103
+skills/hallmark/references/themes/arcade.md
+  s_26ed2a08afb01b::t_35fadc4f916967 1-34,36,38,40-43,45,47-51,53,55-58,60,62-64,66,68,70,72,74,76-79,81,83-84,87-101
+skills/hallmark/references/themes/atelier.md
+  s_26ed2a08afb01b::t_5490b482752915 1-98
+skills/hallmark/references/themes/bloom.md
+  s_26ed2a08afb01b::t_f4bfb35a04a0b5 1-102
+skills/hallmark/references/themes/blueprint.md
+  s_26ed2a08afb01b::t_689ed316ee1755 1-103
+skills/hallmark/references/themes/broadside.md
+  s_26ed2a08afb01b::t_6d84dd4c28ab7c 1-108
+skills/hallmark/references/themes/brutal.md
+  s_26ed2a08afb01b::t_7278a975ffff81 1-95
+skills/hallmark/references/themes/carnival.md
+  s_26ed2a08afb01b::t_e3908f6f82d83d 1-104
+skills/hallmark/references/themes/cobalt.md
+  s_26ed2a08afb01b::t_86431c77871bcc 1-101
+skills/hallmark/references/themes/console.md
+  s_26ed2a08afb01b::t_c0797fd3766cc2 1-99
+skills/hallmark/references/themes/coral.md
+  s_26ed2a08afb01b::t_fb8f6e95ae01d3 1-13,15,17,19,21-38,40,42,44-47,49,51-102
+skills/hallmark/references/themes/darkroom.md
+  s_26ed2a08afb01b::t_e103f656199515 1-30,32,34,36-40,42,44-46,48,50-54,56,58-61,63,65-67,69,71,73-99
+skills/hallmark/references/themes/dose.md
+  s_26ed2a08afb01b::t_276c7d93033c8f 1-36,38,40,42,44-47,49,51-55,57,59-62,64,66-67,69,71,73,75,77,79-82,84,86-88,90-98
+skills/hallmark/references/themes/dusk.md
+  s_26ed2a08afb01b::t_afe3db3613e6ff 1-105
+skills/hallmark/references/themes/editorial.md
+  s_26ed2a08afb01b::t_b0e4749cb50bc7 1-31,33,35-37,39,41-46,48,50-53,55,57-59,61,63,65,67,69,71-75,77,79-81,83-97
+skills/hallmark/references/themes/formwork.md
+  s_26ed2a08afb01b::t_0d1d46d00d9029 1-13,15,17,19,21-34,36,38,40-44,46,48-51,53-107
+skills/hallmark/references/themes/furrow.md
+  s_26ed2a08afb01b::t_2c46d2405d4d97 1-98
+skills/hallmark/references/themes/garden.md
+  s_26ed2a08afb01b::t_cdee3f2b9cdd88 1-97
+skills/hallmark/references/themes/grid.md
+  s_26ed2a08afb01b::t_8f3d1244acda7d 1-101
+skills/hallmark/references/themes/halftone.md
+  s_26ed2a08afb01b::t_e3b1e194784dfa 1-31,33,35,37-41,43,45-47,49,51-56,58,60-106
+skills/hallmark/references/themes/hedgerow.md
+  s_26ed2a08afb01b::t_5c1670ac6f5fe0 1-31,33,35,37-40,42,44-46,48,50-54,56,58-61,63,65-104
+skills/hallmark/references/themes/hum.md
+  s_26ed2a08afb01b::t_f96b03496f496f 1-99
+skills/hallmark/references/themes/index.json
+  s_26ed2a08afb01b::t_de4c4356df1976 1-2190
+skills/hallmark/references/themes/ink.md
+  s_26ed2a08afb01b::t_d3890157a8297f 1-106
+skills/hallmark/references/themes/kiln.md
+  s_26ed2a08afb01b::t_dddd9c02000854 1-108
+skills/hallmark/references/themes/loom.md
+  s_26ed2a08afb01b::t_4e47d595cfec11 1-106
+skills/hallmark/references/themes/lumen.md
+  s_26ed2a08afb01b::t_4d226e9522d58d 1-13,15,17-19,21-32,34,36,38,40-44,46,48-52,54,56-59,61,63-65,67-103
+skills/hallmark/references/themes/manifesto.md
+  s_26ed2a08afb01b::t_797c49aaa7b441 1-101
+skills/hallmark/references/themes/midnight.md
+  s_26ed2a08afb01b::t_e1ef250a7015f1 1-97
+skills/hallmark/references/themes/newsprint.md
+  s_26ed2a08afb01b::t_0184c2a96fa123 1-31,33,35,37-42,44,46-50,52,54-85,87-102
+skills/hallmark/references/themes/overprint.md
+  s_26ed2a08afb01b::t_c674c6b78f581b 1-101
+skills/hallmark/references/themes/pasteup.md
+  s_26ed2a08afb01b::t_2eff8dbf21b55d 1-100
+skills/hallmark/references/themes/piste.md
+  s_26ed2a08afb01b::t_973aecbfb0a504 1-99
+skills/hallmark/references/themes/ribbon.md
+  s_26ed2a08afb01b::t_bde6c7911a4db2 1-39,41,43-47,49,51-53,55,57-61,63,65-68,70,72-74,76,78,80,82,84,86-89,91,93-94,97-106
+skills/hallmark/references/themes/rim.md
+  s_26ed2a08afb01b::t_30e302e136755b 1-96
+skills/hallmark/references/themes/riso.md
+  s_26ed2a08afb01b::t_c3f94a1a8b009b 1-98
+skills/hallmark/references/themes/solstice.md
+  s_26ed2a08afb01b::t_c2dd9059e1016a 1-104
+skills/hallmark/references/themes/specimen.md
+  s_26ed2a08afb01b::t_50efff25051517 1-100
+skills/hallmark/references/themes/spore.md
+  s_26ed2a08afb01b::t_8b526188947935 1-104
+skills/hallmark/references/themes/sport.md
+  s_26ed2a08afb01b::t_39cd60f4336201 1-101
+skills/hallmark/references/themes/squeeze.md
+  s_26ed2a08afb01b::t_121ece40bdaf1f 1-99
+skills/hallmark/references/themes/sticker.md
+  s_26ed2a08afb01b::t_e01813c0db853a 1-106
+skills/hallmark/references/themes/studio.md
+  s_26ed2a08afb01b::t_01b867918d31ec 1-99
+skills/hallmark/references/themes/terminal.md
+  s_26ed2a08afb01b::t_c4a7f6e7ba3205 1-96
+skills/hallmark/references/themes/terrazzo.md
+  s_26ed2a08afb01b::t_6c6f1ad4f652fe 1-32,34,36,38-42,44,46-49,51,53-57,59,61-64,66,68-70,72,74,76,78,80,82-85,87,89-91,93-106
+skills/hallmark/references/themes/ultraviolet.md
+  s_26ed2a08afb01b::t_09fad5e60e70a9 1-13,15,17,19,21-32,34,36,38-42,44-106
+skills/hallmark/references/themes/vellum.md
+  s_26ed2a08afb01b::t_f58cecc174f07d 1-105
+skills/hallmark/references/themes/wayfind.md
+  s_26ed2a08afb01b::t_cdb972cb315efd 1-30,32,34,36-105
+skills/hallmark/references/themes/werkstatt.md
+  s_26ed2a08afb01b::t_70d21f99d859d5 1-32,34,36,38-42,44,46-49,51,53-57,59,61-64,66,68-70,72,74,76,78,80,82-85,87,89-91,93-105
+skills/hallmark/scripts/capture.mjs
+  s_26ed2a08afb01b::t_919f0cf808b172 1-125
+skills/hallmark/scripts/fixtures/exemplars/atmospheric.html
+  s_26ed2a08afb01b::t_ab1c7b45b12ab3 1-324
+skills/hallmark/scripts/fixtures/exemplars/editorial.html
+  s_26ed2a08afb01b::t_314a82940e0f79 1-358,360-363
+skills/hallmark/scripts/fixtures/exemplars/modern-minimal.html
+  s_26ed2a08afb01b::t_998c58a2a1d813 1-522,524-527
+skills/hallmark/scripts/fixtures/exemplars/playful.html
+  s_26ed2a08afb01b::t_ec88155f6e7977 1-39,41-71,74-192,194-199,201-353
+skills/hallmark/scripts/fixtures/eyebrow-fail/index.html
+  s_26ed2a08afb01b::t_7bbbcaebd78cac 1-3,5-7,9-10,12-27,29-31,33-36,38-41,43-44,46-49,52-55,57-115,117-118
+skills/hallmark/scripts/fixtures/eyebrow-pass/index.html
+  s_26ed2a08afb01b::t_535b87699c65cb 1-137
+skills/hallmark/scripts/fixtures/kept/after.html
+  s_26ed2a08afb01b::t_2e63e920a65c68 1-27
+skills/hallmark/scripts/fixtures/kept/before.html
+  s_26ed2a08afb01b::t_123cec96016a24 1-26
+skills/hallmark/scripts/fixtures/slopped.html
+  s_26ed2a08afb01b::t_0df6d644dae4cc 1-107,109-116,118-121,123-132,134-137,139-145
+skills/hallmark/scripts/fixtures/tailwind-fail/Feature.vue
+  s_26ed2a08afb01b::t_48428cf4b383c7 1-14
+skills/hallmark/scripts/fixtures/tailwind-fail/Hero.tsx
+  s_26ed2a08afb01b::t_475db255c1ffb0 1-33
+skills/hallmark/scripts/fixtures/tailwind-fail/index.html
+  s_26ed2a08afb01b::t_0a10b6a5be5027 1-74
+skills/hallmark/scripts/fixtures/tailwind-fail/style.css
+  s_26ed2a08afb01b::t_71529dd4750062 1-6
+skills/hallmark/scripts/fixtures/tailwind-pass/Hero.tsx
+  s_26ed2a08afb01b::t_7d303e509b84a4 1-33
+skills/hallmark/scripts/fixtures/tailwind-pass/index.html
+  s_26ed2a08afb01b::t_a7fef47ac0325d 1-12,14-20,22-36,38-53,55-57
+skills/hallmark/scripts/fixtures/tailwind-pass/style.css
+  s_26ed2a08afb01b::t_d5cb72ceb1bc63 1-15
+skills/hallmark/scripts/fixtures/waiver/index.html
+  s_26ed2a08afb01b::t_053f1c546fe1c3 1-43,45-54
+skills/hallmark/scripts/imagegen.mjs
+  s_26ed2a08afb01b::t_40c3ce008addb4 2-4,6-7,10,12-17,19,22-27,29-31,33-45,47-49,52-59,62-71,73-75,77-84
+skills/hallmark/scripts/install-hook.mjs
+  s_26ed2a08afb01b::t_ab2cf3a7226ede 2-27,31-45,49-63,66-70
+skills/hallmark/scripts/install.mjs
+  s_26ed2a08afb01b::t_cd3617c248c9ec 2-45,47-57,61-71,73-76,79-83,86-90,93-94,96-98,102-106,108-115,118-132,134,136-138,140-141
+skills/hallmark/scripts/lint-hook.mjs
+  s_26ed2a08afb01b::t_14046b46089b3c 2-5,7,9-31,33-35,37-46,49
+skills/hallmark/scripts/photos.json
+  s_26ed2a08afb01b::t_1777c1518028f8 1
+skills/hallmark/scripts/picture.mjs
+  s_26ed2a08afb01b::t_6f4598ef8b127a 1-71
+skills/hallmark/scripts/refcheck.mjs
+  s_26ed2a08afb01b::t_b5fce406edde57 1-19,21,24-71,73-75,77-80,84-94,96-103,107-113,115-129,131-136,138-142,144-146,150-181,187-193,196-207,210-215,220-225,228-231,233-239,243-271,275-306,308-338,343-350,352
+skills/hallmark/scripts/sloplint-render.mjs
+  s_26ed2a08afb01b::t_7ee0003833d224 1-28,30-88,91-94,96-99,101-103,105-107,109-111,113-114,116-238,240-241,243,245-317,319-390,392-414,417-430,432-472,474-480,482,484-491,493-501,504-505,507-549,552-553,555-579,582-593,597,599-600,602-619,621-654,656,658-662,664-666,668,670-671,673-687,689-706,708-749,751-758,760,762,764-770,772-790,792-810,813-826,828-844,846-862,864-870,872-885,887-894,897-916,918-920,922-929,932-937,940-1000,1002-1004,1006-1013,1015-1079,1081-1084,1086-1149,1151-1190,1192,1195-1240,1242-1251
+skills/hallmark/scripts/sloplint.mjs
+  s_26ed2a08afb01b::t_eaabefb735e378 1-55,57-58,60-78,80-81,83-124,126-160,162-165,167,169-172,174-205,207-212,214-277,279-280,282-301,303-318,320-348,351-410,412-414,416,418-496,498,500-501,504-522,524,527-581,583-589,592-594,597-598,600-607,611-619,621-632,634,636-653,655-701,703,706-772,774-778,781-782,785-845,847-852,854-963,966-979,981-983,987-994,996-998,1000,1002,1005-1011,1013,1017-1023,1026-1030,1032-1059,1062-1063,1066-1075,1078-1081,1084-1088,1091-1098,1101-1102,1104-1113,1116-1120,1122,1124-1128,1130-1135,1137,1139-1160,1162-1166,1168-1192,1195,1197-1222,1225,1227,1229-1247,1249,1251-1258,1261,1263-1271,1275-1291,1293-1305,1307-1308,1312-1318,1320-1321,1327-1373,1377-1405,1408-1414,1420-1427,1430-1440,1443-1458,1461-1497,1500-1516,1518-1528,1534-1548,1551-1577,1579-1586,1589-1602,1604-1605,1607-1676,1681-1753,1758-1794,1797-1814,1817-1825,1827-1836,1842-1856,1860-1868,1871-1876,1880-1886,1890-1968,1971-1986,1989-1995,1997-2000,2002-2013,2017-2036,2041-2052,2055-2059,2061-2063,2065-2080,2082-2085,2088-2099,2103-2111,2115,2117-2133,2137,2139-2163,2166,2168-2197,2201,2203-2211,2215,2217-2229,2232-2315,2319-2340,2343-2389,2392-2394,2397-2472,2475-2663,2666-2711,2714-2784,2787-2799,2801-2851,2853-2883,2885-2928,2933-3015,3017-3031,3035-3109,3111,3113-3141,3143-3164,3167-3176,3178-3184,3187,3189-3195,3197-3218,3221-3241,3243,3245-3251,3253-3256,3258-3271,3273-3286,3291-3418,3421-3422,3424-3452,3454-3456,3458-3513,3515-3516,3518-3522,3524-3555,3557-3593,3596-3633,3636-3637,3640-3651,3653-3712,3717-3781,3783-3824,3826-3841,3846-3860,3863-3875,3878-3881,3883-3885,3889-3898,3901-3959,3964-3971,3973-3974,3976-3982,3985-3990,3992,3994-3999,4001,4004-4032,4034-4039,4044-4074,4076-4136,4139,4141-4256,4258-4314,4317-4414,4416-4422
+skills/hallmark/scripts/theme.mjs
+  s_26ed2a08afb01b::t_07a3657d61e6ea 2-3,5,7-50,52-60,64-180,182-244,246-256,258-380,382-402,404-411,414-425,428-578,580-608,610-616,618-649
+skills/impeccable/SKILL.md
+  s_26ed2a08afb01b::t_7cf0c3981c35f8 3-7,10,13-15,19-23,29,45-70,75-77,80,82,84,86,88
+skills/impeccable/deps.yml
+  s_26ed2a08afb01b::t_5d606a1f06773a 3-4
+skills/impeccable/reference/adapt.md
+  s_26ed2a08afb01b::t_d098abcbf28a55 31,168,170,191-197
+skills/impeccable/reference/adapt.native.md
+  s_26ed2a08afb01b::t_d5f22396c3239d 51,53
+skills/impeccable/reference/android.md
+  s_26ed2a08afb01b::t_fb59631cffa746 45
+skills/impeccable/reference/animate.md
+  s_26ed2a08afb01b::t_8dbe474964c559 89
+skills/impeccable/reference/audit.md
+  s_26ed2a08afb01b::t_22f3ad92881af5 14,50-51,56,62-63,74-75,105,121-122,124,130,132,134
+skills/impeccable/reference/audit.native.md
+  s_26ed2a08afb01b::t_33f8769ce1f6b2 3,105,121-122,124,130,132,134
+skills/impeccable/reference/bolder.md
+  s_26ed2a08afb01b::t_a61bd8399e3ae0 9,33
+skills/impeccable/reference/clarify.md
+  s_26ed2a08afb01b::t_18686b381b1884 94
+skills/impeccable/reference/colorize.md
+  s_26ed2a08afb01b::t_fbb6cee9646d88 76
+skills/impeccable/reference/component-review.md
+  s_26ed2a08afb01b::t_a73f43f02e87fe 1-63
+skills/impeccable/reference/craft-floor.md
+  s_26ed2a08afb01b::t_649b953d09d400 3,7
+skills/impeccable/reference/critique.md
+  s_26ed2a08afb01b::t_84be56a6a728a5 3,7-8,11,26,33-34,39,44,61,65,79,82,84-87,89,91,93,95,97,99,108,141,158,163,200,211,213,219,232,238,242,268-269,273,280,286,803
+skills/impeccable/reference/degraded/asset-producer.md
+  s_26ed2a08afb01b::t_0fb6a9e5226b43 14,16,18,20,22,24,26,28,30,32-36,38,42
+skills/impeccable/reference/degraded/documenter.md
+  s_26ed2a08afb01b::t_47cc37c1f54fd0 8,18,24
+skills/impeccable/reference/degraded/finish-reviewer.md
+  s_26ed2a08afb01b::t_69b56a6beb37b4 14,19-20,22-24
+skills/impeccable/reference/degraded/manual-edit-applier.md
+  s_26ed2a08afb01b::t_99e005df9048fb 24
+skills/impeccable/reference/delight.md
+  s_26ed2a08afb01b::t_b93a55463f2bdd 70
+skills/impeccable/reference/distill.md
+  s_26ed2a08afb01b::t_c049c2f13b85fe 24,26,37,44,73,77,86,111
+skills/impeccable/reference/doctor.md
+  s_26ed2a08afb01b::t_7ab7080c6786f2 9,16,29,49,54
+skills/impeccable/reference/document.md
+  s_26ed2a08afb01b::t_90dd6a8a4d75a4 20,23,71,78,328,369,388
+skills/impeccable/reference/extract.md
+  s_26ed2a08afb01b::t_fdb3a19ca73735 9,34,62
+skills/impeccable/reference/generate.md
+  s_26ed2a08afb01b::t_f1f4565aff0ae6 1-101
+skills/impeccable/reference/harden.md
+  s_26ed2a08afb01b::t_fb53574f47ab12 31,112-130,227-231,331,335,356,360-362
+skills/impeccable/reference/hooks.md
+  s_26ed2a08afb01b::t_61ccff2f404c8a 1,5,7,9,15,17,19-21,37,45,48,55,65,67,75,81,87,94,100,105-108,112-113
+skills/impeccable/reference/init.md
+  s_26ed2a08afb01b::t_c11ed05e4b23d2 7,27,104,112,114,126-127,129,131
+skills/impeccable/reference/layout.md
+  s_26ed2a08afb01b::t_064dec88fa694c 28,74
+skills/impeccable/reference/live-setup.md
+  s_26ed2a08afb01b::t_ff71278b61e0dd 1,35,37,45-46,50,83,98,102,104
+skills/impeccable/reference/live.md
+  s_26ed2a08afb01b::t_b80c47787f68f9 7,13,15,18-19,36,57,60,71-73,76,92,113,120,161,167-168,201,240,245,252,259,265,267-268,272,285,289,293,309,318,321,325
+skills/impeccable/reference/mode-operate.md
+  s_26ed2a08afb01b::t_35ce50adb08240 1-21
+skills/impeccable/reference/mode-persuade.md
+  s_26ed2a08afb01b::t_b78d63667ddc80 1-19
+skills/impeccable/reference/mode-read.md
+  s_26ed2a08afb01b::t_8906d2e9d57629 1-21
+skills/impeccable/reference/new-work.md
+  s_26ed2a08afb01b::t_15e67f374dc07e 5-6,20,39,41,46,48,51,53,55,57,61,65,69-71,75-77,81-83,85,87,91,97-105,107-124,127-129,132,138,142,144,146,148,152-154
+skills/impeccable/reference/onboard.md
+  s_26ed2a08afb01b::t_907cb060430041 26,211,213,234
+skills/impeccable/reference/optimize.md
+  s_26ed2a08afb01b::t_c974fa9c6df741 20,235,237,257
+skills/impeccable/reference/overdrive.md
+  s_26ed2a08afb01b::t_fd3ef468b5075f 10,17,22,24
+skills/impeccable/reference/polish.md
+  s_26ed2a08afb01b::t_c8c21c34932cfe 32,35,95,98-105
+skills/impeccable/reference/quieter.md
+  s_26ed2a08afb01b::t_d7e9f4b75ce8e2 31,33,44,83,99
+skills/impeccable/reference/region-map.md
+  s_26ed2a08afb01b::t_74ab514b568bcc 1-26
+skills/impeccable/reference/routing.md
+  s_26ed2a08afb01b::t_32c7f9e53884ee 1,3,5-11,16-17,19,22
+skills/impeccable/reference/typeset.md
+  s_26ed2a08afb01b::t_7410e7e32422f0 27,59-68,80
+skills/impeccable/reference/visualize.md
+  s_26ed2a08afb01b::t_530fe6fcdf9cc5 3,5,9,11-15,17,19,27,29,33,35,37,39,41,43,45,47
+skills/impeccable/scripts/VERSION
+  s_26ed2a08afb01b::t_db7e771092713a 1
+skills/impeccable/scripts/command-metadata.json
+  s_26ed2a08afb01b::t_01bf4e9bf24541 7,22-25,91
+skills/impeccable/scripts/data/font-index-failures.json
+  s_26ed2a08afb01b::t_23c3f794cf3569 1-121
+skills/impeccable/scripts/data/font-index.json
+  s_26ed2a08afb01b::t_b306ebb7108748 1
+skills/impeccable/scripts/impeccable
+  s_26ed2a08afb01b::t_5cfd053594e834 1-213
+skills/impeccable/scripts/impeccable.cmd
+  s_26ed2a08afb01b::t_2a8795f076f096 1-239
+skills/impeccable/scripts/live-browser-dom.js
+  s_26ed2a08afb01b::t_35e7d42934ea4f 67-86,88-97,112-236,238-242,283-291,298,303-307,312
+skills/impeccable/scripts/live-browser-ignores.js
+  s_26ed2a08afb01b::t_aa314c74a5b376 2,4-9,11-22,24-36,38-45,48-54,57-75,77-91,93-95,98-127,129-138,140-153,155-157,160-170,172-173,176-183,185-186,189-210,213-236,239,242-246
+skills/impeccable/scripts/live-browser-session.js
+  s_26ed2a08afb01b::t_b8f94002e86a85 11-42,45-49,82-85,99,113-125,128-130,134,137-144,182
+skills/impeccable/scripts/live-browser.js
+  s_26ed2a08afb01b::t_5d9926174cb602 16-20,23,68-82,138-141,182-189,217-219,240,282,304,309-313,318,887-893,895,998-1001,1003,1023-1033,1037-1039,2089,2096-2105,2113,2184,2191,2489,2521,2575,2625,3133-3137,3214,3274-3321,3333-3340,3365,3376,3380,3407,3414-3415,3424,3444,3804,3812-3813,3839,3845-3846,4130,4164,4636,4806,4993-4995,5004,5023,5062-5063,5127,5178,5943,6304-6305,6338-6468,6486-6520,6533-6534,6559,6561,6563-6564,6567-6580,6584-6585,6716,6726,6818-6821,6824,6827,6830,6836-6910,7054-7089,7119,7203-7206,7241-7632,7642,7653,7655-7657,7667-7669,7673-7675,7733,7738-7742,7799,7906-7914,7936-7943,8090,8108,8136-8137,8285,8348,8374-8391,8452,8749,8809-8810,8851-8854,8942-8950,9097-9102,9104-9111,9118,9143-9152,9175,9215,9221,9227-9230,9249,9286,9329,9355,9372,9374-9375,9381,9408-9411,9416-9426,9428,9445,9456,9459,9466,9475,9478-9479,9500-9501,9510,9591,9594,9682-9687,9745,9800,9839-9840,9847,9859-9863,9865,9868-9885,9887,9889-9907,9926-9927,9992-10106,10110-10112,10132,10186-10193,10210-10227,10232-10240,10666-10670,10879,11067-11068,11543,11664-11678,11718-11721,11726,11742-11745,12141-12143,12201-12221,12225-12230,12340-12346,12361,12399,13535-13537,13545-13552,13566-13569,13572-13573,13575-13583,13602,13607,13611-13612,13614-13623,13625,13628
+skills/modular-monolith-design/SKILL.md
+  s_26ed2a08afb01b::t_6f9d56e68fc554 1-115
+skills/modular-monolith-design/deps.yml
+  s_26ed2a08afb01b::t_28b963a7f1c728 1-3
+skills/modular-monolith-design/references/books.md
+  s_26ed2a08afb01b::t_004ae1d290b569 1-55
+skills/modular-monolith-design/references/tach.md
+  s_26ed2a08afb01b::t_d57b0062f535cc 1-159
+skills/modular-monolith-design/references/templates.md
+  s_26ed2a08afb01b::t_680d9536a2381e 1-59
+skills/modular-monolith-design/scripts/probe.sh
+  s_26ed2a08afb01b::t_6be904b66a5475 1-50
+skills/ponytail/SKILL.md
+  s_26ed2a08afb01b::t_62daac184d5387 4-9,15,17,19,21,23,25,27-32,34-42,44,46,48-52
+skills/ponytail/deps.yml
+  s_26ed2a08afb01b::t_9431f092fdac0c 4
+skills/qmd/SKILL.md
+  s_26ed2a08afb01b::t_62b1614fa2cebc 10,204-270,350-352
+skills/qmd/deps.yml
+  s_26ed2a08afb01b::t_81d1a24a5fdb04 8
+skills/security-review/SKILL.md
+  s_26ed2a08afb01b::t_3a784e705bfbbd 127-129,131,136-140
+skills/security-review/deps.yml
+  s_26ed2a08afb01b::t_230017956ba2b6 4
+skills/show-me/SKILL.md
+  s_26ed2a08afb01b::t_29ba6c1ddc91e4 4
+skills/show-me/agents/openai.yaml
+  s_26ed2a08afb01b::t_dbf9638c00af99 1-2
+skills/show-me/deps.yml
+  s_26ed2a08afb01b::t_727719999c8b14 4
+skills/skill-doctor/SKILL.md
+  s_26ed2a08afb01b::t_1e0fdd53bd7305 3,92,96-97,99,105-106,110-111,113,115,135,147-154
+skills/skill-doctor/deps.yml
+  s_26ed2a08afb01b::t_80ac0fecb68e39 4
+skills/skill-doctor/scorers/procedure-compliance.md
+  s_26ed2a08afb01b::t_9495491d6841ad 1-33
+skills/skill-doctor/scorers/verbosity.md
+  s_26ed2a08afb01b::t_315aeea1300193 1-30
+skills/skill-doctor/scripts/render_report.py
+  s_26ed2a08afb01b::t_f6e5ae3b7748cb 242-243,273-274,466-467
+skills/skill-doctor/scripts/test_render_report.py
+  s_26ed2a08afb01b::t_100789d47c0f8a 52-87,207-208,224-226,229-236,271-272
+skills/terraform-engineer/deps.yml
+  s_26ed2a08afb01b::t_484ed666731ab4 4
+skills/terraform-engineer/references/best-practices.md
+  s_26ed2a08afb01b::t_2c9340f301f2e4 241
+skills/ticket-overview/SKILL.md
+  s_26ed2a08afb01b::t_47616ed87bcd83 15,22,41,51-53,65,72-73,76
+skills/update-docstrings/SKILL.md
+  s_26ed2a08afb01b::t_f3e5fe464b3c5e 8,10,12,14-21,23,25-31,35,37,39-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "20f4887bfce6d4f9344684ea9e4483de51272857",
+  "prompts": {},
+  "sessions": {
+    "s_26ed2a08afb01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "340b9701-5aaa-4a26-a486-4ecf3b34e3ac",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
