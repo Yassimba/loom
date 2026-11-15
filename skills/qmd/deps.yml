@@ -5,4 +5,4 @@ tools:
 upstream:
   repository: https://github.com/tobi/qmd
   path: skills/qmd
-  commit: dbfd0b4736aeaf761d1a16ca8e424f071df8feb9
+  commit: 86d2365d17fc682e491c2c53d1e4a884aee8682a

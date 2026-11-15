@@ -1,6 +1,6 @@
 ---
 name: "skill-doctor"
-description: "Grades agent skills by scoring agent conversations against efficiency and code-quality rubrics, then drafts concrete skill edits and a shareable report. Use when the user wants their agent setup graded from real conversation history, or asks which of their installed skills are actually working."
+description: "Grades agent skills by scoring agent conversations for efficiency, code quality, procedure compliance, and verbosity, then drafts concrete skill edits and a shareable report. Use when the user wants their agent setup graded from real conversation history, or asks which of their installed skills are actually working."
 ---
 # skill-doctor
 
@@ -89,24 +89,30 @@ Read `$REPORT_DIR/inventory.json`. If `sessions_sampled` is 0, tell the user the
 
 ## Step 2: Score each sampled transcript
 
-Scoring is based on efficiency and code quality for the sessions sampled. Process datasets of 50 transcripts or fewer in a single batch. For datasets with more than 50 transcripts, use parallel batches (20 transcripts per batch recommended). Score batches in the current local agent process, or delegate only to local child agents that keep transcript contents on the user's machine. Pass the following rubrics as context:
+Scoring is based on efficiency, code quality, procedure compliance, and verbosity for the sessions sampled. Process datasets of 50 transcripts or fewer in a single batch. For datasets with more than 50 transcripts, use parallel batches (20 transcripts per batch recommended). Score batches in the current local agent process, or delegate only to local child agents that keep transcript contents on the user's machine. Pass the following rubrics as context:
 
 - `$SKILL_ROOT/scorers/efficiency.md`
 - `$SKILL_ROOT/scorers/code-quality.md`
+- `$SKILL_ROOT/scorers/procedure-compliance.md`
+- `$SKILL_ROOT/scorers/verbosity.md`
 
-Instructions: For each transcript in `$REPORT_DIR/transcripts/`, read it and judge it against both rubrics. For each scorer record: label, numeric score (from the rubric's label table), and a 1–3 sentence reason citing specifics from the transcript. Apply the code-quality scorer only where the transcript shows code changes; otherwise record `insufficient_evidence` and exclude that result from the code-quality average and failed-conversation filter.
+Instructions: For each transcript in `$REPORT_DIR/transcripts/`, read it and judge it against all four rubrics. For each scorer record: label, numeric score (from the rubric's label table), and a 1–3 sentence reason citing specifics from the transcript. Apply the code-quality scorer only where the transcript shows code changes; otherwise record `insufficient_evidence` and exclude that result from the code-quality average and failed-conversation filter.
 
 ## Step 3: Aggregate
 
 - `raw_efficiency` = mean of efficiency scores across all scored sessions.
 - `raw_code_quality` = mean of code-quality scores, excluding `insufficient_evidence`. If no session had enough evidence, set it to 0.5 and say so in the findings.
+- `raw_procedure_compliance` = mean of procedure-compliance scores across all scored sessions.
+- `raw_verbosity` = mean of verbosity scores across all scored sessions.
 - Curve qualitative rubric means into letter-grade report scores with `curve(score) = 0.5 + 0.5 * score`.
 - `efficiency = curve(raw_efficiency)`.
 - `code_quality = curve(raw_code_quality)`.
+- `procedure_compliance = curve(raw_procedure_compliance)`.
+- `verbosity = curve(raw_verbosity)`.
 - `skill_coverage` = fraction of sampled sessions where at least one installed skill was detected. If `skills_found` is 0, coverage is 0.
-- `overall = 0.5 * efficiency + 0.35 * code_quality + 0.15 * skill_coverage.`
+- `overall = 0.25 * efficiency + 0.25 * code_quality + 0.2 * procedure_compliance + 0.15 * verbosity + 0.15 * skill_coverage.`
 
-Then, define `failed_conversations` from each conversation's raw, uncurved scorer results. A conversation fails when at least one applicable efficiency or code-quality score is below `0.5`. An `insufficient_evidence` result does not make a conversation fail. Use only `failed_conversations` as evidence for skill-improvement suggestions and draft skill edits.
+Then, define `failed_conversations` from each conversation's raw, uncurved scorer results. A conversation fails when at least one applicable efficiency, code-quality, procedure-compliance, or verbosity score is below `0.5`. An `insufficient_evidence` result does not make a conversation fail. Use only `failed_conversations` as evidence for skill-improvement suggestions and draft skill edits.
 
 Then derive the substance:
 
@@ -126,7 +132,7 @@ For a proposed-new skill, write the complete new SKILL.md to the same `proposed/
 Do not modify the user's real skill files in this step.
 
 ## Step 5: Write report.json and render
-Write `$REPORT_DIR/report.json`. Store the curved `efficiency` and `code_quality` values, literal `skill_coverage`, and weighted `overall` in `scores`; do not store the raw rubric means there.
+Write `$REPORT_DIR/report.json`. Store the curved `efficiency`, `code_quality`, `procedure_compliance`, and `verbosity` values, literal `skill_coverage`, and weighted `overall` in `scores`; do not store the raw rubric means there.
 
 ```json
 {
@@ -138,7 +144,14 @@ Write `$REPORT_DIR/report.json`. Store the curved `efficiency` and `code_quality
     "sessions_analyzed": 0, "sessions_scanned": 0,
     "skills_found": 0, "skills_used": 0, "window_days": 45
   },
-  "scores": {"efficiency": 0.0, "code_quality": 0.0, "skill_coverage": 0.0, "overall": 0.0},
+  "scores": {
+    "efficiency": 0.0,
+    "code_quality": 0.0,
+    "procedure_compliance": 0.0,
+    "verbosity": 0.0,
+    "skill_coverage": 0.0,
+    "overall": 0.0
+  },
   "top_findings": ["", "", ""],
   "suggestions": [
     {
