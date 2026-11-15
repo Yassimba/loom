@@ -49,6 +49,42 @@ class ReportRendererTests(unittest.TestCase):
         self.assertIn("| Claude Code | `claude` |", harness_text)
         self.assertIn("| Codex | `codex` |", harness_text)
         self.assertIn("stop before creating a report directory", harness_text)
+    def test_skill_scores_verbosity_and_procedure_compliance(self):
+        skill_root = Path(__file__).resolve().parent.parent
+        skill_text = (skill_root / "SKILL.md").read_text()
+        procedure_text = (
+            skill_root / "scorers" / "procedure-compliance.md"
+        ).read_text()
+        verbosity_text = (skill_root / "scorers" / "verbosity.md").read_text()
+
+        self.assertIn(
+            "$SKILL_ROOT/scorers/procedure-compliance.md",
+            skill_text,
+        )
+        self.assertIn("$SKILL_ROOT/scorers/verbosity.md", skill_text)
+        self.assertIn("raw_procedure_compliance", skill_text)
+        self.assertIn("raw_verbosity", skill_text)
+        self.assertIn(
+            "A conversation fails when at least one applicable efficiency, "
+            "code-quality, procedure-compliance, or verbosity score is below "
+            "`0.5`",
+            skill_text,
+        )
+        self.assertIn("name: Procedure Compliance", procedure_text)
+        self.assertIn("name: Verbosity", verbosity_text)
+
+        page = render_page({
+            "scores": {
+                "efficiency": 1.0,
+                "code_quality": 0.9,
+                "procedure_compliance": 0.8,
+                "verbosity": 0.7,
+                "skill_coverage": 0.6,
+                "overall": 0.83,
+            },
+        })
+        self.assertIn("Procedure Compliance", page)
+        self.assertIn("Verbosity", page)
 
     def test_code_diffs_follow_os_theme(self):
         bundle = embedded_diffs_script()
@@ -168,6 +204,8 @@ class ReportRendererTests(unittest.TestCase):
             "scores": {
                 "efficiency": 0.75,
                 "code_quality": 0.93,
+                "procedure_compliance": 0.88,
+                "verbosity": 0.81,
                 "skill_coverage": 0.74,
                 "overall": 0.82,
             },
@@ -183,9 +221,19 @@ class ReportRendererTests(unittest.TestCase):
         self.assertIn("to { transform: scaleX(1); }", page)
         self.assertIn("width:75%;--metric-delay:180ms", page)
         self.assertIn("width:93%;--metric-delay:290ms", page)
-        self.assertIn("width:74%;--metric-delay:400ms", page)
+        self.assertIn("width:88%;--metric-delay:400ms", page)
+        self.assertIn("width:81%;--metric-delay:510ms", page)
+        self.assertIn("width:74%;--metric-delay:620ms", page)
         self.assertIn("@media (prefers-reduced-motion: reduce)", page)
         self.assertIn(".bar-fill { animation: none; }", page)
+        self.assertIn(
+            "gap = CARD.bars.length > 3 ? 12 : 28",
+            page,
+        )
+        self.assertIn(
+            "CARD.bars.length * rowH + (CARD.bars.length - 1) * gap",
+            page,
+        )
 
     def test_skill_output_uses_report_and_warp_factories_labels(self):
         skill_path = Path(__file__).resolve().parent.parent / "SKILL.md"
@@ -220,7 +268,8 @@ class ReportRendererTests(unittest.TestCase):
             skill_text,
         )
         self.assertIn(
-            "`overall = 0.5 * efficiency + 0.35 * code_quality + "
+            "`overall = 0.25 * efficiency + 0.25 * code_quality + "
+            "0.2 * procedure_compliance + 0.15 * verbosity + "
             "0.15 * skill_coverage.`",
             skill_text,
         )

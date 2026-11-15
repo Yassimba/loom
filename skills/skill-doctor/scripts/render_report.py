@@ -239,6 +239,8 @@ def render_page(r) -> str:
         for index, (name, val) in enumerate([
             ("Efficiency", scores.get("efficiency", 0)),
             ("Code Quality", scores.get("code_quality", 0)),
+            ("Procedure Compliance", scores.get("procedure_compliance", 0)),
+            ("Verbosity", scores.get("verbosity", 0)),
             ("Skill Coverage", scores.get("skill_coverage", 0)),
         ])
     )
@@ -268,6 +270,8 @@ def render_page(r) -> str:
         "bars": [
             ["Efficiency", pct(scores.get("efficiency", 0))],
             ["Code Quality", pct(scores.get("code_quality", 0))],
+            ["Procedure Compliance", pct(scores.get("procedure_compliance", 0))],
+            ["Verbosity", pct(scores.get("verbosity", 0))],
             ["Skill Coverage", pct(scores.get("skill_coverage", 0))],
         ],
         "meta": f"{stats.get('sessions_scanned', 0)} conversations found \u00b7 "
@@ -459,8 +463,8 @@ def page_script(card_data: str) -> str:
 
     var bx = fx + 392;
     var bw = fx + fw - 36 - bx;
-    var rowH = 35, gap = 28;
-    var top = mainMid - (3 * rowH + 2 * gap) / 2;
+    var rowH = 35, gap = CARD.bars.length > 3 ? 12 : 28;
+    var top = mainMid - (CARD.bars.length * rowH + (CARD.bars.length - 1) * gap) / 2;
     CARD.bars.forEach(function (bar, index) {
       var y = top + index * (rowH + gap);
       font('500', 14);

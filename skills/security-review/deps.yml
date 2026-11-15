@@ -1,4 +1,4 @@
 upstream:
   repository: https://github.com/affaan-m/ECC
   path: skills/security-review
-  commit: e04ea0b9cc8248686edf5ac751cadff550e162b8
+  commit: 90606c8315ee09cafc303515c5f33024db6b9882

@@ -1,4 +1,4 @@
 upstream:
   repository: https://github.com/humanlayer/skills
   path: plugins/show-me/skills/show-me
-  commit: 3c2629142c5d437428269b1b722b08c0b87f574d
+  commit: 653b6411c1f70c275a18e37673b042ff99f67ceb

@@ -646,6 +646,18 @@
       ]
     },
     {
+      "id": "skill:modular-monolith-design",
+      "kind": "skill",
+      "group": "Coding",
+      "label": "modular-monolith-design",
+      "description": "Modular monolith design with tach fitness functions. Use when designing a modular monolith, deciding whether a capability belongs inside one deployable, or encoding module boundaries as tach.toml rules.\n",
+      "installTarget": "modular-monolith-design",
+      "nextAction": "Ask your coding agent to use the modular-monolith-design skill.",
+      "dependencies": [
+        "codebase-design"
+      ]
+    },
+    {
       "id": "skill:show-me",
       "kind": "skill",
       "group": "Coding",
@@ -660,7 +672,7 @@
       "kind": "skill",
       "group": "Coding",
       "label": "ponytail",
-      "description": "Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the task needs to exist at all (YAGNI), reach for the standard library before custom code, native platform features before dependencies, one line before fifty. Supports intensity levels: lite, full (default), ultra. Use on ANY coding task: writing, adding, refactoring, fixing, reviewing, or designing code, and choosing libraries or dependencies. Also use whenever the user says \"ponytail\", \"be lazy\", \"lazy mode\", \"simplest solution\", \"minimal solution\", \"yagni\", \"do less\", or \"shortest path\", or complains about over-engineering, bloat, boilerplate, or unnecessary dependencies. Do NOT use for non-coding requests (general knowledge, prose, translation, summaries, recipes).\n",
+      "description": "Lazy senior dev mode: the smallest change that fully solves the task, and a reply a busy human understands in one read. Use on any coding task (writing, fixing, refactoring, reviewing, choosing dependencies) and when the user says \"ponytail\", \"be lazy\", \"simplest solution\", \"yagni\", or complains about over-engineering or bloat. Levels: lite, full (default), ultra.\n",
       "installTarget": "ponytail",
       "nextAction": "Ask your coding agent to use the ponytail skill.",
       "dependencies": []
@@ -720,7 +732,7 @@
       "kind": "skill",
       "group": "Diagrams and slides",
       "label": "impeccable",
-      "description": "Use when the user wants to design, redesign, shape, critique, audit, polish, clarify, distill, harden, optimize, adapt, animate, colorize, extract, or otherwise improve a frontend interface. Covers websites, landing pages, dashboards, product UI, app shells, components, forms, settings, onboarding, and empty states. Handles UX review, visual hierarchy, information architecture, cognitive load, accessibility, performance, responsive behavior, theming, anti-patterns, typography, fonts, spacing, layout, alignment, color, motion, micro-interactions, UX copy, error states, edge cases, i18n, and reusable design systems or tokens. Also use for bland designs that need to become bolder or more delightful, loud designs that should become quieter, live browser iteration on UI elements, or ambitious visual effects that should feel technically extraordinary. Not for backend-only or non-UI tasks.",
+      "description": "Use when the user wants to design, redesign, shape, critique, audit, polish, simplify, harden, animate, or otherwise improve a frontend interface: websites, landing pages, dashboards, product UI, components, forms, settings, onboarding, empty states, and native iOS or Android screens. Handles UX review, hierarchy, layout, typography, color, motion, UX copy, accessibility, responsive behavior, edge cases, and capturing or documenting design systems (DESIGN.md, tokens). Also for making bland UI bolder, loud UI quieter, or ambitious visual effects. Not for backend-only or non-UI tasks.",
       "installTarget": "impeccable",
       "nextAction": "Ask your coding agent to use the impeccable skill.",
       "dependencies": []
@@ -742,7 +754,7 @@
       "kind": "skill",
       "group": "Diagrams and slides",
       "label": "diagram-design",
-      "description": "Create branded architecture, IT current-state, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar/spider, polar chart (polar/radial lollipop), loop/flywheel, nested, tree, org chart, layer stack, Venn, pyramid/funnel, treemap, bar, line, Gantt and scatter charts, high-level, process, medallion, data flow, DP integration, DP security matrix, Sankey, fishbone, Wardley map, kanban, user journey, deployment, dependency graph, UML class, story map, or database schema diagrams as standalone HTML/SVG/PNG. Redraw .drawio/.drawio.png/.drawio.svg or Mermaid .mmd sources at a chosen size/detail; onboard brand tokens from a website; add semantic patterns, callouts, accessible motion, or sketchy/hand-drawn styling.",
+      "description": "Create branded architecture, architecture delta, IT current-state, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar/spider, polar chart (polar/radial lollipop), loop/flywheel, nested, tree, org chart, layer stack, exploded axonometric, axonometric plan, Venn, pyramid/funnel, treemap and marimekko, heatmap, bar and dumbbell, waterfall, line (slopegraph, ridgeline, streamgraph, bump), Gantt and scatter charts (bubble, beeswarm), high-level, process, medallion, data flow, DP integration, DP security matrix, Sankey, fishbone, Wardley map, kanban, user journey, service blueprint, deployment, dependency graph, UML class, story map, or database schema diagrams as HTML/SVG/PNG, with .drawio, Mermaid, and .excalidraw import, plus lifecycle phase maps, block decomposition trees, and onboarding guidance.",
       "installTarget": "diagram-design",
       "nextAction": "Ask your coding agent to use the diagram-design skill.",
       "dependencies": []
@@ -897,7 +909,7 @@
       "kind": "skill",
       "group": "General",
       "label": "skill-doctor",
-      "description": "Grades agent skills by scoring agent conversations against efficiency and code-quality rubrics, then drafts concrete skill edits and a shareable report. Use when the user wants their agent setup graded from real conversation history, or asks which of their installed skills are actually working.",
+      "description": "Grades agent skills by scoring agent conversations for efficiency, code quality, procedure compliance, and verbosity, then drafts concrete skill edits and a shareable report. Use when the user wants their agent setup graded from real conversation history, or asks which of their installed skills are actually working.",
       "installTarget": "skill-doctor",
       "nextAction": "Ask your coding agent to use the skill-doctor skill.",
       "dependencies": []
