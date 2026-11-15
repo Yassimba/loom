@@ -113,6 +113,22 @@
           "jsonpath": "$.packages['plugins/loom-sessions'].version"
         }
       ]
+    },
+    "plugins/better": {
+      "release-type": "node",
+      "component": "better",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['plugins/better'].version"
+        }
+      ]
     }
   }
 }
