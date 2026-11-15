@@ -48,9 +48,9 @@ Reconform, don't reflow. Replace web navigation with the platform's model, HTML-
 - Respect safe areas and window insets in every new configuration (notch, hinge, status bar, keyboard).
 - Test on simulators for breadth, then real hardware for truth: at least one phone and one tablet per shipped platform, both orientations, split-screen where supported.
 
-When the adaptation feels native to each context, hand off to `$impeccable polish` for the final pass.
+When the adaptation feels native to each context, hand off to `/impeccable polish` for the final pass.
 
-**NEVER**:
+**Avoid**:
 - Ship a stretched phone layout on a tablet
 - Port one platform's controls or navigation onto the other
 - Hide core functionality on smaller devices (if it matters, make it work)
