@@ -1,0 +1,42 @@
+plugins/better/tests/mod.test.ts
+  s_26ed2a08afb01b::t_a5a59659c89f29 1-77
+  s_26ed2a08afb01b::t_52d2723c8d6820 78-81
+.claude-plugin/marketplace.json
+  s_26ed2a08afb01b::t_fdc8df0990fdb5 78-94
+.release-please-manifest.json
+  s_26ed2a08afb01b::t_121338f6933976 11-12
+package-lock.json
+  s_26ed2a08afb01b::t_67350150b9cff4 2437-2440,4107-4111
+package.json
+  s_26ed2a08afb01b::t_8407e48fb6fc0d 25
+plugins/better/.claude-plugin/plugin.json
+  s_26ed2a08afb01b::t_38296d87890ae5 1-12
+plugins/better/hooks/hooks.json
+  s_26ed2a08afb01b::t_7bbc4be47a50fd 1
+plugins/better/hooks/register.tsx
+  s_26ed2a08afb01b::t_fc847f233fa8ec 1-158
+plugins/better/package.json
+  s_26ed2a08afb01b::t_c55e34f4856902 1-7
+plugins/better/tsconfig.json
+  s_26ed2a08afb01b::t_ccd7bc73883507 1-3
+plugins/better/types/index.d.ts
+  s_26ed2a08afb01b::t_848ea224775e63 1-7
+release-please-config.json
+  s_26ed2a08afb01b::t_c30f69e2ae2902 116-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "ad5e5db27e62c3a7c5fa5699f7c78b5417ff60ce",
+  "prompts": {},
+  "sessions": {
+    "s_26ed2a08afb01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "340b9701-5aaa-4a26-a486-4ecf3b34e3ac",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
