@@ -44,8 +44,11 @@ jobs:
           # any workflow change (pin bump, deadline tweak) invalidates the cache
           key: skillspector-${{ hashFiles('.github/workflows/security.yml') }}
       - name: Install SkillSpector
-        if: steps.spector-cache.outputs.cache-hit != 'true'
-        run: pipx install "git+https://github.com/NVIDIA/skillspector.git@c7958a3268d9498644b22edb75d0f051bbc8cbfc" # v2.12.0
+        # A restored venv points at the Python of the runner image that built
+        # it, so it stops starting when the image moves that Python.
+        run: |
+          /opt/pipx/venvs/skillspector/bin/skillspector --help >/dev/null 2>&1 ||
+            pipx install --force "git+https://github.com/NVIDIA/skillspector.git@c7958a3268d9498644b22edb75d0f051bbc8cbfc" # v2.12.0
       - name: Put the cached SkillSpector venv on PATH
         # cache restores the venv but not the pipx shim; use the venv bin
         run: echo "$(pipx environment --value PIPX_LOCAL_VENVS)/skillspector/bin" >> "$GITHUB_PATH"
