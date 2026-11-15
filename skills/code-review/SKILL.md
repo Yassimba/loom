@@ -1,15 +1,14 @@
 ---
 name: code-review
-description: 'Review changes since a fixed point along separate Standards and Spec axes, plus Code Contracts when the repository defines @cc or CONTRACTS obligations. Runs enabled reviews in parallel sub-agents and reports them side by side. Use for branches, PRs, work-in-progress changes, or "review since X".'
+description: 'Review changes since a fixed point along separate Standards and Spec axes. Runs both reviews in parallel sub-agents and reports them side by side. Use for branches, PRs, work-in-progress changes, or "review since X".'
 ---
 
 Independent review axes for the diff between `HEAD` and a fixed point the user supplies:
 
 - **Standards**: does the code conform to this repo's documented coding standards?
 - **Spec**: does the code faithfully implement the originating issue / spec?
-- **Code Contracts**, when present: does the change comply with applicable `@cc` and `CONTRACTS` obligations?
 
-Run enabled axes as **parallel sub-agents** so they don't pollute each other's context, then aggregate their findings without merging the axes.
+Run the axes as **parallel sub-agents** so they don't pollute each other's context, then aggregate their findings without merging the axes.
 
 The issue tracker configuration should have been provided to you.
 
@@ -58,11 +57,7 @@ Each smell reads _what it is_ → _how to fix_; match it against the diff:
 - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-### 4. Detect code contracts
-
-Search the repository for production `@cc` declarations and files named `CONTRACTS`, excluding documentation examples and intentionally malformed fixtures. If any exist, enable the **Code Contracts** axis. The contract sub-agent performs full applicability discovery; this search only decides whether to spawn it.
-
-### 5. Spawn enabled sub-agents in parallel
+### 4. Spawn the sub-agents in parallel
 
 **Standards sub-agent prompt** should include:
 
@@ -76,18 +71,13 @@ Search the repository for production `@cc` declarations and files named `CONTRAC
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-**Code Contracts sub-agent prompt**, when enabled, should include:
+If the spec is missing, skip the Spec sub-agent and note this in the final report.
 
-- The full diff command and commit list.
-- The brief: "Run `$code-contracts verify` against this exact diff. Return every evidenced violation or contradiction required by that procedure, including its contract ID, location, evidence, consequence, and material coverage limits. Keep the summary under 200 words; do not omit findings to meet the summary limit."
+### 5. Aggregate
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report. If no production contracts exist, skip the Code Contracts sub-agent and report `no contracts found`.
+Present the reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings because each axis answers a different question.
 
-### 6. Aggregate
-
-Present enabled reports under `## Standards`, `## Spec`, and `## Code Contracts` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings because each axis answers a different question.
-
-End with a one-line summary: total findings per enabled axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes.
+End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes.
 
 ## Why separate axes
 
@@ -95,7 +85,6 @@ A change can pass one axis and fail another:
 
 - Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
 - Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
-- Code can satisfy the issue and repository style while violating a colocated invariant → **Standards pass, Spec pass, Code Contracts fail.**
 
 Reporting them separately stops one axis from masking another.
 

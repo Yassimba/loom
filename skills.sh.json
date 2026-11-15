@@ -12,7 +12,6 @@
         "brainstorming",
         "browser-usage",
         "clarify-code",
-        "code-contracts",
         "code-review",
         "commit",
         "database-pro",
@@ -40,9 +39,6 @@
         "show-me",
         "ponytail",
         "ponytail-audit",
-        "ponytail-debt",
-        "ponytail-gain",
-        "ponytail-help",
         "ponytail-review"
       ]
     },

@@ -121,21 +121,6 @@ test("setup offers combinable goals; Build software includes Annotate and Mermai
   assert.ok(profile.resources.includes(bun.id));
 });
 
-test("Blueprint and code review install code contracts, checked by loom itself", async () => {
-  const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
-  const blueprint = catalog.resources.find(({ id }) => id === "skill:blueprint");
-  const codeReview = catalog.resources.find(({ id }) => id === "skill:code-review");
-  const contracts = catalog.resources.find(({ id }) => id === "skill:code-contracts");
-  assert.deepEqual(blueprint.dependencies, ["code-contracts"]);
-  assert.deepEqual(codeReview.dependencies, ["loom", "code-contracts"]);
-  // `loom contracts` replaced the npm checker, and loom is core: no tool dependency.
-  assert.deepEqual(contracts.dependencies, []);
-  assert.equal(
-    catalog.resources.find(({ id }) => id === "tool:cc-check"),
-    undefined,
-  );
-});
-
 test("software profile keeps Sem CLI and adds exact local code MCP dependencies", async () => {
   const catalog = await buildSetupCatalogDocument(join(import.meta.dirname, ".."));
   const profile = catalog.profiles[0];
