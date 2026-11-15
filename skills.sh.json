@@ -12,7 +12,6 @@
         "brainstorming",
         "browser-usage",
         "clarify-code",
-        "code-contracts",
         "code-review",
         "commit",
         "database-pro",
@@ -37,13 +36,9 @@
         "improve-codebase-architecture",
         "modularity-design",
         "modularity-review",
-        "modular-monolith-design",
         "show-me",
         "ponytail",
         "ponytail-audit",
-        "ponytail-debt",
-        "ponytail-gain",
-        "ponytail-help",
         "ponytail-review"
       ]
     },

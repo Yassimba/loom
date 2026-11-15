@@ -1,4 +1,0 @@
-upstream:
-  repository: https://github.com/Nutlope/hallmark
-  path: skills/hallmark
-  commit: 7ec868225c6caa040558c321ee0fefa0e73f83a8

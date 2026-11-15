@@ -1,7 +1,6 @@
 # Skills this skill invokes; installers pull them in transitively.
 skills:
   - loom
-  - code-contracts
 
 upstream:
   repository: https://github.com/mattpocock/skills
