@@ -12,6 +12,7 @@
       "test/**",
       "*.json",
       "!**/*.generated.*",
+      "!**/CHANGELOG.md",
       "!plugins/pi-loom-mermaid/src/loom-mermaid"
     ]
   },
