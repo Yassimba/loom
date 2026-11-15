@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.17.0](https://github.com/Yassimba/loom/compare/loom-v1.16.0...loom-v1.17.0) (2026-11-15)
+
+
+### Features
+
+* **skills:** add excalidraw, refresh shared skills, and drop code contracts and three ponytail helpers ([#424](https://github.com/Yassimba/loom/issues/424)) ([97f3d3d](https://github.com/Yassimba/loom/commit/97f3d3d48af4019ec1a33224d126e44be614daac))
+
+
+### Bug Fixes
+
+* **deps:** move rustix, quinn-udp and minimatch to patched versions ([#423](https://github.com/Yassimba/loom/issues/423)) ([ecd5f18](https://github.com/Yassimba/loom/commit/ecd5f1879753bccee654c3fd3fa3aa1243d31172))
+
 ## [1.16.0](https://github.com/Yassimba/loom/compare/loom-v1.15.1...loom-v1.16.0) (2026-10-25)
 
 
