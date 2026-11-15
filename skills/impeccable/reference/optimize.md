@@ -17,7 +17,7 @@ Understand current performance and identify problems:
    - How bad is it? (Perceivable? Annoying? Blocking?)
    - Who's affected? (All users? Mobile only? Slow connections?)
 
-Measure before and after. Optimizing without a measurement spends effort on things that do not matter.
+**CRITICAL**: Measure before and after. Premature optimization wastes time. Optimize what actually matters.
 
 ## Optimization Strategy
 
@@ -38,6 +38,7 @@ Create systematic improvement plan:
   src="hero.webp"
   srcset="hero-400.webp 400w, hero-800.webp 800w, hero-1200.webp 1200w"
   sizes="(max-width: 400px) 400px, (max-width: 800px) 800px, 1200px"
+  loading="lazy"
   alt="Hero image"
 />
 ```
@@ -232,9 +233,9 @@ const observer = new IntersectionObserver((entries) => {
 - Bundle size
 - Request count
 
-Measure on real devices with real network conditions. Desktop Chrome on a fast connection isn't representative.
+**IMPORTANT**: Measure on real devices with real network conditions. Desktop Chrome with fast connection isn't representative.
 
-**Avoid**:
+**NEVER**:
 - Optimize without measuring (premature optimization)
 - Sacrifice accessibility for performance
 - Break functionality while optimizing
@@ -254,4 +255,4 @@ Test that optimizations worked:
 - **No regressions**: Ensure functionality still works
 - **User perception**: Does it *feel* faster?
 
-When the user-facing numbers move, hand off to `/impeccable polish` for the final pass.
+When the user-facing numbers move, hand off to `$impeccable polish` for the final pass.

@@ -28,10 +28,6 @@ agent-browser close           # Close browser (aliases: quit, exit)
 agent-browser connect 9222    # Connect to browser via CDP port
 ```
 
-After `connect`, the session stays attached until `agent-browser close`. Later commands without a connection flag run against the same browser, as if you passed `--cdp` again. If that browser goes away, commands fail instead of launching a local one.
-
-If the debugging port is not open yet, `connect` and `--cdp` wait up to 2 seconds for it before failing.
-
 ### Pre-navigation setup (one-turn batch)
 
 ```bash
@@ -52,11 +48,7 @@ agent-browser snapshot -i         # Interactive elements only (recommended)
 agent-browser snapshot -c         # Compact output
 agent-browser snapshot -d 3       # Limit depth to 3
 agent-browser snapshot -s "#main" # Scope to CSS selector
-agent-browser snapshot --delta     # Full state once, then bounded structural deltas
-agent-browser snapshot --delta --full # Force full state and refresh baseline
 ```
-
-Delta history is per tab and option set. Responses are `full`, `unchanged`, or `delta`; URL changes or large deltas return full state. For a delta, apply `changes` (`add`, `remove`, `replace`) to ref metadata. Split the previous tree on newlines, splice `treeChange.lines` at zero-based `startLine`, replacing `deleteCount` lines, then join with newlines. Apply both parts to `baseRevision` before advancing to `revision`; use `--full` if the baseline is unavailable.
 
 ## Interactions (use @refs from snapshot)
 
@@ -74,7 +66,7 @@ agent-browser keyup Shift         # Release key
 agent-browser hover @e1           # Hover
 agent-browser check @e1           # Check checkbox
 agent-browser uncheck @e1         # Uncheck checkbox
-agent-browser select @e1 "value"  # Select by value or visible label
+agent-browser select @e1 "value"  # Select dropdown option
 agent-browser select @e1 "a" "b"  # Select multiple options
 agent-browser scroll down 500     # Scroll page (default: down 300px)
 agent-browser scrollintoview @e1  # Scroll element into view (alias: scrollinto)
@@ -82,9 +74,7 @@ agent-browser drag @e1 @e2        # Drag and drop
 agent-browser upload @e1 file.pdf # Upload files
 ```
 
-Visible-label matching treats non-breaking and ordinary spaces equivalently.
-
-Clicks fail before dispatch when another element covers the target's click point. The error names the covering element, for example `covered by <div#consent-banner>`. Dismiss or interact with that element, run a fresh snapshot, then retry the original action. Click and dblclick fail, instead of reporting success, when the element is hidden, disabled, or outside the viewport. `click --new-tab` opens the link's URL directly, so these checks do not apply to it.
+Clicks fail before dispatch when another element covers the target's click point. The error names the covering element, for example `covered by <div#consent-banner>`. Dismiss or interact with that element, run a fresh snapshot, then retry the original action.
 
 ## Get Information
 
@@ -115,12 +105,8 @@ agent-browser is checked @e1      # Check if checked
 agent-browser screenshot          # Save to temporary directory
 agent-browser screenshot path.png # Save to specific path
 agent-browser screenshot --full   # Full page
-agent-browser screenshot --if-changed # Recommended: skip unchanged images to save tokens
-agent-browser screenshot --threshold 0.01 # Ignore changes affecting at most 1% of pixels
 agent-browser pdf output.pdf      # Save as PDF
 ```
-
-`--threshold <0-1>` implies `--if-changed`. Conditional history is isolated by tab and capture scope. JSON responses include `changed`, `revision`, `pixelChangeRatio`, and `threshold`; `path` is present only when the change exceeds the threshold. The first capture for a scope is always changed.
 
 Headless Chromium screenshots hide native scrollbars for consistent image output. Pass `--hide-scrollbars false` when launching to keep native scrollbars visible.
 
@@ -128,19 +114,11 @@ Headless Chromium screenshots hide native scrollbars for consistent image output
 
 ```bash
 agent-browser open https://example.com     # Launch a browser session first
-agent-browser record start ./demo.webm    # Start recording the current page at 30 fps
+agent-browser record start ./demo.webm    # Start recording
 agent-browser click @e1                   # Perform actions
 agent-browser record stop                 # Stop and save video
 agent-browser record restart ./take2.webm # Stop current + start new
-
-agent-browser record start ./scroll.webm --fps 60  # 60 fps for motion-heavy takes
-agent-browser record start ./soak.webm --fps 10    # Lower rate for long sessions
-agent-browser tab new https://example.com          # Open a separate tab first if you want the recording there
-agent-browser record start ./demo.webm --cursor    # Add an animated mouse pointer
-agent-browser record start ./demo.webm --contact-sheet # Save a timestamped PNG summary
 ```
-
-Needs `ffmpeg` on PATH; use a path with an extension. `--fps` accepts 1 to 60 and defaults to 30. `--contact-sheet-threshold <0-1>` adjusts keyframe sensitivity and implies `--contact-sheet`.
 
 ## Wait
 
@@ -149,26 +127,18 @@ agent-browser wait @e1                     # Wait for element
 agent-browser wait 2000                    # Wait milliseconds
 agent-browser wait --text "Success"        # Wait for text (or -t)
 agent-browser wait --url "**/dashboard"    # Wait for URL pattern (or -u)
-agent-browser wait --load domcontentloaded # Wait for DOMContentLoaded (or -l)
-agent-browser wait --load load             # Wait for the load event
-agent-browser wait --load networkidle      # Wait for network idle on known-quiet pages
+agent-browser wait --load networkidle      # Wait for network idle (or -l)
 agent-browser wait --fn "window.ready"     # Wait for JS condition (or -f)
 ```
-
-After a page-changing action, prefer the selector, text, URL, or JavaScript condition that represents the result you need. Use a lifecycle wait when the lifecycle event is the milestone. `networkidle` is also supported, but use it only for pages known to become quiet because SSE, WebSockets, polling, and long-polling can keep it from resolving.
 
 ## Mouse Control
 
 ```bash
-agent-browser mouse move 100 200      # Move mouse instantly
-agent-browser mouse move 600 400 --duration 250 --steps 24
-agent-browser mouse move 600 400 --human --seed 42
+agent-browser mouse move 100 200      # Move mouse
 agent-browser mouse down left         # Press button
 agent-browser mouse up left           # Release button
 agent-browser mouse wheel 100         # Scroll wheel
 ```
-
-Use `--human` with `click` or `drag` when pointer-path events matter. Movement starts at the current cursor position and ends at the target; `mouse move --seed` makes the path reproducible. `--duration` is the target total duration, including browser response time; a slow browser can still extend it.
 
 ## Semantic Locators (alternative to refs)
 
@@ -196,7 +166,7 @@ agent-browser set device "iPhone 14"          # Emulate device
 agent-browser set geo 37.7749 -122.4194       # Set geolocation (alias: geolocation)
 agent-browser set offline on                  # Toggle offline mode
 agent-browser set headers '{"X-Key":"v"}'     # Extra HTTP headers
-agent-browser set credentials user pass       # HTTP basic auth for current and future tabs (alias: auth)
+agent-browser set credentials user pass       # HTTP basic auth (alias: auth)
 agent-browser set media dark                  # Emulate color scheme
 agent-browser set media light reduced-motion  # Light mode + reduced motion
 ```
@@ -258,8 +228,6 @@ agent-browser tab close docs             # close by label
 ```
 
 Labels are never auto-generated, never rewritten on navigation, and must be unique within a session. To interact with another tab, switch to it first: the daemon maintains a single active tab, so refs (`@eN`) belong to the tab that was active when the snapshot ran.
-
-Tabs opened through `tab new` or `click --new-tab` inherit the session's setup before their first document loads: user agent, `set headers`, `set credentials`, origin-scoped `--headers`, init scripts, `route` rules, and emulation overrides (color scheme, timezone, locale, geolocation, offline). Turning offline mode off or setting headers to `{}` restores the default setup for future tabs.
 
 `tab list --json` also reports each tab's CDP `targetId`, accepted anywhere a tab ref is accepted (`tab <targetId>`, `tab close <targetId>`). Target ids stay stable across daemon restarts, unlike `t<N>` ids, which are per-daemon counters. With `--pin-tab` the session is pinned to its bound tab: if that tab is closed, commands fail with a `tab_gone` error instead of falling back to another tab, and `tab new` or `tab list` recover. JSON errors include `code: "tab_gone"` and a recovery object with `data.targetId` plus optional sanitized `data.lastUrl`; batch uses `result` for the same object.
 
@@ -334,23 +302,17 @@ EOF
 ```bash
 agent-browser auth save <name> --url <url> --username <user> --password-stdin
 agent-browser auth login <name>          # Login using saved credentials
-agent-browser auth login <name> --no-navigate
-                                          # Use active page after same-origin validation
 agent-browser auth login <name> --credential-provider <plugin> [--item <ref>] [--url <url>]
 agent-browser auth login <name> --username-selector <s> --password-selector <s> [--submit-selector <s>]
 agent-browser auth list                  # List saved auth profiles
 agent-browser auth show <name>           # Show profile metadata, no passwords
 agent-browser auth delete <name>         # Delete a saved profile
-agent-browser plugin add <ref>           # Add a plugin from npm or GitHub (writes ~/.agent-browser/config.json; --project writes ./agent-browser.json)
+agent-browser plugin add <ref>           # Add a plugin from npm or GitHub
 agent-browser plugin list                # List configured plugins
 agent-browser plugin show <name>         # Show one configured plugin
 agent-browser plugin run <name> <type> --payload <json>
                                           # Run an arbitrary plugin request
 ```
-
-`auth login` filters matching controls by their layout size, computed visibility and opacity, and disabled/readonly state, including custom CSS selectors. If a selected credential field is replaced or redirects focus before entry, the command fails without submitting.
-
-`auth login` normally navigates to the effective credential URL. `--no-navigate` requires an existing active top-level HTTP(S) page, checks that its scheme, host, and effective port match the effective credential URL, then uses the normal selector waits, fills, and submit click without replacing the document. Paths, queries, and fragments may differ, and submit-triggered navigation remains enabled. Command-level `--url` takes precedence over stored or provider metadata and becomes the expected-origin constraint in this mode.
 
 Credential provider plugins run out-of-process over the `agent-browser.plugin.v1` stdio JSON protocol and must declare `credential.read`. Use `--confirm-actions plugin:<name>:credential.read` to require explicit approval before a plugin resolves secrets.
 
@@ -374,31 +336,10 @@ agent-browser state load auth.json    # Restore saved state
 agent-browser stream status --json    # Enabled state, port, client count
 agent-browser stream enable           # Start the WebSocket stream server
 agent-browser stream enable --port 9223
-
-# Experimental WebMCP page tools
-# Browser results announce brief summaries only when the catalog changes.
-# Choose a relevant tool, fetch its schema, then invoke within the user task.
-agent-browser webmcp list <tool> --frame <frame-id> --json
-agent-browser webmcp list --json  # Full catalog or context recovery
-agent-browser webmcp invoke <tool> --frame <frame-id> --params '{"key":"value"}'
-agent-browser webmcp invoke <tool> --params @input.json --detach
-agent-browser webmcp result <invocation-id>
-agent-browser webmcp cancel <invocation-id>
 agent-browser stream disable          # Stop it
 ```
 
 Clients connect to `ws://127.0.0.1:<port>` and receive `frame`, `status`, `tabs`, `url`, and `console` messages. They send `input_mouse`, `input_keyboard`, and `input_touch` to drive the page, `{"type":"config","maxFps":N}` (1 to 120, `0` = uncapped) to cap their own frame rate, and `{"type":"config","pacing":"ack"}` to receive one frame at a time, acknowledged with `{"type":"ack","seq":N}`. Both settings can be declared on the URL instead (`ws://127.0.0.1:<port>/?pacing=ack&maxFps=10`). See [streaming.md](streaming.md).
-
-## Observability Dashboard
-
-```bash
-agent-browser dashboard start
-agent-browser dashboard start --port 8080
-agent-browser dashboard start --allowed-origins https://dashboard.example.com
-agent-browser dashboard stop
-```
-
-Loopback origins are allowed by default over IPv4 and IPv6 without an access token. Set `--allowed-origins` or `AGENT_BROWSER_DASHBOARD_ALLOWED_ORIGINS` to a comma-separated list of exact HTTPS reverse-proxied origins. Every origin must be valid, and custom ports must be integers from 1 to 65535. Unknown options, missing values, invalid ports, and malformed origins fail without starting the server. The command prints private tokenized access URLs only for external origins; open the matching URL once to establish the browser session and do not share it. Open `http://localhost:<port>` directly for local access. Repeated starts reuse the running dashboard only when the port and allowed origins match; stop it before changing either setting.
 
 ## MCP Server
 
@@ -438,7 +379,7 @@ Common tools include:
 - `agent_browser_eval`
 - `agent_browser_close`
 
-Tool calls use the same config files and environment variables as the CLI. Each tool accepts typed arguments plus `extraArgs` for per-command options and display or emulation flags such as `--engine`; global flags that change network, file, policy, or host access (such as `--allowed-domains`, `--action-policy`, `--executable-path`, `--args`, and `--config`) are rejected and must be set in the MCP server's environment or config. The typed `allowedDomains` argument is also rejected when the server's environment or config already sets allowed domains. The common `allowedDomains` array maps to `--allowed-domains` and activates the same WebRTC containment and launch-mode restrictions. Tool discovery is paginated and includes read-only/open-world annotations so modern MCP clients can load the large typed surface incrementally. Use the `session` tool argument or `AGENT_BROWSER_SESSION` to isolate browser state.
+Tool calls use the same config files and environment variables as the CLI. Each tool accepts typed arguments plus `extraArgs` for advanced CLI flags and exact CLI parity. The common `allowedDomains` array maps to `--allowed-domains` and activates the same WebRTC containment and launch-mode restrictions. Tool discovery is paginated and includes read-only/open-world annotations so modern MCP clients can load the large typed surface incrementally. Use the `session` tool argument or `AGENT_BROWSER_SESSION` to isolate browser state.
 
 ## Global Options
 
@@ -447,8 +388,7 @@ agent-browser --session <name> ...    # Isolated browser session
 agent-browser --json ...              # JSON output for parsing
 agent-browser --headed ...            # Show browser window (not headless; on displayless Linux an Xvfb display starts automatically)
 agent-browser --webgpu ...            # Enable WebGPU (SwiftShader software Vulkan on Linux, no GPU needed)
-agent-browser --no-webmcp ...         # Disable default experimental WebMCP Chrome features (or AGENT_BROWSER_NO_WEBMCP env)
-agent-browser --cdp <port|url> ...    # Connect via CDP; root query slash is optional
+agent-browser --cdp <port> ...        # Connect via Chrome DevTools Protocol
 agent-browser --pin-tab ...           # Pin the session to its bound tab (strict tab binding)
 agent-browser --no-pin-tab ...        # Disable a sticky pin previously enabled with --pin-tab
 agent-browser -p <provider> ...       # Browser provider or configured provider plugin
@@ -456,12 +396,10 @@ agent-browser --proxy <url> ...       # Use proxy server
 agent-browser --proxy-bypass <hosts>  # Hosts to bypass proxy
 agent-browser --headers <json> ...    # HTTP headers scoped to URL's origin
 agent-browser --executable-path <p>   # Custom browser executable
-agent-browser --args "--a,--b=x,y"    # Launch args; commas inside a value are kept
 agent-browser --extension <path> ...  # Load browser extension (repeatable)
 agent-browser --ignore-https-errors   # Ignore SSL certificate errors
-agent-browser --ca-cert <path>        # Trust a CA for CLI requests, and in local Chromium on Linux (install --with-deps provides certutil)
+agent-browser --ca-cert <path>        # Trust a CA in local Chromium on Linux (install --with-deps provides certutil)
 agent-browser --no-ca-cert            # Clear CA trust retained by the running session
-agent-browser --use-system-ca         # OS trust store for CLI requests (read, install, upgrade, doctor)
 agent-browser --hide-scrollbars false # Keep native scrollbars visible in headless Chromium screenshots
 agent-browser --help                  # Show help (-h)
 agent-browser --version               # Show version (-V)
@@ -469,8 +407,6 @@ agent-browser <command> --help        # Show detailed help for a command
 ```
 
 ## Debugging
-
-On Windows, owned headless Chrome runs on a private desktop so hidden windows cannot draw stray rectangles over the user's desktop. This applies to custom Chrome executables and windows created later through CDP. Headed and extension sessions use the interactive desktop. Owned Chrome trees are terminated when their daemon exits, including forced termination; attaching to an external browser does not take ownership of it.
 
 ```bash
 agent-browser --headed open example.com   # Show browser window
@@ -525,10 +461,8 @@ agent-browser a11y <url> --json                     # Structured results for aut
 ```bash
 agent-browser open --init-script <path>             # Register before first navigation (repeatable)
 agent-browser addinitscript <js>                    # Register at runtime (returns identifier)
-agent-browser removeinitscript <identifier>         # Remove from every tab in the session
+agent-browser removeinitscript <identifier>         # Remove a previously registered init script
 ```
-
-Runtime init-script identifiers are session-wide. Removing one clears it from every open tab where it was registered and from the setup replayed into future tabs.
 
 ## cURL cookie import
 
@@ -558,16 +492,9 @@ AGENT_BROWSER_HIDE_SCROLLBARS="false"        # Keep native scrollbars visible in
 AGENT_BROWSER_WEBGPU="1"                     # Enable the WebGPU launch preset (see references/webgpu.md)
 AGENT_BROWSER_NO_XVFB="1"                    # Disable automatic Xvfb for headed mode on displayless Linux
 AGENT_BROWSER_PROVIDER="browserbase"         # Browser provider or configured provider plugin
-BROWSER_USE_API_KEY="your-api-key"           # Browser Use Cloud API key
-BROWSER_USE_PROFILE_ID="profile-uuid"        # Optional Browser Use profile UUID
-BROWSER_USE_PROXY_COUNTRY="de"               # Managed proxy country; none/direct disables proxy
-BROWSER_USE_ENABLE_RECORDING="true"          # Record the Browser Use Cloud session
 AGENT_BROWSER_STREAM_PORT="9223"             # Override WebSocket streaming port (default: OS-assigned)
-AGENT_BROWSER_DASHBOARD_ALLOWED_ORIGINS="https://dashboard.example.com" # Trusted HTTPS reverse-proxied dashboard origins
 AGENT_BROWSER_CONFIG="./agent-browser.json"  # Custom config file
 AGENT_BROWSER_CDP="9222"                     # Connect daemon to CDP port or WebSocket URL
 AGENT_BROWSER_ALLOWED_DOMAINS="example.com"  # Restrict network domains; requires a fresh controllable browser context without profile/session startup args, restore/state replay, or direct-page provider plugins
 AGENT_BROWSER_PLUGINS='[{"name":"vault","command":"agent-browser-plugin-vault","capabilities":["credential.read"]},{"name":"stealth","command":"agent-browser-plugin-stealth","capabilities":["launch.mutate"]}]'
 ```
-
-Browser Use Cloud lifecycle: setup is bounded to 18s plus up to 4s for timeout cleanup (10s create, 8s CDP attach, 4s stop). `close` succeeds only after the Cloud session acknowledges it stopped; a failed stop returns an error, keeps the session id for retrying `close`, and blocks a new launch until released. If create fails before an id arrives, the outcome is unknown; inspect the Browser Use Cloud dashboard before retrying. If the daemon exits before a successful stop, inspect and stop the browser in Cloud.

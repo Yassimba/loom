@@ -19,8 +19,7 @@ echo "Form automation: $FORM_URL"
 
 # Step 1: Navigate to form
 agent-browser open "$FORM_URL"
-agent-browser wait --load domcontentloaded
-agent-browser wait --fn "Array.from(document.querySelectorAll('input:not([type=hidden]), textarea, select')).some((el) => { const style = getComputedStyle(el); return !el.disabled && !el.readOnly && style.display !== 'none' && style.visibility !== 'hidden' && el.getClientRects().length > 0; })"
+agent-browser wait --load networkidle
 
 # Step 2: Snapshot to discover form elements
 echo ""
@@ -45,8 +44,8 @@ agent-browser snapshot -i
 # agent-browser click @e3  # Submit button
 
 # Step 4: Wait for submission
+# agent-browser wait --load networkidle
 # agent-browser wait --url "**/success"  # Or wait for redirect
-# agent-browser wait --text "Success"     # Or wait for confirmation text
 
 # Step 5: Verify result
 echo ""
