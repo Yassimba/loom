@@ -90,6 +90,8 @@ export const register: Register = (on) => {
 
   on("classic.MessageDisplay", async ($, e, next) => {
     const result = await next(e);
+    // Only the terminal shows character art: the apps draw Mermaid themselves and show ANSI codes as text.
+    if ((await $.session.surfaces()).some((surface) => surface !== "terminal")) return result;
     const before = arriving.get(e.message_id) ?? "";
     const text = before + e.delta;
     if (e.final) arriving.delete(e.message_id);
@@ -106,6 +108,7 @@ export const register: Register = (on) => {
 
   // The open fence of a streaming reply, growing statement by statement above the prompt.
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
+    if (e.surface !== "terminal") return next(e);
     columns = e.viewport?.columns ?? columns;
     const fence = await read($, arrivingFence);
     if (fence === null || e.props.hasSurvey) return next(e);
@@ -127,10 +130,10 @@ export const register: Register = (on) => {
   });
 
   on("ui.render", { component: "AssistantMessage" }, ($, e, next) => {
+    if (e.surface !== "terminal") return next(e);
     // The site carries no streaming flag, so an unclosed fence is one still arriving.
     columns = e.viewport?.columns ?? DEFAULT_COLUMNS;
-    const gutter = e.surface === "terminal" ? GUTTER : 0;
-    const parts = drawMessage(e.props.text, columns - gutter, true);
+    const parts = drawMessage(e.props.text, columns - GUTTER, true);
     if (parts.every((part) => part.drawing === null)) return next(e);
 
     const ui = $.ui.resolve(e);
@@ -152,8 +155,7 @@ export const register: Register = (on) => {
         })}
       </Box>
     );
-    if (e.surface !== "terminal") return body;
-    // On the terminal a hook that draws the reply draws its chrome too: the
+    // A hook that draws the reply draws its chrome too: the
     // blank row above it, the bullet and the gutter.
     return (
       <Box flexDirection="row" marginTop={1}>

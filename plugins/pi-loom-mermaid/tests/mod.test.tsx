@@ -7,13 +7,23 @@ const mounted = (text: string) => ({
   props: { text, isFirstOfReply: true },
 });
 
-test("a Mermaid fence in a reply draws as a diagram on every surface", async ($) => {
+test("a Mermaid fence in a reply draws as a diagram on the terminal only", async ($, on) => {
+  on("ui.render", { component: "AssistantMessage" }, ($, e) => {
+    const { Text } = $.ui.resolve(e);
+    return <Text>engine drew this</Text>;
+  });
   const text =
     "Before\n\n```mermaid\nflowchart LR\n A[Start]:::green --> B[End]\n```\n\nAfter\n\n- item\n\n  ```mermaid\n  flowchart LR\n   C[Nested] --> D\n  ```\n";
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...mounted(text), surface });
     await ui.drawn();
-    expect(Boolean(await ui.find({ type: "Text", text: /^⏺ $/ }))).toBe(surface === "terminal");
+    if (surface !== "terminal") {
+      expect(await ui.find({ type: "Text", text: /engine drew this/ })).toBeDefined();
+      expect(await ui.find({ type: "Text", text: /Start/ })).toBeUndefined();
+      await ui.unmount();
+      continue;
+    }
+    expect(await ui.find({ type: "Text", text: /^⏺ $/ })).toBeDefined();
     expect(await ui.find({ type: "Markdown", text: /Before/ })).toBeDefined();
     expect(await ui.find({ type: "Markdown", text: /After/ })).toBeDefined();
     expect(await ui.find({ type: "Markdown", text: /flowchart/ })).toBeUndefined();
@@ -48,13 +58,11 @@ test("a reply with no drawable Mermaid is left to the engine", async ($, on) => 
 test("a clickable node draws as a link and a styled node takes its stroke color", async ($) => {
   const text =
     '```mermaid\nflowchart LR\n A[Docs]:::custom --> B\n classDef custom stroke:#abcdef\n click A "https://example.com"\n```\n';
-  for (const surface of SURFACES) {
-    const ui = await $.ui.mount({ ...mounted(text), surface });
-    const tree = JSON.stringify(await ui.drawn());
-    expect(tree).toContain("https://example.com");
-    expect(tree).toContain("#abcdef");
-    await ui.unmount();
-  }
+  const ui = await $.ui.mount({ ...mounted(text), surface: "terminal" });
+  const tree = JSON.stringify(await ui.drawn());
+  expect(tree).toContain("https://example.com");
+  expect(tree).toContain("#abcdef");
+  await ui.unmount();
 });
 
 test("the system prompt gains the Mermaid note after the engine's sections", async ($, on) => {
@@ -86,8 +94,16 @@ const stream = async ($: Parameters<TestBody>[0], batches: string[]) => {
   return displayed;
 };
 
+test("a streaming reply is left alone when the session draws on an app", async ($, on) => {
+  on("classic.MessageDisplay", () => ({}));
+  on("session.surfaces", () => ({ value: ["terminal", "mobile"] }));
+  const batches = ["```mermaid\nflowchart LR\n", " A[Start] --> B[End]\n", "```\n"];
+  expect(await stream($, batches)).toEqual(batches);
+});
+
 test("a streaming reply withholds an open fence and draws it when it closes", async ($, on) => {
   on("classic.MessageDisplay", () => ({}));
+  on("session.surfaces", () => ({ value: ["terminal"] }));
   const displayed = await stream($, [
     "Before\n\n",
     "```mermaid\nflowchart LR\n",
@@ -102,6 +118,7 @@ test("a streaming reply withholds an open fence and draws it when it closes", as
 
 test("the band above the prompt grows with the open fence and clears when it closes", async ($, on) => {
   on("classic.MessageDisplay", () => ({}));
+  on("session.surfaces", () => ({ value: ["terminal"] }));
   on("ui.render", { component: "AbovePrompt" }, ($, e) => {
     const { Text } = $.ui.resolve(e);
     return <Text>engine band</Text>;
@@ -122,6 +139,12 @@ test("the band above the prompt grows with the open fence and clears when it clo
     });
     expect(await ui.find({ type: "Text", text: /engine band/ })).toBeDefined();
     await stream($, ["```mermaid\nflowchart"]);
+    if (surface !== "terminal") {
+      expect(await ui.find({ type: "Text", text: /engine band/ })).toBeDefined();
+      await stream($, ["\n```\n"]);
+      await ui.unmount();
+      continue;
+    }
     expect(await ui.find({ type: "Text", text: /Drawing Mermaid/ })).toBeDefined();
     await stream($, [" LR\n A[First] --> B[Second]\n B --> C[Thi"]);
     expect(await ui.find({ type: "Text", text: /Second/ })).toBeDefined();
