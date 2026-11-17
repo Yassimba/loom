@@ -65,7 +65,7 @@
     },
     {
       "name": "pi-rewind-hook",
-      "version": "1.8.7",
+      "version": "1.8.8",
       "label": "rewind",
       "description": "Records file checkpoints as you work; branch to an earlier message and it restores your files to match. By nicobailon.",
       "nextAction": "Branch to an earlier Pi message to see files rewind."
