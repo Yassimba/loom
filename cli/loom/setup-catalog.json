@@ -263,7 +263,7 @@
       "label": "subagents",
       "description": "Run Claude Code-style subagents asynchronously, steer them while they work, and inspect their live conversations. By tintinweb.",
       "installTarget": "@tintinweb/pi-subagents",
-      "version": "0.25.0",
+      "version": "0.26.0",
       "nextAction": "Ask Pi to run an Explore subagent in the background."
     },
     {
