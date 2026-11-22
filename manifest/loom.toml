@@ -58,7 +58,7 @@ herdr = { version = "0.9.5", os = ["macos", "linux"] }
 "github:AlexsJones/llmfit" = { version = "v1.1.20", os = ["linux", "windows"] }
 
 # local hybrid search for Markdown knowledge bases
-"npm:@tobilu/qmd" = "2.8.3"
+"npm:@tobilu/qmd" = "2.9.0"
 
 # code review TUI (annotate diffs, export to GitHub or clipboard)
 "github:agavra/tuicr" = "v0.29.0"
