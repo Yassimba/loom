@@ -69,7 +69,7 @@ herdr = { version = "0.9.5", os = ["macos", "linux"] }
 # forges
 gh = "2.104.0"
 "github:ankitpokhrel/jira-cli" = "v1.7.0"
-glab = "1.130.0"
+glab = "1.131.0"
 "github:rcieri/glab-tui" = "v0.9.5"
 
 # hygiene & navigation
