@@ -1,0 +1,45 @@
+plugins/pi-loom-mermaid/README.md
+  s_b2c89a36dceba8::t_03a1840a3d4109 52-77
+plugins/pi-loom-mermaid/src/loom-mermaid/canvas.ts
+  s_b2c89a36dceba8::t_c130f76778f10e 56-62,88-94,103,118
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/c4.ts
+  s_b2c89a36dceba8::t_3271b11e7f8358 9-10,18,35-41,60,64-65,70,81-84,88-89
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/flowchart.ts
+  s_b2c89a36dceba8::t_e99e090be5bf72 340,347
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/xychart.ts
+  s_b2c89a36dceba8::t_240c4938c73b09 2-6,11-12,18-78,95,117-120
+plugins/pi-loom-mermaid/src/loom-mermaid/graph-render.ts
+  s_b2c89a36dceba8::t_ab5a3f57d85310 319-320,325-326,419-421
+plugins/pi-loom-mermaid/src/loom-mermaid/graph.ts
+  s_b2c89a36dceba8::t_bea196848ffbcb 166-167
+plugins/pi-loom-mermaid/src/loom-mermaid/labels.ts
+  s_b2c89a36dceba8::t_a76a853c996c23 226,254-256,258-261,302-304,339-341
+plugins/pi-loom-mermaid/src/loom-mermaid/layout.ts
+  s_b2c89a36dceba8::t_e2ce1df69f4d91 156-157,197-199,247-249,258,307,718-741,963-990,1168-1190,1276-1279,1300,1438-1439,1498,1500,1502-1521,1528-1529,1665,1685,1809,1812-1819,1870-1872,2051,2078,2233-2234,2271-2284,2300,2307-2311
+plugins/pi-loom-mermaid/src/loom-mermaid/paint.ts
+  s_b2c89a36dceba8::t_740f8c86155fd3 62,65,67,341,347-388
+scripts/mermaid-metrics.ts
+  s_b2c89a36dceba8::t_07e2d4918d7497 49-51,85-95,148-172,211-214,230-240,246-253
+test/fixtures/mermaid/baseline.json
+  s_b2c89a36dceba8::t_74a2f5e364dc1c 7-8,10,17-18,27-28,30,37-38,47-48,50,57-58,67-68,77-78,87-88,97-98,107-108,117-118,127-128,137-138,147-148,157-158,167-168,177-178,187-188,197-198,207-208,217-218,227-228,237-238,247-248,257-258,267-268
+test/pi-loom-mermaid-fixtures.test.ts
+  s_b2c89a36dceba8::t_959e51d19b8234 108-109,190-240,247-248,251-253
+test/pi-loom-mermaid.test.ts
+  s_b2c89a36dceba8::t_f3324a76adf3aa 586-587,668-669,948-958,1047-1148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "3a936c867982d158da488516644f86190ee25112",
+  "prompts": {},
+  "sessions": {
+    "s_b2c89a36dceba8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "777a2e21-240d-44d5-90f6-cdc488200c63",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
