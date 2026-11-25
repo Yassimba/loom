@@ -46,7 +46,7 @@ herdr = { version = "0.9.5", os = ["macos", "linux"] }
 "github:Ataraxy-Labs/sem" = "v0.30.1"
 
 # persistent local repository graph and impact analysis
-"npm:codebase-memory-mcp" = "0.11.0"
+"npm:codebase-memory-mcp" = "0.12.1"
 
 # compress command output for coding agents
 "github:rtk-ai/rtk" = "v0.52.0"
