@@ -337,14 +337,14 @@ function readShape(chars: string[], start: number, closer: string, shape: Shape)
       continue
     }
     if (!inQuotes && chars.slice(i, i + closer.length).join('') === closer) {
-      return { shape, label: cleanLabel(text), after: i + closer.length }
+      return { shape, label: cleanLabel(text, true), after: i + closer.length }
     }
     text += c
     i++
   }
   // Ran off the end still looking for the closer: everything after the opening
   // bracket became label text, so any link operator in it was swallowed.
-  return { shape, label: cleanLabel(text), after: chars.length, unclosed: closer }
+  return { shape, label: cleanLabel(text, true), after: chars.length, unclosed: closer }
 }
 
 /**

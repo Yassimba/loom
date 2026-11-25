@@ -4,14 +4,18 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
-    "area": 885
+    "area": 810
   },
   "class-inheritance": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 858
   },
@@ -20,14 +24,18 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
-    "area": 5472
+    "area": 5600
   },
   "composite-states": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 1376
   },
@@ -36,14 +44,18 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
-    "area": 336
+    "area": 364
   },
   "cycles": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 1419
   },
@@ -52,6 +64,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 520
   },
@@ -60,6 +74,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 910
   },
@@ -68,6 +84,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 702
   },
@@ -76,6 +94,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 192
   },
@@ -84,6 +104,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 494
   },
@@ -92,6 +114,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 1,
     "area": 1184
   },
@@ -100,6 +124,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 385
   },
@@ -108,6 +134,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 230
   },
@@ -116,6 +144,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 768
   },
@@ -124,6 +154,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 1156
   },
@@ -132,6 +164,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 416
   },
@@ -140,6 +174,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 510
   },
@@ -148,6 +184,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 2025
   },
@@ -156,6 +194,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 325
   },
@@ -164,6 +204,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 1320
   },
@@ -172,6 +214,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 1196
   },
@@ -180,6 +224,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 847
   },
@@ -188,6 +234,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 624
   },
@@ -196,6 +244,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 688
   },
@@ -204,6 +254,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 1,
     "area": 8736
   },
@@ -212,6 +264,8 @@
     "edgeOverText": 0,
     "danglingHeads": 0,
     "behindBox": 0,
+    "labelGlued": 0,
+    "labelAstray": 0,
     "crossings": 0,
     "area": 988
   }

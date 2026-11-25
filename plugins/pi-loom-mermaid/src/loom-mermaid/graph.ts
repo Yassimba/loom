@@ -163,6 +163,8 @@ export class Graph {
         this.nodes[existing].shape = shape
       }
       if (name !== null) this.addClass(existing, name)
+      // First used outside any group, then inside one: it belongs there.
+      this.nodeGroup[existing] ??= this.curGroup
       return existing
     }
     if (this.nodes.length >= MAX_NODES) {

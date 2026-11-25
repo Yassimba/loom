@@ -49,6 +49,32 @@ To show changes, add `:::red` after a box for removed code, `:::orange` for chan
 
 If a diagram is too wide, Pi shows its code instead. Widen the terminal or ask Pi to split it into smaller diagrams.
 
+### Supported diagrams
+
+Any other kind is shown as its code.
+
+| Diagram | Opening line |
+| --- | --- |
+| Flowchart, with subgraphs | `flowchart`, `graph` |
+| Sequence | `sequenceDiagram` |
+| State | `stateDiagram-v2`, `stateDiagram` |
+| Class | `classDiagram` |
+| Entity relationship | `erDiagram` |
+| Requirement | `requirementDiagram` |
+| C4 | `C4Context`, `C4Container`, `C4Component`, `C4Dynamic`, `C4Deployment` |
+| Architecture | `architecture-beta` |
+| Mindmap | `mindmap` |
+| Timeline | `timeline` |
+| Git graph | `gitGraph` |
+| Gantt | `gantt` |
+| User journey | `journey` |
+| Kanban | `kanban` |
+| Pie | `pie` |
+| Quadrant chart | `quadrantChart` |
+| XY chart (bars and lines) | `xychart-beta` |
+
+`<br/>` in a box label starts a new line.
+
 ## Plannotator document export
 
 `loom-mermaid-render` requires Bun on `PATH` (also required by Herdr Annotate).

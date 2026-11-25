@@ -59,10 +59,12 @@ export function paint(graph: Graph, extras: NodeExtra[], lay: Layout): Canvas {
     canvas.curStyle =
       edge.line === 'dotted' ? STY_DOT : edge.line === 'thick' ? STY_THICK : STY_SOLID
     const route = routes[i]
+    canvas.curEdge = i
     if (route.points.length === 0) drawSelfLoop(canvas, placed[edge.from], edge, route.hook ?? 'right')
     else drawRoute(canvas, edge, route)
-    for (const { text, row, x } of route.labels) placeLabel(canvas, text, row, x)
+    for (const { text, row, x, alts } of route.labels) canvas.labels.push({ label: text, row, x, edge: i, alts })
   })
+  canvas.curEdge = -1
   flushLabels(canvas)
   placeLaneLabels(canvas, routes.flatMap((r) => (r?.laneLabel === undefined ? [] : [r.laneLabel])))
 
@@ -334,25 +336,56 @@ function placeLaneLabels(canvas: Canvas, labels: LaneLabel[]): void {
  * or other text.
  */
 /** Queue a label to be written after every line, so it interrupts them. */
-function placeLabel(canvas: Canvas, label: string, row: number, x: number): void {
-  canvas.labels.push({ label, row, x })
-}
-
 function flushLabels(canvas: Canvas): void {
   const seen = new Set<string>()
-  for (const { label, row, x } of canvas.labels.splice(0)) {
+  for (const { label, row, x, edge, alts } of canvas.labels.splice(0)) {
     // Edges reading alike onto one head: one label names them all.
     const key = `${row}:${x}:${label}`
     if (seen.has(key)) continue
     seen.add(key)
-    // Two labels routed onto one row (adjacent buses into one rank) would
-    // truncate each other; the later one moves a row up, then down, if a
-    // row there is free for the whole text.
     const glyphs = [...measured(label)]
-    const run = (r: number): number => (r >= 0 && r < canvas.h ? labelRun(canvas, glyphs, r, x) : 0)
-    const at = [row, row - 1, row + 1].find((r) => run(r) === glyphs.length) ?? row
-    let cx = x
-    for (const [c, cw] of glyphs.slice(0, run(at))) {
+    const width = glyphs.reduce((sum, [, cw]) => sum + cw, 0)
+    const run = (r: number, c: number): number => (r >= 0 && r < canvas.h && c >= 0 ? labelRun(canvas, glyphs, r, c) : 0)
+    const inside = (r: number, c: number): boolean => c >= 0 && c < canvas.w && r >= 0 && r < canvas.h
+    // Touching another label, the two read as one word: that row is taken.
+    const touches = (r: number, c: number): boolean =>
+      [c - 1, c + width].some((k) => inside(r, k) && canvas.role[canvas.idx(k, r)] === 'edgeLabel')
+    // Written over another edge's line it cuts that line and reads as its
+    // name; over its own line it sits in a gap of it, which is fine.
+    const foreign = (r: number, c: number): boolean => {
+      const owners = inside(r, c) ? canvas.owners.get(canvas.idx(c, r)) : undefined
+      return owners !== undefined && !owners.has(edge)
+    }
+    const covers = (r: number, c: number, pad = 0): boolean =>
+      Array.from({ length: width + 2 * pad }, (_, k) => c - pad + k).some((k) => foreign(r, k))
+    const fits = (r: number, c: number): boolean => run(r, c) === glyphs.length && !touches(r, c)
+    // The layout's other spots for it come first, each taken only when it
+    // is free with a cell clear of every other edge. Then its own row, and
+    // the rows above and below: two labels routed onto one row (adjacent
+    // buses into one rank) would truncate each other.
+    const alt = alts?.find((a) => fits(a.row, a.x) && !covers(a.row, a.x, 1))
+    const free = [row, row - 1, row + 1].filter((r) => fits(r, x))
+    const clear = free.filter((r) => !covers(r, x))
+    // Moved off its row, it still has to sit against its own line.
+    const byOwn = (r: number): boolean =>
+      [r - 1, r, r + 1].some((y) =>
+        Array.from({ length: width }, (_, k) => x + k).some((c) => inside(y, c) && canvas.owners.get(canvas.idx(c, y))?.has(edge)),
+      )
+    const [at, x0] = alt !== undefined ? [alt.row, alt.x] : [clear.find(byOwn) ?? clear[0] ?? free[0] ?? row, x]
+    // With no free row it still touches another label: it starts a cell
+    // late, or ends a cell early on an ellipsis, so the two do not read as
+    // one word.
+    const isLabel = (c: number): boolean => inside(at, c) && canvas.role[canvas.idx(c, at)] === 'edgeLabel'
+    const ax = isLabel(x0 - 1) ? x0 + 1 : x0
+    const cut = run(at, ax)
+    const span = (n: number): number => glyphs.slice(0, n).reduce((sum, [, cw]) => sum + cw, 0)
+    const shown: [string, number][] = isLabel(ax + span(cut))
+      ? [...glyphs.slice(0, Math.max(0, cut - 2)), ...(cut >= 2 ? [['…', 1] as [string, number]] : [])]
+      : glyphs.slice(0, cut)
+    const shownW = shown.reduce((sum, [, cw]) => sum + cw, 0)
+    canvas.written.push({ row: at, x: ax, w: shownW, edge, cut: shownW < width })
+    let cx = ax
+    for (const [c, cw] of shown) {
       if (cw === 0) continue
       for (let k = 0; k < cw; k++) canvas.mask[canvas.idx(cx + k, at)] = 0
       canvas.set(cx, at, c, 'edgeLabel')

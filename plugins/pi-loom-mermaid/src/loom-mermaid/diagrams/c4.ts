@@ -6,8 +6,8 @@
  * renderer. Lenient: an unreadable statement is dropped and recorded in
  * `warnings`.
  *
- * shortcut: descriptions, technologies and `title` are not drawn; add them
- * to the box text here if the boxes should carry them.
+ * A box carries its kind, name, technology and description; the `title`
+ * frames the whole drawing.
  */
 
 import type { Diagram } from '../registry.ts'
@@ -15,7 +15,7 @@ import { headerKind, splitTop, statementsOf } from '../statements.ts'
 import { flowchart } from './flowchart.ts'
 
 /** Macros that style or lay out mermaid's own drawing. */
-const STYLING = /^(Update|Add|Show|Hide|Lay|title\b|accTitle|accDescr)/
+const STYLING = /^(Update|Add|Show|Hide|Lay|accTitle|accDescr)/
 
 /** A label safe inside a flowchart's quoted text. */
 const quoted = (text: string): string => text.replace(/"/g, "'").replace(/\|/g, '/')
@@ -32,6 +32,13 @@ export const c4: Diagram = {
     let open = 0
 
     for (const st of statements.slice(1)) {
+      const title = /^title\s+(.+)$/.exec(st)
+      if (title !== null) {
+        // The frame opens first, so it holds every element.
+        out.splice(1, 0, `subgraph c4title["${quoted(title[1])}"]`)
+        open++
+        continue
+      }
       if (st === '}') {
         if (open > 0) out.push('end')
         open = Math.max(0, open - 1)
@@ -50,16 +57,17 @@ export const c4: Diagram = {
         .map((arg) => arg.replace(/^"(.*)"$/, '$1'))
       if (/^(Bi)?Rel/.test(macro)) {
         // `RelIndex` leads with a step number; `Rel_Back` points the other way.
-        const [a, b, label] = macro === 'RelIndex' ? args.slice(1) : args
+        const [a, b, label, techn] = macro === 'RelIndex' ? args.slice(1) : args
         if (a === undefined || b === undefined) dropped.push(st)
         else {
           const [from, to] = macro.endsWith('Back') ? [b, a] : [a, b]
-          const text = label ? `|"${quoted(label)}"|` : ''
+          const words = [label, techn ? `[${techn}]` : ''].filter(Boolean).join(' ')
+          const text = words ? `|"${quoted(words)}"|` : ''
           out.push(`${from} ${macro.startsWith('Bi') ? '<-->' : '-->'}${text} ${to}`)
         }
         continue
       }
-      const [id, label] = args
+      const [id, label, ...rest] = args
       if (id === undefined) {
         dropped.push(st)
         continue
@@ -70,11 +78,15 @@ export const c4: Diagram = {
         continue
       }
       const kind = macro.replace(/_/g, ' ').toLowerCase()
-      const text = `"«${kind}»<br/>${quoted(label ?? id)}"`
+      // Containers and components name their technology before the description.
+      const [techn, descr] = /^(Container|Component)/.test(macro) ? rest : ['', rest[0]]
+      const lines = [`«${kind}»`, label ?? id, techn ? `[${techn}]` : '', descr ?? ''].filter(Boolean).map(quoted)
+      const text = `"${lines.join('<br/>')}"`
       out.push(/db$/i.test(macro.replace(/_Ext$/, '')) ? `${id}[(${text})]` : `${id}[${text}]`)
     }
     while (open-- > 0) out.push('end')
-    const drawn = flowchart.render(out.join('\n'), limits)
+    // Kind, name and technology take a line each before the description.
+    const drawn = flowchart.render(out.join('\n'), { ...limits, lines: limits.lines + 3 })
     if (drawn === null) return null
     drawn.warnings.push(...dropped.map((st) => `dropped, unreadable statement: "${st}"`))
     return drawn

@@ -53,7 +53,13 @@ export class Canvas {
    * junction can point a head at the arm that feeds it. */
   flow: Uint8Array
   /** Edge labels queued by the layout, written after every line. */
-  labels: { label: string; row: number; x: number }[] = []
+  labels: { label: string; row: number; x: number; edge: number; alts?: { row: number; x: number }[] }[] = []
+  /** The edge being drawn, or -1: stamped on its cells in `owners`. */
+  curEdge = -1
+  /** Edges whose line or head runs through a cell, by cell index. */
+  owners = new Map<number, Set<number>>()
+  /** Where each edge label ended up, for checks that it names its own edge. */
+  written: { row: number; x: number; w: number; edge: number; cut: boolean }[] = []
   curStyle: number = STY_SOLID
   /** Author classes stamped on cells painted while set, like `curStyle`. */
   curTag: string | undefined
@@ -79,6 +85,13 @@ export class Canvas {
     return y * this.w + x
   }
 
+  private own(i: number): void {
+    if (this.curEdge < 0) return
+    const set = this.owners.get(i)
+    if (set === undefined) this.owners.set(i, new Set([this.curEdge]))
+    else set.add(this.curEdge)
+  }
+
   set(x: number, y: number, c: string, role: Role): void {
     if (x >= this.w || y >= this.h) return
     const i = this.idx(x, y)
@@ -87,6 +100,7 @@ export class Canvas {
     // tabs for the same reason). Same width, safe glyph.
     this.ch[i] = c === '\t' ? ' ' : c
     this.role[i] = role
+    if (role === 'edge') this.own(i)
     if (this.curTag !== undefined) this.tag[i] = this.curTag
     if (this.curHref !== undefined) this.href[i] = this.curHref
   }
@@ -101,6 +115,7 @@ export class Canvas {
     if (x >= this.w || y >= this.h) return
     const i = this.idx(x, y)
     if (this.occupied[i]) return
+    this.own(i)
     this.mask[i] |= bits
     this.pass[i] |= bits === (U | D) ? PASS_V : bits === (L | R) ? PASS_H : JOINED
     this.style[i] |= this.curStyle

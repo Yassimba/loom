@@ -316,13 +316,14 @@ function buildScope(
       toAnchor: anchorOf(t, e.to),
     }
     // Repeats of one inner-node pair ride the same cells; draw them once.
-    // Top-down layout still ports at the frame (ponytail: anchors are wired
-    // into placeLr only), so there every pair of frames is one edge.
+    // Top-down layout ports arrivals only (every edge leaves a frame at
+    // its centre), so there the box an edge leaves makes no difference.
     const ported = graph.dir === 'right' || graph.dir === 'left'
     const twin = (a: Edge, b: Edge): boolean =>
       a.from === b.from &&
       a.to === b.to &&
-      (!ported || (a.fromAnchor?.node === b.fromAnchor?.node && a.toAnchor?.node === b.toAnchor?.node)) &&
+      (!ported || a.fromAnchor?.node === b.fromAnchor?.node) &&
+      a.toAnchor?.node === b.toAnchor?.node &&
       a.label === b.label &&
       a.headTo === b.headTo &&
       a.headFrom === b.headFrom &&
@@ -415,7 +416,9 @@ function drawBest(graph: Graph, extras: NodeExtra[], limits: Limits): { lay: Lay
   let best = draw(0)
   // Each order is drawn twice: lanes on the side their direction names,
   // then split across both sides where that parts two that must cross.
-  for (let k = 1; best !== null && best.cost > 0 && k <= 2 * VARIANTS + 1; k++) {
+  // The second drawing of the first order is always tried: it costs one
+  // layout and may bend less. The other orders only when lines cross.
+  for (let k = 1; best !== null && (k === 1 || best.cost > 0) && k <= 2 * VARIANTS + 1; k++) {
     const other = draw(k >> 1, k % 2 === 1)
     if (other !== null && (other.cost < best.cost || (other.cost === best.cost && other.bends < best.bends))) best = other
   }

@@ -223,7 +223,7 @@ function stripHtmlTags(s: string): string {
       if (tag) {
         const lower = tag.name.toLowerCase()
         if (lower === 'br') {
-          out += ' '
+          out += '\n'
           i = tag.end
           continue
         }
@@ -251,9 +251,14 @@ function unwrap(s: string, open: string, close: string): string | null {
  *
  * Decoding happens after tag-stripping so `<b>` is removed as markup while
  * `&lt;b&gt;` survives as the literal text `<b>`.
+ *
+ * `<br>` is a line break where the caller draws several lines (`breaks`),
+ * and a space everywhere else.
  */
-export function cleanLabel(raw: string): string {
-  const trimmed = stripHtmlTags(raw.trim()).trim()
+export function cleanLabel(raw: string, breaks = false): string {
+  const trimmed = stripHtmlTags(raw.trim())
+    .replace(/\n/g, breaks ? '\n' : ' ')
+    .trim()
   const unquoted = (unwrap(trimmed, '"', '"') ?? unwrap(trimmed, "'", "'") ?? trimmed).trim()
   const md = unwrap(unquoted, '`', '`')
   return decodeHtmlEntities(md === null ? unquoted : stripMarkdown(md.trim()))
@@ -294,7 +299,9 @@ export function wrapLabel(label: string, width: number, maxLines: number): strin
   let cur = ''
   let curW = 0
 
-  for (const word of label.split(/\s+/).filter((w) => w !== '')) {
+  // A line break in the label starts a new line whatever the width.
+  for (const para of label.split('\n')) {
+  for (const word of para.split(/\s+/).filter((w) => w !== '')) {
     const ww = stringWidth(word)
     if (ww > width) {
       if (cur !== '') {
@@ -329,6 +336,9 @@ export function wrapLabel(label: string, width: number, maxLines: number): strin
     }
   }
   if (cur !== '') lines.push(cur)
+  cur = ''
+  curW = 0
+  }
   if (lines.length === 0) lines.push('')
 
   if (lines.length > maxLines) {

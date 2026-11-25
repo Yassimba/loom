@@ -583,8 +583,8 @@ test("two sources sharing two targets ride one trunk, a private dotted edge take
   assert.doesNotMatch(text, /╫/, "no hop");
   assert.match(
     text,
-    /optional +┌─+┐\n[^\n]*├─+┬─┼─+▶│ +SHACL Check Engine/,
-    "the label sits on its own arm, a row above the arrival it names",
+    /\n +optional ╎ │ /,
+    "the label sits beside its own dotted leg, not on a shared row",
   );
   assert.match(text, /│ Turbine Engine ├─┴─┴─+▶│ +Schema Inspector/, "one head for both");
 });
@@ -665,10 +665,8 @@ test("a label clears every trunk in its band, not only its own", () => {
   const rows = drawn.plain;
   const row = rows.findIndex((l) => l.includes("optional"));
   const at = rows[row].indexOf("optional");
-  // Both the dotted track and the solid trunk stay drawn left of the label.
-  const left = rows[row].slice(0, at);
-  assert.match(left, /│/, "the neighbouring trunk survives the label row");
-  assert.doesNotMatch(rows[row], /optional│/, "and the label ends clear of the box");
+  // Both the dotted track and the solid trunk stay drawn on the label's row.
+  assert.match(rows[row].slice(at), /^optional ╎ │/, "both trunks survive the label row");
 });
 
 test("a lane leg climbs past the boxes stacked under its target, not through them", () => {
@@ -947,8 +945,17 @@ test("journey, kanban, gantt, quadrant, xychart, requirement and C4 sources draw
       [/«requirement»/, /risk: high/, /«element»/, /satisfies/],
     ],
     [
-      'C4Context\n  Boundary(b, "Bank") {\n    Person(u, "Customer")\n    SystemDb(db, "Ledger")\n  }\n  Rel(u, db, "Reads")\n  UpdateLayoutConfig($c4ShapeInRow="3")\n',
-      [/┌ Bank ─/, /«person» Customer/, /«systemdb» Ledger/, /Reads/],
+      'C4Container\n  title Internet banking\n  Boundary(b, "Bank") {\n    Person(u, "Customer", "Holds an account")\n    ContainerDb(db, "Ledger", "Postgres", "Stores balances")\n  }\n  Rel(u, db, "Reads", "SQL")\n  UpdateLayoutConfig($c4ShapeInRow="3")\n',
+      [
+        /┌ Internet banking ─/,
+        /┌ Bank ─/,
+        /│ +«person» +│/,
+        /│ +Customer +│/,
+        /│ Holds an account │/,
+        /│ +\[Postgres\] +│/,
+        /│ Stores balances │/,
+        /Reads \[SQL\]/,
+      ],
     ],
   ];
   for (const [source, expected] of cases) {
@@ -1036,4 +1043,106 @@ test("a return leaves by the top when an arrival comes in from beyond its chain"
   );
   assert.ok(drawn);
   assert.ok(!drawn.plain.join("\n").includes("╫"));
+});
+
+test("a line break in a box label starts a new line; in an edge label it is a space", () => {
+  const drawn = render("flowchart LR\n  A[First line<br/>second] -->|a<br>b| B\n");
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  assert.match(text, /│ First line ├/);
+  assert.match(text, /│ +second +│/);
+  assert.match(text, /a b/);
+});
+
+test("an xychart with a line series is a plot: bars as blocks, the line as joined dots", () => {
+  const drawn = render(
+    "xychart-beta\n  x-axis [jan, feb, mar]\n  y-axis 0 --> 100\n  bar [20, 100, 50]\n  line [100, 0, 100]\n",
+  );
+  assert.ok(drawn);
+  const rows = drawn.plain;
+  const top = rows.findIndex((row) => row.startsWith("100 ┤"));
+  const bottom = rows.findIndex((row) => /^ +0 ┤/.test(row));
+  assert.equal(bottom - top, 9);
+  // Bars: 20 fills two rows of ten, 100 all ten.
+  const col = (label: string): number => rows[bottom + 2].indexOf(label) + 1;
+  const height = (x: number): number =>
+    rows.slice(top, bottom + 1).filter((row) => row[x] === "█").length;
+  assert.equal(height(col("jan")), 2);
+  assert.equal(height(col("mar")), 5);
+  assert.ok(height(col("feb")) >= 8);
+  // The line starts on the top row and every plot row carries part of it.
+  const braille = /[\u2801-\u28ff]/;
+  assert.match(rows[top], braille);
+  for (const row of rows.slice(top, bottom + 1)) assert.match(row, braille);
+  assert.match(rows.at(-1) ?? "", /█ bar +⠒ line/);
+});
+
+test("a fan-out branch carries its label at its own arrival, not on a sibling's row", () => {
+  const drawn = render("flowchart LR\n  A --> B\n  A -->|ab| C\n");
+  assert.ok(drawn);
+  const named = drawn.plain.findIndex((row) => row.includes("ab"));
+  assert.match(drawn.plain[named + 1], /▶│ C │/);
+});
+
+test("a node first used outside a subgraph joins the subgraph that lists it later", () => {
+  const drawn = render("flowchart LR\n  X --> A\n  subgraph G[Group]\n    A --> B\n  end\n");
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  assert.match(text, /┌ Group ─/);
+  // X stays outside the frame; A and B stand inside it.
+  assert.match(text, /│ X ├─+▶│ │ A ├─+▶│ B │ │/);
+});
+
+test("an edge label sits against its own line, never a neighbour's", () => {
+  const text = (source: string): string => {
+    const drawn = render(source);
+    assert.ok(drawn);
+    return drawn.plain.join("\n");
+  };
+  // Both ends shared: the label goes beside the edge's own leg.
+  const fan = text(
+    "flowchart LR\n  N0 --> N1\n  N1 --> N2\n  N1 -->|fails| N6\n  N3 --> N6\n  N6 --> N4",
+  );
+  assert.match(fan, /│ fails\n/, "beside the leg, not over the sibling's arrival");
+  // Two edges between the same frames at different boxes are not parallel:
+  // each keeps its own label.
+  const frames = text(
+    "flowchart LR\n  subgraph G0\n    N0\n    N1\n  end\n  subgraph G1\n    N2\n    N3\n  end\n  G1 ==> N1\n  N2 --o|ships| N0",
+  );
+  assert.match(
+    frames,
+    /─o│[^\n]*\n[^\n]*│ +ships /,
+    "the label stays under the circle-headed edge, off the thick one",
+  );
+  // Self-loops on one box share one hook, so one label names them all.
+  const loops = text(
+    "classDiagram\n  direction LR\n  N5 o-- N5 : owns\n  N5 *-- N5 : holds\n  N4 <|-- N5",
+  );
+  assert.match(loops, /▲ owns \/ holds/);
+  // A self-loop's label stays inside its column, clear of the next band's lines.
+  const loop = text("flowchart LR\n  N5 --> N3\n  N3 --> N0\n  N3 --> N6\n  N3 -->|again| N3");
+  assert.match(loop, /▲ again +│/, "the bus runs past the label, not through it");
+});
+
+test("top-down edges into different boxes of one frame each arrive over their own box", () => {
+  const text = (source: string): string => {
+    const drawn = render(source);
+    assert.ok(drawn);
+    return drawn.plain.join("\n");
+  };
+  const fan = text("flowchart TD\n  A --> X\n  A --> Z\n  subgraph G[Group]\n    X\n    Z\n  end");
+  assert.match(
+    fan,
+    /┌─+┴─+┐\n +▼ +▼\n┌ Group ─+┐\n│ +┌───┐ +┌───┐/,
+    "two heads, one over each box",
+  );
+  // Sources with one edge each stand over the box they point at: no bend.
+  const pair = text("flowchart TD\n  A --> X\n  C --> Z\n  subgraph G[Group]\n    X\n    Z\n  end");
+  assert.doesNotMatch(pair, /[┘└┐┌]\n +▼/, "both drops run straight");
+  // With room between the border and the box, the edge runs through to the box.
+  const nested = text(
+    "flowchart TD\n  A --> X\n  C --> W\n  subgraph Outer\n    subgraph Inner\n      X --> Y\n    end\n    W\n  end",
+  );
+  assert.match(nested, /┌ Outer ─+┼─+┐/, "the border is pierced over W");
+  assert.match(nested, /▼ +│\n[^\n]*┌───┐ │\n[^\n]*│ W │/, "and the head lands on W");
 });

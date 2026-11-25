@@ -46,6 +46,9 @@ interface CanvasLike {
   role: string[];
   mask: Uint8Array;
   occupied: Uint8Array;
+  /** Edges through each cell and where labels landed; absent on old revisions. */
+  owners?: Map<number, Set<number>>;
+  written?: { row: number; x: number; w: number; edge: number; cut: boolean }[];
 }
 
 export interface Metrics {
@@ -79,6 +82,17 @@ export interface Metrics {
    * in — it goes on behind the box, where it cannot be followed at all.
    */
   behindBox: number;
+  /** Hard failure: two edge labels touching on a row, read as one word. */
+  labelGlued: number;
+  /**
+   * Hard failure: an edge label touching only other edges' lines, so it
+   * reads as naming one of them.
+   */
+  labelAstray: number;
+  /** Edge labels that lost part of their text for lack of room. */
+  labelCut: number;
+  /** Edge labels written across another edge's line. */
+  labelOverLine: number;
   heads: number;
   ms: number;
 }
@@ -131,6 +145,31 @@ function headDangling(c: CanvasLike, x: number, y: number, dir: [number, number]
   return j === null || (!c.occupied[j] && c.ch[j] !== "●");
 }
 
+/**
+ * A label names a line it touches: one it is written into, the row above
+ * or below it, or up to two blank cells beside it on its row (a self-loop's
+ * label hangs two cells off its hook). Astray when it
+ * touches lines and none of them is its own edge's. `over` is true when it
+ * is written across another edge's line, cutting it.
+ */
+function labelPlace(
+  c: CanvasLike,
+  l: { row: number; x: number; w: number; edge: number },
+): { astray: boolean; over: boolean } {
+  const owners = (x: number, y: number): Set<number> | undefined =>
+    at(c, x, y) === null ? undefined : c.owners?.get(y * c.w + x);
+  const span = (from: number, to: number, y: number): Set<number>[] =>
+    Array.from({ length: to - from }, (_, k) => owners(from + k, y)).filter((o) => o !== undefined);
+  const inside = span(l.x, l.x + l.w, l.row);
+  const touched = [
+    ...span(l.x - 3, l.x + l.w + 3, l.row),
+    ...span(l.x, l.x + l.w, l.row - 1),
+    ...span(l.x, l.x + l.w, l.row + 1),
+  ];
+  const foreign = (o: Set<number>): boolean => !o.has(l.edge);
+  return { astray: touched.length > 0 && touched.every(foreign), over: inside.some(foreign) };
+}
+
 const isBend = (mask: number): boolean =>
   mask === (D | R) || mask === (D | L) || mask === (U | R) || mask === (U | L);
 
@@ -169,6 +208,10 @@ export function measure(c: CanvasLike, ms: number): Metrics {
     edgeOverText: 0,
     danglingHeads: 0,
     behindBox: 0,
+    labelGlued: 0,
+    labelAstray: 0,
+    labelCut: 0,
+    labelOverLine: 0,
     heads: 0,
     ms,
   };
@@ -184,12 +227,30 @@ export function measure(c: CanvasLike, ms: number): Metrics {
       if (c.role[i] === "edge") measureEdgeCell(c, x, y, m);
     }
   }
+  const written = (c.written ?? []).filter((l) => l.w > 0);
+  for (const l of written) {
+    if (written.some((o) => o !== l && o.row === l.row && (o.x === l.x + l.w || o.x + o.w === l.x)))
+      m.labelGlued++;
+    const place = labelPlace(c, l);
+    // A label with no room for its text is cut wherever it fits: counted
+    // as cut, not as astray.
+    if (l.cut) m.labelCut++;
+    else if (place.astray) m.labelAstray++;
+    if (place.over) m.labelOverLine++;
+  }
   m.marginRight = c.w - 1 - maxBoxX;
   m.marginBottom = c.h - 1 - maxBoxY;
   return m;
 }
 
-export const HARD_KEYS = ["brokenLinks", "edgeOverText", "danglingHeads", "behindBox"] as const;
+export const HARD_KEYS = [
+  "brokenLinks",
+  "edgeOverText",
+  "danglingHeads",
+  "behindBox",
+  "labelGlued",
+  "labelAstray",
+] as const;
 
 export interface FixtureResult {
   name: string;
