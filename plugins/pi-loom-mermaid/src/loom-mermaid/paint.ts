@@ -339,7 +339,12 @@ function placeLabel(canvas: Canvas, label: string, row: number, x: number): void
 }
 
 function flushLabels(canvas: Canvas): void {
+  const seen = new Set<string>()
   for (const { label, row, x } of canvas.labels.splice(0)) {
+    // Edges reading alike onto one head: one label names them all.
+    const key = `${row}:${x}:${label}`
+    if (seen.has(key)) continue
+    seen.add(key)
     // Two labels routed onto one row (adjacent buses into one rank) would
     // truncate each other; the later one moves a row up, then down, if a
     // row there is free for the whole text.

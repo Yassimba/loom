@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> idle
+    idle --> waiting: not-ready answer
+    waiting --> polling: NEXT ends, refetch
+    state polling {
+        asking
+    }
+    polling --> idle: answer ready
+    polling --> waiting: answer not ready
+    polling --> failed: refetch fails
+    waiting --> gaveUp: NEXT ends after 5 min
+    failed --> waiting: new not-ready answer
+    gaveUp --> waiting: new not-ready answer

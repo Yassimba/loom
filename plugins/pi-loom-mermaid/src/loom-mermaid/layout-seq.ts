@@ -82,6 +82,8 @@ export function layoutSequence(seq: Sequence, limits: Limits): CanvasResult {
 
   // A note left of the first participant has no gap to grow; shift the whole
   // diagram right instead so the note box lands beside the lifeline, not on it.
+  // Blocks draw a bracket down the left margin, one column pair per depth.
+  const gutter = 2 * Math.max(0, ...seq.items.map((item) => (item.kind === 'divider' ? item.depth + 1 : 0)))
   let leftPad = 0
   for (const item of seq.items) {
     if (item.kind === 'note' && item.anchor.kind === 'left' && item.anchor.at === 0) {
@@ -89,6 +91,7 @@ export function layoutSequence(seq: Sequence, limits: Limits): CanvasResult {
       leftPad = Math.max(leftPad, sat(w + 1, xs[0]))
     }
   }
+  leftPad = Math.max(leftPad, sat(gutter + 1, sat(xs[0], half(boxW[0]))))
   if (leftPad > 0) for (let i = 0; i < n; i++) xs[i] += leftPad
 
   let canvasW = xs[n - 1] + Math.ceil(boxW[n - 1] / 2) + 1
@@ -99,7 +102,7 @@ export function layoutSequence(seq: Sequence, limits: Limits): CanvasResult {
       const g = noteGeometry(xs, item.anchor, stringWidth(item.text))
       canvasW = Math.max(canvasW, g.x + g.w + 1)
     } else if (item.kind === 'divider') {
-      canvasW = Math.max(canvasW, stringWidth(item.text) + 4)
+      canvasW = Math.max(canvasW, 2 * item.depth + stringWidth(item.text) + 4)
     }
   }
 
@@ -136,7 +139,19 @@ export function layoutSequence(seq: Sequence, limits: Limits): CanvasResult {
   seq.items.forEach((item, k) => {
     const r = rows[k]
     if (item.kind === 'message') drawMessage(canvas, item, xs, r)
-    else if (item.kind === 'divider') drawDivider(canvas, item.text, r, canvasW)
+    else if (item.kind === 'divider') drawDivider(canvas, item, r, canvasW)
+  })
+  // The bracket's upright joins a block's rules; one left open runs to the end.
+  const open: number[] = []
+  seq.items.forEach((item, k) => {
+    if (item.kind !== 'divider') return
+    if (item.role === 'open') open[item.depth] = rows[k]
+    else for (let y = open[item.depth] + 1; y < rows[k]; y++) canvas.set(2 * item.depth, y, '│', 'edge')
+    if (item.role === 'close') delete open[item.depth]
+    else open[item.depth] = rows[k]
+  })
+  open.forEach((from, depth) => {
+    for (let y = from + 1; y < bottomTop; y++) canvas.set(2 * depth, y, '│', 'edge')
   })
 
   // Activations turn the lifeline into a double line from the activating
@@ -227,8 +242,14 @@ function drawMessage(
   }
 }
 
-/** A full-width rule labelling a `loop` / `alt` / `opt` block boundary. */
-function drawDivider(canvas: Canvas, text: string, r: number, canvasW: number): void {
-  for (let x = 0; x < canvasW; x++) canvas.set(x, r, '─', 'edge')
-  drawTextOverEdges(canvas, ` ${fitLabel(text, sat(canvasW, 4))} `, 2, r, 'edgeLabel')
+/**
+ * A rule at a `loop` / `alt` / `opt` block boundary, starting at the
+ * block's bracket in the left margin: `┌` opens it, `├` divides it, `└`
+ * closes it, so the bracket shows what the block holds and how blocks nest.
+ */
+function drawDivider(canvas: Canvas, item: Extract<SeqItem, { kind: 'divider' }>, r: number, canvasW: number): void {
+  const x0 = 2 * item.depth
+  canvas.set(x0, r, { open: '┌', mid: '├', close: '└' }[item.role], 'edge')
+  for (let x = x0 + 1; x < canvasW; x++) canvas.set(x, r, '─', 'edge')
+  if (item.text !== '') drawTextOverEdges(canvas, ` ${fitLabel(item.text, sat(canvasW, x0 + 4))} `, x0 + 2, r, 'edgeLabel')
 }

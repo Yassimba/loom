@@ -85,12 +85,12 @@ test("back-edge side exit clears a wider source in the dataset lifecycle", () =>
       const row = r.plain.findIndex((line) => line.includes("Every accepted Dataset"));
       // The self-loop owns one side, so the return climbs the other: both
       // stay on the box's sides and neither needs the top.
-      assert.match(r.plain[row], /└─+║/, "the return leaves the side away from the loop");
+      assert.match(r.plain[row], /└─+╢/, "the return leaves the side away from the loop");
       assert.match(r.plain[row], /╟─╮|╭─╢/, "the self-loop keeps its own side");
     } else {
       assert.match(
         text,
-        /└─+║ (Every accepted|.*durable\?)|durable\? +║─+┘/,
+        /└─+╢ (Every accepted|.*durable\?)|durable\? +╟─+┘/,
         "No leaves the source side directly into its return lane",
       );
     }
@@ -101,5 +101,106 @@ test("back-edge side exit clears a wider source in the dataset lifecycle", () =>
 test.after(() => {
   if (process.env.UPDATE_MERMAID_BASELINE) {
     writeFileSync(baselinePath, `${JSON.stringify(seen, null, 2)}\n`);
+  }
+});
+
+/**
+ * Seeded random diagrams of every graph-drawn kind: none may throw, differ
+ * between two renders, or trip a hard metric (a broken link, a line under
+ * text, a dangling head, a line behind a box).
+ */
+test("random diagrams hold the hard invariants", () => {
+  let seed = 20240501;
+  const rnd = (n: number): number => {
+    seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
+    return (seed >> 8) % n;
+  };
+  const pick = <T>(xs: T[]): T => xs[rnd(xs.length)];
+  const id = (): string => `N${rnd(8)}`;
+  const label = (): string => pick(["ok", "retry", "fails", "timeout", "Order Service", "配送"]);
+  const lines = (header: string, line: () => string): string =>
+    [header, ...Array.from({ length: 3 + rnd(10) }, line)].join("\n");
+  const kinds: Record<string, () => string> = {
+    flowchart: () =>
+      lines(
+        `flowchart ${pick(["TD", "LR"])}`,
+        () => `  ${id()} -->${rnd(2) ? `|${label()}|` : ""} ${id()}`,
+      ),
+    // Groups: nodes declared inside one or two frames (sometimes nested,
+    // sometimes with their own direction), edges between nodes and frames.
+    subgraphs: () => {
+      const out = [`flowchart ${pick(["TD", "LR"])}`];
+      const groups = 1 + rnd(3);
+      // Group g owns N(2g) and N(2g+1); the rest stand outside.
+      for (let g = 0; g < groups; g++) {
+        out.push(`  subgraph G${g}[${label()}]`);
+        if (!rnd(3)) out.push(`    direction ${pick(["TB", "LR"])}`);
+        out.push(`    N${2 * g}`);
+        out.push(
+          ...(rnd(3)
+            ? [`    N${2 * g + 1}`]
+            : [`    subgraph H${g}`, `      N${2 * g + 1}`, "    end"]),
+        );
+        out.push("  end");
+      }
+      const owner = (end: string): string =>
+        end[0] === "G" ? end : `G${Number(end.slice(1)) >> 1}`;
+      for (let k = 2 + rnd(8); k > 0; k--) {
+        const [a, b] = [rnd(4) ? id() : `G${rnd(groups)}`, rnd(4) ? id() : `G${rnd(groups)}`];
+        // A frame linked to itself or to its own member is not a drawing.
+        if ((a[0] === "G" || b[0] === "G") && owner(a) === owner(b)) continue;
+        out.push(
+          `  ${a} ${pick(["-->", "-.->", "==>", "<-->", "--o", "--x"])}${rnd(2) ? `|${label()}|` : ""} ${b}`,
+        );
+      }
+      return out.join("\n");
+    },
+    composite: () => {
+      const out = ["stateDiagram-v2"];
+      for (let g = 0; g < 1 + rnd(2); g++) {
+        out.push(`  state C${g} {`);
+        for (let k = 1 + rnd(3); k > 0; k--)
+          out.push(`    ${pick(["[*]", id()])} --> ${pick(["[*]", id()])}`);
+        out.push("  }");
+      }
+      for (let k = 2 + rnd(6); k > 0; k--) {
+        out.push(
+          `  ${pick(["[*]", id(), "C0"])} --> ${pick([id(), "C0", "[*]"])}${rnd(2) ? `: ${label()}` : ""}`,
+        );
+      }
+      return out.join("\n");
+    },
+    state: () =>
+      lines(
+        "stateDiagram-v2",
+        () => `  ${pick(["[*]", id(), id()])} --> ${id()}${rnd(2) ? `: ${label()}` : ""}`,
+      ),
+    class: () =>
+      lines(
+        `classDiagram${rnd(3) ? "" : "\n  direction LR"}`,
+        () =>
+          `  ${id()} ${pick(["<|--", "*--", "o--", "-->", "..>"])} ${id()}${rnd(2) ? ` : ${label()}` : ""}`,
+      ),
+    er: () =>
+      lines(
+        "erDiagram",
+        () =>
+          `  ${id()} ${pick(["||", "}o", "}|"])}--${pick(["||", "o{", "|{"])} ${id()} : ${label().replace(" ", "_")}`,
+      ),
+  };
+  for (const [kind, generate] of Object.entries(kinds)) {
+    for (let i = 0; i < 60; i++) {
+      const source = generate();
+      const r = renderFixture(registry, `${kind}-${i}`, source);
+      assert.ok(r.metrics, `${kind} drew nothing:\n${source}`);
+      assert.ok(r.deterministic, `${kind} differs between renders:\n${source}`);
+      for (const key of HARD_KEYS) {
+        assert.equal(
+          r.metrics[key],
+          0,
+          `${key} in ${kind}:\n${source}\n${(r.plain ?? []).join("\n")}`,
+        );
+      }
+    }
   }
 });

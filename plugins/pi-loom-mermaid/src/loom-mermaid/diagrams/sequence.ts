@@ -55,7 +55,11 @@ export type SeqItem =
       head: SeqHead
     }
   | { kind: 'note'; anchor: NoteAnchor; text: string }
-  | { kind: 'divider'; text: string }
+  /**
+   * A block boundary: `open` starts a `loop` / `alt` / …, `mid` is an
+   * `else` inside it, `close` its `end`. `depth` counts the blocks around it.
+   */
+  | { kind: 'divider'; text: string; role: 'open' | 'mid' | 'close'; depth: number }
 
 /** A hot span of one lifeline: item indices, `to === null` while still open. */
 interface Activation {
@@ -173,12 +177,15 @@ function parseSequence(src: string): Sequence | null {
       const continues = ['else', 'and', 'option'].includes(lower)
       if (!continues) blocks.push(true)
       if (!continues || blocks.at(-1) === true) {
-        seq.pushItem({ kind: 'divider', text: decodeHtmlEntities(st) })
+        const depth = blocks.filter(Boolean).length - 1
+        seq.pushItem({ kind: 'divider', text: decodeHtmlEntities(st), role: continues ? 'mid' : 'open', depth })
       }
     } else if (lower === 'rect' || lower === 'box') {
       blocks.push(false)
     } else if (lower === 'end') {
-      if (blocks.pop() === true) seq.pushItem({ kind: 'divider', text: 'end' })
+      if (blocks.pop() === true) {
+        seq.pushItem({ kind: 'divider', text: '', role: 'close', depth: blocks.filter(Boolean).length })
+      }
     } else {
       const msg = parseSeqMessage(st, seq)
       if (!msg) {
