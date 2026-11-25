@@ -697,7 +697,7 @@ test("the path of boxes runs straight and the return keeps to the side", () => {
   };
   // start, check, process, more? and finish share one column; the branch
   // to reject splits off it and the return climbs outside the boxes.
-  const spine = ["│ start │", "║ check ║", "│ process │", "║ more? ║", "│ finish │"].map(col);
+  const spine = ["│ start │", "║ check ║", "│ process │", "╢ more? ║", "│ finish │"].map(col);
   assert.ok(Math.max(...spine) - Math.min(...spine) <= 1, `spine drifts: ${spine.join()}`);
   assert.ok(col("│ reject │") > Math.max(...spine), "reject splits to the side");
   assert.ok(
@@ -786,4 +786,254 @@ test("fence scanner round-trips and leaves quoted or indented-code Mermaid as te
       { source: "flowchart LR\n E --> F", indent: "", closed: false, nested: false },
     ],
   );
+});
+
+test("a long return goes around the fan it arrives under: no crossing, no jog, one label", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/return-past-fan.mmd", import.meta.url), "utf8"),
+    { maxWidth: 200 },
+  );
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  assert.doesNotMatch(text, /[╫┼]/, "no crossing");
+  assert.doesNotMatch(text, /└─+┐|┌─+┘/, "the return leaves its port straight");
+  assert.equal(text.split("new not-ready answer").length, 2, "alike returns share one label");
+  assert.match(text, /┌ polling ─*┴/, "a return leaves a frame past its title");
+});
+
+test("an order that draws a crossing gives way to one that draws none", () => {
+  // The layered count calls the author's order crossing-free; drawn, the
+  // return beside the fan crosses twice.
+  const drawn = render(
+    "flowchart TD\n  N2 -->|done| N3\n  N2 -->|ok| N1\n  N0 --> N2\n  N1 --> N3\n  N2 -->|fails| N0\n",
+  );
+  assert.ok(drawn);
+  assert.doesNotMatch(drawn.plain.join("\n"), /╫/, "no crossing");
+});
+
+test("a crossing is kept over an order that runs a line behind a box", () => {
+  const drawn = render(
+    readFileSync(new URL("./fixtures/mermaid/lane-past-stack.mmd", import.meta.url), "utf8"),
+    { maxWidth: 200 },
+  );
+  assert.ok(drawn);
+  assertNoLineBehindBox(drawn.plain);
+});
+
+/** A line stopping dead at a border (no tee, no head) went behind the box. */
+function assertNoLineBehindBox(plain: string[]): void {
+  const rows = plain.map((row) => [...row]);
+  rows.forEach((row, y) => {
+    row.forEach((c, x) => {
+      if (c !== "│") return;
+      assert.notEqual(rows[y - 1]?.[x], "─", `line lost behind a box at ${x},${y}`);
+      assert.notEqual(rows[y + 1]?.[x], "─", `line lost behind a box at ${x},${y}`);
+    });
+  });
+}
+
+test("LR lane with boxes stacked on both sides of its ends runs beside the rank, not behind a box", () => {
+  for (const source of [
+    "flowchart LR\n  N0 --> N1\n  N1 -->|fails| N2\n  N2 -->|fails| N3\n  N4 --> N5\n  N5 -->|timeout| N6\n  N6 -->|fails| N7\n  N6 -->|fails| N2\n  N6 -->|retry| N1\n  N1 -->|retry| N6\n  N5 --> N7\n  N8 --> N2\n",
+    readFileSync(new URL("./fixtures/mermaid/class-lr-skips.mmd", import.meta.url), "utf8"),
+  ]) {
+    const drawn = render(source, { maxWidth: 200 });
+    assert.ok(drawn);
+    assertNoLineBehindBox(drawn.plain);
+  }
+});
+
+test("LR lanes nest: the shorter span takes the inner track", () => {
+  const drawn = render(
+    "flowchart LR\n  N2 -->|retry| N3\n  N3 -->|retry| N4\n  N4 -->|timeout| N5\n  N5 --> N2\n  N4 -->|retry| N3\n",
+  );
+  assert.ok(drawn);
+  assert.doesNotMatch(drawn.plain.join("\n"), /╫/, "no crossing");
+});
+
+test("a one-edge box stands over its entry and a skip-fed sink under its chain: no jog", () => {
+  const drawn = render(
+    'erDiagram\n  CUSTOMER ||--o{ ORDER : places\n  ORDER ||--|{ LINE_ITEM : contains\n  PRODUCT ||--o{ LINE_ITEM : "ordered in"\n  CUSTOMER }o--|| ADDRESS : "ships to"\n  ORDER }o--|| ADDRESS : "billed to"\n',
+  );
+  assert.ok(drawn);
+  const rows = drawn.plain.map((row) => [...row]);
+  // PRODUCT's line drops straight from its tee to its label row.
+  const top = rows.findIndex((row) => row.join("").includes("PRODUCT")) + 1;
+  const x = rows[top].lastIndexOf("┬");
+  const end = rows.findIndex((row) => row.join("").includes("ordered in"));
+  for (let y = top + 1; y <= end; y++)
+    assert.equal(rows[y][x], "│", `PRODUCT's line bends at row ${y}`);
+  // The skip into ADDRESS runs down one column from its turn to the box.
+  const ships = rows.findIndex((row) => row.join("").includes("ships to"));
+  const col = rows[ships].indexOf("│");
+  const turn = rows.findLastIndex((row, y) => y < ships && row[col] === "┌");
+  assert.ok(turn > 0);
+  for (let y = turn + 1; y <= ships; y++)
+    assert.equal(rows[y][col], "│", `the skip bends at row ${y}`);
+});
+
+test("sequence blocks bracket what they hold, nested one inside the other", () => {
+  const drawn = render(
+    "sequenceDiagram\n  A->>B: go\n  alt ok\n    B->>A: yes\n    loop retry\n      A->>B: again\n    end\n  else bad\n    B->>A: no\n  end\n",
+  );
+  assert.ok(drawn);
+  const rows = drawn.plain;
+  const at = (needle: string): number => rows.findIndex((row) => row.startsWith(needle));
+  const [alt, loop, other] = [at("┌─ alt ok"), at("│ ┌─ loop retry"), at("├─ else bad")];
+  assert.ok(alt >= 0 && loop > alt && other > loop, rows.join("\n"));
+  const end = rows.findIndex((row, y) => y > other && row.startsWith("└─"));
+  assert.ok(end > other, "the block closes");
+  for (let y = alt + 1; y < end; y++)
+    assert.match(rows[y], /^[│├]/, `the bracket breaks at row ${y}`);
+  assert.ok(
+    rows.some((row, y) => y > loop && y < other && row.startsWith("│ └─")),
+    "the inner block closes inside",
+  );
+});
+
+test("a return leaving a box's side tees off its border; verbless cardinalities read as a ratio", () => {
+  const loop = render("flowchart TD\n  A --> B\n  B --> C\n  B --> D\n  D --> A\n  C --> E\n");
+  assert.ok(loop);
+  assert.doesNotMatch(loop.plain.join("\n"), /│─|─│/, "a line meets a border without a tee");
+  const cls = render('classDiagram\n  Owner "1" o-- "*" Address\n');
+  assert.ok(cls);
+  assert.match(cls.plain.join("\n"), /1 : \*/);
+});
+
+test("a class body written on one line keeps its members", () => {
+  const drawn = render("classDiagram\n  class Animal { +String name +eat() }\n");
+  assert.ok(drawn);
+  const text = drawn.plain.join("\n");
+  assert.match(text, /\+String name/);
+  assert.match(text, /\+eat\(\)/);
+});
+
+test("LR lanes whose spans interleave take opposite sides instead of crossing", () => {
+  const drawn = render(
+    "flowchart LR\n  N0 --> N1\n  N1 --> N2\n  N2 --> N3\n  N3 --> N4\n  N4 --> N5\n  N5 --> N6\n  N6 --> N7\n  N7 -->|done| N2\n  N3 --> N2\n  N3 -->|done| N1\n",
+  );
+  assert.ok(drawn);
+  assert.doesNotMatch(drawn.plain.join("\n"), /╫/, "no crossing");
+});
+
+test("journey, kanban, gantt, quadrant, xychart, requirement and C4 sources draw", () => {
+  const cases: [string, RegExp[]][] = [
+    [
+      "journey\n  title Day\n  section Work\n    Make tea: 5: Me\n    Do work: 1: Me, Cat\n",
+      [/Make tea +█████ +5\/5 +Me/, /Do work +█░░░░ +1\/5 +Me, Cat/],
+    ],
+    [
+      "kanban\n  Todo\n    [Write docs]\n  id2[Done]\n    id3[Ship it]@{ assigned: 'x' }\n",
+      [/Todo +Done/, /• Write docs +• Ship it/],
+    ],
+    [
+      "gantt\n  dateFormat YYYY-MM-DD\n  section S\n  First :a1, 2024-01-01, 10d\n  Second :after a1, 10d\n  Launch :milestone, 2024-01-21, 0d\n",
+      [
+        /First +█+░+ +2024-01-01 → 2024-01-11/,
+        /Second +░+█+ +2024-01-11 → 2024-01-21/,
+        /Launch +░+◆ +2024-01-21/,
+      ],
+    ],
+    [
+      "quadrantChart\n  x-axis Low --> High\n  y-axis Bad --> Good\n  quadrant-1 Expand\n  quadrant-3 Drop\n  A: [0.9, 0.9]\n",
+      [/│ +│ Expand/, /│ Drop +│/, /● A|A ●/, /← Low +High →/, /↑ Good/],
+    ],
+    [
+      'xychart-beta\n  x-axis [jan, feb]\n  y-axis "Sales" 0 --> 10\n  bar [5, 10]\n',
+      [/jan +█{15}░{15} +5/, /feb +█{30} +10/],
+    ],
+    [
+      "requirementDiagram\n  requirement need {\n  id: 1\n  risk: high\n  }\n  element part {\n  type: sim\n  }\n  part - satisfies -> need\n",
+      [/«requirement»/, /risk: high/, /«element»/, /satisfies/],
+    ],
+    [
+      'C4Context\n  Boundary(b, "Bank") {\n    Person(u, "Customer")\n    SystemDb(db, "Ledger")\n  }\n  Rel(u, db, "Reads")\n  UpdateLayoutConfig($c4ShapeInRow="3")\n',
+      [/┌ Bank ─/, /«person» Customer/, /«systemdb» Ledger/, /Reads/],
+    ],
+  ];
+  for (const [source, expected] of cases) {
+    const drawn = render(source);
+    assert.ok(drawn, source);
+    assert.deepEqual(drawn.warnings, [], source);
+    for (const pattern of expected) assert.match(drawn.plain.join("\n"), pattern, source);
+  }
+  // An unreadable statement is dropped and named, not fatal.
+  const lenient = render("gantt\n  First :2024-01-01, 10d\n  Broken :not-a-date, 3d\n");
+  assert.ok(lenient);
+  assert.match(lenient.warnings.join(), /Broken/);
+});
+
+test("a labelled skip beside a forward keeps its arrival order: no crossing, one jog", () => {
+  const drawn = render(
+    "flowchart TD\n  N0 --> N1\n  N1 --> N2\n  N2 -->|done| N3\n  N4 -->|done| N5\n  N0 -->|timeout| N2\n  N1 -->|ok| N4\n  N3 --> N2\n  N4 --> N0\n",
+  );
+  assert.ok(drawn);
+  assert.ok(!drawn.plain.join("\n").includes("╫"));
+  // The label sits left of its arrow, and the skip drops straight onto it.
+  const head = drawn.plain.findIndex((row) => row.includes("timeout ▼"));
+  const col = [...drawn.plain[head]].indexOf("▼");
+  const turn = drawn.plain.findIndex((row) => [...row][col] === "┌");
+  assert.ok(turn > 0);
+  for (let y = turn + 1; y < head; y++) assert.equal([...drawn.plain[y]][col], "│");
+  // The return out of N3 keeps its stem: the label beside it reads left.
+  assert.ok(drawn.plain.some((row) => row.includes("done ▼ │")));
+});
+
+test("a return shares a border two cells off the stem, and its left label clears a passing chain", () => {
+  const drawn = render(
+    "stateDiagram-v2\n  N0 --> N1\n  N1 --> N2: timeout\n  N2 --> N3\n  N3 --> N1: retry\n  N3 --> N2\n  N0 --> N3\n  N2 --> N0: retry\n",
+  );
+  assert.ok(drawn);
+  const art = drawn.plain.join("\n");
+  // No line runs hard against another line's arrowhead.
+  assert.doesNotMatch(art, /│[▲▼]|[▲▼]│/);
+  // A chain passing left of a return's label stays whole beside it.
+  const labelled = render(
+    "flowchart TD\n  N0 -->|fails| N1\n  N2 --> N3\n  N4 --> N5\n  N5 -->|timeout| N3\n  N1 -->|retry| N2\n  N5 -->|retry| N2\n  N0 -->|timeout| N5\n  N3 -->|done| N5\n",
+  );
+  assert.ok(labelled);
+  const row = labelled.plain.find((line) => line.includes("timeout ▲"));
+  assert.ok(row?.trimStart().startsWith("│"));
+
+  const across = render(
+    "flowchart LR\n  N1 --> N2\n  N2 --> N3\n  N3 --> N0\n  N0 --> N4\n  N1 --> N3\n  N0 --> N3\n  N3 --> N4\n",
+  );
+  assert.ok(across);
+  assert.doesNotMatch(across.plain.join("\n"), /│[▲▼]|[▲▼]│/);
+});
+
+test("a return's chain takes the port that keeps it clear of its target's stem", () => {
+  const drawn = render(
+    "flowchart TD\n  N0 -->|timeout| N1\n  N1 --> N2\n  N2 -->|ok| N3\n  N3 -->|fails| N4\n  N2 --> N1\n  N3 --> N0\n  N5 --> N1\n",
+  );
+  assert.ok(drawn);
+  assert.ok(!drawn.plain.join("\n").includes("╫"));
+  // The source stands over its drop: the return turns into its side.
+  assert.ok(drawn.plain.some((row) => row.includes("─▶│ N0")));
+  assert.ok(drawn.plain.some((row) => row.includes("▼ timeout ▼")));
+});
+
+test("a lane landing beside a departing stem takes the side that does not cut the nearer lane", () => {
+  const drawn = render(
+    "flowchart LR\n  N0 --> N1\n  N1 --> N2\n  N3 --> N4\n  N4 -->|done| N5\n  N0 -->|retry| N5\n  N5 -->|ok| N4\n  N1 -->|ok| N4\n",
+  );
+  assert.ok(drawn);
+  assert.ok(!drawn.plain.join("\n").includes("╫"));
+});
+
+test("a lane leaves a frame's top beside its title, on the side its port was cut", () => {
+  const drawn = render(
+    "flowchart LR\n  subgraph G0[Order Service]\n    direction TB\n    N0\n    N1\n  end\n  subgraph G1[Order Service]\n    N2\n    N3\n  end\n  G0 ==>|retry| N3\n  N3 -.-> N7\n  G1 -->|timeout| G0\n  N7 -.-> N2\n",
+  );
+  assert.ok(drawn);
+  // No frame title has a line or a head run into its text.
+  for (const row of drawn.plain) assert.doesNotMatch(row, /┌ [^─]*[│┼╎▲▼┴┬][^─]* ─/);
+});
+
+test("a return leaves by the top when an arrival comes in from beyond its chain", () => {
+  const drawn = render(
+    "stateDiagram-v2\n  N1 --> N2: fails\n  N2 --> N3: done\n  N3 --> N4: ok\n  N4 --> N5: fails\n  N5 --> N6: timeout\n  N6 --> N7: fails\n  N7 --> N8: timeout\n  N5 --> N4: ok\n  N5 --> N2: timeout\n  N7 --> N0\n  N8 --> N5\n",
+  );
+  assert.ok(drawn);
+  assert.ok(!drawn.plain.join("\n").includes("╫"));
 });

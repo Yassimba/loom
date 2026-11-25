@@ -31,9 +31,13 @@ export const labelCols = (text: string, max: number): number => Math.min(stringW
 export const labelStart = (arrowX: number, text: string, left: boolean, max: number): number =>
   left ? sat(arrowX, labelCols(text, max) + 1) : arrowX + 2
 
-/** Everything an edge says, joined: source cardinality, verb, target cardinality. */
+/**
+ * Everything an edge says, joined: source cardinality, verb, target
+ * cardinality. Without a verb between them two cardinalities read as a
+ * ratio (`1 : *`), not as one number.
+ */
 export function edgeText(edge: Edge): string | null {
-  const joined = [edge.cardFrom ?? '', edge.label ?? '', edge.cardTo ?? '']
+  const joined = [edge.cardFrom ?? '', edge.label ?? (edge.cardFrom && edge.cardTo ? ':' : ''), edge.cardTo ?? '']
     .filter((part) => part !== '')
     .join(' ')
   return joined === '' ? null : joined

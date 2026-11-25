@@ -129,8 +129,9 @@ export function assignTracks(spans: TrackSpan[]): { assigned: [number, number][]
 export function packTracks(spans: TrackSpan[], weak: Set<number> = new Set()): { assigned: [number, number][]; count: number } {
   const sorted = [...spans].sort(
     (a, b) =>
-      Number(weak.has(a.edge)) - Number(weak.has(b.edge)) ||
       a.end - a.start - (b.end - b.start) ||
+      // Only a tie: a redundant lane put outside a longer one crosses it.
+      Number(weak.has(a.edge)) - Number(weak.has(b.edge)) ||
       a.start - b.start ||
       a.end - b.end ||
       a.from - b.from ||

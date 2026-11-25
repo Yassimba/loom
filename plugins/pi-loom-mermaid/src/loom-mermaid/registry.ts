@@ -18,6 +18,13 @@ import { pie } from './diagrams/pie.ts'
 import { sequence } from './diagrams/sequence.ts'
 import { state } from './diagrams/state.ts'
 import { timeline } from './diagrams/timeline.ts'
+import { c4 } from './diagrams/c4.ts'
+import { gantt } from './diagrams/gantt.ts'
+import { journey } from './diagrams/journey.ts'
+import { kanban } from './diagrams/kanban.ts'
+import { quadrant } from './diagrams/quadrant.ts'
+import { requirement } from './diagrams/requirement.ts'
+import { xychart } from './diagrams/xychart.ts'
 import { type Limits, stripControls } from './labels.ts'
 import { headerKind, statementsOf } from './statements.ts'
 
@@ -33,6 +40,13 @@ export type DiagramKind =
   | 'mindmap'
   | 'timeline'
   | 'gitgraph'
+  | 'c4'
+  | 'gantt'
+  | 'journey'
+  | 'kanban'
+  | 'quadrant'
+  | 'requirement'
+  | 'xychart'
 
 export interface Diagram {
   kind: DiagramKind
@@ -66,6 +80,13 @@ const DIAGRAMS: Diagram[] = [
   mindmap,
   timeline,
   gitgraph,
+  c4,
+  gantt,
+  journey,
+  kanban,
+  quadrant,
+  requirement,
+  xychart,
 ]
 
 /** The registry entry `src`'s header declares, or `null`. */

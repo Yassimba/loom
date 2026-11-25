@@ -74,12 +74,33 @@ export interface Metrics {
   edgeOverText: number;
   /** Hard failure: an arrowhead not pointing at a box border. */
   danglingHeads: number;
+  /**
+   * Hard failure: a line running into a box border that does not tee it
+   * in — it goes on behind the box, where it cannot be followed at all.
+   */
+  behindBox: number;
   heads: number;
   ms: number;
 }
 
 const at = (c: CanvasLike, x: number, y: number): number | null =>
   x >= 0 && y >= 0 && x < c.w && y < c.h ? y * c.w + x : null;
+
+/** Double-line borders carry no direction bits; a line tees into them by glyph. */
+const DOUBLE = new Set("═║╔╗╚╝╤╧╟╢╪╫");
+
+/**
+ * Direction bits at an edge cell that point into a box whose border does
+ * not answer: the line goes on behind the box instead of teeing into it.
+ */
+function behindAt(c: CanvasLike, x: number, y: number, mask: number): number {
+  let behind = 0;
+  for (const [bit, dx, dy, back] of LINKS) {
+    const j = (mask & bit) === 0 ? null : at(c, x + dx, y + dy);
+    if (j !== null && c.occupied[j] && (c.mask[j] & back) === 0 && !DOUBLE.has(c.ch[j])) behind++;
+  }
+  return behind;
+}
 
 /** Direction bits at cell `i` that no neighbour answers. */
 function brokenAt(c: CanvasLike, x: number, y: number, mask: number): number {
@@ -99,8 +120,13 @@ function brokenAt(c: CanvasLike, x: number, y: number, mask: number): number {
   return broken;
 }
 
-/** A head must point at a box border or at a junction dot it feeds. */
+/**
+ * A head must point at a box border or at a junction dot it feeds. One
+ * drawn in a border (the tail end of a two-headed edge) is attached
+ * already: on a frame it points at the open inside.
+ */
 function headDangling(c: CanvasLike, x: number, y: number, dir: [number, number]): boolean {
+  if (c.occupied[y * c.w + x]) return false;
   const j = at(c, x + dir[0], y + dir[1]);
   return j === null || (!c.occupied[j] && c.ch[j] !== "●");
 }
@@ -119,6 +145,7 @@ function measureEdgeCell(c: CanvasLike, x: number, y: number, m: Metrics): void 
     else if (isBend(mask)) m.bends++;
     if (!EDGE_GLYPHS.has(ch) && ch !== "\0") m.edgeOverText++;
     m.brokenLinks += brokenAt(c, x, y, mask);
+    if (!c.occupied[y * c.w + x]) m.behindBox += behindAt(c, x, y, mask);
   }
   const dir = HEADS[ch];
   if (dir !== undefined) {
@@ -141,6 +168,7 @@ export function measure(c: CanvasLike, ms: number): Metrics {
     brokenLinks: 0,
     edgeOverText: 0,
     danglingHeads: 0,
+    behindBox: 0,
     heads: 0,
     ms,
   };
@@ -161,7 +189,7 @@ export function measure(c: CanvasLike, ms: number): Metrics {
   return m;
 }
 
-export const HARD_KEYS = ["brokenLinks", "edgeOverText", "danglingHeads"] as const;
+export const HARD_KEYS = ["brokenLinks", "edgeOverText", "danglingHeads", "behindBox"] as const;
 
 export interface FixtureResult {
   name: string;

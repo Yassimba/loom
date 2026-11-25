@@ -33,10 +33,17 @@ export function computeRanks(graph: Graph): number[] {
   const hierarchy = (e: Edge): boolean =>
     e.headTo === 'triangle' || e.headFrom === 'triangle' || e.headTo.startsWith('diamond') || e.headFrom.startsWith('diamond')
   if (!graph.edges.some(hierarchy) || graph.edges.every(hierarchy)) return rankEdges(graph, graph.edges)
-  const strong = rankEdges(graph, graph.edges.filter(hierarchy))
   // Associations the hierarchy already orders forward add no constraint.
-  const needed = graph.edges.filter((e) => hierarchy(e) || strong[e.to] <= strong[e.from])
-  return rankEdges(graph, needed)
+  // One that does can move its target level with the source of another
+  // left out, so that one joins too, until every edge spans a rank: an
+  // edge inside one rank has no route.
+  const needed = new Set(graph.edges.filter(hierarchy))
+  for (;;) {
+    const rank = rankEdges(graph, [...needed])
+    const flat = graph.edges.filter((e) => !needed.has(e) && e.from !== e.to && rank[e.to] <= rank[e.from])
+    if (flat.length === 0) return rank
+    for (const e of flat) needed.add(e)
+  }
 }
 
 function rankEdges(graph: Graph, edges: Edge[]): number[] {
@@ -243,6 +250,10 @@ function normalize(
  * toward lies past the rank's last box, so anything ordered beyond them
  * would be cut through). The constraint is applied inside every sweep, so the
  * crossing count that picks the best order is the count of the order used.
+ *
+ * That count is of the layered model; what ports, bus rows and lanes add
+ * shows only in the drawing. `variant` 0 is the author's order, any other
+ * a different starting order for the caller to draw and compare.
  */
 export function orderRanks(
   byRank: number[][],
@@ -250,6 +261,7 @@ export function orderRanks(
   ranks: number[],
   interior: (e: Edge) => boolean,
   trailing: boolean[] = [],
+  variant = 0,
 ): Layered {
   const n = ranks.length
   const layered = normalize(byRank, edges, ranks, interior)
@@ -260,12 +272,18 @@ export function orderRanks(
   // column is pinned to the end of the rank its own source sits toward,
   // which leaves every box between the return's ends on one hand.
   const outside = new Map<number, number>()
+  /** The last column of each return, and the node it enters. */
+  const feet = new Map<number, number>()
+  /** A return moved to the end its source sits away from. */
+  const flipped = new Set<number>()
   edges.forEach((e, i) => {
     if (e.from === e.to || ranks[e.to] >= ranks[e.from]) return
     for (const v of layered.chains[i]) {
       outside.set(v, e.from)
       layered.lanes.add(v)
     }
+    const foot = layered.chains[i].at(-1)
+    if (foot !== undefined) feet.set(foot, e.to)
   })
   const isTrailing = (v: number): boolean => trailing[v] ?? false
   const partition = (row: number[]): void => {
@@ -274,14 +292,32 @@ export function orderRanks(
       if (src === undefined) return 0
       const own = byRank[ranks[src]]
       const at = own.indexOf(src)
-      return (at < 0 ? i * 2 : at * 2) < (at < 0 ? row.length : own.length) ? -1 : 1
+      const toward = (at < 0 ? i * 2 : at * 2) < (at < 0 ? row.length : own.length) ? -1 : 1
+      return flipped.has(v) ? -toward : toward
     }
     const keyed = row.map((v, i) => ({ v, k: side(v, i), t: Number(isTrailing(v)) }))
     keyed.sort((a, b) => a.k - b.k || a.t - b.t)
     for (let i = 0; i < keyed.length; i++) row[i] = keyed[i].v
   }
+  // A variant starts from another order: the mirror first, then seeded
+  // shuffles. The caller draws each and keeps the one that crosses least.
+  let seed = 0x9e3779b9 + variant
+  const random = (): number => {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
+    return seed / 0x100000000
+  }
+  const shuffle = (row: number[]): void => {
+    for (let i = row.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1))
+      ;[row[i], row[j]] = [row[j], row[i]]
+    }
+  }
   for (const row of byRank) partition(row)
-  for (const row of layered.layers) partition(row)
+  for (const row of layered.layers) {
+    if (variant === 1) row.reverse()
+    else if (variant > 1) shuffle(row)
+    partition(row)
+  }
   if (byRank.length < 2 || n < 3) return layered
 
   const { layers, up, down } = layered
@@ -293,6 +329,14 @@ export function orderRanks(
   const total = (): number => {
     let sum = 0
     for (let r = 0; r + 1 < layers.length; r++) sum += crossingsBetween(layers[r], down, pos)
+    // A return climbing between two targets of the fan it arrives under
+    // cuts that fan's bus; the segments meet at one node, so the layered
+    // count above misses it.
+    for (const [foot, target] of feet) {
+      const fan = down[target].filter((u) => !outside.has(u))
+      const left = fan.filter((u) => pos[u] < pos[foot]).length
+      sum += Math.min(left, fan.length - left)
+    }
     return sum
   }
 
@@ -301,6 +345,10 @@ export function orderRanks(
   const sweep = (): void => {
     let stale = 0
     let current = total()
+    if (current < bestCrossings) {
+      bestCrossings = current
+      best = layers.map((row) => [...row])
+    }
     for (let it = 0; current > 0 && stale < 2 && it < 24; it++) {
       const downward = it % 2 === 0
       const rows = downward ? layers.slice(1) : layers.slice(0, -1).reverse()
@@ -328,19 +376,30 @@ export function orderRanks(
   // no crossings on average (Domrös and von Hanxleden, "Model Order in
   // Sugiyama Layouts", GD 2022): every tie-break here is stable, and a
   // shuffle replaces it only on a strictly lower crossing count.
-  let seed = 0x9e3779b9
-  const random = (): number => {
-    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
-    return seed / 0x100000000
-  }
   const restarts = n < 40 ? 12 : 4
   for (let restart = 0; restart < restarts && bestCrossings > 0; restart++) {
+    // Before shuffling the author's order: the end a return's source sits
+    // toward is a guess (a source alone in its rank sits toward neither),
+    // so try each return at the other end and keep what crosses less.
+    if (restart === 1) {
+      for (const chain of new Set(layered.chains.filter((c) => outside.has(c[0])))) {
+        const before = bestCrossings
+        const flip = (): void => {
+          for (const v of chain) flipped.has(v) ? flipped.delete(v) : flipped.add(v)
+          for (const row of layers) {
+            partition(row)
+            reindex(row)
+          }
+        }
+        flip()
+        sweep()
+        if (bestCrossings >= before) flip()
+      }
+      if (bestCrossings === 0) break
+    }
     if (restart > 0) {
       for (const row of layers) {
-        for (let i = row.length - 1; i > 0; i--) {
-          const j = Math.floor(random() * (i + 1))
-          ;[row[i], row[j]] = [row[j], row[i]]
-        }
+        shuffle(row)
         partition(row)
         reindex(row)
       }

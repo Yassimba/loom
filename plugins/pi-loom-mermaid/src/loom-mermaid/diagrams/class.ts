@@ -80,7 +80,13 @@ function parseClass(src: string): Graph | null {
   /** `link A "url"` / `click A href "url"` targets, applied post-walk. */
   const hrefs: [string, string][] = []
 
-  for (const st of statements.slice(1)) {
+  // `class A { +x() +y }` on one line reads as the block form: the body's
+  // members split where a visibility marker starts the next one.
+  const lines = statements.slice(1).flatMap((st) => {
+    const inline = /^(class\s[^{]*\{)\s*(\S.*?)\s*\}$/i.exec(st)
+    return inline ? [inline[1], ...inline[2].split(/\s+(?=[+\-#~]\S)/), '}'] : [st]
+  })
+  for (const st of lines) {
     if (curClass !== null) {
       if (st === '}') curClass = null
       else if (curClass !== 'skip') pushMember(graph.nodes[curClass], st)

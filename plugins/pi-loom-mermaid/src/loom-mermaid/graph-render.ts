@@ -8,7 +8,7 @@ import { Canvas } from './canvas.ts'
 import type { Anchor, Edge, Node } from './graph.ts'
 import { Graph } from './graph.ts'
 import { type Limits, wrapLabel } from './labels.ts'
-import { layout, type NodeExtra } from './layout.ts'
+import { type Layout, layout, type NodeExtra } from './layout.ts'
 import { frameOrigin, orient, paint } from './paint.ts'
 
 /** A laid-out canvas, or `null` when the diagram is empty or over the cell cap. */
@@ -335,9 +335,9 @@ function buildScope(
   const synth = new Graph(graph.dir)
   synth.nodes = nodes
   synth.edges = edges
-  const lay = layout(synth, extras, limits)
-  if (lay === null) return null
-  const canvas = paint(synth, extras, lay)
+  const drawn = drawBest(synth, extras, limits)
+  if (drawn === null) return null
+  const { lay, canvas } = drawn
 
   const anchors = new Map<number, Anchor>()
   for (const item of items) {
@@ -357,8 +357,69 @@ function buildScope(
 
 /** Lay out and paint one scope. */
 function layoutCanvas(graph: Graph, extras: NodeExtra[], limits: Limits): CanvasResult {
-  const lay = layout(graph, extras, limits)
-  return lay === null ? null : paint(graph, extras, lay)
+  return drawBest(graph, extras, limits)?.canvas ?? null
+}
+
+/** Other starting orders tried when the author's order draws a crossing. */
+const VARIANTS = 8
+
+/** Boxes a route runs through on its way between two others. */
+function pierced(graph: Graph, lay: Layout): number {
+  let count = 0
+  graph.edges.forEach((e, i) => {
+    const points = lay.routes[i]?.points ?? []
+    lay.placed.forEach((box, j) => {
+      if (j === e.from || j === e.to) return
+      const hit = points.some(([x, y], k) => {
+        if (k === 0) return false
+        const [px, py] = points[k - 1]
+        return (
+          Math.max(x, px) >= box.x && Math.min(x, px) < box.x + box.w && Math.max(y, py) >= box.y && Math.min(y, py) < box.y + box.h
+        )
+      })
+      if (hit) count++
+    })
+  })
+  return count
+}
+
+/** Corners the routes turn. */
+function bends(lay: Layout): number {
+  let count = 0
+  for (const route of lay.routes) {
+    const points = route?.points ?? []
+    for (let k = 2; k < points.length; k++) {
+      if ((points[k][0] === points[k - 1][0]) !== (points[k - 1][0] === points[k - 2][0])) count++
+    }
+  }
+  return count
+}
+
+/**
+ * Lay out and paint, keeping the drawing that reads best. The ordering
+ * counts crossings in the layered model; ports, bus rows and lanes add
+ * ones only the drawing shows, so the drawing is what is scored: a line
+ * lost behind a box costs most (it cannot be followed at all), a crossing
+ * next, a bend last. The author's order wins ties, and a drawing with no
+ * crossing is never second-guessed.
+ */
+function drawBest(graph: Graph, extras: NodeExtra[], limits: Limits): { lay: Layout; canvas: Canvas } | null {
+  const draw = (variant: number, split = false): { lay: Layout; canvas: Canvas; cost: number; bends: number } | null => {
+    const lay = layout(graph, extras, limits, variant, split)
+    if (lay === null) return null
+    const canvas = paint(graph, extras, lay)
+    let crossings = 0
+    for (let i = 0; i < canvas.ch.length; i++) if (canvas.mask[i] !== 0 && canvas.ch[i] === '╫') crossings++
+    return { lay, canvas, cost: 1000 * pierced(graph, lay) + crossings, bends: bends(lay) }
+  }
+  let best = draw(0)
+  // Each order is drawn twice: lanes on the side their direction names,
+  // then split across both sides where that parts two that must cross.
+  for (let k = 1; best !== null && best.cost > 0 && k <= 2 * VARIANTS + 1; k++) {
+    const other = draw(k >> 1, k % 2 === 1)
+    if (other !== null && (other.cost < best.cost || (other.cost === best.cost && other.bends < best.bends))) best = other
+  }
+  return best
 }
 
 // ------------------------------------------------------------------- drawing

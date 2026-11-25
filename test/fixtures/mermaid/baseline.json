@@ -3,6 +3,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 885
   },
@@ -10,6 +11,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 858
   },
@@ -17,20 +19,23 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
-    "area": 5882
+    "area": 5472
   },
   "composite-states": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
-    "area": 1344
+    "area": 1376
   },
   "concentrate": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 336
   },
@@ -38,6 +43,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 1419
   },
@@ -45,6 +51,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 520
   },
@@ -52,6 +59,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 910
   },
@@ -59,6 +67,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 702
   },
@@ -66,6 +75,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 192
   },
@@ -73,6 +83,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 494
   },
@@ -80,6 +91,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 1,
     "area": 1184
   },
@@ -87,6 +99,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 385
   },
@@ -94,6 +107,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 230
   },
@@ -101,6 +115,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 768
   },
@@ -108,6 +123,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 1156
   },
@@ -115,6 +131,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 416
   },
@@ -122,13 +139,23 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
-    "area": 480
+    "area": 510
+  },
+  "return-past-fan": {
+    "brokenLinks": 0,
+    "edgeOverText": 0,
+    "danglingHeads": 0,
+    "behindBox": 0,
+    "crossings": 0,
+    "area": 2025
   },
   "self-loops": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 325
   },
@@ -136,6 +163,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 1320
   },
@@ -143,6 +171,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 1196
   },
@@ -150,6 +179,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 847
   },
@@ -157,6 +187,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 624
   },
@@ -164,6 +195,7 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 688
   },
@@ -171,13 +203,15 @@
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
-    "crossings": 2,
-    "area": 8712
+    "behindBox": 0,
+    "crossings": 1,
+    "area": 8736
   },
   "unicode-wide": {
     "brokenLinks": 0,
     "edgeOverText": 0,
     "danglingHeads": 0,
+    "behindBox": 0,
     "crossings": 0,
     "area": 988
   }
