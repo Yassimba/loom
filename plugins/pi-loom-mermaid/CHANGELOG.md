@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.10.1...pi-loom-mermaid-v0.11.0) (2026-11-25)
+
+
+### Features
+
+* **pi-loom-mermaid:** plot chart lines, fill C4 boxes, keep labels on their own edge ([3a936c8](https://github.com/Yassimba/loom/commit/3a936c867982d158da488516644f86190ee25112))
+
+
+### Bug Fixes
+
+* **pi-loom-mermaid:** route edges with fewer crossings and bends ([ce17637](https://github.com/Yassimba/loom/commit/ce17637c3e20a8db63fa658e1e97f45620c15a11))
+
 ## [0.10.1](https://github.com/Yassimba/loom/compare/pi-loom-mermaid-v0.10.0...pi-loom-mermaid-v0.10.1) (2026-11-15)
 
 
