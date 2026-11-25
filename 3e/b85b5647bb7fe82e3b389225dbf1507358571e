@@ -1,0 +1,134 @@
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/gantt.ts
+  s_b2c89a36dceba8::t_a3c348bbad2c62 1-148
+plugins/pi-loom-mermaid/src/loom-mermaid/layout-tracks.ts
+  s_b2c89a36dceba8::t_7cbc36b245b955 133-134
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/c4.ts
+  s_b2c89a36dceba8::t_4dd775ec0ddfb6 1-82
+scripts/mermaid-metrics.ts
+  s_b2c89a36dceba8::t_7d0bf7c9faabeb 104
+  s_b2c89a36dceba8::t_3cefc9cebfad6c 78-79,89-103,148
+  s_b2c89a36dceba8::t_1cb96aad061484 123-127,129
+  s_b2c89a36dceba8::t_d96d0496d94a85 77,80-81,171,192
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/kanban.ts
+  s_b2c89a36dceba8::t_a3c348bbad2c62 1-8,10-76
+  s_b2c89a36dceba8::t_4dd775ec0ddfb6 9
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/journey.ts
+  s_b2c89a36dceba8::t_a3c348bbad2c62 1-42
+plugins/pi-loom-mermaid/src/loom-mermaid/layout-rank.ts
+  s_b2c89a36dceba8::t_cbe2ae9d6e33d1 37-46
+  s_b2c89a36dceba8::t_4da40dfc81d89e 275-278,285-286,295-296,332-339,348-351,381-399
+  s_b2c89a36dceba8::t_225efcfb45d2b7 253-256,264,302-314,316-320,402
+test/pi-loom-mermaid.test.ts
+  s_b2c89a36dceba8::t_9fb6845024679e 803-806,810-812
+  s_b2c89a36dceba8::t_e0a08ed1a778e0 902-917
+  s_b2c89a36dceba8::t_084ebe2397da97 874-901
+  s_b2c89a36dceba8::t_1c8f828a7d7cca 1004-1010,1014-1030,1039
+  s_b2c89a36dceba8::t_b744d4ef98e9b4 820-825,828-830,833-851
+  s_b2c89a36dceba8::t_4a45857b1ba2da 1011-1013
+  s_b2c89a36dceba8::t_1dcd3b41cf9192 869
+  s_b2c89a36dceba8::t_8f13ebb364ec96 813-819,826-827,831-832,852
+  s_b2c89a36dceba8::t_3336ee2f0c3469 700
+  s_b2c89a36dceba8::t_722799c905cae5 864-865,871-872
+  s_b2c89a36dceba8::t_f4a3d289a64f9d 868,870,964-977
+  s_b2c89a36dceba8::t_a6fa08573e19d2 984
+  s_b2c89a36dceba8::t_1a0ce506da9f63 918-963,980
+  s_b2c89a36dceba8::t_679607449250e9 996
+  s_b2c89a36dceba8::t_13758d97ff3999 990-995,1031-1038
+  s_b2c89a36dceba8::t_7142e838f3c8cb 790-800,802
+  s_b2c89a36dceba8::t_ba76579eda0420 801
+  s_b2c89a36dceba8::t_9454ddba3133b3 978-979
+  s_b2c89a36dceba8::t_fce6f35a598501 807-809
+  s_b2c89a36dceba8::t_9a21d35ffbd8ce 853-863,866-867,873
+  s_b2c89a36dceba8::t_d2a35590183f7f 981-983,985-989,997-1003
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/rows.ts
+  s_b2c89a36dceba8::t_a3c348bbad2c62 1-63
+test/fixtures/mermaid/baseline.json
+  s_b2c89a36dceba8::t_44b91207bfdfa0 6,14,22,24,30,38,46,54,62,70,78,86,94,102,110,118,126,134,142,146-151,158,166,174,182,190,198,206-207,214
+  s_b2c89a36dceba8::t_a2ce682511f215 208
+  s_b2c89a36dceba8::t_d2a35590183f7f 32,144,152
+  s_b2c89a36dceba8::t_64e242b433c8df 145
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/class.ts
+  s_b2c89a36dceba8::t_e0a08ed1a778e0 83-89
+plugins/pi-loom-mermaid/src/loom-mermaid/layout-seq.ts
+  s_b2c89a36dceba8::t_17df0b9b0e3676 85-86,94,105,142-154,245-254
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/sequence.ts
+  s_b2c89a36dceba8::t_17df0b9b0e3676 58-62,180-181,186-188
+test/fixtures/mermaid/return-past-fan.mmd
+  s_b2c89a36dceba8::t_7142e838f3c8cb 1-13
+plugins/pi-loom-mermaid/src/loom-mermaid/graph-render.ts
+  s_b2c89a36dceba8::t_07575782733e7b 386-397,403-404,413,420
+  s_b2c89a36dceba8::t_7564841c083d88 366-385,399-402
+  s_b2c89a36dceba8::t_225efcfb45d2b7 11,338-340,360-365,398,405-406,409-412,414-415,421-422
+  s_b2c89a36dceba8::t_4c06f0762f5e6d 407-408,416-419
+plugins/pi-loom-mermaid/src/loom-mermaid/layout-geom.ts
+  s_b2c89a36dceba8::t_0eed1a943b73e7 34-38,40
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/xychart.ts
+  s_b2c89a36dceba8::t_a3c348bbad2c62 1-66
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/quadrant.ts
+  s_b2c89a36dceba8::t_4dd775ec0ddfb6 1-93
+test/pi-loom-mermaid-fixtures.test.ts
+  s_b2c89a36dceba8::t_44b91207bfdfa0 106-128,173-206
+  s_b2c89a36dceba8::t_ab14511c46da3e 134,138-143,146-147,149-151,153
+  s_b2c89a36dceba8::t_084ebe2397da97 88,93
+  s_b2c89a36dceba8::t_1983f372f1c5c7 129-133,135-137,144-145,148,152,154-172
+plugins/pi-loom-mermaid/src/loom-mermaid/diagrams/requirement.ts
+  s_b2c89a36dceba8::t_4dd775ec0ddfb6 1-57
+plugins/pi-loom-mermaid/src/loom-mermaid/paint.ts
+  s_b2c89a36dceba8::t_845af3db9dac16 342,344-347
+plugins/pi-loom-mermaid/src/loom-mermaid/registry.ts
+  s_b2c89a36dceba8::t_4dd775ec0ddfb6 21-27,43-49,83-89
+plugins/pi-loom-mermaid/src/loom-mermaid/layout.ts
+  s_b2c89a36dceba8::t_c1244c6aef8e33 1076-1080
+  s_b2c89a36dceba8::t_703df24d1235bc 807-808,813
+  s_b2c89a36dceba8::t_f24372ad51e5b6 1882-1886,1888-1890
+  s_b2c89a36dceba8::t_691383a8769945 869-873
+  s_b2c89a36dceba8::t_24ac46398db34f 1480-1495,1497,1529-1557,1563,1623,1625-1626,1628-1632,2195-2198,2200-2212,2214-2215,2218-2219
+  s_b2c89a36dceba8::t_776b8c7d0080c8 824-828,831
+  s_b2c89a36dceba8::t_8d8d2c2346e249 822
+  s_b2c89a36dceba8::t_225efcfb45d2b7 1825
+  s_b2c89a36dceba8::t_c27dc534078e5a 1831-1842
+  s_b2c89a36dceba8::t_5317cd13160db7 468-469,472
+  s_b2c89a36dceba8::t_d7e0256dcb31e6 1661-1668
+  s_b2c89a36dceba8::t_56b454700dc198 648,652,957-959,962,965,980,984-986
+  s_b2c89a36dceba8::t_0baad52b76beec 616-621,631,722,1001
+  s_b2c89a36dceba8::t_6391cf96cefaca 938-951
+  s_b2c89a36dceba8::t_1d6e53ced82cd4 1573-1575,1709-1711
+  s_b2c89a36dceba8::t_7cbc36b245b955 1634-1635
+  s_b2c89a36dceba8::t_02f6a661ffc518 1654-1656,1658-1659,1673,1715-1725
+  s_b2c89a36dceba8::t_3f90b213f90bfa 1496,1498-1501,1506-1507,1511-1524,1526-1528
+  s_b2c89a36dceba8::t_7f3dce89c99168 823,829-830,832-833,866-868,932-936
+  s_b2c89a36dceba8::t_2558c2a93a79e1 659-667,675,678-682,708-710
+  s_b2c89a36dceba8::t_b4bfb1c8b3879b 969-977
+  s_b2c89a36dceba8::t_1719c8b431816c 1558-1562,1589,1624
+  s_b2c89a36dceba8::t_2bc66ad7f31e98 695
+  s_b2c89a36dceba8::t_a335691dbef883 1362-1370,1375,1508-1510
+  s_b2c89a36dceba8::t_e62598abac62a1 1879-1881,1887,1891
+  s_b2c89a36dceba8::t_6b6223888a7b9a 889-897
+  s_b2c89a36dceba8::t_8eca3694fed4a7 647,649-651,653-658,677,684-690,701-707,937,952-953,963-964
+  s_b2c89a36dceba8::t_07575782733e7b 2060-2061,2065
+  s_b2c89a36dceba8::t_722799c905cae5 691-694,696-700
+  s_b2c89a36dceba8::t_0d9f4343276e80 533-541
+  s_b2c89a36dceba8::t_0daf00a8a5e1bc 954-956,960-961,966-968,978-979,981-983
+  s_b2c89a36dceba8::t_fede41b3a890f3 426-432
+  s_b2c89a36dceba8::t_4c06f0762f5e6d 1179,1502-1505,1525,1747,1946
+  s_b2c89a36dceba8::t_ebab2a47bac01c 1657
+  s_b2c89a36dceba8::t_c4c61a88b195d6 1706-1707
+  s_b2c89a36dceba8::t_3d0c1c4610e3ed 834,885
+  s_b2c89a36dceba8::t_98e3fde0e97d8c 668-674,676,683
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "3eb85b5647bb7fe82e3b389225dbf1507358571e",
+  "prompts": {},
+  "sessions": {
+    "s_b2c89a36dceba8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "777a2e21-240d-44d5-90f6-cdc488200c63",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Yassin Chibrani - Derks <y.chibrani@gmail.com>"
+    }
+  }
+}
